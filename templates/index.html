@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Money Flow Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Select2 (for multi-month select, if you want it) -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Crunching your money data…</div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-left">
+                <h1 class="logo">Money Flow</h1>
+                <span class="logo-tagline">Personal cashflow & insights</span>
+            </div>
+            <div class="header-right">
+                <span id="total-transactions" class="header-pill">0 Transactions</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <section class="filter-bar">
+        <div class="container">
+            <div class="filter-group">
+                <label for="category-filter">Broader category</label>
+                <select id="category-filter" class="filter-select"></select>
+            </div>
+
+            <div class="filter-group">
+                <label for="month-filter">Month(s)</label>
+                <select id="month-filter" class="filter-select" multiple></select>
+            </div>
+
+            <div class="filter-group scenario-group">
+                <label>Scenarios</label>
+                <div class="scenario-chips">
+                    <button class="chip chip-active" data-scenario="all">All</button>
+                    <button class="chip" data-scenario="last3">Last 3 months</button>
+                    <button class="chip" data-scenario="current">Current month</button>
+                </div>
+            </div>
+
+            <div class="filter-actions">
+                <button id="apply-filters" class="btn btn-primary">Apply</button>
+                <button id="clear-filters" class="btn btn-secondary">Reset</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+
+            <!-- Hero Summary -->
+            <section class="hero-summary">
+                <!-- Balance card + sparkline -->
+                <div class="hero-balance-card">
+                    <div class="hero-balance-header">
+                        <div class="hero-balance-label">Current balance</div>
+                        <div id="hero-current-balance" class="hero-balance-value">₹0</div>
+                        <div class="hero-balance-subtitle">
+                            Net of all income and expenses till date
+                        </div>
+                    </div>
+
+                    <div class="hero-sparkline-container">
+                        <canvas id="heroSparkline"></canvas>
+                    </div>
+
+                    <div class="hero-badge-row">
+                        <span class="badge" id="balance-insight">Lowest: ₹0 | Peak: ₹0</span>
+                    </div>
+                </div>
+
+                <!-- Month comparison + biggest category -->
+                <div class="hero-comparison-cards">
+                    <div class="hero-comparison-card">
+                        <div class="comparison-label">This month vs last month</div>
+                        <div id="month-comparison-net" class="comparison-value">₹0</div>
+                        <div id="month-comparison-delta" class="comparison-delta">
+                            <span class="delta-arrow">–</span>
+                            <span class="delta-value">0.0%</span>
+                        </div>
+                    </div>
+
+                    <div class="hero-comparison-card">
+                        <div class="comparison-label">Biggest expense category (this month)</div>
+                        <div id="biggest-category-name" class="comparison-amount">–</div>
+                        <div id="biggest-category-amount" class="comparison-sub">₹0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- KPI Section -->
+            <section class="kpi-section">
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-icon">⬆️</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Total income</div>
+                            <div id="kpi-total-income" class="kpi-value income">₹0</div>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon">⬇️</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Total expense</div>
+                            <div id="kpi-total-expense" class="kpi-value expense">₹0</div>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon">⚖️</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Net cashflow</div>
+                            <div id="kpi-net-cashflow" class="kpi-value">₹0</div>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📊</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Expense ratio</div>
+                            <div id="kpi-expense-ratio" class="kpi-value">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Running balance</div>
+                                <div class="chart-subtitle">How your money moved over time</div>
+                            </div>
+                            <span id="balance-insight-badge" class="insight-badge">
+                                Tracking extremes in your balance
+                            </span>
+                        </div>
+                        <div class="chart-container large">
+                            <canvas id="balanceChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Expense by category</div>
+                                <div class="chart-subtitle">Visual breakdown of where money goes</div>
+                            </div>
+                            <span id="category-insight" class="insight-badge">Top category: –</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Monthly income vs expense</div>
+                                <div class="chart-subtitle">Month-on-month inflows, outflows and net</div>
+                            </div>
+                            <span id="monthly-insight" class="insight-badge">Highest expense: –</span>
+                        </div>
+                        <div class="chart-container large">
+                            <canvas id="monthlyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Top vendors</div>
+                                <div class="chart-subtitle">Your biggest expense counterparties</div>
+                            </div>
+                            <span id="vendor-insight" class="insight-badge">Top vendor: –</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="vendorChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+
+            </section>
+
+            <!-- Insights Section -->
+            <section class="insights-section insights-top">
+                <div class="section-header">
+                    <h2 class="section-title">Spending insights</h2>
+                    <p class="section-subtitle">High‑level patterns extracted from your data</p>
+                </div>
+
+                <div class="insights-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="insight-card">
+                        <div class="insight-icon">📆</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Avg. monthly expense</div>
+                            <div id="avg-monthly-expense" class="insight-value">₹0</div>
+                            <div id="avg-expense-desc" class="insight-description">Based on all months</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">📈</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Expense trend</div>
+                            <div id="expense-trend" class="insight-value">Stable</div>
+                            <div id="expense-trend-desc" class="insight-description">Last 3 months comparison</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">💳</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Avg. transaction size</div>
+                            <div id="avg-transaction-size" class="insight-value">₹0</div>
+                            <div id="avg-transaction-desc" class="insight-description">Mean transaction amount</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">📅</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Peak spending day</div>
+                            <div id="peak-day" class="insight-value">–</div>
+                            <div id="peak-day-desc" class="insight-description">No data available</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">⚡</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Cash flow velocity</div>
+                            <div id="cashflow-velocity" class="insight-value">0 transactions</div>
+                            <div id="velocity-desc" class="insight-description">Average per month</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Transactions Section -->
+            <section class="transactions-section">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 class="section-title">Transaction history</h2>
+                        <p class="section-subtitle">Detailed ledger with latest transactions on top</p>
+                    </div>
+                    <button id="download-transactions" class="btn btn-secondary"
+                        style="height: 32px; font-size: 0.8rem;">
+                        <span>📥 Download Excel</span>
+                    </button>
+                </div>
+
+                <div class="scrollable-table">
+                    <table class="transactions-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Vendor</th>
+                                <th>Category</th>
+                                <th>Description</th>
+                                <th class="text-right">Debit</th>
+                                <th class="text-right">Credit</th>
+                                <th class="text-right">Net</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactions-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            Built for personal money management · Powered by your bank exports
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+</body>
+
+</html>
