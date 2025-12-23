@@ -365,6 +365,11 @@ def get_transactions():
     month_filter = request.args.get('month', 'All')
     limit = int(request.args.get('limit', 10000))  # Very high limit to get all
 
+    # New parameters for sorting and searching
+    sort_by = request.args.get('sort_by', 'date')   # date, dr_amount, cr_amount
+    sort_order = request.args.get('sort_order', 'desc') # asc, desc
+    search_query = request.args.get('search', '').lower()
+
     month_list = parse_month_filter(month_filter)
 
     df = df_global.copy()
@@ -372,8 +377,26 @@ def get_transactions():
         df = df[df['Broader Category'] == category]
     df = filter_by_months(df, month_list)
 
-    # Get all transactions sorted by date (most recent first)
-    df_sorted = df.sort_values('date', ascending=False).head(limit)
+    # Apply Search
+    if search_query:
+        # Search in description, vendor, and category
+        df = df[
+            df['Transaction Description'].astype(str).str.lower().str.contains(search_query, na=False) |
+            df['Client/Vendor'].astype(str).str.lower().str.contains(search_query, na=False) |
+            df['Broader Category'].astype(str).str.lower().str.contains(search_query, na=False)
+        ]
+
+    # Apply Sorting
+    ascending = (sort_order == 'asc')
+
+    if sort_by == 'dr_amount':
+        # Secondary sort by date
+        df_sorted = df.sort_values(['DR Amount', 'date'], ascending=[ascending, False]).head(limit)
+    elif sort_by == 'cr_amount':
+        df_sorted = df.sort_values(['CR Amount', 'date'], ascending=[ascending, False]).head(limit)
+    else:
+        # Default to date sort
+        df_sorted = df.sort_values('date', ascending=ascending).head(limit)
 
     transactions = []
     for _, row in df_sorted.iterrows():

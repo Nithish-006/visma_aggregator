@@ -3,6 +3,10 @@ let charts = {};
 let currentCategory = 'All';
 let currentMonths = ['All'];
 let crossFilterActive = false;
+let currentSortBy = 'date';
+let currentSortOrder = 'desc';
+let currentSearch = '';
+let searchTimeout = null;
 
 /** Utilities **/
 
@@ -696,7 +700,7 @@ async function loadTransactions(category = 'All', months = ['All']) {
         const res = await fetch(
             `/api/transactions?category=${encodeURIComponent(
                 category
-            )}&month=${encodeURIComponent(monthParam)}&limit=10000`
+            )}&month=${encodeURIComponent(monthParam)}&limit=10000&sort_by=${currentSortBy}&sort_order=${currentSortOrder}&search=${encodeURIComponent(currentSearch)}`
         );
         const data = await res.json();
 
@@ -852,6 +856,42 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentCategory
         )}&month=${encodeURIComponent(monthParam)}`;
         window.location.href = url;
+    });
+
+    // Search listener
+    const searchInput = document.getElementById('transaction-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            currentSearch = e.target.value;
+            if (searchTimeout) clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                loadTransactions(currentCategory, currentMonths);
+            }, 300);
+        });
+    }
+
+    // Sort listeners
+    document.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const field = th.dataset.sort;
+            if (currentSortBy === field) {
+                // Toggle order
+                currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSortBy = field;
+                currentSortOrder = 'desc'; // Default to desc for new field
+            }
+
+            // Update UI
+            document.querySelectorAll('.sortable').forEach(h => {
+                h.classList.remove('header-sort-active');
+                h.querySelector('.sort-icon').textContent = '';
+            });
+            th.classList.add('header-sort-active');
+            th.querySelector('.sort-icon').textContent = currentSortOrder === 'desc' ? '↓' : '↑';
+
+            loadTransactions(currentCategory, currentMonths);
+        });
     });
 
     await runFullRefresh();

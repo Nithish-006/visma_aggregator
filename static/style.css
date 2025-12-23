@@ -891,3 +891,38 @@ body {
         padding: 8px 8px;
     }
 }
+
+/* Sortable headers */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.sortable:hover {
+    background-color: #f3f4f6;
+    color: var(--primary-color);
+}
+
+.sort-icon {
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 0.8rem;
+    opacity: 0.5;
+}
+
+.header-sort-active {
+    color: var(--primary-color) !important;
+}
+
+.header-sort-active .sort-icon {
+    opacity: 1;
+}
+
+/* Search Input */
+.search-input:focus {
+    outline: none;
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.15);
+}
+

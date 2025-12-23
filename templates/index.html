@@ -280,16 +280,25 @@
                     </button>
                 </div>
 
+                <!-- Search Toolbar -->
+                <div class="transactions-toolbar" style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
+                    <div style="position: relative; width: 100%; max-width: 300px;">
+                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">🔍</span>
+                        <input type="text" id="transaction-search" placeholder="Search description, vendor..." class="search-input"
+                            style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.2s;">
+                    </div>
+                </div>
+
                 <div class="scrollable-table">
                     <table class="transactions-table">
                         <thead>
                             <tr>
-                                <th>Date</th>
+                                <th class="sortable header-sort-active" data-sort="date">Date <span class="sort-icon">↓</span></th>
                                 <th>Vendor</th>
                                 <th>Category</th>
                                 <th>Description</th>
-                                <th class="text-right">Debit</th>
-                                <th class="text-right">Credit</th>
+                                <th class="text-right sortable" data-sort="dr_amount">Debit <span class="sort-icon"></span></th>
+                                <th class="text-right sortable" data-sort="cr_amount">Credit <span class="sort-icon"></span></th>
                                 <th class="text-right">Net</th>
                             </tr>
                         </thead>
