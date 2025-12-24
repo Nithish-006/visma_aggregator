@@ -14,7 +14,7 @@ Get your VISMA Financial App live in **15 minutes** using Railway (FREE)!
 
 ```bash
 # Install production requirements
-pip install -r requirements-production.txt
+pip install -r requirements.txt
 
 # Test locally
 python app.py

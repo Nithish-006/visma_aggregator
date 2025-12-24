@@ -58,7 +58,7 @@ web: gunicorn app:app --bind 0.0.0.0:$PORT
 
 3. **Install production dependencies**:
 ```bash
-pip install -r requirements-production.txt
+pip install -r requirements.txt
 ```
 
 ### Step 2: Deploy to Railway
@@ -144,7 +144,7 @@ Same as Railway - add `Procfile` and `.gitignore`
    - Settings:
      - **Name**: `visma-financial-app`
      - **Environment**: Python 3
-     - **Build Command**: `pip install -r requirements-production.txt`
+     - **Build Command**: `pip install -r requirements.txt`
      - **Start Command**: `gunicorn app:app --bind 0.0.0.0:$PORT`
 
 2. **Add Environment Variables**:

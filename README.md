@@ -35,7 +35,7 @@ A Flask-based web application for processing and categorizing bank statements wi
 ### Local Development
 
 1. Clone the repository
-2. Install dependencies: `pip install -r requirements-production.txt`
+2. Install dependencies: `pip install -r requirements.txt`
 3. Create `.env` file (use `.env.example` as template)
 4. Initialize database: `python init_production_db.py`
 5. Run the app: `python app.py`
@@ -72,7 +72,7 @@ Required environment variables (see `.env.example`):
 │   ├── script.js                  # Dashboard JS
 │   ├── edit_transactions.css      # Edit page styles
 │   └── edit_transactions.js       # Edit page JS
-├── requirements-production.txt    # Python dependencies
+├── requirements.txt               # Python dependencies
 ├── Procfile                       # Deployment configuration
 └── .env.example                   # Environment template
 ```
