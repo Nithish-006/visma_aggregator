@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Transactions - VISMA Financial</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+</head>
+
+<body>
+    <!-- Loading overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p class="loading-text">Loading transactions...</p>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-left">
+                <div class="logo">VISMA Financial</div>
+                <span class="logo-tagline">Transaction Editor</span>
+            </div>
+            <div class="header-right">
+                <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+
+            <!-- Page Header -->
+            <div class="edit-page-header">
+                <div>
+                    <h1 class="page-title">Edit Transactions</h1>
+                    <p class="page-subtitle">Manage and categorize your financial data</p>
+                </div>
+                <div class="header-stats">
+                    <span class="stat-badge">Total: <strong id="total-count">0</strong></span>
+                    <span class="stat-badge">Selected: <strong id="selected-count">0</strong></span>
+                    <span class="stat-badge stat-badge-warning" id="modified-badge" style="display: none;">
+                        Unsaved: <strong id="modified-count">0</strong>
+                    </span>
+                    <button id="save-all-btn" class="btn btn-primary" style="display: none;">
+                        Save All Changes
+                    </button>
+                    <button id="discard-all-btn" class="btn btn-secondary" style="display: none;">
+                        Discard Changes
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="edit-filter-bar">
+                <div class="filter-section">
+                    <label for="edit-category-filter">Category</label>
+                    <select id="edit-category-filter" class="filter-select">
+                        <option value="All">All Categories</option>
+                    </select>
+                </div>
+
+                <div class="filter-section">
+                    <label for="edit-vendor-filter">Vendor</label>
+                    <input type="text" id="edit-vendor-filter" class="filter-input" placeholder="Filter by vendor...">
+                </div>
+
+                <div class="filter-section">
+                    <label for="edit-search">Search</label>
+                    <input type="text" id="edit-search" class="filter-input" placeholder="Search description...">
+                </div>
+
+                <div class="filter-section filter-actions">
+                    <button id="filter-uncategorized" class="btn btn-primary">Show Uncategorized</button>
+                    <button id="clear-all-filters" class="btn btn-secondary">Clear Filters</button>
+                </div>
+            </div>
+
+            <!-- Bulk Edit Bar -->
+            <div class="bulk-edit-bar" id="bulk-edit-bar" style="display: none;">
+                <div class="bulk-info">
+                    <strong id="bulk-count">0</strong> transactions selected
+                </div>
+                <div class="bulk-actions">
+                    <select id="bulk-category" class="bulk-select">
+                        <option value="">Change Category...</option>
+                    </select>
+                    <input type="text" id="bulk-project" class="bulk-input" placeholder="Set Project...">
+                    <input type="text" id="bulk-dd" class="bulk-input" placeholder="Set DD...">
+                    <button id="apply-bulk-edit" class="btn btn-primary">Apply to Selected</button>
+                    <button id="cancel-bulk-edit" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Transactions Table -->
+            <div class="edit-table-container">
+                <table class="edit-table" id="edit-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="select-all-checkbox">
+                            </th>
+                            <th style="width: 120px;">Date</th>
+                            <th style="width: 150px;">Vendor</th>
+                            <th style="width: 150px;">Category</th>
+                            <th style="width: 300px;">Description</th>
+                            <th style="width: 110px;" class="text-right">Debit</th>
+                            <th style="width: 110px;" class="text-right">Credit</th>
+                            <th style="width: 110px;" class="text-right">Net</th>
+                            <th style="width: 130px;">Project</th>
+                            <th style="width: 130px;">DD</th>
+                            <th style="width: 200px;">Notes</th>
+                            <th style="width: 60px;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="edit-table-body">
+                        <!-- Rows will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            Transaction Editor · VISMA Financial App
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="{{ url_for('static', filename='edit_transactions.js') }}"></script>
+</body>
+
+</html>

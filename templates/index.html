@@ -34,10 +34,64 @@
                 <span class="logo-tagline">Personal cashflow & insights</span>
             </div>
             <div class="header-right">
+                <a href="/edit-transactions" class="btn btn-primary" style="text-decoration: none; margin-right: 12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    <span>Edit Transactions</span>
+                </a>
+                <button id="upload-btn" class="upload-btn" title="Upload Bank Statement">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <span>Upload Statement</span>
+                </button>
                 <span id="total-transactions" class="header-pill">0 Transactions</span>
             </div>
         </div>
     </header>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Upload Bank Statement</h2>
+                <button class="modal-close" id="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-area" id="upload-area">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p class="upload-text">Click to browse or drag & drop your Excel file here</p>
+                    <p class="upload-hint">Supported formats: .xlsx, .xls</p>
+                    <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
+                </div>
+
+                <div id="upload-progress" class="upload-progress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" id="progress-bar-fill"></div>
+                    </div>
+                    <p class="progress-text" id="progress-text">Processing...</p>
+                </div>
+
+                <div id="upload-result" class="upload-result" style="display: none;">
+                    <div class="result-icon" id="result-icon"></div>
+                    <h3 id="result-title"></h3>
+                    <p id="result-message"></p>
+                    <div id="result-stats" class="result-stats"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="modal-done-btn" class="btn btn-primary" style="display: none;">Done</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Filter Bar -->
     <section class="filter-bar">
@@ -281,10 +335,13 @@
                 </div>
 
                 <!-- Search Toolbar -->
-                <div class="transactions-toolbar" style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
+                <div class="transactions-toolbar"
+                    style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
                     <div style="position: relative; width: 100%; max-width: 300px;">
-                        <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">🔍</span>
-                        <input type="text" id="transaction-search" placeholder="Search description, vendor..." class="search-input"
+                        <span
+                            style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">🔍</span>
+                        <input type="text" id="transaction-search" placeholder="Search description, vendor..."
+                            class="search-input"
                             style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.2s;">
                     </div>
                 </div>
@@ -293,12 +350,15 @@
                     <table class="transactions-table">
                         <thead>
                             <tr>
-                                <th class="sortable header-sort-active" data-sort="date">Date <span class="sort-icon">↓</span></th>
+                                <th class="sortable header-sort-active" data-sort="date">Date <span
+                                        class="sort-icon">↓</span></th>
                                 <th>Vendor</th>
                                 <th>Category</th>
                                 <th>Description</th>
-                                <th class="text-right sortable" data-sort="dr_amount">Debit <span class="sort-icon"></span></th>
-                                <th class="text-right sortable" data-sort="cr_amount">Credit <span class="sort-icon"></span></th>
+                                <th class="text-right sortable" data-sort="dr_amount">Debit <span
+                                        class="sort-icon"></span></th>
+                                <th class="text-right sortable" data-sort="cr_amount">Credit <span
+                                        class="sort-icon"></span></th>
                                 <th class="text-right">Net</th>
                             </tr>
                         </thead>
@@ -321,6 +381,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+    <script src="{{ url_for('static', filename='upload.js') }}"></script>
 </body>
 
 </html>

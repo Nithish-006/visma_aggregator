@@ -44,3 +44,17 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Environment Variables
+.env
+.env.local
+.env.production
+
+# Uploads
+uploads/
+*.xlsx
+*.xls
+
+# Database
+*.db
+*.sqlite

@@ -772,6 +772,9 @@ async function runFullRefresh() {
     hideLoading();
 }
 
+// Alias for edit.js compatibility
+window.loadDashboardData = runFullRefresh;
+
 /** Init **/
 
 document.addEventListener('DOMContentLoaded', async () => {

@@ -2,57 +2,151 @@ from flask import Flask, render_template, jsonify, request, send_file
 import pandas as pd
 import json
 import io
+import os
 from datetime import datetime
+from werkzeug.utils import secure_filename
+
+# Import our modules
+from config import Config, allowed_file
+from database import DatabaseManager
+from bank_statement_processor import process_bank_statement
 
 app = Flask(__name__)
+app.config.from_object(Config)
 
-# Load data function
-def load_financial_data():
-    """Load and preprocess financial data"""
-    df = pd.read_excel('APR_TO_DEC_2025_AGGREGATED_FINAL_WITH_CODE.xlsx')
+# Create uploads directory if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    # Parse dates - handle both formats
-    def parse_date(date_str):
-        if pd.isna(date_str):
-            return pd.NaT
-        date_str = str(date_str).strip()
-        for fmt in ['%d-%m-%Y', '%d/%m/%Y', '%d-%m-%y', '%d/%m/%y']:
+# Initialize database manager
+db_manager = DatabaseManager()
+db_connected = False
+
+# Global dataframe
+df_global = None
+
+
+# ============================================================================
+# DATA LOADING FUNCTIONS
+# ============================================================================
+
+def load_financial_data_from_db():
+    """Load and preprocess financial data from database"""
+    global db_manager, db_connected
+
+    if not db_connected:
+        db_connected = db_manager.connect()
+
+    if not db_connected:
+        print("[!] Database not connected, falling back to Excel file")
+        return load_financial_data_from_excel()
+
+    try:
+        df = db_manager.get_all_transactions()
+
+        if df.empty:
+            print("[!] No transactions in database, falling back to Excel file")
+            return load_financial_data_from_excel()
+
+        # Ensure date column is datetime
+        if 'Date' in df.columns:
+            df['date'] = pd.to_datetime(df['Date'])
+        else:
+            df['date'] = pd.to_datetime(df['transaction_date'])
+
+        # Ensure numeric columns
+        df['DR Amount'] = pd.to_numeric(df['DR Amount'], errors='coerce').fillna(0)
+        df['CR Amount'] = pd.to_numeric(df['CR Amount'], errors='coerce').fillna(0)
+        df['Running Balance'] = pd.to_numeric(df['Running Balance'], errors='coerce').fillna(0)
+
+        # Derived fields
+        df['month_name'] = df['date'].dt.strftime('%B %Y')
+        df['month'] = df['date'].dt.to_period('M').astype(str)
+        df['net'] = df['Net']
+        df['running_balance'] = df['Running Balance']
+
+        # Clean categories
+        df['Broader Category'] = df['Broader Category'].fillna('Uncategorized')
+        df['Category'] = df['Category'].fillna('Uncategorized')
+        df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
+
+        # Sort by date
+        df = df.sort_values('date')
+
+        print(f"[+] Loaded {len(df)} transactions from database")
+        return df
+
+    except Exception as e:
+        print(f"[!] Error loading from database: {e}")
+        return load_financial_data_from_excel()
+
+
+def load_financial_data_from_excel():
+    """Load and preprocess financial data from Excel file"""
+    try:
+        df = pd.read_excel(app.config['EXCEL_FILE'])
+
+        # Parse dates - handle both formats
+        def parse_date(date_str):
+            if pd.isna(date_str):
+                return pd.NaT
+            date_str = str(date_str).strip()
+            for fmt in ['%d-%m-%Y', '%d/%m/%Y', '%d-%m-%y', '%d/%m/%y']:
+                try:
+                    return pd.to_datetime(date_str, format=fmt)
+                except:
+                    continue
             try:
-                return pd.to_datetime(date_str, format=fmt)
+                return pd.to_datetime(date_str, dayfirst=True)
             except:
-                continue
-        try:
-            return pd.to_datetime(date_str, dayfirst=True)
-        except:
-            return pd.NaT
+                return pd.NaT
 
-    df['date'] = df['Date'].apply(parse_date)
+        df['date'] = df['Date'].apply(parse_date)
 
-    # Clean amounts - remove commas
-    df['DR Amount'] = df['DR Amount'].astype(str).str.replace(',', '').replace('nan', '')
-    df['DR Amount'] = pd.to_numeric(df['DR Amount'], errors='coerce').fillna(0)
+        # Clean amounts - remove commas
+        df['DR Amount'] = df['DR Amount'].astype(str).str.replace(',', '').replace('nan', '')
+        df['DR Amount'] = pd.to_numeric(df['DR Amount'], errors='coerce').fillna(0)
 
-    df['CR Amount'] = df['CR Amount'].astype(str).str.replace(',', '').replace('nan', '')
-    df['CR Amount'] = pd.to_numeric(df['CR Amount'], errors='coerce').fillna(0)
+        df['CR Amount'] = df['CR Amount'].astype(str).str.replace(',', '').replace('nan', '')
+        df['CR Amount'] = pd.to_numeric(df['CR Amount'], errors='coerce').fillna(0)
 
-    # Derived fields
-    df['month_name'] = df['date'].dt.strftime('%B %Y')
-    df['month'] = df['date'].dt.to_period('M').astype(str)
-    df['net'] = df['CR Amount'] - df['DR Amount']
-    df = df.sort_values('date')
-    df['running_balance'] = df['net'].cumsum()
+        # Derived fields
+        df['month_name'] = df['date'].dt.strftime('%B %Y')
+        df['month'] = df['date'].dt.to_period('M').astype(str)
+        df['net'] = df['CR Amount'] - df['DR Amount']
+        df = df.sort_values('date')
+        df['running_balance'] = df['net'].cumsum()
 
-    # Clean categories
-    df['Broader Category'] = df['Broader Category'].fillna('Uncategorized')
-    df['Category'] = df['Category'].fillna('Uncategorized')
-    df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
+        # Clean categories
+        df['Broader Category'] = df['Broader Category'].fillna('Uncategorized')
+        df['Category'] = df['Category'].fillna('Uncategorized')
+        df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
 
-    return df
+        print(f"[+] Loaded {len(df)} transactions from Excel file")
+        return df
+
+    except Exception as e:
+        print(f"[!] Error loading Excel file: {e}")
+        return pd.DataFrame()
+
+
+def reload_data():
+    """Reload financial data"""
+    global df_global
+    if app.config['USE_DATABASE']:
+        df_global = load_financial_data_from_db()
+    else:
+        df_global = load_financial_data_from_excel()
+    return df_global
+
 
 # Load data at startup
-df_global = load_financial_data()
+df_global = reload_data()
 
-# Helper function to parse month filter
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
 def parse_month_filter(month_filter):
     """Parse month filter - handle single or multiple months"""
     if not month_filter or month_filter == 'All':
@@ -61,12 +155,13 @@ def parse_month_filter(month_filter):
         return [m.strip() for m in month_filter.split(',')]
     return [month_filter]
 
-# Helper function to filter dataframe by months
+
 def filter_by_months(df, month_list):
     """Filter dataframe by list of months"""
     if month_list == ['All']:
         return df
     return df[df['month'].isin(month_list)]
+
 
 def format_indian_number(amount):
     """Format number in Indian system"""
@@ -85,10 +180,150 @@ def format_indian_number(amount):
     else:
         return f"{sign}₹{abs_amount:,.0f}"
 
+
+# ============================================================================
+# UPLOAD ENDPOINT
+# ============================================================================
+
+@app.route('/api/upload', methods=['POST'])
+def upload_statement():
+    """Upload and process bank statement"""
+    try:
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+
+        file = request.files['file']
+
+        # Check if file is selected
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        # Check if file is allowed
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type. Only .xlsx and .xls files are allowed'}), 400
+
+        # Secure the filename
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{timestamp}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        # Save the file
+        file.save(filepath)
+        print(f"[+] File saved: {filepath}")
+
+        # Process the bank statement
+        print(f"[*] Processing bank statement: {filename}")
+        df = process_bank_statement(filepath)
+
+        # Insert into database if enabled
+        if app.config['USE_DATABASE']:
+            print(f"[*] Inserting into database...")
+
+            # Ensure database is connected
+            global db_connected
+            if not db_connected:
+                connected = db_manager.connect()
+                if connected:
+                    db_connected = True
+                else:
+                    return jsonify({
+                        'error': 'Database connection failed',
+                        'details': 'Could not connect to MySQL database'
+                    }), 500
+
+            # Insert transactions
+            results = db_manager.insert_transactions_bulk(df)
+
+            # Print results
+            print(f"[+] Insertion complete!")
+            print(f"    Total: {results['total']}")
+            print(f"    Inserted: {results['inserted']}")
+            print(f"    Duplicates: {results['duplicates']}")
+            print(f"    Errors: {results['errors']}")
+
+            # Log the upload
+            db_manager.log_upload(
+                filename=filename,
+                records_processed=results['total'],
+                records_inserted=results['inserted'],
+                records_duplicated=results['duplicates'],
+                status='success' if results['errors'] == 0 else 'partial',
+                error_message='; '.join(results['error_messages'][:5]) if results['error_messages'] else None
+            )
+
+            # Reload data
+            print(f"[*] Reloading dashboard data...")
+            reload_data()
+            print(f"[+] Dashboard data reloaded!")
+
+            return jsonify({
+                'success': True,
+                'message': 'Bank statement processed successfully',
+                'filename': filename,
+                'stats': {
+                    'total': results['total'],
+                    'inserted': results['inserted'],
+                    'duplicates': results['duplicates'],
+                    'errors': results['errors']
+                }
+            })
+        else:
+            # Excel mode - save to file
+            output_file = filepath.replace('.xlsx', '_PROCESSED.xlsx')
+            df.to_excel(output_file, index=False)
+
+            return jsonify({
+                'success': True,
+                'message': 'Bank statement processed successfully (Excel mode)',
+                'filename': filename,
+                'output_file': output_file,
+                'stats': {
+                    'total': len(df),
+                    'inserted': 0,
+                    'duplicates': 0,
+                    'errors': 0
+                }
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Error processing file',
+            'details': str(e)
+        }), 500
+
+
+@app.route('/api/upload_history')
+def get_upload_history():
+    """Get recent upload history"""
+    if not app.config['USE_DATABASE'] or not db_connected:
+        return jsonify({'history': []})
+
+    try:
+        history = db_manager.get_upload_history(10)
+        return jsonify({'history': history})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# EXISTING ROUTES (keep all your existing routes from app.py)
+# ============================================================================
+
 @app.route('/')
 def index():
     """Render main dashboard page"""
     return render_template('index.html')
+
+
+@app.route('/edit-transactions')
+def edit_transactions():
+    """Render transaction edit page"""
+    return render_template('edit_transactions.html')
+
 
 @app.route('/api/summary')
 def get_summary():
@@ -181,6 +416,10 @@ def get_summary():
         'biggest_category_amount': biggest_category_amount,
         'biggest_category_amount_formatted': format_indian_number(biggest_category_amount) if biggest_category_amount > 0 else '₹0'
     })
+
+
+# Continue with all other routes from original app.py...
+# (I'll include the rest in the next part to keep this manageable)
 
 @app.route('/api/monthly_trend')
 def get_monthly_trend():
@@ -399,26 +638,127 @@ def get_transactions():
         df_sorted = df.sort_values('date', ascending=ascending).head(limit)
 
     transactions = []
-    for _, row in df_sorted.iterrows():
+    for idx, row in df_sorted.iterrows():
         transactions.append({
+            'id': int(idx) if hasattr(idx, '__int__') else idx,  # Transaction ID for editing
             'date': row['date'].strftime('%d %b %Y'),
+            'date_raw': row['date'].strftime('%Y-%m-%d'),
             'description': row['Transaction Description'],
             'vendor': row['Client/Vendor'],
             'category': row['Broader Category'],
+            'code': row.get('Code', ''),
             'dr_amount': float(row['DR Amount']),
             'dr_amount_formatted': format_indian_number(row['DR Amount']) if row['DR Amount'] > 0 else '',
             'cr_amount': float(row['CR Amount']),
             'cr_amount_formatted': format_indian_number(row['CR Amount']) if row['CR Amount'] > 0 else '',
             'net': float(row['net']),
-            'net_formatted': format_indian_number(row['net'])
+            'net_formatted': format_indian_number(row['net']),
+            'project': row.get('Project', ''),
+            'dd': row.get('DD', ''),
+            'notes': row.get('Notes', '')
         })
 
     return jsonify({'transactions': transactions})
 
 
+@app.route('/api/transaction/update', methods=['POST'])
+def update_transaction():
+    """Update a transaction's editable fields"""
+    try:
+        data = request.json
+        print(f"[DEBUG] Received update request with data: {data}")
+
+        # Required fields
+        transaction_date = data.get('date')
+        description = data.get('description')
+
+        # Support both field names - use proper fallback for zero values
+        dr_amount = data.get('debit') if data.get('debit') is not None else data.get('dr_amount')
+        cr_amount = data.get('credit') if data.get('credit') is not None else data.get('cr_amount')
+
+        # Editable fields
+        category = data.get('category')
+        vendor = data.get('vendor')
+        project = data.get('project')
+        dd = data.get('dd')
+        notes = data.get('notes')
+
+        print(f"[DEBUG] Parsed fields - date: {transaction_date}, desc: {description[:50]}..., dr: {dr_amount}, cr: {cr_amount}")
+
+        if not all([transaction_date, description is not None]):
+            print(f"[ERROR] Missing required fields - date: {transaction_date}, description: {description}")
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields',
+                'details': f'date={transaction_date}, description={description}'
+            }), 400
+
+        # Update in database
+        if app.config['USE_DATABASE'] and db_connected:
+            query = """
+            UPDATE transactions
+            SET
+                category = %s,
+                broader_category = %s,
+                client_vendor = %s,
+                project = %s,
+                dd = %s,
+                notes = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE transaction_date = %s
+              AND transaction_description = %s
+              AND dr_amount = %s
+              AND cr_amount = %s
+            LIMIT 1
+            """
+
+            cursor = db_manager.connection.cursor()
+            cursor.execute(query, (
+                category,
+                category,  # broader_category same as category
+                vendor,
+                project,
+                dd,
+                notes,
+                transaction_date,
+                description,
+                dr_amount,
+                cr_amount
+            ))
+            db_manager.connection.commit()
+            affected_rows = cursor.rowcount
+            cursor.close()
+
+            if affected_rows > 0:
+                # Reload data
+                reload_data()
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Transaction updated successfully'
+                })
+            else:
+                return jsonify({
+                    'error': 'Transaction not found or no changes made'
+                }), 404
+        else:
+            return jsonify({
+                'error': 'Database not available'
+            }), 503
+
+    except Exception as e:
+        print(f"[!] Error updating transaction: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Error updating transaction',
+            'details': str(e)
+        }), 500
+
+
 @app.route('/api/download_transactions')
 def download_transactions():
-    """Download transactions as Excel"""
+    """Download transactions as Excel - matches original table schema"""
     category = request.args.get('category', 'All')
     month_filter = request.args.get('month', 'All')
 
@@ -432,29 +772,54 @@ def download_transactions():
     # Sort and prepare for export
     df_export = df.sort_values('date', ascending=False).copy()
 
-    # Select and rename columns for user friendliness
-    columns_map = {
-        'date': 'Date',
-        'Client/Vendor': 'Vendor',
-        'Broader Category': 'Category',
-        'Transaction Description': 'Description',
-        'DR Amount': 'Debit',
-        'CR Amount': 'Credit',
-        'net': 'Net Amount',
-        'running_balance': 'Running Balance'
-    }
+    # Format date as DD-MM-YYYY to match original format
+    df_export['Date'] = df_export['date'].dt.strftime('%d-%m-%Y')
 
-    # Add formatted date for export
-    df_export['date'] = df_export['date'].dt.strftime('%d-%m-%Y')
+    # Select columns in the exact order of original schema
+    export_columns = [
+        'Date',
+        'Transaction Description',
+        'Client/Vendor',
+        'Category',
+        'Broader Category',
+        'Code',
+        'DR Amount',
+        'CR Amount',
+        'Running Balance',
+        'Net',
+        'Project',
+        'DD',
+        'Notes'
+    ]
 
-    # Select columns if they exist
-    export_cols = [c for c in columns_map.keys() if c in df_export.columns]
-    df_export = df_export[export_cols].rename(columns=columns_map)
+    # Create export dataframe with only existing columns
+    df_final = pd.DataFrame()
+    for col in export_columns:
+        if col in df_export.columns:
+            df_final[col] = df_export[col]
+        elif col == 'Date':
+            df_final[col] = df_export['Date']
+        elif col == 'Running Balance':
+            df_final[col] = df_export['running_balance'] if 'running_balance' in df_export.columns else df_export.get('Running Balance', 0)
+        elif col == 'Net':
+            df_final[col] = df_export['net'] if 'net' in df_export.columns else df_export.get('Net', 0)
+        else:
+            # Add empty columns for Project, DD, Notes if they don't exist
+            df_final[col] = None
 
     # Create Excel file in memory
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_export.to_excel(writer, index=False, sheet_name='Transactions')
+        df_final.to_excel(writer, index=False, sheet_name='Transactions')
+
+        # Auto-adjust column widths
+        worksheet = writer.sheets['Transactions']
+        for idx, col in enumerate(df_final.columns):
+            max_length = max(
+                df_final[col].astype(str).apply(len).max(),
+                len(str(col))
+            ) + 2
+            worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
 
     output.seek(0)
 
@@ -523,6 +888,8 @@ def get_insights():
         'cashflow_velocity': round(transactions_per_month, 0),
         'total_months': total_months
     })
+
+
 
 if __name__ == '__main__':
     print("=" * 60)

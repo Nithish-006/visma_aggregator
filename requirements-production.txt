@@ -1,0 +1,35 @@
+# ============================================================================
+# VISMA Financial App - Production Dependencies
+# ============================================================================
+#
+# Installation: pip install -r requirements-production.txt
+#
+# ============================================================================
+
+# Web Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Production WSGI Server
+gunicorn==21.2.0
+
+# Data Processing & Analysis
+pandas==2.1.4
+numpy==1.26.2
+
+# Excel File Handling
+openpyxl==3.1.2
+xlrd==2.0.1
+
+# Database Connectivity
+mysql-connector-python==8.2.0
+
+# Date/Time Utilities
+python-dateutil>=2.8.2
+pytz>=2023.3
+
+# Environment Variables
+python-dotenv==1.0.0
+
+# Security (optional but recommended)
+# python-decouple==3.8  # Alternative to python-dotenv
