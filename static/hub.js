@@ -1,0 +1,96 @@
+/**
+ * Hub Page JavaScript
+ * Handles dynamic content for the multi-bank hub dashboard
+ */
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Refresh stats periodically (optional)
+    // refreshBankStats();
+
+    // Load personal tracker count
+    loadPersonalTrackerCount();
+
+    // Add animation on card hover
+    initCardAnimations();
+});
+
+/**
+ * Initialize card hover animations
+ */
+function initCardAnimations() {
+    const cards = document.querySelectorAll('.bank-card');
+
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-4px)';
+        });
+
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+}
+
+/**
+ * Refresh bank statistics from the API
+ */
+async function refreshBankStats() {
+    try {
+        const response = await fetch('/api/hub/stats');
+        if (!response.ok) {
+            throw new Error('Failed to fetch stats');
+        }
+
+        const data = await response.json();
+
+        // Update Axis count
+        if (data.axis) {
+            const axisCount = document.getElementById('axis-count');
+            if (axisCount) {
+                axisCount.textContent = formatNumber(data.axis.transaction_count);
+            }
+        }
+
+        // Update KVB count
+        if (data.kvb) {
+            const kvbCount = document.getElementById('kvb-count');
+            if (kvbCount) {
+                kvbCount.textContent = formatNumber(data.kvb.transaction_count);
+            }
+        }
+    } catch (error) {
+        console.error('Error refreshing bank stats:', error);
+    }
+}
+
+/**
+ * Load personal tracker transaction count
+ */
+async function loadPersonalTrackerCount() {
+    try {
+        const response = await fetch('/api/personal/summary');
+        if (!response.ok) {
+            throw new Error('Failed to fetch personal summary');
+        }
+
+        const data = await response.json();
+        const personalCount = document.getElementById('personal-count');
+        if (personalCount && data.transaction_count !== undefined) {
+            personalCount.textContent = formatNumber(data.transaction_count);
+        }
+    } catch (error) {
+        console.error('Error loading personal tracker count:', error);
+        const personalCount = document.getElementById('personal-count');
+        if (personalCount) {
+            personalCount.textContent = '0';
+        }
+    }
+}
+
+/**
+ * Format number with commas
+ */
+function formatNumber(num) {
+    if (num === null || num === undefined) return '0';
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}

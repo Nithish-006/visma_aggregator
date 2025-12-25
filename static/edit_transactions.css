@@ -187,9 +187,12 @@
     white-space: normal;
     word-wrap: break-word;
     word-break: break-word;
-    max-width: 300px;
+    min-width: 300px;
+    max-width: none;
     line-height: 1.4;
     padding: 12px 10px;
+    overflow: visible;
+    text-overflow: unset;
 }
 
 .edit-table tbody tr:hover {

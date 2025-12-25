@@ -4,10 +4,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Transactions - VISMA Financial</title>
+    <title>Edit Transactions - {{ bank_name | default('Axis Bank') }} | VISMA Financial</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+    <!-- Bank Context -->
+    <script>
+        window.BANK_CODE = "{{ bank_code | default('axis') }}";
+        window.BANK_NAME = "{{ bank_name | default('Axis Bank') }}";
+        window.BANK_CONFIG = {{ bank_config | default({}) | tojson }};
+    </script>
 </head>
 
 <body>
@@ -21,11 +28,11 @@
     <header class="header">
         <div class="container">
             <div class="header-left">
-                <div class="logo">VISMA Financial</div>
+                <div class="logo">{{ bank_name | default('Axis Bank') }}</div>
                 <span class="logo-tagline">Transaction Editor</span>
             </div>
             <div class="header-right">
-                <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+                <a href="/dashboard/{{ bank_code | default('axis') }}" class="btn btn-secondary">← Back to Dashboard</a>
                 <a href="/logout" class="btn btn-secondary logout-btn" style="text-decoration: none; margin-left: 12px;" title="Logout">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -69,6 +76,13 @@
                     <label for="edit-category-filter">Category</label>
                     <select id="edit-category-filter" class="filter-select">
                         <option value="All">All Categories</option>
+                    </select>
+                </div>
+
+                <div class="filter-section">
+                    <label for="edit-project-filter">Project</label>
+                    <select id="edit-project-filter" class="filter-select">
+                        <option value="All">All Projects</option>
                     </select>
                 </div>
 

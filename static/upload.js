@@ -3,6 +3,9 @@
 // ============================================================================
 
 (function() {
+    // Bank code from page context
+    const BANK_CODE = window.BANK_CODE || 'axis';
+
     const uploadBtn = document.getElementById('upload-btn');
     const uploadModal = document.getElementById('upload-modal');
     const closeModal = document.getElementById('close-modal');
@@ -101,7 +104,7 @@
         const formData = new FormData();
         formData.append('file', file);
 
-        fetch('/api/upload', {
+        fetch(`/api/${BANK_CODE}/upload`, {
             method: 'POST',
             body: formData
         })

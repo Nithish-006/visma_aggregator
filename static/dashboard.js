@@ -1,3 +1,7 @@
+// Bank code from page context (set in template)
+const BANK_CODE = window.BANK_CODE || 'axis';
+const BANK_NAME = window.BANK_NAME || 'Axis Bank';
+
 // Global state
 let charts = {};
 let currentCategory = 'All';
@@ -85,7 +89,10 @@ function formatDateRangeForAPI(startDate, endDate) {
     return params;
 }
 
-function buildApiUrl(baseUrl, category, startDate, endDate, extraParams = {}) {
+function buildApiUrl(endpoint, category, startDate, endDate, extraParams = {}) {
+    // Build bank-specific API URL
+    const baseUrl = `/api/${BANK_CODE}${endpoint}`;
+
     const params = new URLSearchParams();
     params.append('category', category || 'All');
     if (startDate) params.append('start_date', startDate);
@@ -103,7 +110,7 @@ function buildApiUrl(baseUrl, category, startDate, endDate, extraParams = {}) {
 
 async function loadDateRange() {
     try {
-        const res = await fetch('/api/date_range');
+        const res = await fetch(`/api/${BANK_CODE}/date_range`);
         const data = await res.json();
 
         if (data.min_date && data.max_date) {
@@ -132,7 +139,7 @@ async function loadDateRange() {
 
 async function loadCategories() {
     try {
-        const res = await fetch('/api/categories');
+        const res = await fetch(`/api/${BANK_CODE}/categories`);
         const data = await res.json();
         const select = document.getElementById('category-filter');
         if (!select) return;
@@ -153,7 +160,7 @@ async function loadCategories() {
 
 async function loadHeroSummary(category = 'All', startDate = null, endDate = null) {
     try {
-        const url = buildApiUrl('/api/summary', category, startDate, endDate);
+        const url = buildApiUrl('/summary', category, startDate, endDate);
         const res = await fetch(url);
         const data = await res.json();
 
@@ -207,7 +214,7 @@ async function loadHeroSummary(category = 'All', startDate = null, endDate = nul
 
 async function loadSparkline(category = 'All', startDate = null, endDate = null) {
     try {
-        const url = buildApiUrl('/api/running_balance', category, startDate, endDate);
+        const url = buildApiUrl('/running_balance', category, startDate, endDate);
         const res = await fetch(url);
         const data = await res.json();
         if (!data.sparkline_dates || data.sparkline_dates.length === 0) return;
@@ -262,7 +269,7 @@ async function loadSparkline(category = 'All', startDate = null, endDate = null)
 
 async function loadBalanceChart(category = 'All', startDate = null, endDate = null) {
     try {
-        const url = buildApiUrl('/api/running_balance', category, startDate, endDate);
+        const url = buildApiUrl('/running_balance', category, startDate, endDate);
         const res = await fetch(url);
         const data = await res.json();
 
@@ -407,7 +414,7 @@ async function loadBalanceChart(category = 'All', startDate = null, endDate = nu
 
 async function loadMonthlyChart(category = 'All', startDate = null, endDate = null) {
     try {
-        const url = buildApiUrl('/api/monthly_trend', category, startDate, endDate);
+        const url = buildApiUrl('/monthly_trend', category, startDate, endDate);
         const res = await fetch(url);
         const data = await res.json();
 
@@ -534,7 +541,7 @@ async function loadMonthlyChart(category = 'All', startDate = null, endDate = nu
 
 async function loadCategoryChart(category = 'All', startDate = null, endDate = null) {
     try {
-        const url = buildApiUrl('/api/category_breakdown', category, startDate, endDate);
+        const url = buildApiUrl('/category_breakdown', category, startDate, endDate);
         const res = await fetch(url);
         const data = await res.json();
 
@@ -639,7 +646,7 @@ async function loadCategoryChart(category = 'All', startDate = null, endDate = n
 
 async function loadVendorChart(category = 'All', startDate = null, endDate = null) {
     try {
-        const url = buildApiUrl('/api/top_vendors', category, startDate, endDate);
+        const url = buildApiUrl('/top_vendors', category, startDate, endDate);
         const res = await fetch(url);
         const data = await res.json();
 
@@ -724,7 +731,7 @@ async function loadVendorChart(category = 'All', startDate = null, endDate = nul
 
 async function loadInsights(category = 'All', startDate = null, endDate = null) {
     try {
-        const url = buildApiUrl('/api/insights', category, startDate, endDate);
+        const url = buildApiUrl('/insights', category, startDate, endDate);
         const res = await fetch(url);
         const data = await res.json();
 
@@ -779,7 +786,7 @@ async function loadInsights(category = 'All', startDate = null, endDate = null) 
 
 async function loadTransactions(category = 'All', startDate = null, endDate = null) {
     try {
-        const url = buildApiUrl('/api/transactions', category, startDate, endDate, {
+        const url = buildApiUrl('/transactions', category, startDate, endDate, {
             limit: '10000',
             sort_by: currentSortBy,
             sort_order: currentSortOrder,
@@ -803,6 +810,7 @@ async function loadTransactions(category = 'All', startDate = null, endDate = nu
         <td>${txn.vendor}</td>
         <td>${txn.category}</td>
         <td>${txn.description || ''}</td>
+        <td>${txn.project || ''}</td>
         <td class="text-right">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
         <td class="text-right">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
         <td class="text-right"><span class="monetary-pill ${txn.net > 0 ? 'credit' : (txn.net < 0 ? 'debit' : 'neutral')}">${txn.net_formatted}</span></td>
@@ -999,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (currentStartDate) params.append('start_date', currentStartDate);
         if (currentEndDate) params.append('end_date', currentEndDate);
 
-        window.location.href = `/api/download_transactions?${params.toString()}`;
+        window.location.href = `/api/${BANK_CODE}/download_transactions?${params.toString()}`;
     });
 
     // Search listener

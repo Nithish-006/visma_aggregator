@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Visma Financials Dashboard</title>
+    <title>{{ bank_name | default('Axis Bank') }} | Visma Financials</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <!-- Fonts -->
@@ -14,6 +14,13 @@
 
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Bank Context -->
+    <script>
+        window.BANK_CODE = "{{ bank_code | default('axis') }}";
+        window.BANK_NAME = "{{ bank_name | default('Axis Bank') }}";
+        window.BANK_CONFIG = {{ bank_config | default({}) | tojson }};
+    </script>
 
     <!-- Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
@@ -30,11 +37,17 @@
     <header class="header">
         <div class="container">
             <div class="header-left">
-                <h1 class="logo">Visma Financials</h1>
-                <span class="logo-tagline">Personal cashflow & insights</span>
+                <a href="/" class="back-to-hub" style="display: flex; align-items: center; gap: 6px; color: #94a3b8; text-decoration: none; margin-right: 16px; font-size: 0.875rem;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    All Banks
+                </a>
+                <h1 class="logo">{{ bank_name | default('Axis Bank') }}</h1>
+                <span class="logo-tagline">Transactions & Insights</span>
             </div>
             <div class="header-right">
-                <a href="/edit-transactions" class="btn btn-primary" style="text-decoration: none; margin-right: 12px;">
+                <a href="/edit-transactions/{{ bank_code | default('axis') }}" class="btn btn-primary" style="text-decoration: none; margin-right: 12px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -140,6 +153,53 @@
     <!-- Main Content -->
     <main class="main-content">
         <div class="container">
+
+            <!-- Transactions Section (moved to top) -->
+            <section class="transactions-section" style="margin-bottom: 2rem;">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2 class="section-title">Transaction history</h2>
+                        <p class="section-subtitle">Detailed ledger with latest transactions on top</p>
+                    </div>
+                    <button id="download-transactions" class="btn btn-secondary"
+                        style="height: 32px; font-size: 0.8rem;">
+                        <span>Download Excel</span>
+                    </button>
+                </div>
+
+                <!-- Search Toolbar -->
+                <div class="transactions-toolbar"
+                    style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
+                    <div style="position: relative; width: 100%; max-width: 300px;">
+                        <span
+                            style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">🔍</span>
+                        <input type="text" id="transaction-search" placeholder="Search description, vendor..."
+                            class="search-input"
+                            style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.2s;">
+                    </div>
+                </div>
+
+                <div class="scrollable-table">
+                    <table class="transactions-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable header-sort-active" data-sort="date">Date <span
+                                        class="sort-icon">↓</span></th>
+                                <th>Vendor</th>
+                                <th>Category</th>
+                                <th>Description</th>
+                                <th>Project</th>
+                                <th class="text-right sortable" data-sort="dr_amount">Debit <span
+                                        class="sort-icon"></span></th>
+                                <th class="text-right sortable" data-sort="cr_amount">Credit <span
+                                        class="sort-icon"></span></th>
+                                <th class="text-right">Net</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactions-body"></tbody>
+                    </table>
+                </div>
+            </section>
 
             <!-- Hero Summary -->
             <section class="hero-summary">
@@ -333,52 +393,6 @@
                             <div id="velocity-desc" class="insight-description">Average per month</div>
                         </div>
                     </div>
-                </div>
-            </section>
-
-            <!-- Transactions Section -->
-            <section class="transactions-section">
-                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <h2 class="section-title">Transaction history</h2>
-                        <p class="section-subtitle">Detailed ledger with latest transactions on top</p>
-                    </div>
-                    <button id="download-transactions" class="btn btn-secondary"
-                        style="height: 32px; font-size: 0.8rem;">
-                        <span>📥 Download Excel</span>
-                    </button>
-                </div>
-
-                <!-- Search Toolbar -->
-                <div class="transactions-toolbar"
-                    style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
-                    <div style="position: relative; width: 100%; max-width: 300px;">
-                        <span
-                            style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">🔍</span>
-                        <input type="text" id="transaction-search" placeholder="Search description, vendor..."
-                            class="search-input"
-                            style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.2s;">
-                    </div>
-                </div>
-
-                <div class="scrollable-table">
-                    <table class="transactions-table">
-                        <thead>
-                            <tr>
-                                <th class="sortable header-sort-active" data-sort="date">Date <span
-                                        class="sort-icon">↓</span></th>
-                                <th>Vendor</th>
-                                <th>Category</th>
-                                <th>Description</th>
-                                <th class="text-right sortable" data-sort="dr_amount">Debit <span
-                                        class="sort-icon"></span></th>
-                                <th class="text-right sortable" data-sort="cr_amount">Credit <span
-                                        class="sort-icon"></span></th>
-                                <th class="text-right">Net</th>
-                            </tr>
-                        </thead>
-                        <tbody id="transactions-body"></tbody>
-                    </table>
                 </div>
             </section>
 

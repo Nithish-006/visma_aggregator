@@ -388,20 +388,27 @@ def detect_header_row(file_path: str) -> int:
 
 def process_bank_statement(
     file_path: str,
+    bank_code: str = 'axis',
     auto_detect_header: bool = True,
     header_row: Optional[int] = None
 ) -> pd.DataFrame:
     """
-    Process an Axis Bank statement Excel file into standardized format
+    Process a bank statement Excel file into standardized format
 
     Args:
         file_path: Path to Excel file
+        bank_code: Bank code ('axis', 'kvb') - determines processing logic
         auto_detect_header: Whether to automatically detect header row
         header_row: Manual header row number (0-indexed) if auto_detect is False
 
     Returns:
         Processed DataFrame with standardized columns
+
+    Note:
+        Currently uses Axis Bank processing logic for all banks.
+        KVB-specific processing will be added once a sample statement is provided.
     """
+    safe_print(f"[*] Processing {bank_code.upper()} bank statement...")
     # Step 1: Detect or use provided header row
     if auto_detect_header:
         skip_rows = detect_header_row(file_path)

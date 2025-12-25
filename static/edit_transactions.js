@@ -5,6 +5,10 @@
 (function() {
     'use strict';
 
+    // Bank code from page context
+    const BANK_CODE = window.BANK_CODE || 'axis';
+    const BANK_NAME = window.BANK_NAME || 'Axis Bank';
+
     // Global state
     let allTransactions = [];
     let filteredTransactions = [];
@@ -15,6 +19,7 @@
     // Filter state
     let currentFilters = {
         category: 'All',
+        project: 'All',
         vendor: '',
         search: ''
     };
@@ -55,7 +60,7 @@
      */
     async function loadCategories() {
         try {
-            const response = await fetch('/api/categories');
+            const response = await fetch(`/api/${BANK_CODE}/categories`);
             const data = await response.json();
             categories = data.categories;
 
@@ -89,15 +94,52 @@
      */
     async function loadTransactions() {
         try {
-            const response = await fetch('/api/transactions?limit=10000');
+            const response = await fetch(`/api/${BANK_CODE}/transactions?limit=10000`);
             const data = await response.json();
             allTransactions = data.transactions;
+
+            // Populate project filter with unique projects
+            populateProjectFilter();
+
             applyFilters();
             renderTable();
             updateCounts();
         } catch (error) {
             console.error('Error loading transactions:', error);
         }
+    }
+
+    /**
+     * Populate project filter with unique projects from transactions
+     */
+    function populateProjectFilter() {
+        const projectFilter = document.getElementById('edit-project-filter');
+        const uniqueProjects = new Set();
+
+        allTransactions.forEach(txn => {
+            const project = txn.project || txn.Project;
+            if (project && project.trim()) {
+                uniqueProjects.add(project.trim());
+            }
+        });
+
+        // Sort projects alphabetically
+        const sortedProjects = Array.from(uniqueProjects).sort();
+
+        // Populate dropdown
+        projectFilter.innerHTML = '<option value="All">All Projects</option>';
+        sortedProjects.forEach(proj => {
+            const option = document.createElement('option');
+            option.value = proj;
+            option.textContent = proj;
+            projectFilter.appendChild(option);
+        });
+
+        // Add "No Project" option for filtering empty projects
+        const noProjectOption = document.createElement('option');
+        noProjectOption.value = '__EMPTY__';
+        noProjectOption.textContent = '(No Project)';
+        projectFilter.appendChild(noProjectOption);
     }
 
     /**
@@ -108,6 +150,19 @@
             // Category filter
             if (currentFilters.category !== 'All' && txn.category !== currentFilters.category) {
                 return false;
+            }
+
+            // Project filter
+            if (currentFilters.project !== 'All') {
+                const txnProject = (txn.project || txn.Project || '').trim();
+                if (currentFilters.project === '__EMPTY__') {
+                    // Filter for transactions without project
+                    if (txnProject !== '') {
+                        return false;
+                    }
+                } else if (txnProject !== currentFilters.project) {
+                    return false;
+                }
             }
 
             // Vendor filter
@@ -398,7 +453,7 @@
 
             console.log('[DEBUG] Saving transaction:', requestData);
 
-            const response = await fetch('/api/transaction/update', {
+            const response = await fetch(`/api/${BANK_CODE}/transaction/update`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -560,11 +615,13 @@
     function clearAllFilters() {
         currentFilters = {
             category: 'All',
+            project: 'All',
             vendor: '',
             search: ''
         };
 
         document.getElementById('edit-category-filter').value = 'All';
+        document.getElementById('edit-project-filter').value = 'All';
         document.getElementById('edit-vendor-filter').value = '';
         document.getElementById('edit-search').value = '';
 
@@ -587,6 +644,13 @@
         // Filters
         document.getElementById('edit-category-filter').addEventListener('change', (e) => {
             currentFilters.category = e.target.value;
+            applyFilters();
+            renderTable();
+            updateCounts();
+        });
+
+        document.getElementById('edit-project-filter').addEventListener('change', (e) => {
+            currentFilters.project = e.target.value;
             applyFilters();
             renderTable();
             updateCounts();

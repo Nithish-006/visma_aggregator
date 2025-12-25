@@ -691,23 +691,37 @@ body {
 
 .transactions-table th:nth-child(4),
 .transactions-table td:nth-child(4) {
-    /* Description */
+    /* Description - show full text */
     width: auto;
-    /* Takes remaining space */
     min-width: 250px;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow: visible;
+    text-overflow: unset;
+    line-height: 1.4;
 }
 
 .transactions-table th:nth-child(5),
-.transactions-table td:nth-child(5),
-/* Debit */
+.transactions-table td:nth-child(5) {
+    /* Project */
+    width: 120px;
+    max-width: 150px;
+}
+
 .transactions-table th:nth-child(6),
 .transactions-table td:nth-child(6),
-/* Credit */
+/* Debit */
 .transactions-table th:nth-child(7),
-.transactions-table td:nth-child(7) {
+.transactions-table td:nth-child(7),
+/* Credit */
+.transactions-table th:nth-child(8),
+.transactions-table td:nth-child(8) {
     /* Net */
-    width: 110px;
+    width: 140px;
+    min-width: 140px;
     text-align: right;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8rem;
 }
 
 .transactions-table tbody tr:hover {
@@ -1314,14 +1328,24 @@ body {
         white-space: nowrap;
     }
 
+    /* Project column */
     .transactions-table th:nth-child(5),
-    .transactions-table td:nth-child(5),
+    .transactions-table td:nth-child(5) {
+        min-width: 100px;
+        white-space: nowrap;
+    }
+
+    /* Amount columns */
     .transactions-table th:nth-child(6),
     .transactions-table td:nth-child(6),
     .transactions-table th:nth-child(7),
-    .transactions-table td:nth-child(7) {
-        min-width: 90px;
+    .transactions-table td:nth-child(7),
+    .transactions-table th:nth-child(8),
+    .transactions-table td:nth-child(8) {
+        min-width: 120px;
         white-space: nowrap;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.75rem;
     }
 
     /* ===== GENERAL MOBILE ===== */

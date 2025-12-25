@@ -9,6 +9,43 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+# ============================================================================
+# BANK CONFIGURATION
+# ============================================================================
+BANK_CONFIG = {
+    'axis': {
+        'name': 'Axis Bank',
+        'code': 'axis',
+        'table': 'axis_transactions',
+        'upload_table': 'bank_upload_history',
+        'color': '#97144D',  # Axis Bank maroon
+        'icon': 'axis',
+        'description': 'Axis Bank Transactions'
+    },
+    'kvb': {
+        'name': 'Karur Vysya Bank',
+        'code': 'kvb',
+        'table': 'kvb_transactions',
+        'upload_table': 'bank_upload_history',
+        'color': '#1E4785',  # KVB blue
+        'icon': 'kvb',
+        'description': 'Karur Vysya Bank Transactions'
+    }
+}
+
+# Valid bank codes
+VALID_BANK_CODES = list(BANK_CONFIG.keys())
+
+def get_bank_config(bank_code):
+    """Get configuration for a specific bank"""
+    return BANK_CONFIG.get(bank_code)
+
+def get_bank_table(bank_code):
+    """Get the transaction table name for a bank"""
+    config = BANK_CONFIG.get(bank_code)
+    return config['table'] if config else None
+
+
 class Config:
     """Application configuration"""
 

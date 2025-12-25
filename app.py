@@ -8,7 +8,7 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 
 # Import our modules
-from config import Config, allowed_file
+from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank_config, get_bank_table
 from database import DatabaseManager
 from bank_statement_processor import process_bank_statement
 
@@ -39,35 +39,40 @@ def login_required(f):
 # Create uploads directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize database manager
+# Initialize database manager (singleton with connection pool)
 db_manager = DatabaseManager()
 db_connected = False
 
-# Global dataframe
+# Global dataframe cache for multi-bank support
+df_cache = {}
+
+# Legacy global dataframe (for backwards compatibility)
 df_global = None
 
 
+
+
 # ============================================================================
-# DATA LOADING FUNCTIONS
+# DATA LOADING FUNCTIONS (Multi-Bank Support)
 # ============================================================================
 
-def load_financial_data_from_db():
-    """Load and preprocess financial data from database"""
+def load_bank_data_from_db(bank_code='axis'):
+    """Load and preprocess financial data from database for a specific bank"""
     global db_manager, db_connected
 
     if not db_connected:
         db_connected = db_manager.connect()
 
     if not db_connected:
-        print("[!] Database not connected, falling back to Excel file")
-        return load_financial_data_from_excel()
+        print(f"[!] Database not connected for {bank_code}")
+        return pd.DataFrame()
 
     try:
-        df = db_manager.get_all_transactions()
+        df = db_manager.get_all_transactions(bank_code)
 
         if df.empty:
-            print("[!] No transactions in database, falling back to Excel file")
-            return load_financial_data_from_excel()
+            print(f"[!] No transactions in database for {bank_code}")
+            return pd.DataFrame()
 
         # Ensure date column is datetime
         if 'Date' in df.columns:
@@ -94,12 +99,35 @@ def load_financial_data_from_db():
         # Sort by date
         df = df.sort_values('date')
 
-        print(f"[+] Loaded {len(df)} transactions from database")
+        print(f"[+] Loaded {len(df)} transactions from database for {bank_code}")
         return df
 
     except Exception as e:
-        print(f"[!] Error loading from database: {e}")
-        return load_financial_data_from_excel()
+        print(f"[!] Error loading from database for {bank_code}: {e}")
+        return pd.DataFrame()
+
+
+def get_bank_df(bank_code='axis'):
+    """Get dataframe for a specific bank (with caching)"""
+    global df_cache
+
+    if bank_code not in df_cache:
+        df_cache[bank_code] = load_bank_data_from_db(bank_code)
+
+    return df_cache.get(bank_code, pd.DataFrame())
+
+
+def reload_bank_data(bank_code='axis'):
+    """Reload financial data for a specific bank"""
+    global df_cache
+    if bank_code in df_cache:
+        del df_cache[bank_code]
+    return get_bank_df(bank_code)
+
+
+def load_financial_data_from_db():
+    """Load and preprocess financial data from database (legacy - uses axis)"""
+    return load_bank_data_from_db('axis')
 
 
 def load_financial_data_from_excel():
@@ -152,7 +180,7 @@ def load_financial_data_from_excel():
 
 
 def reload_data():
-    """Reload financial data"""
+    """Reload financial data (legacy - for backwards compatibility)"""
     global df_global
     if app.config['USE_DATABASE']:
         df_global = load_financial_data_from_db()
@@ -210,21 +238,43 @@ def filter_by_date_range(df, start_date=None, end_date=None):
 
 
 def format_indian_number(amount):
-    """Format number in Indian system"""
+    """Format number with Indian comma system (full numbers, no abbreviations)"""
     if pd.isna(amount) or amount == 0:
         return "₹0"
 
     abs_amount = abs(amount)
     sign = "-" if amount < 0 else ""
 
-    if abs_amount >= 10000000:  # Crore
-        return f"{sign}₹{abs_amount/10000000:.2f} Cr"
-    elif abs_amount >= 100000:  # Lakh
-        return f"{sign}₹{abs_amount/100000:.2f} L"
-    elif abs_amount >= 1000:  # Thousand
-        return f"{sign}₹{abs_amount/1000:.2f} K"
-    else:
-        return f"{sign}₹{abs_amount:,.0f}"
+    # Format with Indian comma system (lakhs and crores)
+    # Example: 12,34,567.89
+    def indian_format(num):
+        s = f"{num:,.2f}"
+        # Convert to Indian format: 1,234,567.89 -> 12,34,567.89
+        parts = s.split('.')
+        integer_part = parts[0].replace(',', '')
+        decimal_part = parts[1] if len(parts) > 1 else '00'
+
+        # Apply Indian grouping
+        if len(integer_part) <= 3:
+            formatted = integer_part
+        else:
+            # First group of 3 from right, then groups of 2
+            formatted = integer_part[-3:]
+            remaining = integer_part[:-3]
+            while remaining:
+                if len(remaining) <= 2:
+                    formatted = remaining + ',' + formatted
+                    remaining = ''
+                else:
+                    formatted = remaining[-2:] + ',' + formatted
+                    remaining = remaining[:-2]
+
+        # Remove decimal if it's .00
+        if decimal_part == '00':
+            return formatted
+        return formatted + '.' + decimal_part
+
+    return f"{sign}₹{indian_format(abs_amount)}"
 
 
 # ============================================================================
@@ -397,16 +447,1091 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    """Render main dashboard page"""
-    return render_template('index.html')
+    """Render hub page with bank selection"""
+    # Get stats for each bank
+    bank_stats = {}
+    for bank_code in VALID_BANK_CODES:
+        try:
+            df = get_bank_df(bank_code)
+            bank_stats[bank_code] = {
+                'transaction_count': len(df),
+                'name': BANK_CONFIG[bank_code]['name']
+            }
+        except Exception as e:
+            print(f"[!] Error getting stats for {bank_code}: {e}")
+            bank_stats[bank_code] = {
+                'transaction_count': 0,
+                'name': BANK_CONFIG[bank_code]['name']
+            }
+
+    return render_template('hub.html', bank_stats=bank_stats)
 
 
-@app.route('/edit-transactions')
+@app.route('/dashboard/<bank_code>')
 @login_required
-def edit_transactions():
-    """Render transaction edit page"""
-    return render_template('edit_transactions.html')
+def bank_dashboard(bank_code):
+    """Render bank-specific dashboard page"""
+    if bank_code not in VALID_BANK_CODES:
+        return redirect(url_for('index'))
 
+    bank_config = get_bank_config(bank_code)
+    return render_template('index.html',
+                         bank_code=bank_code,
+                         bank_name=bank_config['name'],
+                         bank_config=bank_config)
+
+
+@app.route('/edit-transactions/<bank_code>')
+@login_required
+def edit_transactions(bank_code):
+    """Render bank-specific transaction edit page"""
+    if bank_code not in VALID_BANK_CODES:
+        return redirect(url_for('index'))
+
+    bank_config = get_bank_config(bank_code)
+    return render_template('edit_transactions.html',
+                         bank_code=bank_code,
+                         bank_name=bank_config['name'],
+                         bank_config=bank_config)
+
+
+# ============================================================================
+# HUB API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/hub/stats')
+@login_required
+def get_hub_stats():
+    """Get transaction stats for all banks (for hub page)"""
+    stats = {}
+    for bank_code in VALID_BANK_CODES:
+        try:
+            df = get_bank_df(bank_code)
+            stats[bank_code] = {
+                'transaction_count': len(df),
+                'name': BANK_CONFIG[bank_code]['name']
+            }
+        except Exception as e:
+            print(f"[!] Error getting stats for {bank_code}: {e}")
+            stats[bank_code] = {
+                'transaction_count': 0,
+                'name': BANK_CONFIG[bank_code]['name']
+            }
+
+    return jsonify(stats)
+
+
+# ============================================================================
+# BANK-SPECIFIC API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/<bank_code>/summary')
+@login_required
+def get_bank_summary(bank_code):
+    """Get summary statistics for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    category = request.args.get('category', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    # Get bank-specific data
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return jsonify({
+            'current_balance': 0,
+            'current_balance_formatted': '₹0',
+            'total_income': 0,
+            'total_income_formatted': '₹0',
+            'total_expense': 0,
+            'total_expense_formatted': '₹0',
+            'net_cashflow': 0,
+            'net_cashflow_formatted': '₹0',
+            'expense_ratio': 0,
+            'total_transactions': 0
+        })
+
+    if category != 'All':
+        df = df[df['Broader Category'] == category]
+    df = filter_by_date_range(df, start_date, end_date)
+
+    current_balance = float(df['running_balance'].iloc[-1]) if len(df) > 0 else 0
+    total_income = float(df['CR Amount'].sum())
+    total_expense = float(df['DR Amount'].sum())
+    net_cashflow = total_income - total_expense
+    expense_ratio = (total_expense / total_income * 100) if total_income > 0 else 0
+
+    # Calculate this period vs previous period
+    if len(df) > 0:
+        current_month = df['month'].max()
+        last_month = df[df['month'] < current_month]['month'].max() if len(df[df['month'] < current_month]) > 0 else None
+
+        this_month_df = df[df['month'] == current_month] if current_month else pd.DataFrame()
+        last_month_df = df[df['month'] == last_month] if last_month else pd.DataFrame()
+
+        this_month_net = float((this_month_df['CR Amount'].sum() - this_month_df['DR Amount'].sum())) if len(this_month_df) > 0 else 0
+        last_month_net = float((last_month_df['CR Amount'].sum() - last_month_df['DR Amount'].sum())) if len(last_month_df) > 0 else 0
+
+        expenses_df = df[df['DR Amount'] > 0]
+        if len(expenses_df) > 0:
+            biggest_category = expenses_df.groupby('Broader Category')['DR Amount'].sum().idxmax()
+            biggest_category_amount = float(expenses_df.groupby('Broader Category')['DR Amount'].sum().max())
+        else:
+            biggest_category = None
+            biggest_category_amount = 0
+    else:
+        this_month_net = 0
+        last_month_net = 0
+        biggest_category = None
+        biggest_category_amount = 0
+
+    net_change = this_month_net - last_month_net if last_month_net != 0 else 0
+    net_change_pct = ((net_change / abs(last_month_net)) * 100) if last_month_net != 0 else 0
+
+    return jsonify({
+        'current_balance': current_balance,
+        'current_balance_formatted': format_indian_number(current_balance),
+        'total_income': total_income,
+        'total_income_formatted': format_indian_number(total_income),
+        'total_expense': total_expense,
+        'total_expense_formatted': format_indian_number(total_expense),
+        'net_cashflow': net_cashflow,
+        'net_cashflow_formatted': format_indian_number(net_cashflow),
+        'expense_ratio': round(expense_ratio, 1),
+        'total_transactions': len(df),
+        'this_month_net': this_month_net,
+        'this_month_net_formatted': format_indian_number(this_month_net),
+        'last_month_net': last_month_net,
+        'last_month_net_formatted': format_indian_number(last_month_net),
+        'net_change': net_change,
+        'net_change_formatted': format_indian_number(net_change),
+        'net_change_pct': round(net_change_pct, 1),
+        'biggest_category': biggest_category,
+        'biggest_category_amount': biggest_category_amount,
+        'biggest_category_amount_formatted': format_indian_number(biggest_category_amount) if biggest_category_amount > 0 else '₹0'
+    })
+
+
+@app.route('/api/<bank_code>/monthly_trend')
+@login_required
+def get_bank_monthly_trend(bank_code):
+    """Get monthly income/expense trend for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    category = request.args.get('category', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return jsonify({'months': [], 'income': [], 'expense': [], 'net': []})
+
+    if category != 'All':
+        df = df[df['Broader Category'] == category]
+    df = filter_by_date_range(df, start_date, end_date)
+
+    if df.empty:
+        return jsonify({'months': [], 'income': [], 'expense': [], 'net': []})
+
+    monthly = df.groupby('month_name').agg({
+        'CR Amount': 'sum',
+        'DR Amount': 'sum',
+        'date': 'first'
+    }).reset_index().sort_values('date')
+
+    net_values = [(inc - exp) for inc, exp in zip(monthly['CR Amount'].tolist(), monthly['DR Amount'].tolist())]
+
+    avg_expense = monthly['DR Amount'].mean()
+    highest_expense_idx = monthly['DR Amount'].idxmax()
+    highest_expense_month = monthly.loc[highest_expense_idx, 'month_name'] if len(monthly) > 0 else None
+    highest_expense_amount = float(monthly['DR Amount'].max()) if len(monthly) > 0 else 0
+    highest_expense_pct = ((highest_expense_amount - avg_expense) / avg_expense * 100) if avg_expense > 0 else 0
+
+    return jsonify({
+        'months': monthly['month_name'].tolist(),
+        'income': monthly['CR Amount'].tolist(),
+        'expense': monthly['DR Amount'].tolist(),
+        'net': net_values,
+        'highest_expense_month': highest_expense_month,
+        'highest_expense_amount': highest_expense_amount,
+        'highest_expense_amount_formatted': format_indian_number(highest_expense_amount),
+        'highest_expense_pct': round(highest_expense_pct, 1)
+    })
+
+
+@app.route('/api/<bank_code>/category_breakdown')
+@login_required
+def get_bank_category_breakdown(bank_code):
+    """Get expense breakdown by category for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    category = request.args.get('category', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return jsonify({'categories': [], 'amounts': []})
+
+    expense_df = df[df['DR Amount'] > 0]
+    if category != 'All':
+        expense_df = expense_df[expense_df['Broader Category'] == category]
+    expense_df = filter_by_date_range(expense_df, start_date, end_date)
+
+    if expense_df.empty:
+        return jsonify({'categories': [], 'amounts': []})
+
+    category_totals = expense_df.groupby('Broader Category')['DR Amount'].sum().sort_values(ascending=False)
+
+    top_category = category_totals.index[0] if len(category_totals) > 0 else None
+    top_category_amount = float(category_totals.iloc[0]) if len(category_totals) > 0 else 0
+    total_expenses = float(category_totals.sum())
+    top_category_pct = (top_category_amount / total_expenses * 100) if total_expenses > 0 else 0
+
+    return jsonify({
+        'categories': category_totals.index.tolist(),
+        'amounts': category_totals.values.tolist(),
+        'top_category': top_category,
+        'top_category_amount': top_category_amount,
+        'top_category_amount_formatted': format_indian_number(top_category_amount),
+        'top_category_pct': round(top_category_pct, 1)
+    })
+
+
+@app.route('/api/<bank_code>/running_balance')
+@login_required
+def get_bank_running_balance(bank_code):
+    """Get running balance over time for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    category = request.args.get('category', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return jsonify({'dates': [], 'balance': [], 'sparkline_dates': [], 'sparkline_balance': []})
+
+    if category != 'All':
+        df = df[df['Broader Category'] == category]
+    df = filter_by_date_range(df, start_date, end_date)
+
+    if df.empty:
+        return jsonify({'dates': [], 'balance': [], 'sparkline_dates': [], 'sparkline_balance': []})
+
+    if len(df) > 100:
+        df_sample = df.iloc[::5].copy()
+    else:
+        df_sample = df.copy()
+
+    lowest_balance = float(df['running_balance'].min()) if len(df) > 0 else 0
+    peak_balance = float(df['running_balance'].max()) if len(df) > 0 else 0
+    lowest_date_idx = df['running_balance'].idxmin() if len(df) > 0 else None
+    peak_date_idx = df['running_balance'].idxmax() if len(df) > 0 else None
+
+    lowest_date = df.loc[lowest_date_idx, 'date'].strftime('%d %b %Y') if lowest_date_idx is not None else None
+    peak_date = df.loc[peak_date_idx, 'date'].strftime('%d %b %Y') if peak_date_idx is not None else None
+
+    if len(df) > 0:
+        last_date = df['date'].max()
+        thirty_days_ago = last_date - pd.Timedelta(days=30)
+        sparkline_df = df[df['date'] >= thirty_days_ago].sort_values('date')
+        sparkline_dates = sparkline_df['date'].dt.strftime('%d %b').tolist()
+        sparkline_balance = sparkline_df['running_balance'].tolist()
+    else:
+        sparkline_dates = []
+        sparkline_balance = []
+
+    return jsonify({
+        'dates': df_sample['date'].dt.strftime('%d %b %Y').tolist(),
+        'balance': df_sample['running_balance'].tolist(),
+        'lowest_balance': lowest_balance,
+        'lowest_date': lowest_date,
+        'peak_balance': peak_balance,
+        'peak_date': peak_date,
+        'sparkline_dates': sparkline_dates,
+        'sparkline_balance': sparkline_balance
+    })
+
+
+@app.route('/api/<bank_code>/top_vendors')
+@login_required
+def get_bank_top_vendors(bank_code):
+    """Get top 10 vendors by expense for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    category = request.args.get('category', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return jsonify({'vendors': [], 'amounts': []})
+
+    expense_df = df[df['DR Amount'] > 0]
+    if category != 'All':
+        expense_df = expense_df[expense_df['Broader Category'] == category]
+    expense_df = filter_by_date_range(expense_df, start_date, end_date)
+
+    if expense_df.empty:
+        return jsonify({'vendors': [], 'amounts': []})
+
+    vendor_totals = expense_df.groupby('Client/Vendor')['DR Amount'].sum().sort_values(ascending=False).head(10)
+
+    top_vendor = vendor_totals.index[0] if len(vendor_totals) > 0 else None
+    top_vendor_amount = float(vendor_totals.iloc[0]) if len(vendor_totals) > 0 else 0
+    threshold = float(vendor_totals.quantile(0.8)) if len(vendor_totals) > 0 else 0
+
+    return jsonify({
+        'vendors': vendor_totals.index.tolist(),
+        'amounts': vendor_totals.values.tolist(),
+        'top_vendor': top_vendor,
+        'top_vendor_amount': top_vendor_amount,
+        'top_vendor_amount_formatted': format_indian_number(top_vendor_amount),
+        'threshold': threshold
+    })
+
+
+@app.route('/api/<bank_code>/categories')
+@login_required
+def get_bank_categories(bank_code):
+    """Get list of all broader categories for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    df = get_bank_df(bank_code)
+    if df.empty:
+        return jsonify({'categories': ['All']})
+
+    categories = ['All'] + sorted(df['Broader Category'].unique().tolist())
+    return jsonify({'categories': categories})
+
+
+@app.route('/api/<bank_code>/date_range')
+@login_required
+def get_bank_date_range(bank_code):
+    """Get the min and max dates available for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    df = get_bank_df(bank_code)
+    if len(df) == 0:
+        return jsonify({'min_date': None, 'max_date': None})
+
+    min_date = df['date'].min()
+    max_date = df['date'].max()
+
+    return jsonify({
+        'min_date': min_date.strftime('%Y-%m-%d') if pd.notna(min_date) else None,
+        'max_date': max_date.strftime('%Y-%m-%d') if pd.notna(max_date) else None
+    })
+
+
+@app.route('/api/<bank_code>/transactions')
+@login_required
+def get_bank_transactions(bank_code):
+    """Get all transactions for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    category = request.args.get('category', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    limit = int(request.args.get('limit', 10000))
+    sort_by = request.args.get('sort_by', 'date')
+    sort_order = request.args.get('sort_order', 'desc')
+    search_query = request.args.get('search', '').lower()
+
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return jsonify({'transactions': []})
+
+    if category != 'All':
+        df = df[df['Broader Category'] == category]
+    df = filter_by_date_range(df, start_date, end_date)
+
+    if search_query:
+        df = df[
+            df['Transaction Description'].astype(str).str.lower().str.contains(search_query, na=False) |
+            df['Client/Vendor'].astype(str).str.lower().str.contains(search_query, na=False) |
+            df['Broader Category'].astype(str).str.lower().str.contains(search_query, na=False)
+        ]
+
+    ascending = (sort_order == 'asc')
+
+    if sort_by == 'dr_amount':
+        df_sorted = df.sort_values(['DR Amount', 'date'], ascending=[ascending, False]).head(limit)
+    elif sort_by == 'cr_amount':
+        df_sorted = df.sort_values(['CR Amount', 'date'], ascending=[ascending, False]).head(limit)
+    else:
+        df_sorted = df.sort_values('date', ascending=ascending).head(limit)
+
+    transactions = []
+    for idx, row in df_sorted.iterrows():
+        transactions.append({
+            'id': int(idx) if hasattr(idx, '__int__') else idx,
+            'date': row['date'].strftime('%d %b %Y'),
+            'date_raw': row['date'].strftime('%Y-%m-%d'),
+            'description': row['Transaction Description'],
+            'vendor': row['Client/Vendor'],
+            'category': row['Broader Category'],
+            'code': row.get('Code', ''),
+            'dr_amount': float(row['DR Amount']),
+            'dr_amount_formatted': format_indian_number(row['DR Amount']) if row['DR Amount'] > 0 else '',
+            'cr_amount': float(row['CR Amount']),
+            'cr_amount_formatted': format_indian_number(row['CR Amount']) if row['CR Amount'] > 0 else '',
+            'net': float(row['net']),
+            'net_formatted': format_indian_number(row['net']),
+            'project': row.get('Project', ''),
+            'dd': row.get('DD', ''),
+            'notes': row.get('Notes', '')
+        })
+
+    return jsonify({'transactions': transactions})
+
+
+@app.route('/api/<bank_code>/insights')
+@login_required
+def get_bank_insights(bank_code):
+    """Get key insights for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    category = request.args.get('category', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return jsonify({
+            'avg_monthly_expense': 0,
+            'avg_monthly_expense_formatted': '₹0',
+            'expense_trend_pct': 0,
+            'expense_trend_direction': 'no data',
+            'avg_transaction_size': 0,
+            'avg_transaction_size_formatted': '₹0',
+            'peak_day': None,
+            'cashflow_velocity': 0,
+            'total_months': 0
+        })
+
+    if category != 'All':
+        df = df[df['Broader Category'] == category]
+    df = filter_by_date_range(df, start_date, end_date)
+
+    monthly_expenses = df.groupby('month')['DR Amount'].sum()
+    avg_monthly_expense = float(monthly_expenses.mean()) if len(monthly_expenses) > 0 else 0
+
+    if len(monthly_expenses) >= 3:
+        last_3_months = monthly_expenses.tail(3)
+        first_month = last_3_months.iloc[0]
+        last_month = last_3_months.iloc[-1]
+        trend_pct = ((last_month - first_month) / first_month * 100) if first_month > 0 else 0
+        trend_direction = 'increasing' if trend_pct > 0 else 'decreasing' if trend_pct < 0 else 'stable'
+    else:
+        trend_pct = 0
+        trend_direction = 'insufficient data'
+
+    expense_df = df[df['DR Amount'] > 0]
+    avg_transaction_size = float(expense_df['DR Amount'].mean()) if len(expense_df) > 0 else 0
+
+    expense_df_with_day = expense_df.copy()
+    expense_df_with_day['day_of_week'] = expense_df_with_day['date'].dt.day_name()
+    day_expenses = expense_df_with_day.groupby('day_of_week')['DR Amount'].sum()
+    peak_day = day_expenses.idxmax() if len(day_expenses) > 0 else None
+    peak_day_amount = float(day_expenses.max()) if len(day_expenses) > 0 else 0
+
+    total_months = len(df['month'].unique())
+    transactions_per_month = len(df) / total_months if total_months > 0 else 0
+
+    return jsonify({
+        'avg_monthly_expense': avg_monthly_expense,
+        'avg_monthly_expense_formatted': format_indian_number(avg_monthly_expense),
+        'expense_trend_pct': round(trend_pct, 1),
+        'expense_trend_direction': trend_direction,
+        'avg_transaction_size': avg_transaction_size,
+        'avg_transaction_size_formatted': format_indian_number(avg_transaction_size),
+        'peak_day': peak_day,
+        'peak_day_amount': peak_day_amount,
+        'peak_day_amount_formatted': format_indian_number(peak_day_amount),
+        'cashflow_velocity': round(transactions_per_month, 0),
+        'total_months': total_months
+    })
+
+
+@app.route('/api/<bank_code>/upload', methods=['POST'])
+@login_required
+def upload_bank_statement(bank_code):
+    """Upload and process bank statement for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type. Only .xlsx and .xls files are allowed'}), 400
+
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{bank_code}_{timestamp}_{filename}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        file.save(filepath)
+        print(f"[+] File saved: {filepath}")
+
+        print(f"[*] Processing {bank_code} bank statement: {filename}")
+        df = process_bank_statement(filepath, bank_code)
+
+        if app.config['USE_DATABASE']:
+            print(f"[*] Inserting into database for {bank_code}...")
+
+            global db_connected
+            if not db_connected:
+                connected = db_manager.connect()
+                if connected:
+                    db_connected = True
+                else:
+                    return jsonify({
+                        'error': 'Database connection failed',
+                        'details': 'Could not connect to MySQL database'
+                    }), 500
+
+            results = db_manager.insert_transactions_bulk(df, bank_code)
+
+            print(f"[+] Insertion complete for {bank_code}!")
+            print(f"    Total: {results['total']}")
+            print(f"    Inserted: {results['inserted']}")
+            print(f"    Duplicates: {results['duplicates']}")
+            print(f"    Errors: {results['errors']}")
+
+            db_manager.log_upload(
+                filename=filename,
+                records_processed=results['total'],
+                records_inserted=results['inserted'],
+                records_duplicated=results['duplicates'],
+                status='success' if results['errors'] == 0 else 'partial',
+                error_message='; '.join(results['error_messages'][:5]) if results['error_messages'] else None,
+                bank_code=bank_code
+            )
+
+            print(f"[*] Reloading dashboard data for {bank_code}...")
+            reload_bank_data(bank_code)
+            print(f"[+] Dashboard data reloaded for {bank_code}!")
+
+            return jsonify({
+                'success': True,
+                'message': f'Bank statement processed successfully for {BANK_CONFIG[bank_code]["name"]}',
+                'filename': filename,
+                'stats': {
+                    'total': results['total'],
+                    'inserted': results['inserted'],
+                    'duplicates': results['duplicates'],
+                    'errors': results['errors']
+                }
+            })
+        else:
+            output_file = filepath.replace('.xlsx', '_PROCESSED.xlsx')
+            df.to_excel(output_file, index=False)
+
+            return jsonify({
+                'success': True,
+                'message': 'Bank statement processed successfully (Excel mode)',
+                'filename': filename,
+                'output_file': output_file,
+                'stats': {
+                    'total': len(df),
+                    'inserted': 0,
+                    'duplicates': 0,
+                    'errors': 0
+                }
+            })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Error processing file',
+            'details': str(e)
+        }), 500
+
+
+@app.route('/api/<bank_code>/transaction/update', methods=['POST'])
+@login_required
+def update_bank_transaction(bank_code):
+    """Update a transaction's editable fields for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    try:
+        data = request.json
+        table = get_bank_table(bank_code)
+
+        transaction_date = data.get('date')
+        description = data.get('description')
+        dr_amount = data.get('debit') if data.get('debit') is not None else data.get('dr_amount')
+        cr_amount = data.get('credit') if data.get('credit') is not None else data.get('cr_amount')
+
+        category = data.get('category')
+        vendor = data.get('vendor')
+        project = data.get('project')
+        dd = data.get('dd')
+        notes = data.get('notes')
+
+        if not all([transaction_date, description is not None]):
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields'
+            }), 400
+
+        if app.config['USE_DATABASE']:
+            with db_manager.get_connection() as conn:
+                query = f"""
+                UPDATE {table}
+                SET
+                    category = %s,
+                    broader_category = %s,
+                    client_vendor = %s,
+                    project = %s,
+                    dd = %s,
+                    notes = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE transaction_date = %s
+                  AND transaction_description = %s
+                  AND dr_amount = %s
+                  AND cr_amount = %s
+                LIMIT 1
+                """
+
+                cursor = conn.cursor()
+                cursor.execute(query, (
+                    category,
+                    category,
+                    vendor,
+                    project,
+                    dd,
+                    notes,
+                    transaction_date,
+                    description,
+                    dr_amount,
+                    cr_amount
+                ))
+                conn.commit()
+                affected_rows = cursor.rowcount
+                cursor.close()
+
+            if affected_rows > 0:
+                reload_bank_data(bank_code)
+                return jsonify({
+                    'success': True,
+                    'message': 'Transaction updated successfully'
+                })
+            else:
+                return jsonify({
+                    'error': 'Transaction not found or no changes made'
+                }), 404
+        else:
+            return jsonify({
+                'error': 'Database not available'
+            }), 503
+
+    except Exception as e:
+        print(f"[!] Error updating transaction: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Error updating transaction',
+            'details': str(e)
+        }), 500
+
+
+@app.route('/api/<bank_code>/download_transactions')
+@login_required
+def download_bank_transactions(bank_code):
+    """Download transactions as Excel for a specific bank"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    category = request.args.get('category', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    df = get_bank_df(bank_code).copy()
+    if category != 'All':
+        df = df[df['Broader Category'] == category]
+    df = filter_by_date_range(df, start_date, end_date)
+
+    df_export = df.sort_values('date', ascending=False).copy()
+    df_export['Date'] = df_export['date'].dt.strftime('%d-%m-%Y')
+
+    export_columns = [
+        'Date', 'Transaction Description', 'Client/Vendor', 'Category',
+        'Broader Category', 'Code', 'DR Amount', 'CR Amount',
+        'Running Balance', 'Net', 'Project', 'DD', 'Notes'
+    ]
+
+    df_final = pd.DataFrame()
+    for col in export_columns:
+        if col in df_export.columns:
+            df_final[col] = df_export[col]
+        elif col == 'Running Balance':
+            df_final[col] = df_export.get('running_balance', 0)
+        elif col == 'Net':
+            df_final[col] = df_export.get('net', 0)
+        else:
+            df_final[col] = None
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_final.to_excel(writer, index=False, sheet_name='Transactions')
+        worksheet = writer.sheets['Transactions']
+        for idx, col in enumerate(df_final.columns):
+            max_length = max(df_final[col].astype(str).apply(len).max(), len(str(col))) + 2
+            worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
+
+    output.seek(0)
+
+    bank_name = BANK_CONFIG[bank_code]['name'].replace(' ', '_')
+    filename = f"{bank_name}_transactions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+# ============================================================================
+# PERSONAL TRANSACTION TRACKER API ENDPOINTS
+# ============================================================================
+
+@app.route('/personal-tracker')
+@login_required
+def personal_tracker():
+    """Render personal transaction tracker page"""
+    return render_template('personal_tracker.html')
+
+
+@app.route('/api/personal/transactions', methods=['GET'])
+@login_required
+def get_personal_transactions():
+    """Get all personal transactions"""
+    if not app.config['USE_DATABASE']:
+        return jsonify({'transactions': []})
+
+    # Get filter parameters
+    project = request.args.get('project', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    search = request.args.get('search', '').lower()
+
+    try:
+        query = """
+        SELECT id, transaction_date, vendor, description, project, amount, created_at
+        FROM personal_transactions
+        WHERE 1=1
+        """
+        params = []
+
+        if project and project != 'All':
+            query += " AND project = %s"
+            params.append(project)
+
+        if start_date:
+            query += " AND transaction_date >= %s"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND transaction_date <= %s"
+            params.append(end_date)
+
+        if search:
+            query += " AND (LOWER(vendor) LIKE %s OR LOWER(description) LIKE %s)"
+            params.extend([f'%{search}%', f'%{search}%'])
+
+        query += " ORDER BY transaction_date DESC, created_at DESC"
+
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            cursor.close()
+
+        transactions = []
+        for row in rows:
+            transactions.append({
+                'id': row['id'],
+                'date': row['transaction_date'].strftime('%Y-%m-%d'),
+                'date_formatted': row['transaction_date'].strftime('%d %b %Y'),
+                'vendor': row['vendor'],
+                'description': row['description'] or '',
+                'project': row['project'],
+                'amount': float(row['amount']),
+                'amount_formatted': format_indian_number(row['amount'])
+            })
+        return jsonify({'transactions': transactions})
+    except Exception as e:
+        print(f"[!] Error fetching personal transactions: {e}")
+        return jsonify({'transactions': []})
+
+
+@app.route('/api/personal/transactions', methods=['POST'])
+@login_required
+def add_personal_transaction():
+    """Add a new personal transaction"""
+    if not app.config['USE_DATABASE']:
+        return jsonify({'error': 'Database not available'}), 503
+
+    data = request.json
+    transaction_date = data.get('date')
+    vendor = data.get('vendor', '').strip()
+    description = data.get('description', '').strip()
+    project = data.get('project', 'General').strip() or 'General'
+    amount = data.get('amount')
+
+    if not transaction_date or not vendor or amount is None:
+        return jsonify({'error': 'Missing required fields (date, vendor, amount)'}), 400
+
+    try:
+        amount = float(amount)
+        if amount <= 0:
+            return jsonify({'error': 'Amount must be greater than 0'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid amount'}), 400
+
+    try:
+        with db_manager.get_connection() as conn:
+            query = """
+            INSERT INTO personal_transactions (transaction_date, vendor, description, project, amount)
+            VALUES (%s, %s, %s, %s, %s)
+            """
+            cursor = conn.cursor()
+            cursor.execute(query, (transaction_date, vendor, description, project, amount))
+            conn.commit()
+            new_id = cursor.lastrowid
+            cursor.close()
+
+        return jsonify({
+            'success': True,
+            'message': 'Transaction added successfully',
+            'id': new_id
+        })
+    except Exception as e:
+        print(f"[!] Error adding personal transaction: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/personal/transactions/<int:transaction_id>', methods=['PUT'])
+@login_required
+def update_personal_transaction(transaction_id):
+    """Update a personal transaction"""
+    if not app.config['USE_DATABASE']:
+        return jsonify({'error': 'Database not available'}), 503
+
+    data = request.json
+    transaction_date = data.get('date')
+    vendor = data.get('vendor', '').strip()
+    description = data.get('description', '').strip()
+    project = data.get('project', 'General').strip() or 'General'
+    amount = data.get('amount')
+
+    if not transaction_date or not vendor or amount is None:
+        return jsonify({'error': 'Missing required fields (date, vendor, amount)'}), 400
+
+    try:
+        amount = float(amount)
+        if amount <= 0:
+            return jsonify({'error': 'Amount must be greater than 0'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid amount'}), 400
+
+    try:
+        with db_manager.get_connection() as conn:
+            query = """
+            UPDATE personal_transactions
+            SET transaction_date = %s, vendor = %s, description = %s, project = %s, amount = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            """
+            cursor = conn.cursor()
+            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_id))
+            conn.commit()
+            affected_rows = cursor.rowcount
+            cursor.close()
+
+        if affected_rows > 0:
+            return jsonify({
+                'success': True,
+                'message': 'Transaction updated successfully'
+            })
+        else:
+            return jsonify({'error': 'Transaction not found'}), 404
+    except Exception as e:
+        print(f"[!] Error updating personal transaction: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/personal/transactions/<int:transaction_id>', methods=['DELETE'])
+@login_required
+def delete_personal_transaction(transaction_id):
+    """Delete a personal transaction"""
+    if not app.config['USE_DATABASE']:
+        return jsonify({'error': 'Database not available'}), 503
+
+    try:
+        with db_manager.get_connection() as conn:
+            query = "DELETE FROM personal_transactions WHERE id = %s"
+            cursor = conn.cursor()
+            cursor.execute(query, (transaction_id,))
+            conn.commit()
+            affected_rows = cursor.rowcount
+            cursor.close()
+
+        if affected_rows > 0:
+            return jsonify({
+                'success': True,
+                'message': 'Transaction deleted successfully'
+            })
+        else:
+            return jsonify({'error': 'Transaction not found'}), 404
+    except Exception as e:
+        print(f"[!] Error deleting personal transaction: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/personal/summary')
+@login_required
+def get_personal_summary():
+    """Get summary statistics for personal transactions"""
+    empty_response = {
+        'total_spent': 0,
+        'total_spent_formatted': '₹0',
+        'this_month': 0,
+        'this_month_formatted': '₹0',
+        'transaction_count': 0,
+        'project_breakdown': []
+    }
+
+    if not app.config['USE_DATABASE']:
+        return jsonify(empty_response)
+
+    # Get filter parameters
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+
+    try:
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor(dictionary=True)
+
+            # Total spent query
+            total_query = "SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM personal_transactions WHERE 1=1"
+            params = []
+
+            if start_date:
+                total_query += " AND transaction_date >= %s"
+                params.append(start_date)
+            if end_date:
+                total_query += " AND transaction_date <= %s"
+                params.append(end_date)
+
+            cursor.execute(total_query, params)
+            total_result = cursor.fetchone()
+            total_spent = float(total_result['total']) if total_result else 0
+            transaction_count = int(total_result['count']) if total_result else 0
+
+            # This month query
+            this_month_query = """
+            SELECT COALESCE(SUM(amount), 0) as total
+            FROM personal_transactions
+            WHERE YEAR(transaction_date) = YEAR(CURRENT_DATE)
+              AND MONTH(transaction_date) = MONTH(CURRENT_DATE)
+            """
+            cursor.execute(this_month_query)
+            this_month_result = cursor.fetchone()
+            this_month = float(this_month_result['total']) if this_month_result else 0
+
+            # Project breakdown query
+            project_query = """
+            SELECT project, SUM(amount) as total, COUNT(*) as count
+            FROM personal_transactions
+            WHERE 1=1
+            """
+            params = []
+            if start_date:
+                project_query += " AND transaction_date >= %s"
+                params.append(start_date)
+            if end_date:
+                project_query += " AND transaction_date <= %s"
+                params.append(end_date)
+
+            project_query += " GROUP BY project ORDER BY total DESC"
+
+            cursor.execute(project_query, params)
+            project_rows = cursor.fetchall()
+            cursor.close()
+
+        project_breakdown = []
+        for row in project_rows:
+            pct = (float(row['total']) / total_spent * 100) if total_spent > 0 else 0
+            project_breakdown.append({
+                'project': row['project'],
+                'amount': float(row['total']),
+                'amount_formatted': format_indian_number(row['total']),
+                'count': int(row['count']),
+                'percentage': round(pct, 1)
+            })
+
+        return jsonify({
+            'total_spent': total_spent,
+            'total_spent_formatted': format_indian_number(total_spent),
+            'this_month': this_month,
+            'this_month_formatted': format_indian_number(this_month),
+            'transaction_count': transaction_count,
+            'project_breakdown': project_breakdown
+        })
+    except Exception as e:
+        print(f"[!] Error fetching personal summary: {e}")
+        return jsonify(empty_response)
+
+
+@app.route('/api/personal/projects')
+@login_required
+def get_personal_projects():
+    """Get list of unique projects from personal transactions"""
+    if not app.config['USE_DATABASE']:
+        return jsonify({'projects': ['General']})
+
+    try:
+        with db_manager.get_connection() as conn:
+            query = "SELECT DISTINCT project FROM personal_transactions ORDER BY project"
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            cursor.close()
+
+        projects = [row[0] for row in rows if row[0]]
+        if not projects:
+            projects = ['General']
+        return jsonify({'projects': projects})
+    except Exception as e:
+        print(f"[!] Error fetching projects: {e}")
+        return jsonify({'projects': ['General']})
+
+
+# ============================================================================
+# LEGACY API ENDPOINTS (for backwards compatibility)
+# ============================================================================
 
 @app.route('/api/summary')
 @login_required
@@ -779,40 +1904,41 @@ def update_transaction():
             }), 400
 
         # Update in database
-        if app.config['USE_DATABASE'] and db_connected:
-            query = """
-            UPDATE transactions
-            SET
-                category = %s,
-                broader_category = %s,
-                client_vendor = %s,
-                project = %s,
-                dd = %s,
-                notes = %s,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE transaction_date = %s
-              AND transaction_description = %s
-              AND dr_amount = %s
-              AND cr_amount = %s
-            LIMIT 1
-            """
+        if app.config['USE_DATABASE']:
+            with db_manager.get_connection() as conn:
+                query = """
+                UPDATE transactions
+                SET
+                    category = %s,
+                    broader_category = %s,
+                    client_vendor = %s,
+                    project = %s,
+                    dd = %s,
+                    notes = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE transaction_date = %s
+                  AND transaction_description = %s
+                  AND dr_amount = %s
+                  AND cr_amount = %s
+                LIMIT 1
+                """
 
-            cursor = db_manager.connection.cursor()
-            cursor.execute(query, (
-                category,
-                category,  # broader_category same as category
-                vendor,
-                project,
-                dd,
-                notes,
-                transaction_date,
-                description,
-                dr_amount,
-                cr_amount
-            ))
-            db_manager.connection.commit()
-            affected_rows = cursor.rowcount
-            cursor.close()
+                cursor = conn.cursor()
+                cursor.execute(query, (
+                    category,
+                    category,  # broader_category same as category
+                    vendor,
+                    project,
+                    dd,
+                    notes,
+                    transaction_date,
+                    description,
+                    dr_amount,
+                    cr_amount
+                ))
+                conn.commit()
+                affected_rows = cursor.rowcount
+                cursor.close()
 
             if affected_rows > 0:
                 # Reload data
