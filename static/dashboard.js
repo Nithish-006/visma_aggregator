@@ -1,12 +1,15 @@
 // Global state
 let charts = {};
 let currentCategory = 'All';
-let currentMonths = ['All'];
+let currentStartDate = null;
+let currentEndDate = null;
 let crossFilterActive = false;
 let currentSortBy = 'date';
 let currentSortOrder = 'desc';
 let currentSearch = '';
 let searchTimeout = null;
+let dataMinDate = null;
+let dataMaxDate = null;
 
 /** Utilities **/
 
@@ -35,39 +38,60 @@ function hideLoading() {
     document.getElementById('loading-overlay')?.classList.add('hidden');
 }
 
-function formatMonthsForAPI(months) {
-    if (!months || months.length === 0 || (months.length === 1 && months[0] === 'All')) {
-        return 'All';
+function formatDateRangeForAPI(startDate, endDate) {
+    // Returns object with start_date and end_date params
+    const params = {};
+    if (startDate) {
+        params.start_date = startDate;
     }
-    return months.join(',');
+    if (endDate) {
+        params.end_date = endDate;
+    }
+    return params;
+}
+
+function buildApiUrl(baseUrl, category, startDate, endDate, extraParams = {}) {
+    const params = new URLSearchParams();
+    params.append('category', category || 'All');
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+
+    // Add any extra params
+    for (const [key, value] of Object.entries(extraParams)) {
+        params.append(key, value);
+    }
+
+    return `${baseUrl}?${params.toString()}`;
 }
 
 /** Filters loading **/
 
-async function loadMonths() {
+async function loadDateRange() {
     try {
-        const res = await fetch('/api/months');
+        const res = await fetch('/api/date_range');
         const data = await res.json();
 
-        const select = $('#month-filter');
-        select.empty();
+        if (data.min_date && data.max_date) {
+            dataMinDate = data.min_date;
+            dataMaxDate = data.max_date;
 
-        // Use the synchronized data from backend
-        if (data.months_data) {
-            data.months_data.forEach((item) => {
-                const opt = new Option(item.label, item.value, false, false);
-                select.append(opt);
-            });
+            const startInput = document.getElementById('start-date');
+            const endInput = document.getElementById('end-date');
+
+            if (startInput && endInput) {
+                // Set the min/max constraints on the date inputs
+                startInput.min = data.min_date;
+                startInput.max = data.max_date;
+                endInput.min = data.min_date;
+                endInput.max = data.max_date;
+
+                // Default: show all data (leave inputs empty)
+                startInput.value = '';
+                endInput.value = '';
+            }
         }
-
-        // Use Select2
-        select.select2({
-            placeholder: 'All months',
-            allowClear: true,
-            width: 'resolve'
-        });
     } catch (e) {
-        console.error('Error loading months:', e);
+        console.error('Error loading date range:', e);
     }
 }
 
@@ -92,14 +116,10 @@ async function loadCategories() {
 
 /** Hero summary **/
 
-async function loadHeroSummary(category = 'All', months = ['All']) {
+async function loadHeroSummary(category = 'All', startDate = null, endDate = null) {
     try {
-        const monthParam = formatMonthsForAPI(months);
-        const res = await fetch(
-            `/api/summary?category=${encodeURIComponent(category)}&month=${encodeURIComponent(
-                monthParam
-            )}`
-        );
+        const url = buildApiUrl('/api/summary', category, startDate, endDate);
+        const res = await fetch(url);
         const data = await res.json();
 
         // Header count
@@ -142,7 +162,7 @@ async function loadHeroSummary(category = 'All', months = ['All']) {
             document.getElementById('biggest-category-amount').textContent = '₹0';
         }
 
-        await loadSparkline(category, months);
+        await loadSparkline(category, startDate, endDate);
     } catch (e) {
         console.error('Error loading hero summary:', e);
     }
@@ -150,14 +170,10 @@ async function loadHeroSummary(category = 'All', months = ['All']) {
 
 /** Sparkline **/
 
-async function loadSparkline(category = 'All', months = ['All']) {
+async function loadSparkline(category = 'All', startDate = null, endDate = null) {
     try {
-        const monthParam = formatMonthsForAPI(months);
-        const res = await fetch(
-            `/api/running_balance?category=${encodeURIComponent(category)}&month=${encodeURIComponent(
-                monthParam
-            )}`
-        );
+        const url = buildApiUrl('/api/running_balance', category, startDate, endDate);
+        const res = await fetch(url);
         const data = await res.json();
         if (!data.sparkline_dates || data.sparkline_dates.length === 0) return;
 
@@ -209,14 +225,10 @@ async function loadSparkline(category = 'All', months = ['All']) {
 
 /** Balance chart **/
 
-async function loadBalanceChart(category = 'All', months = ['All']) {
+async function loadBalanceChart(category = 'All', startDate = null, endDate = null) {
     try {
-        const monthParam = formatMonthsForAPI(months);
-        const res = await fetch(
-            `/api/running_balance?category=${encodeURIComponent(category)}&month=${encodeURIComponent(
-                monthParam
-            )}`
-        );
+        const url = buildApiUrl('/api/running_balance', category, startDate, endDate);
+        const res = await fetch(url);
         const data = await res.json();
 
         const ctx = document.getElementById('balanceChart').getContext('2d');
@@ -351,14 +363,10 @@ async function loadBalanceChart(category = 'All', months = ['All']) {
 
 /** Monthly chart **/
 
-async function loadMonthlyChart(category = 'All', months = ['All']) {
+async function loadMonthlyChart(category = 'All', startDate = null, endDate = null) {
     try {
-        const monthParam = formatMonthsForAPI(months);
-        const res = await fetch(
-            `/api/monthly_trend?category=${encodeURIComponent(category)}&month=${encodeURIComponent(
-                monthParam
-            )}`
-        );
+        const url = buildApiUrl('/api/monthly_trend', category, startDate, endDate);
+        const res = await fetch(url);
         const data = await res.json();
 
         const ctx = document.getElementById('monthlyChart').getContext('2d');
@@ -463,14 +471,10 @@ async function loadMonthlyChart(category = 'All', months = ['All']) {
 
 /** Category chart **/
 
-async function loadCategoryChart(category = 'All', months = ['All']) {
+async function loadCategoryChart(category = 'All', startDate = null, endDate = null) {
     try {
-        const monthParam = formatMonthsForAPI(months);
-        const res = await fetch(
-            `/api/category_breakdown?category=${encodeURIComponent(category)}&month=${encodeURIComponent(
-                monthParam
-            )}`
-        );
+        const url = buildApiUrl('/api/category_breakdown', category, startDate, endDate);
+        const res = await fetch(url);
         const data = await res.json();
 
         const ctx = document.getElementById('categoryChart').getContext('2d');
@@ -565,14 +569,10 @@ async function loadCategoryChart(category = 'All', months = ['All']) {
 
 /** Vendors chart **/
 
-async function loadVendorChart(category = 'All', months = ['All']) {
+async function loadVendorChart(category = 'All', startDate = null, endDate = null) {
     try {
-        const monthParam = formatMonthsForAPI(months);
-        const res = await fetch(
-            `/api/top_vendors?category=${encodeURIComponent(category)}&month=${encodeURIComponent(
-                monthParam
-            )}`
-        );
+        const url = buildApiUrl('/api/top_vendors', category, startDate, endDate);
+        const res = await fetch(url);
         const data = await res.json();
 
         const ctx = document.getElementById('vendorChart').getContext('2d');
@@ -635,14 +635,10 @@ async function loadVendorChart(category = 'All', months = ['All']) {
 
 /** Insights **/
 
-async function loadInsights(category = 'All', months = ['All']) {
+async function loadInsights(category = 'All', startDate = null, endDate = null) {
     try {
-        const monthParam = formatMonthsForAPI(months);
-        const res = await fetch(
-            `/api/insights?category=${encodeURIComponent(category)}&month=${encodeURIComponent(
-                monthParam
-            )}`
-        );
+        const url = buildApiUrl('/api/insights', category, startDate, endDate);
+        const res = await fetch(url);
         const data = await res.json();
 
         document.getElementById('avg-monthly-expense').textContent =
@@ -694,14 +690,15 @@ async function loadInsights(category = 'All', months = ['All']) {
 
 /** Transactions **/
 
-async function loadTransactions(category = 'All', months = ['All']) {
+async function loadTransactions(category = 'All', startDate = null, endDate = null) {
     try {
-        const monthParam = formatMonthsForAPI(months);
-        const res = await fetch(
-            `/api/transactions?category=${encodeURIComponent(
-                category
-            )}&month=${encodeURIComponent(monthParam)}&limit=10000&sort_by=${currentSortBy}&sort_order=${currentSortOrder}&search=${encodeURIComponent(currentSearch)}`
-        );
+        const url = buildApiUrl('/api/transactions', category, startDate, endDate, {
+            limit: '10000',
+            sort_by: currentSortBy,
+            sort_order: currentSortOrder,
+            search: currentSearch
+        });
+        const res = await fetch(url);
         const data = await res.json();
 
         const tbody = document.getElementById('transactions-body');
@@ -734,14 +731,32 @@ async function loadTransactions(category = 'All', months = ['All']) {
 
 function filterByMonthFromLabel(label) {
     if (!label) return;
-    // Expect something like "April 2025" in month_name
-    const select = $('#month-filter');
-    const matching = Array.from(select[0].options).find(
-        (opt) => opt.textContent === label
-    );
-    if (!matching) return;
-    currentMonths = [matching.value];
-    select.val(currentMonths).trigger('change');
+    // When clicking on a month bar in the chart, filter to that month
+    // Parse "April 2025" format and set date range for that month
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    const parts = label.split(' ');
+    if (parts.length !== 2) return;
+
+    const monthName = parts[0];
+    const year = parseInt(parts[1]);
+    const monthIndex = monthNames.indexOf(monthName);
+    if (monthIndex === -1 || isNaN(year)) return;
+
+    // Set start date to first of the month
+    const startDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+
+    // Set end date to last day of the month
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const endDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    currentStartDate = startDate;
+    currentEndDate = endDate;
+
+    // Update the UI
+    document.getElementById('start-date').value = startDate;
+    document.getElementById('end-date').value = endDate;
+
     crossFilterActive = true;
     runFullRefresh();
 }
@@ -760,14 +775,13 @@ function filterByCategory(category) {
 async function runFullRefresh() {
     showLoading();
     await Promise.all([
-        loadHeroSummary(currentCategory, currentMonths),
-        loadBalanceChart(currentCategory, currentMonths),
-        loadMonthlyChart(currentCategory, currentMonths),
-        loadCategoryChart(currentCategory, currentMonths),
-        loadVendorChart(currentCategory, currentMonths),
-        loadVendorChart(currentCategory, currentMonths),
-        loadInsights(currentCategory, currentMonths),
-        loadTransactions(currentCategory, currentMonths)
+        loadHeroSummary(currentCategory, currentStartDate, currentEndDate),
+        loadBalanceChart(currentCategory, currentStartDate, currentEndDate),
+        loadMonthlyChart(currentCategory, currentStartDate, currentEndDate),
+        loadCategoryChart(currentCategory, currentStartDate, currentEndDate),
+        loadVendorChart(currentCategory, currentStartDate, currentEndDate),
+        loadInsights(currentCategory, currentStartDate, currentEndDate),
+        loadTransactions(currentCategory, currentStartDate, currentEndDate)
     ]);
     hideLoading();
 }
@@ -780,13 +794,32 @@ window.loadDashboardData = runFullRefresh;
 document.addEventListener('DOMContentLoaded', async () => {
     showLoading();
 
-    await Promise.all([loadCategories(), loadMonths()]);
+    await Promise.all([loadCategories(), loadDateRange()]);
 
     // default filter state
     currentCategory = 'All';
-    currentMonths = ['All'];
+    currentStartDate = null;
+    currentEndDate = null;
 
-    // Scenario chips
+    // Helper function to get date N days ago
+    function getDateNDaysAgo(n) {
+        const date = new Date();
+        date.setDate(date.getDate() - n);
+        return date.toISOString().split('T')[0];
+    }
+
+    // Helper function to get first day of current month
+    function getFirstDayOfMonth() {
+        const date = new Date();
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+    }
+
+    // Helper function to get today's date
+    function getToday() {
+        return new Date().toISOString().split('T')[0];
+    }
+
+    // Scenario chips for date ranges
     document.querySelectorAll('.chip').forEach((chip) => {
         chip.addEventListener('click', () => {
             document
@@ -794,17 +827,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                 .forEach((c) => c.classList.remove('chip-active'));
             chip.classList.add('chip-active');
             const scenario = chip.dataset.scenario;
-            const monthSelect = $('#month-filter');
+
+            const startInput = document.getElementById('start-date');
+            const endInput = document.getElementById('end-date');
 
             if (scenario === 'all') {
-                currentMonths = ['All'];
-                monthSelect.val(null).trigger('change');
-            } else if (scenario === 'current') {
-                // Let backend pick latest; just set All but treat as scenario
-                currentMonths = ['All'];
-            } else if (scenario === 'last3') {
-                // leave selection; business logic could be added here if needed
-                currentMonths = ['All'];
+                currentStartDate = null;
+                currentEndDate = null;
+                startInput.value = '';
+                endInput.value = '';
+            } else if (scenario === 'last7') {
+                currentStartDate = getDateNDaysAgo(7);
+                currentEndDate = getToday();
+                startInput.value = currentStartDate;
+                endInput.value = currentEndDate;
+            } else if (scenario === 'last14') {
+                currentStartDate = getDateNDaysAgo(14);
+                currentEndDate = getToday();
+                startInput.value = currentStartDate;
+                endInput.value = currentEndDate;
+            } else if (scenario === 'last30') {
+                currentStartDate = getDateNDaysAgo(30);
+                currentEndDate = getToday();
+                startInput.value = currentStartDate;
+                endInput.value = currentEndDate;
+            } else if (scenario === 'thisMonth') {
+                currentStartDate = getFirstDayOfMonth();
+                currentEndDate = getToday();
+                startInput.value = currentStartDate;
+                endInput.value = currentEndDate;
             }
             runFullRefresh();
         });
@@ -814,18 +865,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Apply / Clear
     document.getElementById('apply-filters').addEventListener('click', () => {
         const catSelect = document.getElementById('category-filter');
-        const monthSelect = $('#month-filter');
+        const startInput = document.getElementById('start-date');
+        const endInput = document.getElementById('end-date');
 
         currentCategory = catSelect.value || 'All';
-        const selectedMonths = monthSelect.val();
-        currentMonths = selectedMonths && selectedMonths.length > 0 ? selectedMonths : ['All'];
+        currentStartDate = startInput.value || null;
+        currentEndDate = endInput.value || null;
 
-        // Handle "All" logic - if specific months are selected, remove All
-        if (currentMonths.length > 1 && currentMonths.includes('All')) {
-            currentMonths = currentMonths.filter(m => m !== 'All');
-            // update UI to reflect removal of All
-            monthSelect.val(currentMonths).trigger('change.select2');
-        }
+        // Clear chip selection when manually applying filters
+        document
+            .querySelectorAll('.chip')
+            .forEach((c) => c.classList.remove('chip-active'));
 
         crossFilterActive = false;
         runFullRefresh();
@@ -833,13 +883,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('clear-filters').addEventListener('click', () => {
         const catSelect = document.getElementById('category-filter');
-        const monthSelect = $('#month-filter');
+        const startInput = document.getElementById('start-date');
+        const endInput = document.getElementById('end-date');
 
         currentCategory = 'All';
-        currentMonths = ['All'];
+        currentStartDate = null;
+        currentEndDate = null;
 
         catSelect.value = 'All';
-        monthSelect.val(null).trigger('change');
+        startInput.value = '';
+        endInput.value = '';
 
         document
             .querySelectorAll('.chip')
@@ -854,11 +907,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Download Transactions
     document.getElementById('download-transactions')?.addEventListener('click', () => {
-        const monthParam = formatMonthsForAPI(currentMonths);
-        const url = `/api/download_transactions?category=${encodeURIComponent(
-            currentCategory
-        )}&month=${encodeURIComponent(monthParam)}`;
-        window.location.href = url;
+        const params = new URLSearchParams();
+        params.append('category', currentCategory || 'All');
+        if (currentStartDate) params.append('start_date', currentStartDate);
+        if (currentEndDate) params.append('end_date', currentEndDate);
+
+        window.location.href = `/api/download_transactions?${params.toString()}`;
     });
 
     // Search listener
@@ -868,7 +922,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             currentSearch = e.target.value;
             if (searchTimeout) clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
-                loadTransactions(currentCategory, currentMonths);
+                loadTransactions(currentCategory, currentStartDate, currentEndDate);
             }, 300);
         });
     }
@@ -893,7 +947,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             th.classList.add('header-sort-active');
             th.querySelector('.sort-icon').textContent = currentSortOrder === 'desc' ? '↓' : '↑';
 
-            loadTransactions(currentCategory, currentMonths);
+            loadTransactions(currentCategory, currentStartDate, currentEndDate);
         });
     });
 

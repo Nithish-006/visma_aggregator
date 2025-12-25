@@ -151,6 +151,23 @@ body {
     box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.15);
 }
 
+.filter-input.date-input {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-card);
+    color: var(--text-main);
+    font-size: 0.9rem;
+    min-width: 140px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.filter-input.date-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.15);
+}
+
 .scenario-group {
     min-width: 220px;
     margin-left: 20px;
@@ -227,6 +244,29 @@ body {
 
 .btn-secondary:hover {
     background-color: #e5e7eb;
+}
+
+.logout-btn {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.logout-btn:hover {
+    background-color: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+}
+
+.logout-btn svg {
+    stroke: #ef4444;
 }
 
 /* Main */

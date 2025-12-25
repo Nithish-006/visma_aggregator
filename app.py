@@ -1,4 +1,5 @@
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, redirect, url_for, session
+from functools import wraps
 import pandas as pd
 import json
 import io
@@ -13,6 +14,27 @@ from bank_statement_processor import process_bank_statement
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Secret key for session management
+app.secret_key = os.environ.get('SECRET_KEY', 'visma-finance-secret-key-2024-secure')
+
+# Login credentials
+VALID_USERNAME = 'visma_finance'
+VALID_PASSWORD = 'visma@1617'
+
+
+def login_required(f):
+    """Decorator to require login for protected routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            # For API routes, return 401
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'Authentication required'}), 401
+            # For page routes, redirect to login
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Create uploads directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -163,6 +185,30 @@ def filter_by_months(df, month_list):
     return df[df['month'].isin(month_list)]
 
 
+def filter_by_date_range(df, start_date=None, end_date=None):
+    """Filter dataframe by date range"""
+    if not start_date and not end_date:
+        return df
+
+    filtered_df = df.copy()
+
+    if start_date:
+        try:
+            start = pd.to_datetime(start_date)
+            filtered_df = filtered_df[filtered_df['date'] >= start]
+        except Exception as e:
+            print(f"[!] Error parsing start_date: {e}")
+
+    if end_date:
+        try:
+            end = pd.to_datetime(end_date)
+            filtered_df = filtered_df[filtered_df['date'] <= end]
+        except Exception as e:
+            print(f"[!] Error parsing end_date: {e}")
+
+    return filtered_df
+
+
 def format_indian_number(amount):
     """Format number in Indian system"""
     if pd.isna(amount) or amount == 0:
@@ -186,6 +232,7 @@ def format_indian_number(amount):
 # ============================================================================
 
 @app.route('/api/upload', methods=['POST'])
+@login_required
 def upload_statement():
     """Upload and process bank statement"""
     try:
@@ -297,6 +344,7 @@ def upload_statement():
 
 
 @app.route('/api/upload_history')
+@login_required
 def get_upload_history():
     """Get recent upload history"""
     if not app.config['USE_DATABASE'] or not db_connected:
@@ -310,42 +358,69 @@ def get_upload_history():
 
 
 # ============================================================================
-# EXISTING ROUTES (keep all your existing routes from app.py)
+# AUTHENTICATION ROUTES
+# ============================================================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Handle user login"""
+    # If already logged in, redirect to dashboard
+    if session.get('logged_in'):
+        return redirect(url_for('index'))
+
+    error = None
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        if username == VALID_USERNAME and password == VALID_PASSWORD:
+            session['logged_in'] = True
+            session['username'] = username
+            return redirect(url_for('index'))
+        else:
+            error = 'Invalid username or password. Please try again.'
+
+    return render_template('login.html', error=error)
+
+
+@app.route('/logout')
+def logout():
+    """Handle user logout"""
+    session.clear()
+    return redirect(url_for('login'))
+
+
+# ============================================================================
+# PROTECTED ROUTES
 # ============================================================================
 
 @app.route('/')
+@login_required
 def index():
     """Render main dashboard page"""
     return render_template('index.html')
 
 
 @app.route('/edit-transactions')
+@login_required
 def edit_transactions():
     """Render transaction edit page"""
     return render_template('edit_transactions.html')
 
 
 @app.route('/api/summary')
+@login_required
 def get_summary():
     """Get summary statistics"""
     category = request.args.get('category', 'All')
-    month_filter = request.args.get('month', 'All')
-
-    # Handle multiple months
-    if month_filter and month_filter != 'All':
-        if ',' in month_filter:
-            month_list = [m.strip() for m in month_filter.split(',')]
-        else:
-            month_list = [month_filter]
-    else:
-        month_list = ['All']
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
 
     # Filter data
     df = df_global.copy()
     if category != 'All':
         df = df[df['Broader Category'] == category]
-    if month_list != ['All']:
-        df = df[df['month'].isin(month_list)]
+    df = filter_by_date_range(df, start_date, end_date)
 
     current_balance = float(df['running_balance'].iloc[-1]) if len(df) > 0 else 0
     total_income = float(df['CR Amount'].sum())
@@ -353,9 +428,9 @@ def get_summary():
     net_cashflow = total_income - total_expense
     expense_ratio = (total_expense / total_income * 100) if total_income > 0 else 0
 
-    # Calculate this month vs last month
-    if month_filter == 'All':
-        # Get current month (most recent month in data)
+    # Calculate this period vs previous period (for comparison)
+    # Get the most recent month in the filtered data for comparison
+    if len(df) > 0:
         current_month = df['month'].max()
         last_month = df[df['month'] < current_month]['month'].max() if len(df[df['month'] < current_month]) > 0 else None
 
@@ -365,30 +440,19 @@ def get_summary():
         this_month_net = float((this_month_df['CR Amount'].sum() - this_month_df['DR Amount'].sum())) if len(this_month_df) > 0 else 0
         last_month_net = float((last_month_df['CR Amount'].sum() - last_month_df['DR Amount'].sum())) if len(last_month_df) > 0 else 0
 
-        # Biggest category this month
-        this_month_expenses = this_month_df[this_month_df['DR Amount'] > 0] if len(this_month_df) > 0 else pd.DataFrame()
-        if len(this_month_expenses) > 0:
-            biggest_category = this_month_expenses.groupby('Broader Category')['DR Amount'].sum().idxmax()
-            biggest_category_amount = float(this_month_expenses.groupby('Broader Category')['DR Amount'].sum().max())
+        # Biggest category in the filtered period
+        expenses_df = df[df['DR Amount'] > 0]
+        if len(expenses_df) > 0:
+            biggest_category = expenses_df.groupby('Broader Category')['DR Amount'].sum().idxmax()
+            biggest_category_amount = float(expenses_df.groupby('Broader Category')['DR Amount'].sum().max())
         else:
             biggest_category = None
             biggest_category_amount = 0
     else:
-        # If specific month selected, compare with previous month
-        month_df = df[df['month'] == month_filter]
-        prev_month = df[df['month'] < month_filter]['month'].max() if len(df[df['month'] < month_filter]) > 0 else None
-        prev_month_df = df[df['month'] == prev_month] if prev_month else pd.DataFrame()
-
-        this_month_net = float((month_df['CR Amount'].sum() - month_df['DR Amount'].sum())) if len(month_df) > 0 else 0
-        last_month_net = float((prev_month_df['CR Amount'].sum() - prev_month_df['DR Amount'].sum())) if len(prev_month_df) > 0 else 0
-
-        month_expenses = month_df[month_df['DR Amount'] > 0] if len(month_df) > 0 else pd.DataFrame()
-        if len(month_expenses) > 0:
-            biggest_category = month_expenses.groupby('Broader Category')['DR Amount'].sum().idxmax()
-            biggest_category_amount = float(month_expenses.groupby('Broader Category')['DR Amount'].sum().max())
-        else:
-            biggest_category = None
-            biggest_category_amount = 0
+        this_month_net = 0
+        last_month_net = 0
+        biggest_category = None
+        biggest_category_amount = 0
 
     net_change = this_month_net - last_month_net if last_month_net != 0 else 0
     net_change_pct = ((net_change / abs(last_month_net)) * 100) if last_month_net != 0 else 0
@@ -404,7 +468,6 @@ def get_summary():
         'net_cashflow_formatted': format_indian_number(net_cashflow),
         'expense_ratio': round(expense_ratio, 1),
         'total_transactions': len(df),
-        'selected_months': month_list if month_list != ['All'] else ['All'],
         'this_month_net': this_month_net,
         'this_month_net_formatted': format_indian_number(this_month_net),
         'last_month_net': last_month_net,
@@ -422,17 +485,17 @@ def get_summary():
 # (I'll include the rest in the next part to keep this manageable)
 
 @app.route('/api/monthly_trend')
+@login_required
 def get_monthly_trend():
     """Get monthly income/expense trend"""
     category = request.args.get('category', 'All')
-    month_filter = request.args.get('month', 'All')
-
-    month_list = parse_month_filter(month_filter)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
 
     df = df_global.copy()
     if category != 'All':
         df = df[df['Broader Category'] == category]
-    df = filter_by_months(df, month_list)
+    df = filter_by_date_range(df, start_date, end_date)
 
     monthly = df.groupby('month_name').agg({
         'CR Amount': 'sum',
@@ -462,19 +525,19 @@ def get_monthly_trend():
     })
 
 @app.route('/api/category_breakdown')
+@login_required
 def get_category_breakdown():
     """Get expense breakdown by broader category"""
     category = request.args.get('category', 'All')
-    month_filter = request.args.get('month', 'All')
-
-    month_list = parse_month_filter(month_filter)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
 
     df = df_global.copy()
     expense_df = df[df['DR Amount'] > 0]
 
     if category != 'All':
         expense_df = expense_df[expense_df['Broader Category'] == category]
-    expense_df = filter_by_months(expense_df, month_list)
+    expense_df = filter_by_date_range(expense_df, start_date, end_date)
 
     category_totals = expense_df.groupby('Broader Category')['DR Amount'].sum().sort_values(ascending=False)
 
@@ -494,17 +557,17 @@ def get_category_breakdown():
     })
 
 @app.route('/api/running_balance')
+@login_required
 def get_running_balance():
     """Get running balance over time"""
     category = request.args.get('category', 'All')
-    month_filter = request.args.get('month', 'All')
-
-    month_list = parse_month_filter(month_filter)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
 
     df = df_global.copy()
     if category != 'All':
         df = df[df['Broader Category'] == category]
-    df = filter_by_months(df, month_list)
+    df = filter_by_date_range(df, start_date, end_date)
 
     # Sample data for performance (take every 5th point if more than 100 points)
     if len(df) > 100:
@@ -544,19 +607,19 @@ def get_running_balance():
     })
 
 @app.route('/api/top_vendors')
+@login_required
 def get_top_vendors():
     """Get top 10 vendors by expense"""
     category = request.args.get('category', 'All')
-    month_filter = request.args.get('month', 'All')
-
-    month_list = parse_month_filter(month_filter)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
 
     df = df_global.copy()
     expense_df = df[df['DR Amount'] > 0]
 
     if category != 'All':
         expense_df = expense_df[expense_df['Broader Category'] == category]
-    expense_df = filter_by_months(expense_df, month_list)
+    expense_df = filter_by_date_range(expense_df, start_date, end_date)
 
     vendor_totals = expense_df.groupby('Client/Vendor')['DR Amount'].sum().sort_values(ascending=False).head(10)
 
@@ -577,12 +640,14 @@ def get_top_vendors():
     })
 
 @app.route('/api/categories')
+@login_required
 def get_categories():
     """Get list of all broader categories"""
     categories = ['All'] + sorted(df_global['Broader Category'].unique().tolist())
     return jsonify({'categories': categories})
 
 @app.route('/api/months')
+@login_required
 def get_months():
     """Get list of all available months"""
     # Create unique pairs of (month_code, month_name) sorted by month_code
@@ -597,11 +662,32 @@ def get_months():
 
     return jsonify({'months_data': months_data})
 
+
+@app.route('/api/date_range')
+@login_required
+def get_date_range():
+    """Get the min and max dates available in the data"""
+    if len(df_global) == 0:
+        return jsonify({
+            'min_date': None,
+            'max_date': None
+        })
+
+    min_date = df_global['date'].min()
+    max_date = df_global['date'].max()
+
+    return jsonify({
+        'min_date': min_date.strftime('%Y-%m-%d') if pd.notna(min_date) else None,
+        'max_date': max_date.strftime('%Y-%m-%d') if pd.notna(max_date) else None
+    })
+
 @app.route('/api/transactions')
+@login_required
 def get_transactions():
     """Get all transactions"""
     category = request.args.get('category', 'All')
-    month_filter = request.args.get('month', 'All')
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
     limit = int(request.args.get('limit', 10000))  # Very high limit to get all
 
     # New parameters for sorting and searching
@@ -609,12 +695,10 @@ def get_transactions():
     sort_order = request.args.get('sort_order', 'desc') # asc, desc
     search_query = request.args.get('search', '').lower()
 
-    month_list = parse_month_filter(month_filter)
-
     df = df_global.copy()
     if category != 'All':
         df = df[df['Broader Category'] == category]
-    df = filter_by_months(df, month_list)
+    df = filter_by_date_range(df, start_date, end_date)
 
     # Apply Search
     if search_query:
@@ -662,6 +746,7 @@ def get_transactions():
 
 
 @app.route('/api/transaction/update', methods=['POST'])
+@login_required
 def update_transaction():
     """Update a transaction's editable fields"""
     try:
@@ -757,17 +842,17 @@ def update_transaction():
 
 
 @app.route('/api/download_transactions')
+@login_required
 def download_transactions():
     """Download transactions as Excel - matches original table schema"""
     category = request.args.get('category', 'All')
-    month_filter = request.args.get('month', 'All')
-
-    month_list = parse_month_filter(month_filter)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
 
     df = df_global.copy()
     if category != 'All':
         df = df[df['Broader Category'] == category]
-    df = filter_by_months(df, month_list)
+    df = filter_by_date_range(df, start_date, end_date)
 
     # Sort and prepare for export
     df_export = df.sort_values('date', ascending=False).copy()
@@ -833,17 +918,17 @@ def download_transactions():
     )
 
 @app.route('/api/insights')
+@login_required
 def get_insights():
     """Get key insights"""
     category = request.args.get('category', 'All')
-    month_filter = request.args.get('month', 'All')
-
-    month_list = parse_month_filter(month_filter)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
 
     df = df_global.copy()
     if category != 'All':
         df = df[df['Broader Category'] == category]
-    df = filter_by_months(df, month_list)
+    df = filter_by_date_range(df, start_date, end_date)
 
     # Calculate average monthly expense
     monthly_expenses = df.groupby('month')['DR Amount'].sum()
