@@ -11,6 +11,41 @@ let searchTimeout = null;
 let dataMinDate = null;
 let dataMaxDate = null;
 
+// Mobile detection for chart optimizations
+const isMobile = () => window.innerWidth <= 768;
+const isSmallPhone = () => window.innerWidth <= 480;
+
+// Mobile-optimized chart font settings
+function getMobileChartDefaults() {
+    if (isSmallPhone()) {
+        return {
+            titleFont: { size: 11 },
+            bodyFont: { size: 10 },
+            footerFont: { size: 9 },
+            tickFont: { size: 9 },
+            legendFont: { size: 9 },
+            padding: 6
+        };
+    } else if (isMobile()) {
+        return {
+            titleFont: { size: 12 },
+            bodyFont: { size: 11 },
+            footerFont: { size: 10 },
+            tickFont: { size: 10 },
+            legendFont: { size: 10 },
+            padding: 8
+        };
+    }
+    return {
+        titleFont: { size: 14 },
+        bodyFont: { size: 13 },
+        footerFont: { size: 12 },
+        tickFont: { size: 12 },
+        legendFont: { size: 12 },
+        padding: 10
+    };
+}
+
 /** Utilities **/
 
 function formatIndianNumber(amount) {
@@ -324,6 +359,9 @@ async function loadBalanceChart(category = 'All', startDate = null, endDate = nu
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        padding: getMobileChartDefaults().padding,
+                        titleFont: getMobileChartDefaults().titleFont,
+                        bodyFont: getMobileChartDefaults().bodyFont,
                         callbacks: {
                             label: (ctx) => {
                                 if (ctx.dataset.label === 'Lowest') {
@@ -337,7 +375,6 @@ async function loadBalanceChart(category = 'All', startDate = null, endDate = nu
                             }
                         },
                         backgroundColor: 'rgba(15,23,42,0.95)',
-                        padding: 10,
                         displayColors: false
                     }
                 },
@@ -345,12 +382,17 @@ async function loadBalanceChart(category = 'All', startDate = null, endDate = nu
                     y: {
                         beginAtZero: false,
                         ticks: {
-                            callback: (value) => formatIndianNumber(value)
+                            callback: (value) => formatIndianNumber(value),
+                            font: { size: getMobileChartDefaults().tickFont.size },
+                            maxTicksLimit: isMobile() ? 5 : 8
                         },
                         grid: { color: 'rgba(148,163,184,0.2)' }
                     },
                     x: {
-                        ticks: { maxTicksLimit: 10 },
+                        ticks: {
+                            maxTicksLimit: isMobile() ? 6 : 10,
+                            font: { size: getMobileChartDefaults().tickFont.size }
+                        },
                         grid: { color: 'rgba(148,163,184,0.18)' }
                     }
                 }
@@ -423,23 +465,42 @@ async function loadMonthlyChart(category = 'All', startDate = null, endDate = nu
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { display: true, position: 'top' },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            boxWidth: isMobile() ? 10 : 14,
+                            padding: isMobile() ? 8 : 12,
+                            font: { size: getMobileChartDefaults().legendFont.size }
+                        }
+                    },
                     tooltip: {
+                        padding: getMobileChartDefaults().padding,
+                        titleFont: getMobileChartDefaults().titleFont,
+                        bodyFont: getMobileChartDefaults().bodyFont,
                         callbacks: {
                             label: (ctx) =>
                                 `${ctx.dataset.label}: ${formatIndianNumber(ctx.parsed.y)}`
                         },
-                        backgroundColor: 'rgba(15,23,42,0.95)',
-                        padding: 10
+                        backgroundColor: 'rgba(15,23,42,0.95)'
                     }
                 },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        ticks: { callback: (v) => formatIndianNumber(v) },
+                        ticks: {
+                            callback: (v) => formatIndianNumber(v),
+                            font: { size: getMobileChartDefaults().tickFont.size },
+                            maxTicksLimit: isMobile() ? 5 : 8
+                        },
                         grid: { color: 'rgba(148,163,184,0.18)' }
                     },
                     x: {
+                        ticks: {
+                            font: { size: getMobileChartDefaults().tickFont.size },
+                            maxRotation: isMobile() ? 45 : 0,
+                            minRotation: isMobile() ? 45 : 0
+                        },
                         grid: { color: 'rgba(148,163,184,0.18)' }
                     }
                 }
@@ -525,10 +586,17 @@ async function loadCategoryChart(category = 'All', startDate = null, endDate = n
                 plugins: {
                     legend: {
                         display: true,
-                        position: 'right',
-                        labels: { boxWidth: 12, padding: 8 }
+                        position: isMobile() ? 'bottom' : 'right',
+                        labels: {
+                            boxWidth: isMobile() ? 10 : 12,
+                            padding: isMobile() ? 6 : 8,
+                            font: { size: getMobileChartDefaults().legendFont.size }
+                        }
                     },
                     tooltip: {
+                        padding: getMobileChartDefaults().padding,
+                        titleFont: getMobileChartDefaults().titleFont,
+                        bodyFont: getMobileChartDefaults().bodyFont,
                         callbacks: {
                             label: (ctx) => {
                                 const label = ctx.label || '';
@@ -609,20 +677,39 @@ async function loadVendorChart(category = 'All', startDate = null, endDate = nul
                 plugins: {
                     legend: { display: false },
                     tooltip: {
+                        padding: getMobileChartDefaults().padding,
+                        titleFont: getMobileChartDefaults().titleFont,
+                        bodyFont: getMobileChartDefaults().bodyFont,
                         callbacks: {
                             label: (ctx) => 'Spent: ' + formatIndianNumber(ctx.parsed.x)
                         },
-                        backgroundColor: 'rgba(15,23,42,0.95)',
-                        padding: 10
+                        backgroundColor: 'rgba(15,23,42,0.95)'
                     }
                 },
                 scales: {
                     x: {
                         beginAtZero: true,
-                        ticks: { callback: (v) => formatIndianNumber(v) },
+                        ticks: {
+                            callback: (v) => formatIndianNumber(v),
+                            font: { size: getMobileChartDefaults().tickFont.size },
+                            maxTicksLimit: isMobile() ? 4 : 6
+                        },
                         grid: { color: 'rgba(148,163,184,0.18)' }
                     },
-                    y: { grid: { color: 'rgba(148,163,184,0.18)' } }
+                    y: {
+                        ticks: {
+                            font: { size: getMobileChartDefaults().tickFont.size },
+                            // Truncate long vendor names on mobile
+                            callback: function(value, index) {
+                                const label = this.getLabelForValue(value);
+                                if (isMobile() && label.length > 15) {
+                                    return label.substring(0, 15) + '...';
+                                }
+                                return label;
+                            }
+                        },
+                        grid: { color: 'rgba(148,163,184,0.18)' }
+                    }
                 }
             }
         });

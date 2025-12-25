@@ -1161,11 +1161,25 @@ body {
     }
 
     .chart-container {
-        height: 200px;
+        height: 280px;
+        padding: 8px;
+        background: var(--bg-card);
+        border-radius: 12px;
     }
 
     .chart-container.large {
-        height: 250px;
+        height: 320px;
+    }
+
+    /* Better chart card styling on mobile */
+    .chart-card {
+        padding: 14px;
+        margin-bottom: 16px;
+    }
+
+    .chart-card h3 {
+        font-size: 1rem;
+        margin-bottom: 12px;
     }
 
     /* ===== INSIGHTS MOBILE ===== */
@@ -1231,12 +1245,15 @@ body {
     }
 
     .scrollable-table {
-        max-height: 350px;
+        max-height: 400px;
         border: 1px solid #e5e7eb;
         border-radius: 8px;
         overflow-x: auto;
+        overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         position: relative;
+        /* Smooth scrolling indicator */
+        scroll-behavior: smooth;
     }
 
     .scrollable-table::after {
@@ -1246,24 +1263,65 @@ body {
         bottom: 0;
         left: 0;
         right: 0;
-        background: linear-gradient(135deg, rgba(74, 108, 247, 0.1), rgba(74, 108, 247, 0.15));
+        background: linear-gradient(135deg, rgba(74, 108, 247, 0.15), rgba(74, 108, 247, 0.25));
         color: var(--primary-color);
         text-align: center;
-        padding: 6px;
-        font-size: 0.7rem;
+        padding: 8px;
+        font-size: 0.75rem;
         font-weight: 600;
         border-top: 1px solid rgba(74, 108, 247, 0.3);
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
     }
 
     .transactions-table {
-        min-width: 700px;
+        min-width: 900px;
         font-size: 0.8rem;
+        table-layout: auto;
     }
 
     .transactions-table th,
     .transactions-table td {
-        padding: 10px 8px;
-        font-size: 0.75rem;
+        padding: 10px 12px;
+        font-size: 0.8rem;
+    }
+
+    /* Show full content without truncation on mobile */
+    .transactions-table td {
+        white-space: normal;
+        word-wrap: break-word;
+        overflow: visible;
+        text-overflow: unset;
+        max-width: none;
+    }
+
+    /* Ensure description column shows full content */
+    .transactions-table th:nth-child(4),
+    .transactions-table td:nth-child(4) {
+        min-width: 280px;
+        white-space: normal;
+        word-wrap: break-word;
+    }
+
+    /* Keep date, amounts compact but readable */
+    .transactions-table th:nth-child(1),
+    .transactions-table td:nth-child(1) {
+        min-width: 100px;
+        white-space: nowrap;
+    }
+
+    .transactions-table th:nth-child(5),
+    .transactions-table td:nth-child(5),
+    .transactions-table th:nth-child(6),
+    .transactions-table td:nth-child(6),
+    .transactions-table th:nth-child(7),
+    .transactions-table td:nth-child(7) {
+        min-width: 90px;
+        white-space: nowrap;
     }
 
     /* ===== GENERAL MOBILE ===== */
@@ -1351,19 +1409,49 @@ body {
         font-size: 1.75rem;
     }
 
-    .chart-container,
+    .chart-container {
+        height: 240px;
+        padding: 6px;
+    }
+
     .chart-container.large {
-        height: 180px;
+        height: 280px;
+    }
+
+    /* Chart cards need more breathing room on small screens */
+    .chart-card {
+        padding: 12px;
+        margin-bottom: 14px;
+    }
+
+    .chart-card h3 {
+        font-size: 0.95rem;
+        margin-bottom: 10px;
     }
 
     .transactions-table {
-        min-width: 600px;
+        min-width: 850px;
+        table-layout: auto;
     }
 
     .transactions-table th,
     .transactions-table td {
-        padding: 8px 6px;
-        font-size: 0.7rem;
+        padding: 10px 8px;
+        font-size: 0.75rem;
+    }
+
+    /* Full description visibility on small phones */
+    .transactions-table td {
+        white-space: normal;
+        word-wrap: break-word;
+        overflow: visible;
+        text-overflow: unset;
+    }
+
+    .transactions-table th:nth-child(4),
+    .transactions-table td:nth-child(4) {
+        min-width: 250px;
+        white-space: normal;
     }
 }
 
