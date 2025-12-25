@@ -359,20 +359,133 @@
             color: var(--primary-light);
         }
 
-        /* Responsive */
-        @media (max-width: 480px) {
-            .login-card {
-                padding: 36px 24px;
+        /* Responsive - Tablets */
+        @media (max-width: 768px) {
+            .login-container {
+                padding: 16px;
             }
 
-            .login-title {
-                font-size: 1.5rem;
+            .login-card {
+                padding: 40px 28px;
+            }
+        }
+
+        /* Responsive - Mobile */
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 12px;
+            }
+
+            .login-card {
+                padding: 32px 20px;
+                border-radius: 20px;
+            }
+
+            .login-header {
+                margin-bottom: 32px;
             }
 
             .logo-icon {
-                width: 60px;
-                height: 60px;
-                font-size: 28px;
+                width: 56px;
+                height: 56px;
+                font-size: 26px;
+                border-radius: 16px;
+                margin-bottom: 16px;
+            }
+
+            .login-title {
+                font-size: 1.4rem;
+            }
+
+            .login-subtitle {
+                font-size: 0.85rem;
+            }
+
+            .login-form {
+                gap: 16px;
+            }
+
+            .form-group label {
+                font-size: 0.8rem;
+            }
+
+            .form-input {
+                padding: 12px 14px 12px 44px;
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
+
+            .input-icon {
+                left: 14px;
+                font-size: 16px;
+            }
+
+            .password-toggle {
+                right: 12px;
+            }
+
+            .login-btn {
+                padding: 14px 20px;
+                font-size: 0.95rem;
+                min-height: 50px;
+            }
+
+            .login-footer {
+                margin-top: 24px;
+                padding-top: 20px;
+            }
+
+            .error-message {
+                padding: 10px 14px;
+                font-size: 0.85rem;
+            }
+
+            /* Reduce particle count on mobile for performance */
+            .particle:nth-child(n+6) {
+                display: none;
+            }
+        }
+
+        /* Very small screens */
+        @media (max-width: 360px) {
+            .login-card {
+                padding: 28px 16px;
+            }
+
+            .login-title {
+                font-size: 1.25rem;
+            }
+
+            .logo-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 24px;
+            }
+        }
+
+        /* Landscape phone */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .login-card {
+                padding: 24px 32px;
+            }
+
+            .login-header {
+                margin-bottom: 20px;
+            }
+
+            .logo-icon {
+                width: 48px;
+                height: 48px;
+                font-size: 22px;
+                margin-bottom: 12px;
+            }
+
+            .login-form {
+                gap: 12px;
+            }
+
+            .login-footer {
+                margin-top: 16px;
+                padding-top: 12px;
             }
         }
 
