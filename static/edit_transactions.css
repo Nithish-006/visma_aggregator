@@ -1,66 +1,77 @@
-/* Edit Transactions Page Specific Styles */
+/* ============================================================================
+   EDIT TRANSACTIONS PAGE - DARK THEME STYLES
+   ============================================================================ */
 
+/* Main content adjustment for edit page */
+.main-content {
+    padding-top: 100px;
+}
+
+/* Edit Page Header */
 .edit-page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .page-title {
-    font-size: 2rem;
+    font-size: 1.75rem;
     font-weight: 700;
     color: var(--text-main);
-    margin: 0 0 4px 0;
+    margin: 0 0 6px 0;
 }
 
 .page-subtitle {
-    font-size: 0.95rem;
-    color: var(--text-muted);
+    font-size: 0.9rem;
+    color: var(--text-main);
+    opacity: 0.85;
     margin: 0;
 }
 
 .header-stats {
     display: flex;
     gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .stat-badge {
     padding: 8px 16px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    font-size: 0.9rem;
-    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    color: var(--text-main);
 }
 
 .stat-badge strong {
-    color: var(--primary-color);
-    font-size: 1.1rem;
+    color: var(--primary-light);
+    font-size: 1rem;
 }
 
 .stat-badge-warning {
-    background: #fef3c7;
-    border-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.4);
 }
 
 .stat-badge-warning strong {
-    color: #b45309;
+    color: #fbbf24;
 }
 
-/* Filter Bar */
+/* Filter Bar - Dark Theme */
 .edit-filter-bar {
     display: flex;
     gap: 16px;
     flex-wrap: wrap;
     align-items: flex-end;
     background: var(--bg-card);
-    padding: 16px;
+    padding: 20px;
     border-radius: var(--radius-md);
     margin-bottom: 20px;
-    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
 }
 
 .filter-section {
@@ -70,46 +81,69 @@
 }
 
 .filter-section label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--text-main);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
 }
 
 .filter-input {
-    padding: 8px 12px;
+    padding: 10px 14px;
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     font-size: 0.9rem;
     min-width: 200px;
+    background: var(--bg-dark);
+    color: var(--text-main);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.filter-input::placeholder {
+    color: var(--text-muted);
 }
 
 .filter-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.15);
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+}
+
+.filter-select {
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    min-width: 180px;
+    background: var(--bg-dark);
+    color: var(--text-main);
+    cursor: pointer;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
 }
 
 .filter-actions {
     margin-left: auto;
     flex-direction: row;
-    gap: 8px;
+    gap: 10px;
 }
 
-/* Bulk Edit Bar */
+/* Bulk Edit Bar - Dark Theme */
 .bulk-edit-bar {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, var(--primary-color) 0%, #7c3aed 100%);
     color: white;
-    padding: 16px 20px;
+    padding: 16px 24px;
     border-radius: var(--radius-md);
     margin-bottom: 20px;
-    box-shadow: var(--shadow-md);
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 16px;
+    box-shadow: 0 4px 15px rgba(74, 108, 247, 0.3);
 }
 
 .bulk-info {
@@ -119,14 +153,14 @@
 
 .bulk-actions {
     display: flex;
-    gap: 10px;
+    gap: 12px;
     align-items: center;
 }
 
 .bulk-select, .bulk-input {
-    padding: 8px 12px;
+    padding: 10px 14px;
     border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 6px;
+    border-radius: var(--radius-sm);
     background: rgba(255, 255, 255, 0.95);
     color: #1f2937;
     font-size: 0.9rem;
@@ -136,20 +170,21 @@
 .bulk-select:focus, .bulk-input:focus {
     outline: none;
     border-color: white;
-    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
 }
 
-/* Edit Table */
+/* Edit Table Container - Dark Theme */
 .edit-table-container {
     background: var(--bg-card);
     border-radius: var(--radius-md);
     padding: 0;
-    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
     overflow-x: auto;
-    max-height: calc(100vh - 400px);
+    max-height: calc(100vh - 380px);
     overflow-y: auto;
 }
 
+/* Edit Table - Dark Theme */
 .edit-table {
     width: 100%;
     border-collapse: collapse;
@@ -157,28 +192,28 @@
 }
 
 .edit-table thead {
-    background: #f9fafb;
+    background: #1a2536;
     position: sticky;
     top: 0;
     z-index: 10;
 }
 
 .edit-table th {
-    padding: 12px 10px;
+    padding: 14px 12px;
     text-align: left;
     font-weight: 600;
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--text-main);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 2px solid #e5e7eb;
+    letter-spacing: 0.06em;
+    border-bottom: 2px solid var(--border-color);
     white-space: nowrap;
 }
 
 .edit-table td {
-    padding: 10px;
-    border-bottom: 1px solid #f3f4f6;
-    color: #111827;
+    padding: 12px;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    color: var(--text-main);
     vertical-align: middle;
 }
 
@@ -190,44 +225,55 @@
     min-width: 300px;
     max-width: none;
     line-height: 1.4;
-    padding: 12px 10px;
+    padding: 14px 12px;
     overflow: visible;
     text-overflow: unset;
+    color: var(--text-main);
+}
+
+.edit-table tbody tr {
+    background: var(--bg-card);
+    transition: background var(--transition-fast);
+}
+
+.edit-table tbody tr:nth-child(even) {
+    background: rgba(30, 41, 59, 0.5);
 }
 
 .edit-table tbody tr:hover {
-    background: #f3f4ff;
+    background: rgba(74, 108, 247, 0.08);
 }
 
 .edit-table tbody tr.selected {
-    background: #eef2ff;
+    background: rgba(74, 108, 247, 0.15);
+    border-left: 3px solid var(--primary-color);
 }
 
 .edit-table tbody tr.modified {
-    background: #fef9e7;
+    background: rgba(245, 158, 11, 0.1);
     border-left: 3px solid #f59e0b;
 }
 
 .edit-table tbody tr.modified:hover {
-    background: #fef3c7;
+    background: rgba(245, 158, 11, 0.15);
 }
 
-/* Editable cells */
+/* Editable cells - Dark Theme */
 .editable-cell {
     cursor: pointer;
     position: relative;
     min-height: 30px;
-    padding: 6px 8px;
-    border-radius: 4px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
     transition: background-color 0.2s;
 }
 
 .editable-cell:hover {
-    background: #f3f4f6;
+    background: rgba(74, 108, 247, 0.1);
 }
 
 .editable-cell.editing {
-    background: white;
+    background: var(--bg-dark);
     padding: 0;
 }
 
@@ -235,11 +281,13 @@
 .editable-cell select,
 .editable-cell textarea {
     width: 100%;
-    padding: 6px 8px;
+    padding: 8px 10px;
     border: 2px solid var(--primary-color);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-size: 0.85rem;
     font-family: inherit;
+    background: var(--bg-dark);
+    color: var(--text-main);
 }
 
 .editable-cell textarea {
@@ -251,97 +299,103 @@
 .editable-cell select:focus,
 .editable-cell textarea:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.1);
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.2);
 }
 
 /* Save button for editable cells */
 .cell-save-btn {
     display: inline-block;
-    margin-top: 4px;
-    padding: 4px 12px;
+    margin-top: 6px;
+    padding: 6px 14px;
     background: var(--success-color);
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-size: 0.75rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, transform 0.2s;
 }
 
 .cell-save-btn:hover {
     background: #1e8635;
+    transform: translateY(-1px);
 }
 
-/* Row action buttons */
+/* Row action buttons - Dark Theme */
 .row-action-btn {
-    padding: 4px 10px;
+    padding: 6px 12px;
     border: 1px solid var(--border-color);
-    background: white;
-    border-radius: 4px;
+    background: var(--bg-dark);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
     font-size: 0.75rem;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .row-action-btn:hover {
-    background: #f3f4f6;
+    background: var(--bg-card-hover);
     border-color: var(--primary-color);
-    color: var(--primary-color);
+    color: var(--primary-light);
 }
 
-/* Category badges */
+/* Category badges - Dark Theme */
 .category-badge {
     display: inline-block;
-    padding: 4px 10px;
+    padding: 5px 12px;
     border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 600;
-    background: #e5e7eb;
-    color: #374151;
+    background: rgba(74, 108, 247, 0.15);
+    color: var(--primary-light);
 }
 
 .category-badge.uncategorized {
-    background: #fef3c7;
-    color: #92400e;
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
 }
 
-/* Checkbox styling */
+/* Checkbox styling - Dark Theme */
 input[type="checkbox"] {
     width: 18px;
     height: 18px;
     cursor: pointer;
     accent-color: var(--primary-color);
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
 }
 
-/* Scrollbar styling */
+/* Scrollbar styling - Dark Theme */
 .edit-table-container::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
 }
 
 .edit-table-container::-webkit-scrollbar-track {
-    background: #f3f4f6;
+    background: var(--bg-dark);
 }
 
 .edit-table-container::-webkit-scrollbar-thumb {
-    background: #9ca3af;
-    border-radius: 5px;
+    background: var(--border-color);
+    border-radius: 4px;
 }
 
 .edit-table-container::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
+    background: var(--text-muted);
 }
 
-/* Success notification */
+/* Success notification - Dark Theme */
 .save-notification {
     position: fixed;
-    top: 80px;
-    right: 20px;
-    padding: 12px 20px;
+    top: 90px;
+    right: 24px;
+    padding: 14px 24px;
     background: var(--success-color);
     color: white;
-    border-radius: 8px;
-    box-shadow: var(--shadow-lg);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 20px rgba(34, 197, 94, 0.3);
     font-weight: 500;
     z-index: 1000;
     animation: slideInRight 0.3s ease;
@@ -358,7 +412,22 @@ input[type="checkbox"] {
     }
 }
 
-/* Responsive - Tablet */
+/* Monetary pills in edit table */
+.edit-table .monetary-pill {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+}
+
+/* Text alignment */
+.edit-table .text-right {
+    text-align: right;
+}
+
+/* ============================================================================
+   RESPONSIVE STYLES
+   ============================================================================ */
+
+/* Tablet */
 @media (max-width: 1200px) {
     .edit-filter-bar {
         flex-direction: column;
@@ -369,8 +438,10 @@ input[type="checkbox"] {
         margin-left: 0;
     }
 
-    .filter-input {
+    .filter-input,
+    .filter-select {
         min-width: auto;
+        width: 100%;
     }
 
     .bulk-edit-bar {
@@ -383,17 +454,21 @@ input[type="checkbox"] {
     }
 }
 
-/* Responsive - Mobile */
+/* Mobile */
 @media (max-width: 768px) {
+    .main-content {
+        padding-top: 80px;
+    }
+
     /* Page header */
     .edit-page-header {
         flex-direction: column;
         align-items: stretch;
-        gap: 12px;
+        gap: 16px;
     }
 
     .page-title {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
     }
 
     .header-stats {
@@ -415,7 +490,7 @@ input[type="checkbox"] {
 
     /* Filter bar */
     .edit-filter-bar {
-        padding: 12px;
+        padding: 16px;
         gap: 12px;
     }
 
@@ -423,14 +498,10 @@ input[type="checkbox"] {
         width: 100%;
     }
 
-    .filter-input {
-        width: 100%;
-        font-size: 16px; /* Prevent zoom on iOS */
-    }
-
+    .filter-input,
     .filter-select {
         width: 100%;
-        font-size: 16px; /* Prevent zoom on iOS */
+        font-size: 16px;
     }
 
     .filter-actions {
@@ -445,7 +516,7 @@ input[type="checkbox"] {
 
     /* Bulk edit bar */
     .bulk-edit-bar {
-        padding: 12px;
+        padding: 16px;
         gap: 12px;
     }
 
@@ -459,7 +530,7 @@ input[type="checkbox"] {
     .bulk-input {
         width: 100%;
         min-width: 100%;
-        font-size: 16px; /* Prevent zoom on iOS */
+        font-size: 16px;
         min-height: 44px;
     }
 
@@ -470,7 +541,7 @@ input[type="checkbox"] {
 
     /* Edit table container */
     .edit-table-container {
-        max-height: calc(100vh - 500px);
+        max-height: calc(100vh - 450px);
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         position: relative;
@@ -478,34 +549,28 @@ input[type="checkbox"] {
 
     /* Scroll indicator for mobile */
     .edit-table-container::after {
-        content: '← Swipe to see more →';
+        content: 'Swipe to see more';
         position: sticky;
         bottom: 0;
         left: 0;
         right: 0;
-        background: linear-gradient(to right, rgba(74, 108, 247, 0.1), rgba(74, 108, 247, 0.2), rgba(74, 108, 247, 0.1));
-        color: var(--primary-color);
+        background: rgba(74, 108, 247, 0.15);
+        color: var(--primary-light);
         text-align: center;
-        padding: 6px;
+        padding: 8px;
         font-size: 0.7rem;
         font-weight: 600;
-        border-top: 1px solid var(--primary-color);
-        animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-        0%, 100% { opacity: 0.6; }
-        50% { opacity: 1; }
+        border-top: 1px solid var(--border-color);
     }
 
     .edit-table {
-        min-width: 1200px; /* Force horizontal scroll */
+        min-width: 1200px;
         font-size: 0.8rem;
     }
 
     .edit-table th,
     .edit-table td {
-        padding: 8px 6px;
+        padding: 10px 8px;
         font-size: 0.75rem;
     }
 
@@ -517,26 +582,21 @@ input[type="checkbox"] {
     .editable-cell input,
     .editable-cell select,
     .editable-cell textarea {
-        font-size: 16px; /* Prevent zoom on iOS */
+        font-size: 16px;
         min-height: 40px;
     }
 
     /* Category badges */
     .category-badge {
         font-size: 0.7rem;
-        padding: 3px 8px;
+        padding: 4px 8px;
     }
 
     /* Monetary pills */
     .monetary-pill {
         font-size: 0.75rem;
-        padding: 2px 8px;
+        padding: 3px 8px;
         min-width: 50px;
-    }
-
-    /* Container padding */
-    .container {
-        padding: 0 12px;
     }
 
     /* Buttons touch-friendly */
@@ -548,7 +608,7 @@ input[type="checkbox"] {
 
     .row-action-btn {
         min-height: 36px;
-        padding: 6px 12px;
+        padding: 8px 12px;
         font-size: 0.75rem;
     }
 
@@ -557,26 +617,20 @@ input[type="checkbox"] {
         width: 20px;
         height: 20px;
     }
-
-    /* Footer */
-    .footer {
-        font-size: 0.75rem;
-        padding: 12px 0;
-    }
 }
 
 /* Small mobile devices */
 @media (max-width: 480px) {
     .page-title {
-        font-size: 1.3rem;
+        font-size: 1.2rem;
     }
 
     .page-subtitle {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
     }
 
     .stat-badge {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         padding: 6px 12px;
     }
 
@@ -586,7 +640,7 @@ input[type="checkbox"] {
 
     .edit-table th,
     .edit-table td {
-        padding: 6px 4px;
+        padding: 8px 6px;
         font-size: 0.7rem;
     }
 }

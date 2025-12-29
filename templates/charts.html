@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>{{ bank_name | default('Axis Bank') }} Charts | Visma Financials</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Bank Context -->
+    <script>
+        window.BANK_CODE = "{{ bank_code | default('axis') }}";
+        window.BANK_NAME = "{{ bank_name | default('Axis Bank') }}";
+        window.BANK_CONFIG = {{ bank_config | default({}) | tojson }};
+    </script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <!-- Animated background -->
+    <div class="bg-animation"></div>
+
+    <!-- Particles -->
+    <div class="particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading charts...</div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <a href="/dashboard/{{ bank_code | default('axis') }}" class="back-to-hub" title="Back to Dashboard">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </a>
+                <div class="header-title">
+                    <h1 class="logo">{{ bank_name | default('Axis Bank') }} - Charts</h1>
+                    <span class="tagline">Visual Analytics</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="user-badge">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    {{ session.get('username', 'User') }}
+                </span>
+                <a href="/logout" class="logout-btn" title="Logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <section class="filter-bar">
+        <div class="container">
+            <div class="filter-group">
+                <label for="category-filter">Broader category</label>
+                <select id="category-filter" class="filter-select"></select>
+            </div>
+
+            <div class="filter-group">
+                <label for="project-filter">Project</label>
+                <select id="project-filter" class="filter-select">
+                    <option value="All">All Projects</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="start-date">From</label>
+                <input type="date" id="start-date" class="filter-input date-input">
+            </div>
+
+            <div class="filter-group">
+                <label for="end-date">To</label>
+                <input type="date" id="end-date" class="filter-input date-input">
+            </div>
+
+            <div class="filter-group scenario-group">
+                <label>Quick Select</label>
+                <div class="scenario-chips">
+                    <button class="chip chip-active" data-scenario="all">All Time</button>
+                    <button class="chip" data-scenario="last7">Last 7 days</button>
+                    <button class="chip" data-scenario="last14">Last 2 weeks</button>
+                    <button class="chip" data-scenario="last30">Last 30 days</button>
+                    <button class="chip" data-scenario="thisMonth">This Month</button>
+                </div>
+            </div>
+
+            <div class="filter-actions">
+                <button id="apply-filters" class="btn btn-primary">Apply</button>
+                <button id="clear-filters" class="btn btn-secondary">Reset</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+
+            <!-- Total Income & Expense KPI Cards -->
+            <section class="kpi-section">
+                <div class="kpi-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="kpi-card">
+                        <div class="kpi-icon">⬆️</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Total Income</div>
+                            <div id="kpi-total-income" class="kpi-value income">₹0</div>
+                        </div>
+                    </div>
+
+                    <div class="kpi-card">
+                        <div class="kpi-icon">⬇️</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">Total Expense</div>
+                            <div id="kpi-total-expense" class="kpi-value expense">₹0</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Expense by Category</div>
+                                <div class="chart-subtitle">Visual breakdown of where money goes</div>
+                            </div>
+                            <span id="category-insight" class="insight-badge">Top category: -</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Top Vendors</div>
+                                <div class="chart-subtitle">Your biggest expense counterparties</div>
+                            </div>
+                            <span id="vendor-insight" class="insight-badge">Top vendor: -</span>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="vendorChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Insights Section (KPIs) -->
+            <section class="insights-section insights-top">
+                <div class="section-header">
+                    <h2 class="section-title">Spending Insights</h2>
+                    <p class="section-subtitle">High-level patterns extracted from your data</p>
+                </div>
+
+                <div class="insights-grid" style="grid-template-columns: repeat(5, 1fr);">
+                    <div class="insight-card">
+                        <div class="insight-icon">📆</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Avg. monthly expense</div>
+                            <div id="avg-monthly-expense" class="insight-value">₹0</div>
+                            <div id="avg-expense-desc" class="insight-description">Based on all months</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">📈</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Expense trend</div>
+                            <div id="expense-trend" class="insight-value">Stable</div>
+                            <div id="expense-trend-desc" class="insight-description">Last 3 months comparison</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">💳</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Avg. transaction size</div>
+                            <div id="avg-transaction-size" class="insight-value">₹0</div>
+                            <div id="avg-transaction-desc" class="insight-description">Mean transaction amount</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">📅</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Peak spending day</div>
+                            <div id="peak-day" class="insight-value">–</div>
+                            <div id="peak-day-desc" class="insight-description">No data available</div>
+                        </div>
+                    </div>
+
+                    <div class="insight-card">
+                        <div class="insight-icon">⚡</div>
+                        <div class="insight-content">
+                            <div class="insight-label">Cash flow velocity</div>
+                            <div id="cashflow-velocity" class="insight-value">0 transactions</div>
+                            <div id="velocity-desc" class="insight-description">Average per month</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>Built for personal money management</p>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="{{ url_for('static', filename='charts.js') }}"></script>
+</body>
+
+</html>

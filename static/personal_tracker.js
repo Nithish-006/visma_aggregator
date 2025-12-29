@@ -8,14 +8,18 @@
     // State
     let transactions = [];
     let projects = [];
+    let vendors = [];
     let deleteTargetId = null;
 
     // DOM Elements
     const elements = {
         // Summary
-        totalSpent: document.getElementById('total-spent'),
-        thisMonth: document.getElementById('this-month'),
+        totalIncome: document.getElementById('total-income'),
+        totalExpense: document.getElementById('total-expense'),
+        netBalance: document.getElementById('net-balance'),
         transactionCount: document.getElementById('transaction-count'),
+        thisMonthIncome: document.getElementById('this-month-income'),
+        thisMonthExpense: document.getElementById('this-month-expense'),
 
         // Panels
         projectBreakdown: document.getElementById('project-breakdown'),
@@ -23,24 +27,35 @@
         transactionsTbody: document.getElementById('transactions-tbody'),
 
         // Filters
+        typeFilter: document.getElementById('type-filter'),
         projectFilter: document.getElementById('project-filter'),
         searchFilter: document.getElementById('search-filter'),
 
         // Modal
-        expenseModal: document.getElementById('expense-modal'),
+        transactionModal: document.getElementById('transaction-modal'),
         modalTitle: document.getElementById('modal-title'),
         modalClose: document.getElementById('modal-close'),
-        expenseForm: document.getElementById('expense-form'),
-        expenseId: document.getElementById('expense-id'),
-        expenseDate: document.getElementById('expense-date'),
-        expenseAmount: document.getElementById('expense-amount'),
-        expenseVendor: document.getElementById('expense-vendor'),
-        expenseDescription: document.getElementById('expense-description'),
-        expenseProject: document.getElementById('expense-project'),
-        projectList: document.getElementById('project-list'),
+        transactionForm: document.getElementById('transaction-form'),
+        transactionId: document.getElementById('transaction-id'),
+        transactionType: document.getElementById('transaction-type'),
+        transactionDate: document.getElementById('transaction-date'),
+        transactionAmount: document.getElementById('transaction-amount'),
+        transactionVendor: document.getElementById('transaction-vendor'),
+        transactionDescription: document.getElementById('transaction-description'),
+        transactionProject: document.getElementById('transaction-project'),
         cancelBtn: document.getElementById('cancel-btn'),
         saveBtn: document.getElementById('save-btn'),
-        addExpenseBtn: document.getElementById('add-expense-btn'),
+        addTransactionBtn: document.getElementById('add-transaction-btn'),
+        typeExpenseBtn: document.getElementById('type-expense-btn'),
+        typeIncomeBtn: document.getElementById('type-income-btn'),
+
+        // Dropdowns
+        vendorDropdown: document.getElementById('vendor-dropdown'),
+        vendorMenu: document.getElementById('vendor-menu'),
+        vendorItems: document.getElementById('vendor-items'),
+        projectDropdown: document.getElementById('project-dropdown'),
+        projectMenu: document.getElementById('project-menu'),
+        projectItems: document.getElementById('project-items'),
 
         // Delete Modal
         deleteModal: document.getElementById('delete-modal'),
@@ -65,18 +80,22 @@
     }
 
     function setupEventListeners() {
-        // Add expense button
-        elements.addExpenseBtn.addEventListener('click', openAddModal);
+        // Add transaction button
+        elements.addTransactionBtn.addEventListener('click', openAddModal);
 
         // Modal close buttons
         elements.modalClose.addEventListener('click', closeModal);
         elements.cancelBtn.addEventListener('click', closeModal);
-        elements.expenseModal.addEventListener('click', (e) => {
-            if (e.target === elements.expenseModal) closeModal();
+        elements.transactionModal.addEventListener('click', (e) => {
+            if (e.target === elements.transactionModal) closeModal();
         });
 
+        // Transaction type toggle
+        elements.typeExpenseBtn.addEventListener('click', () => setTransactionType('expense'));
+        elements.typeIncomeBtn.addEventListener('click', () => setTransactionType('income'));
+
         // Form submit
-        elements.expenseForm.addEventListener('submit', handleFormSubmit);
+        elements.transactionForm.addEventListener('submit', handleFormSubmit);
 
         // Delete modal
         elements.deleteModalClose.addEventListener('click', closeDeleteModal);
@@ -87,13 +106,189 @@
         });
 
         // Filters
+        elements.typeFilter.addEventListener('change', applyFilters);
         elements.projectFilter.addEventListener('change', applyFilters);
         elements.searchFilter.addEventListener('input', debounce(applyFilters, 300));
+
+        // Setup searchable dropdowns
+        setupSearchableDropdown('vendor');
+        setupSearchableDropdown('project');
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#vendor-dropdown')) {
+                closeDropdown('vendor');
+            }
+            if (!e.target.closest('#project-dropdown')) {
+                closeDropdown('project');
+            }
+        });
+    }
+
+    // ============================================================================
+    // SEARCHABLE DROPDOWN
+    // ============================================================================
+
+    let highlightedIndex = { vendor: -1, project: -1 };
+
+    function setupSearchableDropdown(type) {
+        const input = type === 'vendor' ? elements.transactionVendor : elements.transactionProject;
+        const dropdown = type === 'vendor' ? elements.vendorDropdown : elements.projectDropdown;
+
+        // Click on input to open dropdown
+        input.addEventListener('click', () => {
+            openDropdown(type);
+        });
+
+        // Focus on input to open dropdown
+        input.addEventListener('focus', () => {
+            openDropdown(type);
+        });
+
+        // Filter as user types
+        input.addEventListener('input', () => {
+            filterDropdownItems(type, input.value);
+            if (!dropdown.classList.contains('open')) {
+                openDropdown(type);
+            }
+        });
+
+        // Keyboard navigation
+        input.addEventListener('keydown', (e) => {
+            const items = getVisibleDropdownItems(type);
+
+            switch (e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    if (!dropdown.classList.contains('open')) {
+                        openDropdown(type);
+                    } else {
+                        highlightedIndex[type] = Math.min(highlightedIndex[type] + 1, items.length - 1);
+                        updateHighlight(type);
+                    }
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    highlightedIndex[type] = Math.max(highlightedIndex[type] - 1, 0);
+                    updateHighlight(type);
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    if (highlightedIndex[type] >= 0 && items[highlightedIndex[type]]) {
+                        selectDropdownItem(type, items[highlightedIndex[type]].textContent);
+                    }
+                    closeDropdown(type);
+                    break;
+                case 'Escape':
+                    closeDropdown(type);
+                    break;
+                case 'Tab':
+                    closeDropdown(type);
+                    break;
+            }
+        });
+    }
+
+    function openDropdown(type) {
+        const dropdown = type === 'vendor' ? elements.vendorDropdown : elements.projectDropdown;
+        const input = type === 'vendor' ? elements.transactionVendor : elements.transactionProject;
+
+        dropdown.classList.add('open');
+        filterDropdownItems(type, input.value);
+        highlightedIndex[type] = -1;
+    }
+
+    function closeDropdown(type) {
+        const dropdown = type === 'vendor' ? elements.vendorDropdown : elements.projectDropdown;
+        dropdown.classList.remove('open');
+        dropdown.classList.remove('no-results');
+        highlightedIndex[type] = -1;
+    }
+
+    function filterDropdownItems(type, searchTerm) {
+        const items = type === 'vendor' ? vendors : projects;
+        const container = type === 'vendor' ? elements.vendorItems : elements.projectItems;
+        const dropdown = type === 'vendor' ? elements.vendorDropdown : elements.projectDropdown;
+        const search = searchTerm.toLowerCase().trim();
+
+        const filtered = items.filter(item =>
+            item.toLowerCase().includes(search)
+        );
+
+        if (filtered.length === 0 && search === '') {
+            // Show all items when empty
+            renderDropdownItems(type, items);
+            dropdown.classList.remove('no-results');
+        } else if (filtered.length === 0) {
+            container.innerHTML = '';
+            dropdown.classList.add('no-results');
+        } else {
+            renderDropdownItems(type, filtered);
+            dropdown.classList.remove('no-results');
+        }
+
+        highlightedIndex[type] = -1;
+    }
+
+    function renderDropdownItems(type, items) {
+        const container = type === 'vendor' ? elements.vendorItems : elements.projectItems;
+        const input = type === 'vendor' ? elements.transactionVendor : elements.transactionProject;
+        const currentValue = input.value.trim();
+
+        let html = '';
+        items.forEach((item, index) => {
+            const isSelected = item.toLowerCase() === currentValue.toLowerCase();
+            html += `<div class="dropdown-item${isSelected ? ' selected' : ''}" data-index="${index}" data-value="${escapeHtml(item)}">${escapeHtml(item)}</div>`;
+        });
+
+        container.innerHTML = html;
+
+        // Add click handlers
+        container.querySelectorAll('.dropdown-item').forEach(el => {
+            el.addEventListener('click', () => {
+                selectDropdownItem(type, el.dataset.value);
+                closeDropdown(type);
+            });
+        });
+    }
+
+    function selectDropdownItem(type, value) {
+        const input = type === 'vendor' ? elements.transactionVendor : elements.transactionProject;
+        input.value = value;
+    }
+
+    function getVisibleDropdownItems(type) {
+        const container = type === 'vendor' ? elements.vendorItems : elements.projectItems;
+        return container.querySelectorAll('.dropdown-item');
+    }
+
+    function updateHighlight(type) {
+        const items = getVisibleDropdownItems(type);
+        items.forEach((item, index) => {
+            item.classList.toggle('highlighted', index === highlightedIndex[type]);
+        });
+
+        // Scroll highlighted item into view
+        if (highlightedIndex[type] >= 0 && items[highlightedIndex[type]]) {
+            items[highlightedIndex[type]].scrollIntoView({ block: 'nearest' });
+        }
     }
 
     function setDefaultDate() {
         const today = new Date().toISOString().split('T')[0];
-        elements.expenseDate.value = today;
+        elements.transactionDate.value = today;
+    }
+
+    function setTransactionType(type) {
+        elements.transactionType.value = type;
+
+        if (type === 'expense') {
+            elements.typeExpenseBtn.classList.add('active');
+            elements.typeIncomeBtn.classList.remove('active');
+        } else {
+            elements.typeIncomeBtn.classList.add('active');
+            elements.typeExpenseBtn.classList.remove('active');
+        }
     }
 
     // ============================================================================
@@ -104,6 +299,7 @@
         await Promise.all([
             loadSummary(),
             loadProjects(),
+            loadVendors(),
             loadTransactions()
         ]);
     }
@@ -118,9 +314,17 @@
                 return;
             }
 
-            elements.totalSpent.textContent = data.total_spent_formatted || '₹0';
-            elements.thisMonth.textContent = data.this_month_formatted || '₹0';
+            elements.totalIncome.textContent = data.total_income_formatted || '₹0';
+            elements.totalExpense.textContent = data.total_expense_formatted || '₹0';
+
+            // Net balance with color coding
+            const netBalanceEl = elements.netBalance;
+            netBalanceEl.textContent = (data.net_balance_positive ? '' : '-') + data.net_balance_formatted;
+            netBalanceEl.className = 'summary-value ' + (data.net_balance_positive ? 'income-value' : 'expense-value');
+
             elements.transactionCount.textContent = data.transaction_count || '0';
+            elements.thisMonthIncome.textContent = data.this_month_income_formatted || '₹0';
+            elements.thisMonthExpense.textContent = data.this_month_expense_formatted || '₹0';
 
             renderProjectBreakdown(data.project_breakdown || []);
         } catch (error) {
@@ -135,19 +339,34 @@
 
             projects = data.projects || ['General'];
             updateProjectFilter();
-            updateProjectDatalist();
+            updateDropdownItems('project');
         } catch (error) {
             console.error('Error loading projects:', error);
             projects = ['General'];
         }
     }
 
+    async function loadVendors() {
+        try {
+            const response = await fetch('/api/personal/vendors');
+            const data = await response.json();
+
+            vendors = data.vendors || [];
+            updateDropdownItems('vendor');
+        } catch (error) {
+            console.error('Error loading vendors:', error);
+            vendors = [];
+        }
+    }
+
     async function loadTransactions() {
         try {
+            const type = elements.typeFilter.value;
             const project = elements.projectFilter.value;
             const search = elements.searchFilter.value;
 
             let url = '/api/personal/transactions?';
+            if (type && type !== 'All') url += `type=${encodeURIComponent(type)}&`;
             if (project && project !== 'All') url += `project=${encodeURIComponent(project)}&`;
             if (search) url += `search=${encodeURIComponent(search)}&`;
 
@@ -218,13 +437,15 @@
 
         let html = '';
         recent.forEach(t => {
+            const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
+            const prefix = t.transaction_type === 'income' ? '+' : '-';
             html += `
                 <div class="recent-item">
                     <div class="recent-info">
                         <span class="recent-vendor">${escapeHtml(t.vendor)}</span>
                         <span class="recent-date">${t.date_formatted}</span>
                     </div>
-                    <span class="recent-amount">${t.amount_formatted}</span>
+                    <span class="recent-amount ${typeClass}">${prefix}${t.amount_formatted}</span>
                 </div>
             `;
         });
@@ -236,9 +457,9 @@
         if (transactions.length === 0) {
             elements.transactionsTbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="empty-state">
+                    <td colspan="7" class="empty-state">
                         <p>No transactions found</p>
-                        <p style="font-size: 0.8rem;">Click "Add Expense" to add your first transaction</p>
+                        <p style="font-size: 0.8rem;">Click "Add Transaction" to add your first entry</p>
                     </td>
                 </tr>
             `;
@@ -247,13 +468,17 @@
 
         let html = '';
         transactions.forEach(t => {
+            const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
+            const typeLabel = t.transaction_type === 'income' ? 'Income' : 'Expense';
+            const prefix = t.transaction_type === 'income' ? '+' : '-';
             html += `
                 <tr data-id="${t.id}">
                     <td>${t.date_formatted}</td>
+                    <td><span class="type-tag ${typeClass}">${typeLabel}</span></td>
                     <td>${escapeHtml(t.vendor)}</td>
                     <td>${escapeHtml(t.description) || '-'}</td>
                     <td><span class="project-tag">${escapeHtml(t.project)}</span></td>
-                    <td class="text-right amount-cell">${t.amount_formatted}</td>
+                    <td class="text-right amount-cell ${typeClass}">${prefix}${t.amount_formatted}</td>
                     <td class="text-center">
                         <div class="action-btns">
                             <button class="action-btn edit" onclick="editTransaction(${t.id})" title="Edit">
@@ -287,12 +512,9 @@
         elements.projectFilter.value = currentValue || 'All';
     }
 
-    function updateProjectDatalist() {
-        let html = '';
-        projects.forEach(p => {
-            html += `<option value="${escapeHtml(p)}">`;
-        });
-        elements.projectList.innerHTML = html;
+    function updateDropdownItems(type) {
+        const items = type === 'vendor' ? vendors : projects;
+        renderDropdownItems(type, items);
     }
 
     // ============================================================================
@@ -300,36 +522,49 @@
     // ============================================================================
 
     function openAddModal() {
-        elements.modalTitle.textContent = 'Add Expense';
-        elements.saveBtn.textContent = 'Save Expense';
-        elements.expenseId.value = '';
-        elements.expenseForm.reset();
+        elements.modalTitle.textContent = 'Add Transaction';
+        elements.saveBtn.textContent = 'Save Transaction';
+        elements.transactionId.value = '';
+        elements.transactionForm.reset();
         setDefaultDate();
-        elements.expenseModal.classList.add('show');
-        elements.expenseVendor.focus();
+        setTransactionType('expense');
+        closeDropdown('vendor');
+        closeDropdown('project');
+        updateDropdownItems('vendor');
+        updateDropdownItems('project');
+        elements.transactionModal.classList.add('show');
+        setTimeout(() => elements.transactionVendor.focus(), 100);
     }
 
     function openEditModal(transaction) {
-        elements.modalTitle.textContent = 'Edit Expense';
-        elements.saveBtn.textContent = 'Update Expense';
-        elements.expenseId.value = transaction.id;
-        elements.expenseDate.value = transaction.date;
-        elements.expenseAmount.value = transaction.amount;
-        elements.expenseVendor.value = transaction.vendor;
-        elements.expenseDescription.value = transaction.description || '';
-        elements.expenseProject.value = transaction.project || 'General';
-        elements.expenseModal.classList.add('show');
-        elements.expenseVendor.focus();
+        elements.modalTitle.textContent = 'Edit Transaction';
+        elements.saveBtn.textContent = 'Update Transaction';
+        elements.transactionId.value = transaction.id;
+        elements.transactionDate.value = transaction.date;
+        elements.transactionAmount.value = transaction.amount;
+        elements.transactionVendor.value = transaction.vendor;
+        elements.transactionDescription.value = transaction.description || '';
+        elements.transactionProject.value = transaction.project || 'General';
+        setTransactionType(transaction.transaction_type || 'expense');
+        closeDropdown('vendor');
+        closeDropdown('project');
+        updateDropdownItems('vendor');
+        updateDropdownItems('project');
+        elements.transactionModal.classList.add('show');
+        setTimeout(() => elements.transactionVendor.focus(), 100);
     }
 
     function closeModal() {
-        elements.expenseModal.classList.remove('show');
-        elements.expenseForm.reset();
+        elements.transactionModal.classList.remove('show');
+        elements.transactionForm.reset();
+        closeDropdown('vendor');
+        closeDropdown('project');
     }
 
     function openDeleteModal(transaction) {
         deleteTargetId = transaction.id;
-        elements.deleteInfo.textContent = `${transaction.vendor} - ${transaction.amount_formatted} on ${transaction.date_formatted}`;
+        const typeLabel = transaction.transaction_type === 'income' ? 'Income' : 'Expense';
+        elements.deleteInfo.textContent = `${typeLabel}: ${transaction.vendor} - ${transaction.amount_formatted} on ${transaction.date_formatted}`;
         elements.deleteModal.classList.add('show');
     }
 
@@ -345,13 +580,14 @@
     async function handleFormSubmit(e) {
         e.preventDefault();
 
-        const id = elements.expenseId.value;
+        const id = elements.transactionId.value;
         const data = {
-            date: elements.expenseDate.value,
-            amount: parseFloat(elements.expenseAmount.value),
-            vendor: elements.expenseVendor.value.trim(),
-            description: elements.expenseDescription.value.trim(),
-            project: elements.expenseProject.value.trim() || 'General'
+            date: elements.transactionDate.value,
+            amount: parseFloat(elements.transactionAmount.value),
+            vendor: elements.transactionVendor.value.trim(),
+            description: elements.transactionDescription.value.trim(),
+            project: elements.transactionProject.value.trim() || 'General',
+            transaction_type: elements.transactionType.value
         };
 
         if (!data.date || !data.vendor || !data.amount) {
@@ -394,7 +630,7 @@
             showToast('Failed to save transaction', 'error');
         } finally {
             elements.saveBtn.disabled = false;
-            elements.saveBtn.textContent = id ? 'Update Expense' : 'Save Expense';
+            elements.saveBtn.textContent = id ? 'Update Transaction' : 'Save Transaction';
         }
     }
 

@@ -19,6 +19,10 @@
     --border-color: #334155;
     --personal-color: #8b5cf6;
     --personal-light: #a78bfa;
+    --income-color: #22c55e;
+    --income-light: #4ade80;
+    --expense-color: #ef4444;
+    --expense-light: #f87171;
 }
 
 * {
@@ -146,6 +150,16 @@ body {
     margin-bottom: 2rem;
 }
 
+.summary-grid.summary-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 1100px) {
+    .summary-grid.summary-grid-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 @media (max-width: 900px) {
     .summary-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -153,7 +167,8 @@ body {
 }
 
 @media (max-width: 600px) {
-    .summary-grid {
+    .summary-grid,
+    .summary-grid.summary-grid-4 {
         grid-template-columns: 1fr;
     }
 }
@@ -192,6 +207,21 @@ body {
     color: var(--primary-color);
 }
 
+.summary-icon.income {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--income-color);
+}
+
+.summary-icon.expense {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--expense-color);
+}
+
+.summary-icon.balance {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--personal-color);
+}
+
 .summary-content {
     display: flex;
     flex-direction: column;
@@ -207,6 +237,56 @@ body {
     font-size: 1.75rem;
     font-weight: 700;
     color: var(--text-main);
+}
+
+.summary-value.income-value,
+.income-value {
+    color: var(--income-color);
+}
+
+.summary-value.expense-value,
+.expense-value {
+    color: var(--expense-color);
+}
+
+/* Month Summary */
+.month-summary {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+}
+
+.month-summary h3 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.month-stats {
+    display: flex;
+    gap: 3rem;
+    flex-wrap: wrap;
+}
+
+.month-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.month-stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.month-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
 }
 
 /* Content Grid */
@@ -381,7 +461,14 @@ body {
 
 .recent-amount {
     font-weight: 600;
-    color: var(--danger-color);
+}
+
+.recent-amount.income {
+    color: var(--income-color);
+}
+
+.recent-amount.expense {
+    color: var(--expense-color);
 }
 
 /* Transactions Table */
@@ -425,7 +512,14 @@ body {
 
 .transactions-table .amount-cell {
     font-weight: 600;
-    color: var(--danger-color);
+}
+
+.transactions-table .amount-cell.income {
+    color: var(--income-color);
+}
+
+.transactions-table .amount-cell.expense {
+    color: var(--expense-color);
 }
 
 .transactions-table .project-tag {
@@ -435,6 +529,175 @@ body {
     color: var(--personal-light);
     border-radius: 4px;
     font-size: 0.75rem;
+}
+
+.transactions-table .type-tag {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.transactions-table .type-tag.income {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--income-light);
+}
+
+.transactions-table .type-tag.expense {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--expense-light);
+}
+
+/* Transaction Type Toggle */
+.type-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.type-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.type-btn:hover {
+    border-color: var(--text-muted);
+    color: var(--text-main);
+}
+
+.type-btn.expense.active {
+    border-color: var(--expense-color);
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--expense-color);
+}
+
+.type-btn.income.active {
+    border-color: var(--income-color);
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--income-color);
+}
+
+/* Searchable Dropdown */
+.searchable-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.searchable-dropdown .dropdown-input {
+    width: 100%;
+    padding: 0.75rem 2.5rem 0.75rem 1rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-main);
+    font-size: 0.9375rem;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.searchable-dropdown .dropdown-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+}
+
+.searchable-dropdown .dropdown-arrow {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    transition: transform 0.2s ease;
+}
+
+.searchable-dropdown.open .dropdown-arrow {
+    transform: translateY(-50%) rotate(180deg);
+}
+
+.searchable-dropdown .dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+}
+
+.searchable-dropdown.open .dropdown-menu {
+    display: block;
+}
+
+.searchable-dropdown .dropdown-items {
+    padding: 0.25rem 0;
+}
+
+.searchable-dropdown .dropdown-item {
+    padding: 0.625rem 1rem;
+    cursor: pointer;
+    color: var(--text-main);
+    font-size: 0.875rem;
+    transition: background 0.15s ease;
+}
+
+.searchable-dropdown .dropdown-item:hover,
+.searchable-dropdown .dropdown-item.highlighted {
+    background: var(--bg-card-hover);
+}
+
+.searchable-dropdown .dropdown-item.selected {
+    background: rgba(74, 108, 247, 0.15);
+    color: var(--primary-light);
+}
+
+.searchable-dropdown .dropdown-empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    display: none;
+}
+
+.searchable-dropdown.no-results .dropdown-empty {
+    display: block;
+}
+
+.searchable-dropdown.no-results .dropdown-items {
+    display: none;
+}
+
+.searchable-dropdown .dropdown-add-new {
+    padding: 0.625rem 1rem;
+    cursor: pointer;
+    color: var(--primary-light);
+    font-size: 0.875rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.searchable-dropdown .dropdown-add-new:hover {
+    background: var(--bg-card-hover);
 }
 
 /* Action Buttons */

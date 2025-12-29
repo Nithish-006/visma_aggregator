@@ -212,7 +212,6 @@
                 <td class="description-full">${escapeHtml(txn.description || txn['Transaction Description'] || '')}</td>
                 <td class="text-right">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
                 <td class="text-right">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
-                <td class="text-right"><span class="monetary-pill ${txn.net > 0 ? 'credit' : (txn.net < 0 ? 'debit' : 'neutral')}">${txn.net_formatted}</span></td>
                 <td class="editable-cell" data-field="project" data-index="${globalIndex}">${txn.project || txn.Project || ''}</td>
                 <td class="editable-cell" data-field="dd" data-index="${globalIndex}">${txn.dd || txn.DD || ''}</td>
                 <td class="editable-cell" data-field="notes" data-index="${globalIndex}">${txn.notes || txn.Notes || ''}</td>

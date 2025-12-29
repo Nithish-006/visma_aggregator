@@ -241,13 +241,19 @@ CREATE TABLE IF NOT EXISTS personal_transactions (
     description TEXT,
     project VARCHAR(255) DEFAULT 'General',
     amount DECIMAL(15, 2) NOT NULL,
+    transaction_type ENUM('expense', 'income') DEFAULT 'expense',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_transaction_date (transaction_date),
     INDEX idx_project (project),
-    INDEX idx_vendor (vendor)
+    INDEX idx_vendor (vendor),
+    INDEX idx_transaction_type (transaction_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migration: Add transaction_type column if not exists (run this for existing databases)
+-- ALTER TABLE personal_transactions ADD COLUMN transaction_type ENUM('expense', 'income') DEFAULT 'expense' AFTER amount;
+-- ALTER TABLE personal_transactions ADD INDEX idx_transaction_type (transaction_type);
 
 -- ============================================================================
 
@@ -258,3 +264,12 @@ UNION ALL
 SELECT 'kvb_transactions' as table_name, COUNT(*) as count FROM kvb_transactions
 UNION ALL
 SELECT 'categories' as table_name, COUNT(*) as count FROM categories;
+
+
+-- USE visma_financial;
+
+-- ALTER TABLE personal_transactions
+-- ADD COLUMN transaction_type ENUM('expense', 'income') DEFAULT 'expense' AFTER amount;
+
+-- ALTER TABLE personal_transactions
+-- ADD INDEX idx_transaction_type (transaction_type);

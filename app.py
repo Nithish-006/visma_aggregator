@@ -237,6 +237,19 @@ def filter_by_date_range(df, start_date=None, end_date=None):
     return filtered_df
 
 
+def filter_by_project(df, project=None):
+    """Filter dataframe by project"""
+    if not project or project == 'All':
+        return df
+
+    # Handle both 'Project' and 'project' column names
+    project_col = 'Project' if 'Project' in df.columns else 'project'
+    if project_col not in df.columns:
+        return df
+
+    return df[df[project_col].astype(str).str.strip() == project.strip()]
+
+
 def format_indian_number(amount):
     """Format number with Indian comma system (full numbers, no abbreviations)"""
     if pd.isna(amount) or amount == 0:
@@ -495,6 +508,20 @@ def edit_transactions(bank_code):
                          bank_config=bank_config)
 
 
+@app.route('/charts/<bank_code>')
+@login_required
+def bank_charts(bank_code):
+    """Render bank-specific charts page"""
+    if bank_code not in VALID_BANK_CODES:
+        return redirect(url_for('index'))
+
+    bank_config = get_bank_config(bank_code)
+    return render_template('charts.html',
+                         bank_code=bank_code,
+                         bank_name=bank_config['name'],
+                         bank_config=bank_config)
+
+
 # ============================================================================
 # HUB API ENDPOINTS
 # ============================================================================
@@ -533,6 +560,7 @@ def get_bank_summary(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
+    project = request.args.get('project', 'All')
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
@@ -555,6 +583,7 @@ def get_bank_summary(bank_code):
     if category != 'All':
         df = df[df['Broader Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
+    df = filter_by_project(df, project)
 
     current_balance = float(df['running_balance'].iloc[-1]) if len(df) > 0 else 0
     total_income = float(df['CR Amount'].sum())
@@ -621,6 +650,7 @@ def get_bank_monthly_trend(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
+    project = request.args.get('project', 'All')
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
@@ -631,6 +661,7 @@ def get_bank_monthly_trend(bank_code):
     if category != 'All':
         df = df[df['Broader Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
+    df = filter_by_project(df, project)
 
     if df.empty:
         return jsonify({'months': [], 'income': [], 'expense': [], 'net': []})
@@ -669,6 +700,7 @@ def get_bank_category_breakdown(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
+    project = request.args.get('project', 'All')
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
@@ -680,6 +712,7 @@ def get_bank_category_breakdown(bank_code):
     if category != 'All':
         expense_df = expense_df[expense_df['Broader Category'] == category]
     expense_df = filter_by_date_range(expense_df, start_date, end_date)
+    expense_df = filter_by_project(expense_df, project)
 
     if expense_df.empty:
         return jsonify({'categories': [], 'amounts': []})
@@ -709,6 +742,7 @@ def get_bank_running_balance(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
+    project = request.args.get('project', 'All')
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
@@ -719,6 +753,7 @@ def get_bank_running_balance(bank_code):
     if category != 'All':
         df = df[df['Broader Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
+    df = filter_by_project(df, project)
 
     if df.empty:
         return jsonify({'dates': [], 'balance': [], 'sparkline_dates': [], 'sparkline_balance': []})
@@ -766,6 +801,7 @@ def get_bank_top_vendors(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
+    project = request.args.get('project', 'All')
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
@@ -777,6 +813,7 @@ def get_bank_top_vendors(bank_code):
     if category != 'All':
         expense_df = expense_df[expense_df['Broader Category'] == category]
     expense_df = filter_by_date_range(expense_df, start_date, end_date)
+    expense_df = filter_by_project(expense_df, project)
 
     if expense_df.empty:
         return jsonify({'vendors': [], 'amounts': []})
@@ -840,6 +877,7 @@ def get_bank_transactions(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
+    project = request.args.get('project', 'All')
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
     limit = int(request.args.get('limit', 10000))
@@ -854,6 +892,7 @@ def get_bank_transactions(bank_code):
     if category != 'All':
         df = df[df['Broader Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
+    df = filter_by_project(df, project)
 
     if search_query:
         df = df[
@@ -903,6 +942,7 @@ def get_bank_insights(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
+    project = request.args.get('project', 'All')
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
@@ -923,6 +963,7 @@ def get_bank_insights(bank_code):
     if category != 'All':
         df = df[df['Broader Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
+    df = filter_by_project(df, project)
 
     monthly_expenses = df.groupby('month')['DR Amount'].sum()
     avg_monthly_expense = float(monthly_expenses.mean()) if len(monthly_expenses) > 0 else 0
@@ -1163,6 +1204,7 @@ def download_bank_transactions(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
+    project = request.args.get('project', 'All')
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
@@ -1170,6 +1212,7 @@ def download_bank_transactions(bank_code):
     if category != 'All':
         df = df[df['Broader Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
+    df = filter_by_project(df, project)
 
     df_export = df.sort_values('date', ascending=False).copy()
     df_export['Date'] = df_export['date'].dt.strftime('%d-%m-%Y')
@@ -1235,10 +1278,12 @@ def get_personal_transactions():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
     search = request.args.get('search', '').lower()
+    transaction_type = request.args.get('type', 'All')
 
     try:
         query = """
-        SELECT id, transaction_date, vendor, description, project, amount, created_at
+        SELECT id, transaction_date, vendor, description, project, amount,
+               COALESCE(transaction_type, 'expense') as transaction_type, created_at
         FROM personal_transactions
         WHERE 1=1
         """
@@ -1247,6 +1292,10 @@ def get_personal_transactions():
         if project and project != 'All':
             query += " AND project = %s"
             params.append(project)
+
+        if transaction_type and transaction_type != 'All':
+            query += " AND COALESCE(transaction_type, 'expense') = %s"
+            params.append(transaction_type)
 
         if start_date:
             query += " AND transaction_date >= %s"
@@ -1270,6 +1319,7 @@ def get_personal_transactions():
 
         transactions = []
         for row in rows:
+            trans_type = row.get('transaction_type', 'expense') or 'expense'
             transactions.append({
                 'id': row['id'],
                 'date': row['transaction_date'].strftime('%Y-%m-%d'),
@@ -1278,7 +1328,8 @@ def get_personal_transactions():
                 'description': row['description'] or '',
                 'project': row['project'],
                 'amount': float(row['amount']),
-                'amount_formatted': format_indian_number(row['amount'])
+                'amount_formatted': format_indian_number(row['amount']),
+                'transaction_type': trans_type
             })
         return jsonify({'transactions': transactions})
     except Exception as e:
@@ -1299,6 +1350,11 @@ def add_personal_transaction():
     description = data.get('description', '').strip()
     project = data.get('project', 'General').strip() or 'General'
     amount = data.get('amount')
+    transaction_type = data.get('transaction_type', 'expense').strip().lower()
+
+    # Validate transaction_type
+    if transaction_type not in ['expense', 'income']:
+        transaction_type = 'expense'
 
     if not transaction_date or not vendor or amount is None:
         return jsonify({'error': 'Missing required fields (date, vendor, amount)'}), 400
@@ -1313,11 +1369,11 @@ def add_personal_transaction():
     try:
         with db_manager.get_connection() as conn:
             query = """
-            INSERT INTO personal_transactions (transaction_date, vendor, description, project, amount)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO personal_transactions (transaction_date, vendor, description, project, amount, transaction_type)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """
             cursor = conn.cursor()
-            cursor.execute(query, (transaction_date, vendor, description, project, amount))
+            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type))
             conn.commit()
             new_id = cursor.lastrowid
             cursor.close()
@@ -1345,6 +1401,11 @@ def update_personal_transaction(transaction_id):
     description = data.get('description', '').strip()
     project = data.get('project', 'General').strip() or 'General'
     amount = data.get('amount')
+    transaction_type = data.get('transaction_type', 'expense').strip().lower()
+
+    # Validate transaction_type
+    if transaction_type not in ['expense', 'income']:
+        transaction_type = 'expense'
 
     if not transaction_date or not vendor or amount is None:
         return jsonify({'error': 'Missing required fields (date, vendor, amount)'}), 400
@@ -1361,11 +1422,11 @@ def update_personal_transaction(transaction_id):
             query = """
             UPDATE personal_transactions
             SET transaction_date = %s, vendor = %s, description = %s, project = %s, amount = %s,
-                updated_at = CURRENT_TIMESTAMP
+                transaction_type = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
             """
             cursor = conn.cursor()
-            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_id))
+            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type, transaction_id))
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()
@@ -1415,10 +1476,16 @@ def delete_personal_transaction(transaction_id):
 def get_personal_summary():
     """Get summary statistics for personal transactions"""
     empty_response = {
-        'total_spent': 0,
-        'total_spent_formatted': '₹0',
-        'this_month': 0,
-        'this_month_formatted': '₹0',
+        'total_expense': 0,
+        'total_expense_formatted': '₹0',
+        'total_income': 0,
+        'total_income_formatted': '₹0',
+        'net_balance': 0,
+        'net_balance_formatted': '₹0',
+        'this_month_expense': 0,
+        'this_month_expense_formatted': '₹0',
+        'this_month_income': 0,
+        'this_month_income_formatted': '₹0',
         'transaction_count': 0,
         'project_breakdown': []
     }
@@ -1434,8 +1501,15 @@ def get_personal_summary():
         with db_manager.get_connection() as conn:
             cursor = conn.cursor(dictionary=True)
 
-            # Total spent query
-            total_query = "SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM personal_transactions WHERE 1=1"
+            # Total expense and income query
+            total_query = """
+            SELECT
+                COALESCE(SUM(CASE WHEN COALESCE(transaction_type, 'expense') = 'expense' THEN amount ELSE 0 END), 0) as total_expense,
+                COALESCE(SUM(CASE WHEN COALESCE(transaction_type, 'expense') = 'income' THEN amount ELSE 0 END), 0) as total_income,
+                COUNT(*) as count
+            FROM personal_transactions
+            WHERE 1=1
+            """
             params = []
 
             if start_date:
@@ -1447,25 +1521,30 @@ def get_personal_summary():
 
             cursor.execute(total_query, params)
             total_result = cursor.fetchone()
-            total_spent = float(total_result['total']) if total_result else 0
+            total_expense = float(total_result['total_expense']) if total_result else 0
+            total_income = float(total_result['total_income']) if total_result else 0
+            net_balance = total_income - total_expense
             transaction_count = int(total_result['count']) if total_result else 0
 
-            # This month query
+            # This month query with income/expense
             this_month_query = """
-            SELECT COALESCE(SUM(amount), 0) as total
+            SELECT
+                COALESCE(SUM(CASE WHEN COALESCE(transaction_type, 'expense') = 'expense' THEN amount ELSE 0 END), 0) as expense,
+                COALESCE(SUM(CASE WHEN COALESCE(transaction_type, 'expense') = 'income' THEN amount ELSE 0 END), 0) as income
             FROM personal_transactions
             WHERE YEAR(transaction_date) = YEAR(CURRENT_DATE)
               AND MONTH(transaction_date) = MONTH(CURRENT_DATE)
             """
             cursor.execute(this_month_query)
             this_month_result = cursor.fetchone()
-            this_month = float(this_month_result['total']) if this_month_result else 0
+            this_month_expense = float(this_month_result['expense']) if this_month_result else 0
+            this_month_income = float(this_month_result['income']) if this_month_result else 0
 
-            # Project breakdown query
+            # Project breakdown query (expenses only)
             project_query = """
             SELECT project, SUM(amount) as total, COUNT(*) as count
             FROM personal_transactions
-            WHERE 1=1
+            WHERE COALESCE(transaction_type, 'expense') = 'expense'
             """
             params = []
             if start_date:
@@ -1483,7 +1562,7 @@ def get_personal_summary():
 
         project_breakdown = []
         for row in project_rows:
-            pct = (float(row['total']) / total_spent * 100) if total_spent > 0 else 0
+            pct = (float(row['total']) / total_expense * 100) if total_expense > 0 else 0
             project_breakdown.append({
                 'project': row['project'],
                 'amount': float(row['total']),
@@ -1493,10 +1572,17 @@ def get_personal_summary():
             })
 
         return jsonify({
-            'total_spent': total_spent,
-            'total_spent_formatted': format_indian_number(total_spent),
-            'this_month': this_month,
-            'this_month_formatted': format_indian_number(this_month),
+            'total_expense': total_expense,
+            'total_expense_formatted': format_indian_number(total_expense),
+            'total_income': total_income,
+            'total_income_formatted': format_indian_number(total_income),
+            'net_balance': net_balance,
+            'net_balance_formatted': format_indian_number(abs(net_balance)),
+            'net_balance_positive': net_balance >= 0,
+            'this_month_expense': this_month_expense,
+            'this_month_expense_formatted': format_indian_number(this_month_expense),
+            'this_month_income': this_month_income,
+            'this_month_income_formatted': format_indian_number(this_month_income),
             'transaction_count': transaction_count,
             'project_breakdown': project_breakdown
         })
@@ -1527,6 +1613,28 @@ def get_personal_projects():
     except Exception as e:
         print(f"[!] Error fetching projects: {e}")
         return jsonify({'projects': ['General']})
+
+
+@app.route('/api/personal/vendors')
+@login_required
+def get_personal_vendors():
+    """Get list of unique vendors from personal transactions"""
+    if not app.config['USE_DATABASE']:
+        return jsonify({'vendors': []})
+
+    try:
+        with db_manager.get_connection() as conn:
+            query = "SELECT DISTINCT vendor FROM personal_transactions ORDER BY vendor"
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            cursor.close()
+
+        vendors = [row[0] for row in rows if row[0]]
+        return jsonify({'vendors': vendors})
+    except Exception as e:
+        print(f"[!] Error fetching vendors: {e}")
+        return jsonify({'vendors': []})
 
 
 # ============================================================================

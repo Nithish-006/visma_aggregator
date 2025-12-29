@@ -12,9 +12,6 @@
     <!-- Select2 (for multi-month select, if you want it) -->
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
     <!-- Bank Context -->
     <script>
         window.BANK_CODE = "{{ bank_code | default('axis') }}";
@@ -27,6 +24,21 @@
 </head>
 
 <body>
+    <!-- Animated background -->
+    <div class="bg-animation"></div>
+
+    <!-- Particles -->
+    <div class="particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay">
         <div class="spinner"></div>
@@ -35,36 +47,29 @@
 
     <!-- Header -->
     <header class="header">
-        <div class="container">
+        <div class="header-content">
             <div class="header-left">
-                <a href="/" class="back-to-hub" style="display: flex; align-items: center; gap: 6px; color: #94a3b8; text-decoration: none; margin-right: 16px; font-size: 0.875rem;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <a href="/" class="back-to-hub" title="Back to Hub">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
-                    All Banks
                 </a>
-                <h1 class="logo">{{ bank_name | default('Axis Bank') }}</h1>
-                <span class="logo-tagline">Transactions & Insights</span>
+                <div class="header-title">
+                    <h1 class="logo">{{ bank_name | default('Axis Bank') }}</h1>
+                    <span class="tagline">Transactions & Insights</span>
+                </div>
             </div>
             <div class="header-right">
-                <a href="/edit-transactions/{{ bank_code | default('axis') }}" class="btn btn-primary" style="text-decoration: none; margin-right: 12px;">
+                <span id="total-transactions" class="transaction-badge">0 Transactions</span>
+                <span class="user-badge">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
                     </svg>
-                    <span>Edit Transactions</span>
-                </a>
-                <button id="upload-btn" class="upload-btn" title="Upload Bank Statement">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    <span>Upload Statement</span>
-                </button>
-                <span id="total-transactions" class="header-pill">0 Transactions</span>
-                <a href="/logout" class="btn btn-secondary logout-btn" style="text-decoration: none; margin-left: 12px;" title="Logout">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    {{ session.get('username', 'User') }}
+                </span>
+                <a href="/logout" class="logout-btn" title="Logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                         <polyline points="16 17 21 12 16 7"></polyline>
                         <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -123,6 +128,13 @@
             </div>
 
             <div class="filter-group">
+                <label for="project-filter">Project</label>
+                <select id="project-filter" class="filter-select">
+                    <option value="All">All Projects</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
                 <label for="start-date">From</label>
                 <input type="date" id="start-date" class="filter-input date-input">
             </div>
@@ -155,244 +167,75 @@
         <div class="container">
 
             <!-- Transactions Section (moved to top) -->
-            <section class="transactions-section" style="margin-bottom: 2rem;">
-                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <section class="transactions-section">
+                <div class="section-header">
                     <div>
-                        <h2 class="section-title">Transaction history</h2>
+                        <h2 class="section-title">Transaction History</h2>
                         <p class="section-subtitle">Detailed ledger with latest transactions on top</p>
                     </div>
-                    <button id="download-transactions" class="btn btn-secondary"
-                        style="height: 32px; font-size: 0.8rem;">
+                    <button id="download-transactions" class="download-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
                         <span>Download Excel</span>
                     </button>
                 </div>
 
                 <!-- Search Toolbar -->
-                <div class="transactions-toolbar"
-                    style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center;">
-                    <div style="position: relative; width: 100%; max-width: 300px;">
-                        <span
-                            style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">🔍</span>
-                        <input type="text" id="transaction-search" placeholder="Search description, vendor..."
-                            class="search-input"
-                            style="width: 100%; padding: 8px 12px 8px 32px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 0.9rem; transition: all 0.2s;">
+                <div class="transactions-toolbar">
+                    <div class="search-wrapper">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="transaction-search" placeholder="Search description, vendor..." class="search-input">
                     </div>
                 </div>
 
-                <div class="scrollable-table">
+                <div class="table-container">
                     <table class="transactions-table">
                         <thead>
                             <tr>
-                                <th class="sortable header-sort-active" data-sort="date">Date <span
-                                        class="sort-icon">↓</span></th>
+                                <th class="sortable header-sort-active" data-sort="date">Date <span class="sort-icon">↓</span></th>
                                 <th>Vendor</th>
                                 <th>Category</th>
                                 <th>Description</th>
                                 <th>Project</th>
-                                <th class="text-right sortable" data-sort="dr_amount">Debit <span
-                                        class="sort-icon"></span></th>
-                                <th class="text-right sortable" data-sort="cr_amount">Credit <span
-                                        class="sort-icon"></span></th>
-                                <th class="text-right">Net</th>
+                                <th class="text-right sortable" data-sort="dr_amount">Debit <span class="sort-icon"></span></th>
+                                <th class="text-right sortable" data-sort="cr_amount">Credit <span class="sort-icon"></span></th>
                             </tr>
                         </thead>
                         <tbody id="transactions-body"></tbody>
                     </table>
                 </div>
-            </section>
 
-            <!-- Hero Summary -->
-            <section class="hero-summary">
-                <!-- Balance card + sparkline -->
-                <div class="hero-balance-card">
-                    <div class="hero-balance-header">
-                        <div class="hero-balance-label">Current balance</div>
-                        <div id="hero-current-balance" class="hero-balance-value">₹0</div>
-                        <div class="hero-balance-subtitle">
-                            Net of all income and expenses till date
-                        </div>
-                    </div>
-
-                    <div class="hero-sparkline-container">
-                        <canvas id="heroSparkline"></canvas>
-                    </div>
-
-                    <div class="hero-badge-row">
-                        <span class="badge" id="balance-insight">Lowest: ₹0 | Peak: ₹0</span>
-                    </div>
-                </div>
-
-                <!-- Month comparison + biggest category -->
-                <div class="hero-comparison-cards">
-                    <div class="hero-comparison-card">
-                        <div class="comparison-label">This month vs last month</div>
-                        <div id="month-comparison-net" class="comparison-value">₹0</div>
-                        <div id="month-comparison-delta" class="comparison-delta">
-                            <span class="delta-arrow">–</span>
-                            <span class="delta-value">0.0%</span>
-                        </div>
-                    </div>
-
-                    <div class="hero-comparison-card">
-                        <div class="comparison-label">Biggest expense category (this month)</div>
-                        <div id="biggest-category-name" class="comparison-amount">–</div>
-                        <div id="biggest-category-amount" class="comparison-sub">₹0</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- KPI Section -->
-            <section class="kpi-section">
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-icon">⬆️</div>
-                        <div class="kpi-content">
-                            <div class="kpi-label">Total income</div>
-                            <div id="kpi-total-income" class="kpi-value income">₹0</div>
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon">⬇️</div>
-                        <div class="kpi-content">
-                            <div class="kpi-label">Total expense</div>
-                            <div id="kpi-total-expense" class="kpi-value expense">₹0</div>
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon">⚖️</div>
-                        <div class="kpi-content">
-                            <div class="kpi-label">Net cashflow</div>
-                            <div id="kpi-net-cashflow" class="kpi-value">₹0</div>
-                        </div>
-                    </div>
-
-                    <div class="kpi-card">
-                        <div class="kpi-icon">📊</div>
-                        <div class="kpi-content">
-                            <div class="kpi-label">Expense ratio</div>
-                            <div id="kpi-expense-ratio" class="kpi-value">0%</div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Charts Section -->
-            <section class="charts-section">
-                <div class="chart-row">
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <div>
-                                <div class="chart-title">Running balance</div>
-                                <div class="chart-subtitle">How your money moved over time</div>
-                            </div>
-                            <span id="balance-insight-badge" class="insight-badge">
-                                Tracking extremes in your balance
-                            </span>
-                        </div>
-                        <div class="chart-container large">
-                            <canvas id="balanceChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <div>
-                                <div class="chart-title">Expense by category</div>
-                                <div class="chart-subtitle">Visual breakdown of where money goes</div>
-                            </div>
-                            <span id="category-insight" class="insight-badge">Top category: –</span>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="categoryChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="chart-row">
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <div>
-                                <div class="chart-title">Monthly income vs expense</div>
-                                <div class="chart-subtitle">Month-on-month inflows, outflows and net</div>
-                            </div>
-                            <span id="monthly-insight" class="insight-badge">Highest expense: –</span>
-                        </div>
-                        <div class="chart-container large">
-                            <canvas id="monthlyChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="chart-card">
-                        <div class="chart-header">
-                            <div>
-                                <div class="chart-title">Top vendors</div>
-                                <div class="chart-subtitle">Your biggest expense counterparties</div>
-                            </div>
-                            <span id="vendor-insight" class="insight-badge">Top vendor: –</span>
-                        </div>
-                        <div class="chart-container">
-                            <canvas id="vendorChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-
-            </section>
-
-            <!-- Insights Section -->
-            <section class="insights-section insights-top">
-                <div class="section-header">
-                    <h2 class="section-title">Spending insights</h2>
-                    <p class="section-subtitle">High‑level patterns extracted from your data</p>
-                </div>
-
-                <div class="insights-grid" style="grid-template-columns: repeat(5, 1fr);">
-                    <div class="insight-card">
-                        <div class="insight-icon">📆</div>
-                        <div class="insight-content">
-                            <div class="insight-label">Avg. monthly expense</div>
-                            <div id="avg-monthly-expense" class="insight-value">₹0</div>
-                            <div id="avg-expense-desc" class="insight-description">Based on all months</div>
-                        </div>
-                    </div>
-
-                    <div class="insight-card">
-                        <div class="insight-icon">📈</div>
-                        <div class="insight-content">
-                            <div class="insight-label">Expense trend</div>
-                            <div id="expense-trend" class="insight-value">Stable</div>
-                            <div id="expense-trend-desc" class="insight-description">Last 3 months comparison</div>
-                        </div>
-                    </div>
-
-                    <div class="insight-card">
-                        <div class="insight-icon">💳</div>
-                        <div class="insight-content">
-                            <div class="insight-label">Avg. transaction size</div>
-                            <div id="avg-transaction-size" class="insight-value">₹0</div>
-                            <div id="avg-transaction-desc" class="insight-description">Mean transaction amount</div>
-                        </div>
-                    </div>
-
-                    <div class="insight-card">
-                        <div class="insight-icon">📅</div>
-                        <div class="insight-content">
-                            <div class="insight-label">Peak spending day</div>
-                            <div id="peak-day" class="insight-value">–</div>
-                            <div id="peak-day-desc" class="insight-description">No data available</div>
-                        </div>
-                    </div>
-
-                    <div class="insight-card">
-                        <div class="insight-icon">⚡</div>
-                        <div class="insight-content">
-                            <div class="insight-label">Cash flow velocity</div>
-                            <div id="cashflow-velocity" class="insight-value">0 transactions</div>
-                            <div id="velocity-desc" class="insight-description">Average per month</div>
-                        </div>
-                    </div>
+                <!-- Action Buttons (below table for mobile friendliness) -->
+                <div class="table-actions" style="justify-content: flex-end;">
+                    <a href="/charts/{{ bank_code | default('axis') }}" class="action-btn charts-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                        <span>View Charts</span>
+                    </a>
+                    <a href="/edit-transactions/{{ bank_code | default('axis') }}" class="action-btn edit-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                        <span>Edit Transactions</span>
+                    </a>
+                    <button id="upload-btn" class="action-btn upload-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span>Upload Statement</span>
+                    </button>
                 </div>
             </section>
 
@@ -401,9 +244,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="container">
-            Built for personal money management · Powered by your bank exports
-        </div>
+        <p>Built for personal money management</p>
     </footer>
 
     <!-- Scripts -->

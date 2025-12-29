@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Transactions - {{ bank_name | default('Axis Bank') }} | VISMA Financial</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -18,6 +19,21 @@
 </head>
 
 <body>
+    <!-- Animated background -->
+    <div class="bg-animation"></div>
+
+    <!-- Particles -->
+    <div class="particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+    </div>
+
     <!-- Loading overlay -->
     <div id="loading-overlay" class="loading-overlay hidden">
         <div class="spinner"></div>
@@ -26,15 +42,28 @@
 
     <!-- Header -->
     <header class="header">
-        <div class="container">
+        <div class="header-content">
             <div class="header-left">
-                <div class="logo">{{ bank_name | default('Axis Bank') }}</div>
-                <span class="logo-tagline">Transaction Editor</span>
+                <a href="/dashboard/{{ bank_code | default('axis') }}" class="back-to-hub" title="Back to Dashboard">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </a>
+                <div class="header-title">
+                    <h1 class="logo">{{ bank_name | default('Axis Bank') }}</h1>
+                    <span class="tagline">Transaction Editor</span>
+                </div>
             </div>
             <div class="header-right">
-                <a href="/dashboard/{{ bank_code | default('axis') }}" class="btn btn-secondary">← Back to Dashboard</a>
-                <a href="/logout" class="btn btn-secondary logout-btn" style="text-decoration: none; margin-left: 12px;" title="Logout">
+                <span class="user-badge">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    {{ session.get('username', 'User') }}
+                </span>
+                <a href="/logout" class="logout-btn" title="Logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                         <polyline points="16 17 21 12 16 7"></polyline>
                         <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -132,7 +161,6 @@
                             <th style="width: 300px;">Description</th>
                             <th style="width: 110px;" class="text-right">Debit</th>
                             <th style="width: 110px;" class="text-right">Credit</th>
-                            <th style="width: 110px;" class="text-right">Net</th>
                             <th style="width: 130px;">Project</th>
                             <th style="width: 130px;">DD</th>
                             <th style="width: 200px;">Notes</th>
@@ -150,9 +178,7 @@
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="container">
-            Transaction Editor · VISMA Financial App
-        </div>
+        <p>Transaction Editor · VISMA Financial App</p>
     </footer>
 
     <!-- Scripts -->
