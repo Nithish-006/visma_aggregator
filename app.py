@@ -4,7 +4,7 @@ import pandas as pd
 import json
 import io
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 
 # Import our modules
@@ -17,6 +17,9 @@ app.config.from_object(Config)
 
 # Secret key for session management
 app.secret_key = os.environ.get('SECRET_KEY', 'visma-finance-secret-key-2024-secure')
+
+# Permanent session lifetime (30 days for "Stay signed in")
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
 # Login credentials
 VALID_USERNAME = 'visma_finance'
@@ -439,6 +442,9 @@ def login():
         if username == VALID_USERNAME and password == VALID_PASSWORD:
             session['logged_in'] = True
             session['username'] = username
+            # Check if "Stay signed in" was selected
+            if request.form.get('remember_me'):
+                session.permanent = True
             return redirect(url_for('index'))
         else:
             error = 'Invalid username or password. Please try again.'

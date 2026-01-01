@@ -41,7 +41,7 @@
     <main class="main-content">
         <div class="container">
             <!-- Summary Cards -->
-            <div class="summary-grid summary-grid-4">
+            <div class="summary-grid summary-grid-3">
                 <div class="summary-card">
                     <div class="summary-icon income">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -65,19 +65,6 @@
                     <div class="summary-content">
                         <span class="summary-label">Total Expense</span>
                         <span class="summary-value expense-value" id="total-expense">Loading...</span>
-                    </div>
-                </div>
-
-                <div class="summary-card">
-                    <div class="summary-icon balance">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="1" x2="12" y2="23"></line>
-                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                        </svg>
-                    </div>
-                    <div class="summary-content">
-                        <span class="summary-label">Net Balance</span>
-                        <span class="summary-value" id="net-balance">Loading...</span>
                     </div>
                 </div>
 
@@ -162,6 +149,11 @@
                     </div>
                 </div>
                 <div class="panel-body">
+                    <!-- Mobile Card View -->
+                    <div class="transaction-cards" id="transaction-cards">
+                        <div class="loading-state">Loading transactions...</div>
+                    </div>
+                    <!-- Desktop Table View -->
                     <table class="transactions-table" id="transactions-table">
                         <thead>
                             <tr>
@@ -304,6 +296,14 @@
     <div class="toast" id="toast">
         <span class="toast-message" id="toast-message"></span>
     </div>
+
+    <!-- Floating Action Button (Mobile) -->
+    <button class="fab" id="fab-add" aria-label="Add Transaction">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+    </button>
 
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='personal_tracker.js') }}"></script>

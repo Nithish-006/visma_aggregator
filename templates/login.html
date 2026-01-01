@@ -489,6 +489,34 @@
             }
         }
 
+        /* Remember me checkbox */
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 4px;
+        }
+
+        .remember-me input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary-color);
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .remember-me label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.3s ease;
+        }
+
+        .remember-me:hover label {
+            color: var(--text-main);
+        }
+
         /* Loading state */
         .login-btn.loading {
             pointer-events: none;
@@ -588,6 +616,11 @@
                             <span id="toggleIcon">&#128065;</span>
                         </button>
                     </div>
+                </div>
+
+                <div class="remember-me">
+                    <input type="checkbox" id="remember_me" name="remember_me">
+                    <label for="remember_me">Stay signed in</label>
                 </div>
 
                 <button type="submit" class="login-btn" id="loginBtn">

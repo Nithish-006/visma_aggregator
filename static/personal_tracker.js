@@ -16,7 +16,6 @@
         // Summary
         totalIncome: document.getElementById('total-income'),
         totalExpense: document.getElementById('total-expense'),
-        netBalance: document.getElementById('net-balance'),
         transactionCount: document.getElementById('transaction-count'),
         thisMonthIncome: document.getElementById('this-month-income'),
         thisMonthExpense: document.getElementById('this-month-expense'),
@@ -25,6 +24,10 @@
         projectBreakdown: document.getElementById('project-breakdown'),
         recentTransactions: document.getElementById('recent-transactions'),
         transactionsTbody: document.getElementById('transactions-tbody'),
+        transactionCards: document.getElementById('transaction-cards'),
+
+        // FAB (Mobile)
+        fabAdd: document.getElementById('fab-add'),
 
         // Filters
         typeFilter: document.getElementById('type-filter'),
@@ -80,8 +83,13 @@
     }
 
     function setupEventListeners() {
-        // Add transaction button
+        // Add transaction button (header - desktop)
         elements.addTransactionBtn.addEventListener('click', openAddModal);
+
+        // FAB button (mobile)
+        if (elements.fabAdd) {
+            elements.fabAdd.addEventListener('click', openAddModal);
+        }
 
         // Modal close buttons
         elements.modalClose.addEventListener('click', closeModal);
@@ -316,12 +324,6 @@
 
             elements.totalIncome.textContent = data.total_income_formatted || '₹0';
             elements.totalExpense.textContent = data.total_expense_formatted || '₹0';
-
-            // Net balance with color coding
-            const netBalanceEl = elements.netBalance;
-            netBalanceEl.textContent = (data.net_balance_positive ? '' : '-') + data.net_balance_formatted;
-            netBalanceEl.className = 'summary-value ' + (data.net_balance_positive ? 'income-value' : 'expense-value');
-
             elements.transactionCount.textContent = data.transaction_count || '0';
             elements.thisMonthIncome.textContent = data.this_month_income_formatted || '₹0';
             elements.thisMonthExpense.textContent = data.this_month_expense_formatted || '₹0';
@@ -438,7 +440,8 @@
         let html = '';
         recent.forEach(t => {
             const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
-            const prefix = t.transaction_type === 'income' ? '+' : '-';
+            // Show + for income, no prefix for expense (just red color indicates expense)
+            const prefix = t.transaction_type === 'income' ? '+' : '';
             html += `
                 <div class="recent-item">
                     <div class="recent-info">
@@ -454,7 +457,14 @@
     }
 
     function renderTransactions() {
+        // Empty state for both views
         if (transactions.length === 0) {
+            const emptyHtml = `
+                <div class="empty-state">
+                    <p>No transactions found</p>
+                    <p style="font-size: 0.8rem;">Tap + to add your first entry</p>
+                </div>
+            `;
             elements.transactionsTbody.innerHTML = `
                 <tr>
                     <td colspan="7" class="empty-state">
@@ -463,15 +473,20 @@
                     </td>
                 </tr>
             `;
+            if (elements.transactionCards) {
+                elements.transactionCards.innerHTML = emptyHtml;
+            }
             return;
         }
 
-        let html = '';
+        // Desktop Table View
+        let tableHtml = '';
         transactions.forEach(t => {
             const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
             const typeLabel = t.transaction_type === 'income' ? 'Income' : 'Expense';
-            const prefix = t.transaction_type === 'income' ? '+' : '-';
-            html += `
+            // Show + for income, no prefix for expense (just red color indicates expense)
+            const prefix = t.transaction_type === 'income' ? '+' : '';
+            tableHtml += `
                 <tr data-id="${t.id}">
                     <td>${t.date_formatted}</td>
                     <td><span class="type-tag ${typeClass}">${typeLabel}</span></td>
@@ -498,8 +513,51 @@
                 </tr>
             `;
         });
+        elements.transactionsTbody.innerHTML = tableHtml;
 
-        elements.transactionsTbody.innerHTML = html;
+        // Mobile Card View
+        if (elements.transactionCards) {
+            let cardsHtml = '';
+            transactions.forEach(t => {
+                const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
+                const typeLabel = t.transaction_type === 'income' ? 'Income' : 'Expense';
+                // Show + for income, no prefix for expense
+                const prefix = t.transaction_type === 'income' ? '+' : '';
+                const description = t.description ? `<div class="transaction-card-desc">${escapeHtml(t.description)}</div>` : '';
+
+                cardsHtml += `
+                    <div class="transaction-card" data-id="${t.id}">
+                        <div class="transaction-card-header">
+                            <span class="transaction-card-vendor">${escapeHtml(t.vendor)}</span>
+                            <span class="transaction-card-amount ${typeClass}">${prefix}${t.amount_formatted}</span>
+                        </div>
+                        <div class="transaction-card-details">
+                            <span class="transaction-card-date">${t.date_formatted}</span>
+                            <span class="type-tag ${typeClass}">${typeLabel}</span>
+                            <span class="project-tag">${escapeHtml(t.project)}</span>
+                        </div>
+                        ${description}
+                        <div class="transaction-card-actions">
+                            <button class="action-btn edit" onclick="editTransaction(${t.id})">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                                <span>Edit</span>
+                            </button>
+                            <button class="action-btn delete" onclick="deleteTransaction(${t.id})">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                <span>Delete</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            elements.transactionCards.innerHTML = cardsHtml;
+        }
     }
 
     function updateProjectFilter() {
