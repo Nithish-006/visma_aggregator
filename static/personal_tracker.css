@@ -1,30 +1,21 @@
 /* ============================================================================
-   PERSONAL TRACKER STYLES - MOBILE-FIRST DESIGN
+   PERSONAL TRACKER - ULTRA COMPACT MOBILE-FIRST DESIGN
    ============================================================================ */
 
 :root {
-    --primary-color: #4a6cf7;
-    --primary-dark: #3b5ce4;
-    --primary-light: #6b8cff;
-    --accent-color: #22c55e;
-    --danger-color: #ef4444;
-    --warning-color: #f59e0b;
-    --bg-dark: #0f172a;
-    --bg-card: #1e293b;
-    --bg-card-hover: #263548;
-    --bg-input: #0f172a;
-    --text-main: #f8fafc;
+    --bg-primary: #0f1c2e;
+    --bg-secondary: #162234;
+    --bg-card: #1a2942;
+    --bg-hover: #243552;
+    --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
     --text-muted: #64748b;
-    --border-color: #334155;
-    --personal-color: #8b5cf6;
-    --personal-light: #a78bfa;
+    --border-color: #2d3f59;
     --income-color: #22c55e;
-    --income-light: #4ade80;
     --expense-color: #ef4444;
-    --expense-light: #f87171;
+    --accent-color: #ff6b4a;
+    --tab-active: #3b82f6;
 
-    /* Safe area for iPhone */
     --safe-area-top: env(safe-area-inset-top, 0px);
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -43,35 +34,23 @@ html {
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
-    background: var(--bg-dark);
+    background: var(--bg-primary);
     min-height: 100vh;
     min-height: -webkit-fill-available;
-    color: var(--text-main);
-    padding-bottom: calc(80px + var(--safe-area-bottom));
-}
-
-.container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 1rem;
+    color: var(--text-primary);
+    overflow-x: hidden;
 }
 
 /* ============================================================================
-   HEADER - Mobile Optimized
+   HEADER
    ============================================================================ */
 
 .header {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(15, 23, 42, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border-color);
-    padding: calc(0.75rem + var(--safe-area-top)) 0 0.75rem;
-}
-
-.header .container {
+    background: var(--bg-primary);
+    padding: calc(12px + var(--safe-area-top)) 16px 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -80,122 +59,194 @@ body {
 .header-left {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 8px;
 }
 
-.logo {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--personal-color);
+.back-btn,
+.icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-decoration: none;
 }
 
-.logo-tagline {
-    display: none;
+.back-btn:active,
+.icon-btn:active {
+    background: var(--bg-hover);
+}
+
+.month-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.month-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.month-btn:active {
+    background: var(--bg-hover);
+}
+
+.month-label {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 100px;
+    text-align: center;
 }
 
 .header-right {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-}
-
-/* Hide add button in header on mobile - we use FAB instead */
-#add-transaction-btn {
-    display: none;
+    gap: 4px;
 }
 
 /* ============================================================================
-   BUTTONS - Touch Friendly
+   SEARCH BAR
    ============================================================================ */
 
-.btn {
-    display: inline-flex;
+.search-bar {
+    display: none;
+    padding: 0 16px 12px;
+    gap: 8px;
     align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    border-radius: 10px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-decoration: none;
-    min-height: 44px;
-    min-width: 44px;
+    background: var(--bg-primary);
 }
 
-.btn-primary {
-    background: var(--primary-color);
-    color: white;
+.search-bar.show {
+    display: flex;
 }
 
-.btn-primary:hover, .btn-primary:active {
-    background: var(--primary-dark);
-}
-
-.btn-secondary {
-    background: var(--bg-card);
-    color: var(--text-secondary);
+.search-bar input {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    padding: 0.5rem 0.875rem;
-    font-size: 0.8125rem;
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 0.9375rem;
 }
 
-.btn-secondary:hover, .btn-secondary:active {
-    background: var(--bg-card-hover);
-    color: var(--text-main);
+.search-bar input:focus {
+    outline: none;
+    border-color: var(--tab-active);
 }
 
-.btn-danger {
-    background: var(--danger-color);
-    color: white;
-}
-
-.btn-danger:hover, .btn-danger:active {
-    background: #dc2626;
-}
-
-.logout-btn {
-    padding: 0.5rem;
-    width: 40px;
-    height: 40px;
-}
-
-.logout-btn span {
-    display: none;
-}
-
-/* ============================================================================
-   FLOATING ACTION BUTTON (Mobile)
-   ============================================================================ */
-
-.fab {
-    position: fixed;
-    bottom: calc(24px + var(--safe-area-bottom));
-    right: 20px;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary-color), var(--personal-color));
-    color: white;
-    border: none;
-    box-shadow: 0 4px 20px rgba(74, 108, 247, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3);
-    cursor: pointer;
-    z-index: 90;
+.search-close {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
 }
 
-.fab:active {
-    transform: scale(0.95);
+/* ============================================================================
+   TABS
+   ============================================================================ */
+
+.tabs {
+    display: flex;
+    padding: 0 16px;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
 }
 
-.fab svg {
-    width: 28px;
-    height: 28px;
+.tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.tab {
+    flex: 1;
+    min-width: fit-content;
+    padding: 12px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.tab.active {
+    color: var(--text-primary);
+    border-bottom-color: var(--expense-color);
+}
+
+.tab:active {
+    background: var(--bg-hover);
+}
+
+/* ============================================================================
+   SUMMARY BAR
+   ============================================================================ */
+
+.summary-bar {
+    display: flex;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.summary-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.summary-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.summary-value {
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+.summary-value.income {
+    color: var(--income-color);
+}
+
+.summary-value.expense {
+    color: var(--expense-color);
+}
+
+.summary-value.total {
+    color: var(--text-primary);
 }
 
 /* ============================================================================
@@ -203,533 +254,327 @@ body {
    ============================================================================ */
 
 .main-content {
-    padding: 1rem 0 2rem;
+    padding-bottom: calc(80px + var(--safe-area-bottom));
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.loading-state,
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+    font-size: 0.9375rem;
 }
 
 /* ============================================================================
-   SUMMARY CARDS - Mobile Grid
+   DAILY TRANSACTIONS LIST
    ============================================================================ */
 
-.summary-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-    margin-bottom: 1.25rem;
+.date-group {
+    border-bottom: 1px solid var(--border-color);
 }
 
-.summary-grid.summary-grid-3 {
-    grid-template-columns: repeat(2, 1fr);
+.date-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
 }
 
-/* Third card spans full width on mobile for 3-card layout */
-.summary-grid.summary-grid-3 .summary-card:nth-child(3) {
-    grid-column: 1 / -1;
+.date-info {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
 }
 
-.summary-card {
+.date-day {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.date-weekday {
+    font-size: 0.75rem;
+    padding: 2px 6px;
     background: var(--bg-card);
-    border-radius: 16px;
-    padding: 1rem;
-    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-muted);
+}
+
+.date-month {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+.date-totals {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
+    gap: 16px;
+    font-size: 0.8125rem;
+    font-weight: 600;
 }
 
-.summary-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.summary-icon svg {
-    width: 22px;
-    height: 22px;
-}
-
-.summary-icon.income {
-    background: rgba(34, 197, 94, 0.15);
+.date-income {
     color: var(--income-color);
 }
 
-.summary-icon.expense {
-    background: rgba(239, 68, 68, 0.15);
+.date-expense {
     color: var(--expense-color);
 }
 
-.summary-icon.balance {
-    background: rgba(139, 92, 246, 0.15);
-    color: var(--personal-color);
+/* Transaction Row */
+.transaction-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
 }
 
-.summary-icon.count {
-    background: rgba(74, 108, 247, 0.15);
-    color: var(--primary-color);
+.transaction-row:active {
+    background: var(--bg-hover);
 }
 
-.summary-content {
+.transaction-row:last-child {
+    border-bottom: none;
+}
+
+.transaction-category {
     display: flex;
     flex-direction: column;
-    gap: 0.125rem;
-    min-width: 0;
+    align-items: center;
+    min-width: 56px;
 }
 
-.summary-label {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
+.category-icon {
+    font-size: 1.25rem;
+    margin-bottom: 2px;
+}
+
+.category-name {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
     white-space: nowrap;
 }
 
-.summary-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--text-main);
+.transaction-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.transaction-vendor {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.summary-value.income-value,
-.income-value {
+.transaction-project {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.transaction-amount {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.transaction-amount.income {
     color: var(--income-color);
 }
 
-.summary-value.expense-value,
-.expense-value {
+.transaction-amount.expense {
     color: var(--expense-color);
 }
 
 /* ============================================================================
-   MONTH SUMMARY - Compact Mobile
+   MONTHLY BREAKDOWN
    ============================================================================ */
 
-.month-summary {
-    background: var(--bg-card);
-    border-radius: 16px;
-    padding: 1rem 1.25rem;
-    border: 1px solid var(--border-color);
-    margin-bottom: 1.25rem;
+.monthly-list {
+    padding: 0;
 }
 
-.month-summary h3 {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    margin-bottom: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+.month-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.month-row:active {
+    background: var(--bg-hover);
+}
+
+.month-name {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
 }
 
 .month-stats {
     display: flex;
-    gap: 2rem;
-}
-
-.month-stat {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-}
-
-.month-stat-label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.month-stat-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-}
-
-/* ============================================================================
-   CONTENT GRID
-   ============================================================================ */
-
-.content-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    margin-bottom: 1.25rem;
-}
-
-/* ============================================================================
-   PANELS
-   ============================================================================ */
-
-.panel {
-    background: var(--bg-card);
-    border-radius: 16px;
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-}
-
-.panel-header {
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--border-color);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-}
-
-.panel-header h2 {
-    font-size: 1rem;
+    gap: 20px;
+    font-size: 0.875rem;
     font-weight: 600;
-    color: var(--text-main);
-}
-
-.panel-body {
-    padding: 1rem 1.25rem;
 }
 
 /* ============================================================================
-   FILTER BAR - Mobile Stacked
+   TOTAL VIEW
    ============================================================================ */
 
-.filter-bar {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    width: 100%;
+.total-summary {
+    padding: 20px 16px;
 }
 
-.filter-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
+.total-card {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
 }
 
-.filter-group label {
-    font-size: 0.6875rem;
+.total-card-header {
+    font-size: 0.75rem;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    margin-bottom: 8px;
 }
 
-.filter-select,
-.filter-input {
-    padding: 0.75rem 1rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    color: var(--text-main);
-    font-size: 1rem;
-    width: 100%;
-    min-height: 48px;
-    -webkit-appearance: none;
+.total-card-value {
+    font-size: 2rem;
+    font-weight: 700;
 }
 
-.filter-select:focus,
-.filter-input:focus {
-    outline: none;
-    border-color: var(--primary-color);
+.total-card-value.income {
+    color: var(--income-color);
+}
+
+.total-card-value.expense {
+    color: var(--expense-color);
+}
+
+.total-card-value.balance {
+    color: var(--text-primary);
+}
+
+.total-card-count {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin-top: 4px;
 }
 
 /* ============================================================================
-   PROJECT BREAKDOWN
+   PROJECTS VIEW
    ============================================================================ */
 
-.project-item {
+.projects-list {
+    padding: 0;
+}
+
+.project-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.875rem 0;
+    padding: 16px;
     border-bottom: 1px solid var(--border-color);
 }
 
-.project-item:last-child {
-    border-bottom: none;
-}
-
 .project-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
+    flex: 1;
+    min-width: 0;
 }
 
 .project-name {
+    font-size: 0.9375rem;
     font-weight: 500;
-    color: var(--text-main);
-}
-
-.project-count {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.project-stats {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.125rem;
-}
-
-.project-amount {
-    font-weight: 600;
-    color: var(--personal-light);
-}
-
-.project-pct {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: var(--text-primary);
+    margin-bottom: 4px;
 }
 
 .project-bar {
-    width: 100%;
     height: 4px;
     background: var(--border-color);
     border-radius: 2px;
-    margin-top: 0.5rem;
     overflow: hidden;
+    margin-top: 8px;
 }
 
 .project-bar-fill {
     height: 100%;
-    background: var(--personal-color);
+    background: var(--accent-color);
     border-radius: 2px;
     transition: width 0.3s ease;
 }
 
-/* ============================================================================
-   RECENT TRANSACTIONS - Card Style for Mobile
-   ============================================================================ */
-
-.recent-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.875rem 0;
-    border-bottom: 1px solid var(--border-color);
+.project-stats {
+    text-align: right;
+    margin-left: 16px;
 }
 
-.recent-item:last-child {
-    border-bottom: none;
+.project-amount {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--accent-color);
 }
 
-.recent-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    min-width: 0;
-    flex: 1;
-}
-
-.recent-vendor {
-    font-weight: 500;
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.recent-date {
+.project-meta {
     font-size: 0.75rem;
     color: var(--text-muted);
-}
-
-.recent-amount {
-    font-weight: 700;
-    font-size: 1rem;
-    margin-left: 1rem;
-    flex-shrink: 0;
-}
-
-.recent-amount.income {
-    color: var(--income-color);
-}
-
-.recent-amount.expense {
-    color: var(--expense-color);
+    margin-top: 2px;
 }
 
 /* ============================================================================
-   TRANSACTIONS TABLE - Mobile Card View
+   FLOATING ACTION BUTTON
    ============================================================================ */
 
-.transactions-panel .panel-body {
-    padding: 0;
-}
-
-.transactions-table {
-    width: 100%;
-    border-collapse: collapse;
-    display: none;
-}
-
-/* Mobile Card View for Transactions */
-.transaction-cards {
-    display: flex;
-    flex-direction: column;
-}
-
-.transaction-card {
-    display: flex;
-    flex-direction: column;
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.transaction-card:active {
-    background: var(--bg-card-hover);
-}
-
-.transaction-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 0.5rem;
-}
-
-.transaction-card-vendor {
-    font-weight: 600;
-    color: var(--text-main);
-    font-size: 1rem;
-}
-
-.transaction-card-amount {
-    font-weight: 700;
-    font-size: 1.125rem;
-}
-
-.transaction-card-amount.income {
-    color: var(--income-color);
-}
-
-.transaction-card-amount.expense {
-    color: var(--expense-color);
-}
-
-.transaction-card-details {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-    margin-bottom: 0.5rem;
-}
-
-.transaction-card-date {
-    font-size: 0.8125rem;
-    color: var(--text-muted);
-}
-
-.transaction-card-desc {
-    font-size: 0.8125rem;
-    color: var(--text-secondary);
-    margin-top: 0.25rem;
-}
-
-.transaction-card-actions {
-    display: flex;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border-color);
-}
-
-/* Tags */
-.type-tag {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    border-radius: 6px;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-
-.type-tag.income {
-    background: rgba(34, 197, 94, 0.15);
-    color: var(--income-light);
-}
-
-.type-tag.expense {
-    background: rgba(239, 68, 68, 0.15);
-    color: var(--expense-light);
-}
-
-.project-tag {
-    display: inline-block;
-    padding: 0.25rem 0.5rem;
-    background: rgba(139, 92, 246, 0.15);
-    color: var(--personal-light);
-    border-radius: 6px;
-    font-size: 0.6875rem;
-    font-weight: 500;
-}
-
-/* ============================================================================
-   ACTION BUTTONS
-   ============================================================================ */
-
-.action-btns {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.action-btn {
-    padding: 0.5rem 0.875rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    color: var(--text-secondary);
+.fab {
+    position: fixed;
+    bottom: calc(24px + var(--safe-area-bottom));
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    color: white;
+    border: none;
+    box-shadow: 0 4px 16px rgba(255, 107, 74, 0.4);
     cursor: pointer;
-    transition: all 0.2s ease;
+    z-index: 90;
     display: flex;
     align-items: center;
-    gap: 0.375rem;
-    font-size: 0.8125rem;
-    min-height: 40px;
+    justify-content: center;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.action-btn:active {
-    background: var(--bg-card-hover);
+.fab:active {
+    transform: scale(0.95);
 }
 
-.action-btn.edit:active {
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-}
-
-.action-btn.delete:active {
-    border-color: var(--danger-color);
-    color: var(--danger-color);
-}
-
-.action-btn span {
-    display: inline;
+.fab svg {
+    width: 24px;
+    height: 24px;
 }
 
 /* ============================================================================
-   LOADING & EMPTY STATES
-   ============================================================================ */
-
-.loading-state {
-    text-align: center;
-    padding: 2rem 1rem;
-    color: var(--text-muted);
-}
-
-.empty-state {
-    text-align: center;
-    padding: 2.5rem 1rem;
-    color: var(--text-secondary);
-}
-
-.empty-state svg {
-    margin-bottom: 1rem;
-    opacity: 0.5;
-}
-
-.empty-state p {
-    margin-bottom: 0.5rem;
-}
-
-/* ============================================================================
-   MODAL - Full Screen Slide-Up on Mobile
+   MODAL
    ============================================================================ */
 
 .modal {
@@ -751,23 +596,17 @@ body {
 
 .modal-content {
     background: var(--bg-card);
-    border-radius: 24px 24px 0 0;
-    border: 1px solid var(--border-color);
-    border-bottom: none;
+    border-radius: 20px 20px 0 0;
     width: 100%;
-    max-height: calc(95vh - var(--safe-area-top));
+    max-height: calc(90vh - var(--safe-area-top));
     overflow-y: auto;
     animation: slideUp 0.3s ease;
     padding-bottom: var(--safe-area-bottom);
 }
 
 @keyframes slideUp {
-    from {
-        transform: translateY(100%);
-    }
-    to {
-        transform: translateY(0);
-    }
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
 }
 
 .modal-small {
@@ -778,7 +617,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1.25rem 1.5rem;
+    padding: 20px 20px 16px;
     border-bottom: 1px solid var(--border-color);
     position: sticky;
     top: 0;
@@ -804,120 +643,117 @@ body {
 }
 
 .modal-close {
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border: none;
     color: var(--text-secondary);
     font-size: 1.25rem;
     cursor: pointer;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.modal-close:active {
-    background: var(--bg-card-hover);
-    color: var(--text-main);
-}
-
 .modal-body {
-    padding: 1.5rem;
+    padding: 20px;
 }
 
 /* ============================================================================
-   FORM STYLES - Touch Optimized
+   FORM STYLES
    ============================================================================ */
 
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    gap: 12px;
 }
 
 .form-group {
-    margin-bottom: 1.25rem;
+    margin-bottom: 16px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 0.5rem;
-    font-size: 0.875rem;
+    margin-bottom: 6px;
+    font-size: 0.8125rem;
     font-weight: 500;
     color: var(--text-secondary);
 }
 
 .form-group input,
-.form-group textarea,
 .form-group select {
     width: 100%;
-    padding: 0.875rem 1rem;
-    background: var(--bg-input);
+    padding: 12px 14px;
+    background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
-    color: var(--text-main);
+    border-radius: 10px;
+    color: var(--text-primary);
     font-size: 1rem;
     font-family: inherit;
-    min-height: 52px;
-    -webkit-appearance: none;
 }
 
 .form-group input:focus,
-.form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
-}
-
-.form-group textarea {
-    resize: vertical;
-    min-height: 100px;
+    border-color: var(--tab-active);
 }
 
 .form-actions {
     display: flex;
-    gap: 0.75rem;
-    padding-top: 0.5rem;
+    gap: 12px;
+    padding-top: 8px;
 }
 
-.form-actions .btn {
+.btn {
     flex: 1;
-    padding: 1rem;
+    padding: 14px;
     font-size: 1rem;
+    font-weight: 600;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s;
 }
 
-/* ============================================================================
-   TRANSACTION TYPE TOGGLE
-   ============================================================================ */
+.btn:active {
+    opacity: 0.8;
+}
 
+.btn-primary {
+    background: var(--tab-active);
+    color: white;
+}
+
+.btn-secondary {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-danger {
+    background: var(--expense-color);
+    color: white;
+}
+
+/* Type Toggle */
 .type-toggle {
     display: flex;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
+    gap: 12px;
 }
 
 .type-btn {
     flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 1rem;
+    padding: 14px;
     border: 2px solid var(--border-color);
-    border-radius: 12px;
-    background: var(--bg-input);
-    color: var(--text-secondary);
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
-    min-height: 56px;
-}
-
-.type-btn:active {
-    transform: scale(0.98);
+    transition: all 0.2s;
 }
 
 .type-btn.expense.active {
@@ -933,115 +769,17 @@ body {
 }
 
 /* ============================================================================
-   SEARCHABLE DROPDOWN
-   ============================================================================ */
-
-.searchable-dropdown {
-    position: relative;
-    width: 100%;
-}
-
-.searchable-dropdown .dropdown-input {
-    width: 100%;
-    padding: 0.875rem 2.5rem 0.875rem 1rem;
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    color: var(--text-main);
-    font-size: 1rem;
-    font-family: inherit;
-    cursor: pointer;
-    min-height: 52px;
-}
-
-.searchable-dropdown .dropdown-input:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
-}
-
-.searchable-dropdown .dropdown-arrow {
-    position: absolute;
-    right: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--text-muted);
-    pointer-events: none;
-    transition: transform 0.2s ease;
-}
-
-.searchable-dropdown.open .dropdown-arrow {
-    transform: translateY(-50%) rotate(180deg);
-}
-
-.searchable-dropdown .dropdown-menu {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    right: 0;
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    z-index: 1000;
-    max-height: 220px;
-    overflow-y: auto;
-    display: none;
-}
-
-.searchable-dropdown.open .dropdown-menu {
-    display: block;
-}
-
-.searchable-dropdown .dropdown-items {
-    padding: 0.5rem 0;
-}
-
-.searchable-dropdown .dropdown-item {
-    padding: 0.875rem 1rem;
-    cursor: pointer;
-    color: var(--text-main);
-    font-size: 1rem;
-    transition: background 0.15s ease;
-}
-
-.searchable-dropdown .dropdown-item:active,
-.searchable-dropdown .dropdown-item.highlighted {
-    background: var(--bg-card-hover);
-}
-
-.searchable-dropdown .dropdown-item.selected {
-    background: rgba(74, 108, 247, 0.15);
-    color: var(--primary-light);
-}
-
-.searchable-dropdown .dropdown-empty {
-    padding: 1.25rem;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 0.9375rem;
-    display: none;
-}
-
-.searchable-dropdown.no-results .dropdown-empty {
-    display: block;
-}
-
-.searchable-dropdown.no-results .dropdown-items {
-    display: none;
-}
-
-/* ============================================================================
    DELETE MODAL
    ============================================================================ */
 
 .delete-info {
-    margin-top: 0.75rem;
-    padding: 1rem;
-    background: var(--bg-input);
-    border-radius: 12px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: 10px;
     font-size: 0.9375rem;
     color: var(--text-secondary);
+    margin-bottom: 20px;
+    text-align: center;
 }
 
 /* ============================================================================
@@ -1054,16 +792,17 @@ body {
     left: 50%;
     transform: translateX(-50%) translateY(100px);
     background: var(--bg-card);
-    color: var(--text-main);
-    padding: 1rem 1.5rem;
-    border-radius: 12px;
+    color: var(--text-primary);
+    padding: 12px 20px;
+    border-radius: 10px;
     border: 1px solid var(--border-color);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     z-index: 2000;
     opacity: 0;
     transition: all 0.3s ease;
-    max-width: calc(100% - 2rem);
+    max-width: calc(100% - 40px);
     text-align: center;
+    font-size: 0.9375rem;
 }
 
 .toast.show {
@@ -1072,230 +811,159 @@ body {
 }
 
 .toast.success {
-    border-color: var(--accent-color);
+    border-color: var(--income-color);
 }
 
 .toast.error {
-    border-color: var(--danger-color);
+    border-color: var(--expense-color);
 }
 
 /* ============================================================================
-   FOOTER - Hidden on Mobile
-   ============================================================================ */
-
-.footer {
-    display: none;
-}
-
-/* ============================================================================
-   DESKTOP STYLES (768px and up)
+   DESKTOP STYLES (768px+)
    ============================================================================ */
 
 @media (min-width: 768px) {
-    .container {
-        padding: 0 1.5rem;
+    body {
+        max-width: 100%;
+        margin: 0;
+        background: var(--bg-secondary);
     }
 
     .header {
-        padding: 1rem 0;
+        padding: 16px 32px;
+        max-width: 1200px;
+        margin: 0 auto;
+        background: var(--bg-primary);
     }
 
-    .header .container {
-        flex-wrap: wrap;
-        gap: 1rem;
+    .tabs {
+        padding: 0 32px;
+        max-width: 1200px;
+        margin: 0 auto;
+        background: var(--bg-primary);
     }
 
-    .logo {
-        font-size: 1.5rem;
+    .tab {
+        flex: none;
+        padding: 14px 24px;
+        font-size: 0.9375rem;
     }
 
-    .logo-tagline {
-        display: inline-block;
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        padding: 0.25rem 0.75rem;
-        background: var(--bg-card);
-        border-radius: 20px;
-    }
-
-    #add-transaction-btn {
-        display: inline-flex;
-    }
-
-    .fab {
-        display: none;
-    }
-
-    .logout-btn span {
-        display: inline;
-    }
-
-    .logout-btn {
-        width: auto;
-        padding: 0.5rem 1rem;
-    }
-
-    .main-content {
-        padding: 2rem 0 4rem;
-    }
-
-    .summary-grid {
-        gap: 1.25rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .summary-grid.summary-grid-3 {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .summary-grid.summary-grid-3 .summary-card:nth-child(3) {
-        grid-column: auto;
-    }
-
-    .summary-card {
-        padding: 1.25rem;
-    }
-
-    .summary-icon {
-        width: 56px;
-        height: 56px;
-    }
-
-    .summary-icon svg {
-        width: 26px;
-        height: 26px;
+    .summary-bar {
+        padding: 24px 32px;
+        max-width: 1200px;
+        margin: 0 auto;
+        background: var(--bg-secondary);
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
     }
 
     .summary-value {
         font-size: 1.5rem;
     }
 
-    .month-summary {
-        padding: 1.25rem 1.5rem;
-        margin-bottom: 1.5rem;
+    .main-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        background: var(--bg-primary);
+        min-height: calc(100vh - 200px);
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
     }
 
-    .month-stats {
-        gap: 3rem;
+    .date-header {
+        padding: 14px 32px;
     }
 
-    .month-stat-value {
+    .transaction-row {
+        padding: 14px 32px;
+    }
+
+    .transaction-row:hover {
+        background: var(--bg-hover);
+    }
+
+    .transaction-category {
+        min-width: 80px;
+    }
+
+    .category-icon {
         font-size: 1.5rem;
     }
 
-    .content-grid {
-        display: grid;
-        grid-template-columns: 1fr 1.5fr;
-        gap: 1.5rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .panel-header {
-        padding: 1.25rem 1.5rem;
-    }
-
-    .panel-body {
-        padding: 1.25rem 1.5rem;
-    }
-
-    .filter-bar {
-        flex-direction: row;
-        width: auto;
-    }
-
-    .filter-group {
-        min-width: 150px;
-    }
-
-    .filter-select,
-    .filter-input {
-        min-height: 40px;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.875rem;
-    }
-
-    /* Show table, hide cards on desktop */
-    .transactions-table {
-        display: table;
-    }
-
-    .transaction-cards {
-        display: none;
-    }
-
-    .transactions-panel .panel-body {
-        padding: 0 1.5rem 1.5rem;
-    }
-
-    .transactions-table th,
-    .transactions-table td {
-        padding: 0.875rem 1rem;
-        text-align: left;
-        border-bottom: 1px solid var(--border-color);
-    }
-
-    .transactions-table th {
+    .category-name {
         font-size: 0.75rem;
-        font-weight: 600;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        background: var(--bg-input);
     }
 
-    .transactions-table td {
-        font-size: 0.875rem;
-        color: var(--text-main);
+    .transaction-vendor {
+        font-size: 1rem;
     }
 
-    .transactions-table tbody tr:hover {
-        background: var(--bg-card-hover);
+    .transaction-project {
+        font-size: 0.8125rem;
     }
 
-    .transactions-table .text-right {
-        text-align: right;
+    .transaction-amount {
+        font-size: 1rem;
+        min-width: 120px;
     }
 
-    .transactions-table .text-center {
-        text-align: center;
+    .month-row {
+        padding: 18px 32px;
     }
 
-    .transactions-table .amount-cell {
-        font-weight: 600;
+    .month-row:hover {
+        background: var(--bg-hover);
     }
 
-    .transactions-table .amount-cell.income {
-        color: var(--income-color);
+    .project-row {
+        padding: 18px 32px;
     }
 
-    .transactions-table .amount-cell.expense {
-        color: var(--expense-color);
+    .total-summary {
+        padding: 32px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
     }
 
-    .action-btn {
-        padding: 0.375rem;
-        min-height: 32px;
+    .total-card {
+        margin-bottom: 0;
     }
 
-    .action-btn span {
-        display: none;
+    .total-card-value {
+        font-size: 2.25rem;
     }
 
-    /* Modal - Centered on Desktop */
-    .modal {
-        align-items: center;
-        padding: 1rem;
+    .fab {
+        bottom: 32px;
+        right: 32px;
+        width: 64px;
+        height: 64px;
+    }
+
+    .fab svg {
+        width: 28px;
+        height: 28px;
     }
 
     .modal-content {
         border-radius: 16px;
-        border: 1px solid var(--border-color);
-        max-width: 500px;
-        max-height: 90vh;
-        animation: fadeIn 0.2s ease;
+        max-width: 480px;
+        margin: auto;
+        max-height: 85vh;
     }
 
-    @keyframes fadeIn {
+    .modal {
+        align-items: center;
+        padding: 20px;
+    }
+
+    .modal-header::before {
+        display: none;
+    }
+
+    @keyframes slideUp {
         from {
             opacity: 0;
             transform: scale(0.95);
@@ -1305,39 +973,21 @@ body {
             transform: scale(1);
         }
     }
-
-    .modal-header::before {
-        display: none;
-    }
-
-    .modal-small {
-        max-width: 400px;
-    }
-
-    .footer {
-        display: block;
-        padding: 1.5rem 0;
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 0.875rem;
-        border-top: 1px solid var(--border-color);
-    }
-
-    body {
-        padding-bottom: 0;
-    }
 }
 
 /* ============================================================================
-   LARGE DESKTOP (1100px and up)
+   LARGE DESKTOP (1200px+)
    ============================================================================ */
 
-@media (min-width: 1100px) {
-    .summary-grid.summary-grid-3 {
-        grid-template-columns: repeat(3, 1fr);
+@media (min-width: 1200px) {
+    .header,
+    .tabs,
+    .summary-bar,
+    .main-content {
+        max-width: 1000px;
     }
 
-    .summary-value {
-        font-size: 1.75rem;
+    .total-summary {
+        padding: 40px;
     }
 }

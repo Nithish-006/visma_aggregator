@@ -3,186 +3,125 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Personal Tracker | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='personal_tracker.css') }}">
 </head>
 
 <body>
-    <!-- Header -->
+    <!-- Header with Month Navigator -->
     <header class="header">
-        <div class="container">
-            <div class="header-left">
-                <div class="logo">Personal Tracker</div>
-                <span class="logo-tagline">Income & Expense</span>
-            </div>
-            <div class="header-right">
-                <button id="add-transaction-btn" class="btn btn-primary">
+        <div class="header-left">
+            <a href="/" class="back-btn" title="Back to Hub">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </a>
+            <div class="month-nav">
+                <button class="month-btn" id="prev-month">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                        <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
-                    Add Transaction
                 </button>
-                <a href="/" class="btn btn-secondary">Back to Hub</a>
-                <a href="/logout" class="btn btn-secondary logout-btn" title="Logout">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <polyline points="16 17 21 12 16 7"></polyline>
-                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                <span class="month-label" id="current-month">Jan 2026</span>
+                <button class="month-btn" id="next-month">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 6 15 12 9 18"></polyline>
                     </svg>
-                </a>
+                </button>
             </div>
+        </div>
+        <div class="header-right">
+            <button class="icon-btn" id="search-toggle" title="Search">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </button>
+            <a href="/logout" class="icon-btn" title="Logout">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </a>
         </div>
     </header>
 
+    <!-- Search Bar (Hidden by default) -->
+    <div class="search-bar" id="search-bar">
+        <input type="text" id="search-input" placeholder="Search transactions...">
+        <button class="search-close" id="search-close">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Tabs -->
+    <nav class="tabs">
+        <button class="tab active" data-tab="daily">Daily</button>
+        <button class="tab" data-tab="monthly">Monthly</button>
+        <button class="tab" data-tab="total">Total</button>
+        <button class="tab" data-tab="projects">Projects</button>
+    </nav>
+
+    <!-- Summary Bar -->
+    <div class="summary-bar">
+        <div class="summary-item">
+            <span class="summary-label">Income</span>
+            <span class="summary-value income" id="summary-income">0.00</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Expenses</span>
+            <span class="summary-value expense" id="summary-expense">0.00</span>
+        </div>
+        <div class="summary-item">
+            <span class="summary-label">Total</span>
+            <span class="summary-value total" id="summary-total">0.00</span>
+        </div>
+    </div>
+
     <!-- Main Content -->
     <main class="main-content">
-        <div class="container">
-            <!-- Summary Cards -->
-            <div class="summary-grid summary-grid-3">
-                <div class="summary-card">
-                    <div class="summary-icon income">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-                            <polyline points="17 6 23 6 23 12"></polyline>
-                        </svg>
-                    </div>
-                    <div class="summary-content">
-                        <span class="summary-label">Total Income</span>
-                        <span class="summary-value income-value" id="total-income">Loading...</span>
-                    </div>
-                </div>
-
-                <div class="summary-card">
-                    <div class="summary-icon expense">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
-                            <polyline points="17 18 23 18 23 12"></polyline>
-                        </svg>
-                    </div>
-                    <div class="summary-content">
-                        <span class="summary-label">Total Expense</span>
-                        <span class="summary-value expense-value" id="total-expense">Loading...</span>
-                    </div>
-                </div>
-
-                <div class="summary-card">
-                    <div class="summary-icon count">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                            <polyline points="10 9 9 9 8 9"></polyline>
-                        </svg>
-                    </div>
-                    <div class="summary-content">
-                        <span class="summary-label">Transactions</span>
-                        <span class="summary-value" id="transaction-count">Loading...</span>
-                    </div>
-                </div>
+        <!-- Daily View (Default) -->
+        <div class="tab-content active" id="tab-daily">
+            <div class="transactions-list" id="daily-transactions">
+                <div class="loading-state">Loading...</div>
             </div>
+        </div>
 
-            <!-- This Month Summary -->
-            <div class="month-summary">
-                <h3>This Month</h3>
-                <div class="month-stats">
-                    <div class="month-stat">
-                        <span class="month-stat-label">Income</span>
-                        <span class="month-stat-value income-value" id="this-month-income">₹0</span>
-                    </div>
-                    <div class="month-stat">
-                        <span class="month-stat-label">Expense</span>
-                        <span class="month-stat-value expense-value" id="this-month-expense">₹0</span>
-                    </div>
-                </div>
+        <!-- Monthly View -->
+        <div class="tab-content" id="tab-monthly">
+            <div class="monthly-list" id="monthly-breakdown">
+                <div class="loading-state">Loading...</div>
             </div>
+        </div>
 
-            <!-- Two Column Layout -->
-            <div class="content-grid">
-                <!-- Project Breakdown -->
-                <div class="panel project-panel">
-                    <div class="panel-header">
-                        <h2>Project Breakdown</h2>
-                    </div>
-                    <div class="panel-body" id="project-breakdown">
-                        <div class="loading-state">Loading...</div>
-                    </div>
-                </div>
-
-                <!-- Recent Transactions -->
-                <div class="panel recent-panel">
-                    <div class="panel-header">
-                        <h2>Recent Transactions</h2>
-                    </div>
-                    <div class="panel-body" id="recent-transactions">
-                        <div class="loading-state">Loading...</div>
-                    </div>
-                </div>
+        <!-- Total View -->
+        <div class="tab-content" id="tab-total">
+            <div class="total-summary" id="total-summary">
+                <div class="loading-state">Loading...</div>
             </div>
+        </div>
 
-            <!-- All Transactions -->
-            <div class="panel transactions-panel">
-                <div class="panel-header">
-                    <h2>All Transactions</h2>
-                    <div class="filter-bar">
-                        <div class="filter-group">
-                            <label for="type-filter">Type</label>
-                            <select id="type-filter" class="filter-select">
-                                <option value="All">All Types</option>
-                                <option value="income">Income</option>
-                                <option value="expense">Expense</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label for="project-filter">Project</label>
-                            <select id="project-filter" class="filter-select">
-                                <option value="All">All Projects</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <label for="search-filter">Search</label>
-                            <input type="text" id="search-filter" class="filter-input" placeholder="Search vendor or description...">
-                        </div>
-                    </div>
-                </div>
-                <div class="panel-body">
-                    <!-- Mobile Card View -->
-                    <div class="transaction-cards" id="transaction-cards">
-                        <div class="loading-state">Loading transactions...</div>
-                    </div>
-                    <!-- Desktop Table View -->
-                    <table class="transactions-table" id="transactions-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Vendor</th>
-                                <th>Description</th>
-                                <th>Project</th>
-                                <th class="text-right">Amount</th>
-                                <th class="text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="transactions-tbody">
-                            <tr>
-                                <td colspan="7" class="loading-state">Loading transactions...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+        <!-- Projects View -->
+        <div class="tab-content" id="tab-projects">
+            <div class="projects-list" id="projects-breakdown">
+                <div class="loading-state">Loading...</div>
             </div>
         </div>
     </main>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            Personal Expense Tracker - VISMA Financial App
-        </div>
-    </footer>
+    <!-- Floating Action Button -->
+    <button class="fab" id="fab-add" aria-label="Add Transaction">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+    </button>
 
     <!-- Add/Edit Modal -->
     <div class="modal" id="transaction-modal">
@@ -197,77 +136,44 @@
 
                     <!-- Transaction Type Toggle -->
                     <div class="form-group">
-                        <label>Transaction Type *</label>
                         <div class="type-toggle">
-                            <button type="button" class="type-btn expense active" id="type-expense-btn" data-type="expense">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline>
-                                    <polyline points="17 18 23 18 23 12"></polyline>
-                                </svg>
-                                Expense
-                            </button>
-                            <button type="button" class="type-btn income" id="type-income-btn" data-type="income">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-                                    <polyline points="17 6 23 6 23 12"></polyline>
-                                </svg>
-                                Income
-                            </button>
+                            <button type="button" class="type-btn expense active" id="type-expense-btn" data-type="expense">Expense</button>
+                            <button type="button" class="type-btn income" id="type-income-btn" data-type="income">Income</button>
                         </div>
                         <input type="hidden" id="transaction-type" value="expense">
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="transaction-date">Date *</label>
+                            <label for="transaction-date">Date</label>
                             <input type="date" id="transaction-date" required>
                         </div>
                         <div class="form-group">
-                            <label for="transaction-amount">Amount *</label>
+                            <label for="transaction-amount">Amount</label>
                             <input type="number" id="transaction-amount" step="0.01" min="0.01" placeholder="0.00" required>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label for="transaction-vendor">Vendor *</label>
-                        <div class="searchable-dropdown" id="vendor-dropdown">
-                            <input type="text" id="transaction-vendor" class="dropdown-input" placeholder="Select or type vendor" autocomplete="off" required>
-                            <span class="dropdown-arrow">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                </svg>
-                            </span>
-                            <div class="dropdown-menu" id="vendor-menu">
-                                <div class="dropdown-items" id="vendor-items"></div>
-                                <div class="dropdown-empty">No vendors found</div>
-                            </div>
-                        </div>
+                        <label for="transaction-vendor">Vendor</label>
+                        <input type="text" id="transaction-vendor" placeholder="Enter vendor name" autocomplete="off" required list="vendor-list">
+                        <datalist id="vendor-list"></datalist>
                     </div>
 
                     <div class="form-group">
                         <label for="transaction-description">Description</label>
-                        <textarea id="transaction-description" rows="2" placeholder="Enter description (optional)"></textarea>
+                        <input type="text" id="transaction-description" placeholder="Optional description">
                     </div>
 
                     <div class="form-group">
                         <label for="transaction-project">Project</label>
-                        <div class="searchable-dropdown" id="project-dropdown">
-                            <input type="text" id="transaction-project" class="dropdown-input" placeholder="Select or type project" autocomplete="off">
-                            <span class="dropdown-arrow">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                </svg>
-                            </span>
-                            <div class="dropdown-menu" id="project-menu">
-                                <div class="dropdown-items" id="project-items"></div>
-                                <div class="dropdown-empty">No projects found</div>
-                            </div>
-                        </div>
+                        <input type="text" id="transaction-project" placeholder="General" autocomplete="off" list="project-list">
+                        <datalist id="project-list"></datalist>
                     </div>
 
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
-                        <button type="submit" class="btn btn-primary" id="save-btn">Save Transaction</button>
+                        <button type="submit" class="btn btn-primary" id="save-btn">Save</button>
                     </div>
                 </form>
             </div>
@@ -278,11 +184,10 @@
     <div class="modal" id="delete-modal">
         <div class="modal-content modal-small">
             <div class="modal-header">
-                <h3>Confirm Delete</h3>
+                <h3>Delete Transaction?</h3>
                 <button class="modal-close" id="delete-modal-close">&times;</button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete this transaction?</p>
                 <p class="delete-info" id="delete-info"></p>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" id="delete-cancel-btn">Cancel</button>
@@ -296,14 +201,6 @@
     <div class="toast" id="toast">
         <span class="toast-message" id="toast-message"></span>
     </div>
-
-    <!-- Floating Action Button (Mobile) -->
-    <button class="fab" id="fab-add" aria-label="Add Transaction">
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-    </button>
 
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='personal_tracker.js') }}"></script>
