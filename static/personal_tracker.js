@@ -359,8 +359,8 @@
                             <span class="date-month">${months[date.getMonth()]}.${date.getFullYear()}</span>
                         </div>
                         <div class="date-totals">
-                            ${dayIncome > 0 ? `<span class="date-income">+${formatCompact(dayIncome)}</span>` : ''}
-                            ${dayExpense > 0 ? `<span class="date-expense">-${formatCompact(dayExpense)}</span>` : ''}
+                            ${dayIncome > 0 ? `<span class="date-income">${formatCompact(dayIncome)}</span>` : ''}
+                            ${dayExpense > 0 ? `<span class="date-expense">${formatCompact(dayExpense)}</span>` : ''}
                         </div>
                     </div>
                     <div class="date-transactions">
@@ -369,7 +369,6 @@
             dayTransactions.forEach(t => {
                 const category = getCategoryInfo(t);
                 const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
-                const prefix = t.transaction_type === 'income' ? '+' : '-';
 
                 html += `
                     <div class="transaction-row" data-id="${t.id}" onclick="handleTransactionClick(${t.id})">
@@ -381,7 +380,7 @@
                             <div class="transaction-vendor">${escapeHtml(t.vendor)}</div>
                             <div class="transaction-project">${escapeHtml(t.project || 'General')}</div>
                         </div>
-                        <div class="transaction-amount ${typeClass}">${prefix}${formatCompact(t.amount)}</div>
+                        <div class="transaction-amount ${typeClass}">${formatCompact(t.amount)}</div>
                     </div>
                 `;
             });
@@ -475,8 +474,8 @@
                 <div class="month-row" onclick="navigateToMonth(${data.date.getFullYear()}, ${data.date.getMonth()})">
                     <span class="month-name">${monthName} ${year}</span>
                     <div class="month-stats">
-                        <span class="date-income">+${formatCompact(data.income)}</span>
-                        <span class="date-expense">-${formatCompact(data.expense)}</span>
+                        <span class="date-income">${formatCompact(data.income)}</span>
+                        <span class="date-expense">${formatCompact(data.expense)}</span>
                     </div>
                 </div>
             `;
