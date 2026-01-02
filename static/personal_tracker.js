@@ -50,7 +50,6 @@
         // Summary
         summaryIncome: document.getElementById('summary-income'),
         summaryExpense: document.getElementById('summary-expense'),
-        summaryTotal: document.getElementById('summary-total'),
 
         // Content containers
         dailyTransactions: document.getElementById('daily-transactions'),
@@ -78,9 +77,11 @@
         typeExpenseBtn: document.getElementById('type-expense-btn'),
         typeIncomeBtn: document.getElementById('type-income-btn'),
 
-        // Datalists
-        vendorList: document.getElementById('vendor-list'),
-        projectList: document.getElementById('project-list'),
+        // Custom Dropdowns
+        vendorDropdown: document.getElementById('vendor-dropdown'),
+        vendorMenu: document.getElementById('vendor-menu'),
+        projectDropdown: document.getElementById('project-dropdown'),
+        projectMenu: document.getElementById('project-menu'),
 
         // Delete Modal
         deleteModal: document.getElementById('delete-modal'),
@@ -143,6 +144,66 @@
         elements.deleteConfirmBtn.addEventListener('click', confirmDelete);
         elements.deleteModal.addEventListener('click', (e) => {
             if (e.target === elements.deleteModal) closeDeleteModal();
+        });
+
+        // Custom dropdowns
+        setupCustomDropdown('vendor', elements.transactionVendor, elements.vendorMenu, () => vendors);
+        setupCustomDropdown('project', elements.transactionProject, elements.projectMenu, () => projects);
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!elements.vendorDropdown.contains(e.target)) {
+                elements.vendorMenu.classList.remove('show');
+            }
+            if (!elements.projectDropdown.contains(e.target)) {
+                elements.projectMenu.classList.remove('show');
+            }
+        });
+    }
+
+    function setupCustomDropdown(type, input, menu, getItems) {
+        input.addEventListener('focus', () => {
+            renderDropdownPills(menu, getItems(), input);
+            menu.classList.add('show');
+        });
+
+        input.addEventListener('input', () => {
+            const filtered = filterItems(getItems(), input.value);
+            renderDropdownPills(menu, filtered, input);
+            if (filtered.length > 0) {
+                menu.classList.add('show');
+            } else {
+                menu.classList.remove('show');
+            }
+        });
+    }
+
+    function filterItems(items, query) {
+        if (!query) return items;
+        const q = query.toLowerCase();
+        return items.filter(item => item.toLowerCase().includes(q));
+    }
+
+    function renderDropdownPills(menu, items, input) {
+        if (!items || items.length === 0) {
+            menu.innerHTML = '';
+            return;
+        }
+
+        const pillsHtml = items.map(item =>
+            `<div class="dropdown-pill" data-value="${escapeHtml(item)}">${escapeHtml(item)}</div>`
+        ).join('');
+
+        menu.innerHTML = `<div class="dropdown-pills">${pillsHtml}</div>`;
+
+        // Add click handlers to pills
+        menu.querySelectorAll('.dropdown-pill').forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.stopPropagation();
+                input.value = pill.dataset.value;
+                menu.classList.remove('show');
+                input.focus();
+            });
         });
     }
 
@@ -238,7 +299,6 @@
             const response = await fetch('/api/personal/projects');
             const data = await response.json();
             projects = data.projects || ['General'];
-            updateDatalist('project', projects);
         } catch (error) {
             console.error('Error loading projects:', error);
             projects = ['General'];
@@ -250,7 +310,6 @@
             const response = await fetch('/api/personal/vendors');
             const data = await response.json();
             vendors = data.vendors || [];
-            updateDatalist('vendor', vendors);
         } catch (error) {
             console.error('Error loading vendors:', error);
             vendors = [];
@@ -307,16 +366,8 @@
             }
         });
 
-        const total = income - expense;
-
         elements.summaryIncome.textContent = formatAmount(income);
         elements.summaryExpense.textContent = formatAmount(expense);
-        elements.summaryTotal.textContent = formatAmount(total);
-    }
-
-    function updateDatalist(type, items) {
-        const datalist = type === 'vendor' ? elements.vendorList : elements.projectList;
-        datalist.innerHTML = items.map(item => `<option value="${escapeHtml(item)}">`).join('');
     }
 
     // ============================================================================
@@ -504,8 +555,6 @@
             }
         });
 
-        const balance = totalIncome - totalExpense;
-
         elements.totalSummary.innerHTML = `
             <div class="total-card">
                 <div class="total-card-header">Total Income</div>
@@ -516,11 +565,6 @@
                 <div class="total-card-header">Total Expenses</div>
                 <div class="total-card-value expense">${formatAmount(totalExpense)}</div>
                 <div class="total-card-count">${expenseCount} transaction${expenseCount !== 1 ? 's' : ''}</div>
-            </div>
-            <div class="total-card">
-                <div class="total-card-header">Net Balance</div>
-                <div class="total-card-value balance">${formatAmount(balance)}</div>
-                <div class="total-card-count">${allTransactions.length} total transactions</div>
             </div>
         `;
     }
@@ -635,6 +679,7 @@
     function setTransactionType(type) {
         elements.transactionType.value = type;
 
+        // Update bubble styles
         if (type === 'expense') {
             elements.typeExpenseBtn.classList.add('active');
             elements.typeIncomeBtn.classList.remove('active');

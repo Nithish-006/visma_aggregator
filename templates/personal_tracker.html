@@ -78,10 +78,6 @@
             <span class="summary-label">Expenses</span>
             <span class="summary-value expense" id="summary-expense">0.00</span>
         </div>
-        <div class="summary-item">
-            <span class="summary-label">Total</span>
-            <span class="summary-value total" id="summary-total">0.00</span>
-        </div>
     </div>
 
     <!-- Main Content -->
@@ -135,10 +131,10 @@
                     <input type="hidden" id="transaction-id">
 
                     <!-- Transaction Type Toggle -->
-                    <div class="form-group">
-                        <div class="type-toggle">
-                            <button type="button" class="type-btn expense active" id="type-expense-btn" data-type="expense">Expense</button>
-                            <button type="button" class="type-btn income" id="type-income-btn" data-type="income">Income</button>
+                    <div class="form-group type-group">
+                        <div class="type-bubbles">
+                            <button type="button" class="type-bubble expense active" id="type-expense-btn" data-type="expense">Expense</button>
+                            <button type="button" class="type-bubble income" id="type-income-btn" data-type="income">Income</button>
                         </div>
                         <input type="hidden" id="transaction-type" value="expense">
                     </div>
@@ -154,10 +150,12 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group dropdown-group">
                         <label for="transaction-vendor">Vendor</label>
-                        <input type="text" id="transaction-vendor" placeholder="Enter vendor name" autocomplete="off" required list="vendor-list">
-                        <datalist id="vendor-list"></datalist>
+                        <div class="custom-dropdown" id="vendor-dropdown">
+                            <input type="text" id="transaction-vendor" placeholder="Enter vendor name" autocomplete="off" required>
+                            <div class="dropdown-menu" id="vendor-menu"></div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -165,10 +163,12 @@
                         <input type="text" id="transaction-description" placeholder="Optional description">
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group dropdown-group">
                         <label for="transaction-project">Project</label>
-                        <input type="text" id="transaction-project" placeholder="General" autocomplete="off" list="project-list">
-                        <datalist id="project-list"></datalist>
+                        <div class="custom-dropdown" id="project-dropdown">
+                            <input type="text" id="transaction-project" placeholder="General" autocomplete="off">
+                            <div class="dropdown-menu" id="project-menu"></div>
+                        </div>
                     </div>
 
                     <div class="form-actions">

@@ -737,35 +737,109 @@ body {
     color: white;
 }
 
-/* Type Toggle */
-.type-toggle {
-    display: flex;
-    gap: 12px;
+/* Type Toggle - Inline Chips */
+.type-group {
+    margin-bottom: 16px;
 }
 
-.type-btn {
-    flex: 1;
-    padding: 14px;
-    border: 2px solid var(--border-color);
-    border-radius: 10px;
+.type-bubbles {
+    display: inline-flex;
+    gap: 0;
     background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 4px;
+    width: 100%;
+}
+
+.type-bubble {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
     color: var(--text-muted);
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 0.9375rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
+    text-align: center;
 }
 
-.type-btn.expense.active {
-    border-color: var(--expense-color);
-    background: rgba(239, 68, 68, 0.1);
-    color: var(--expense-color);
+.type-bubble.expense.active {
+    background: var(--expense-color);
+    color: white;
 }
 
-.type-btn.income.active {
-    border-color: var(--income-color);
-    background: rgba(34, 197, 94, 0.1);
-    color: var(--income-color);
+.type-bubble.income.active {
+    background: var(--income-color);
+    color: white;
+}
+
+.type-bubble:not(.active):active {
+    background: var(--bg-hover);
+}
+
+/* Custom Dropdown */
+.dropdown-group {
+    position: relative;
+}
+
+.custom-dropdown {
+    position: relative;
+}
+
+.custom-dropdown input {
+    width: 100%;
+    padding-right: 40px;
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.dropdown-menu.show {
+    display: block;
+}
+
+.dropdown-menu:empty {
+    display: none !important;
+}
+
+.dropdown-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+}
+
+.dropdown-pill {
+    padding: 6px 14px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.dropdown-pill:active,
+.dropdown-pill:hover {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: white;
 }
 
 /* ============================================================================
@@ -923,7 +997,7 @@ body {
     .total-summary {
         padding: 32px;
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 24px;
     }
 
