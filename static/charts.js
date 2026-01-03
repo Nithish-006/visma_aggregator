@@ -2,6 +2,25 @@
 const BANK_CODE = window.BANK_CODE || 'axis';
 const BANK_NAME = window.BANK_NAME || 'Axis Bank';
 
+// Check if Chart.js is loaded
+if (typeof Chart === 'undefined') {
+    console.error('Chart.js is not loaded! Charts will not render.');
+    document.addEventListener('DOMContentLoaded', () => {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.innerHTML = `
+                <div style="color: #ef4444; text-align: center; padding: 20px;">
+                    <h2>Charts Failed to Load</h2>
+                    <p>Chart.js library could not be loaded. Please check your internet connection and refresh the page.</p>
+                    <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #4a6cf7; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                        Refresh Page
+                    </button>
+                </div>
+            `;
+        }
+    });
+}
+
 // Global state
 let charts = {};
 let currentCategory = 'All';
@@ -66,11 +85,24 @@ function formatIndianNumber(amount) {
 }
 
 function showLoading() {
-    document.getElementById('loading-overlay')?.classList.remove('hidden');
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+        overlay.style.display = 'flex';
+    }
 }
 
 function hideLoading() {
-    document.getElementById('loading-overlay')?.classList.add('hidden');
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        // Fallback: also set display to none after transition
+        setTimeout(() => {
+            if (overlay.classList.contains('hidden')) {
+                overlay.style.display = 'none';
+            }
+        }, 350);
+    }
 }
 
 function buildApiUrl(endpoint, category, startDate, endDate, project = 'All', extraParams = {}) {
@@ -94,7 +126,14 @@ function buildApiUrl(endpoint, category, startDate, endDate, project = 'All', ex
 async function loadDateRange() {
     try {
         const res = await fetch(`/api/${BANK_CODE}/date_range`);
+
+        if (!res.ok) {
+            console.error('[Charts] Date range API error:', res.status);
+            return;
+        }
+
         const data = await res.json();
+        console.log('[Charts] Date range loaded:', data);
 
         if (data.min_date && data.max_date) {
             dataMinDate = data.min_date;
@@ -113,38 +152,67 @@ async function loadDateRange() {
             }
         }
     } catch (e) {
-        console.error('Error loading date range:', e);
+        console.error('[Charts] Error loading date range:', e);
     }
 }
 
 async function loadCategories() {
     try {
         const res = await fetch(`/api/${BANK_CODE}/categories`);
+
+        // Handle authentication errors
+        if (res.status === 401 || res.status === 403) {
+            console.error('[Charts] Authentication error - redirecting to login');
+            window.location.href = '/login';
+            return;
+        }
+
+        if (!res.ok) {
+            console.error('[Charts] Categories API error:', res.status);
+            return;
+        }
+
         const data = await res.json();
+        console.log('[Charts] Categories loaded:', data.categories?.length || 0);
+
         const select = document.getElementById('category-filter');
         if (!select) return;
 
         select.innerHTML = '';
-        data.categories.forEach((cat) => {
+        (data.categories || ['All']).forEach((cat) => {
             const option = document.createElement('option');
             option.value = cat;
             option.textContent = cat;
             select.appendChild(option);
         });
     } catch (e) {
-        console.error('Error loading categories:', e);
+        console.error('[Charts] Error loading categories:', e);
     }
 }
 
 async function loadProjects() {
     try {
         const res = await fetch(`/api/${BANK_CODE}/transactions?limit=10000`);
+
+        // Handle authentication errors
+        if (res.status === 401 || res.status === 403) {
+            console.error('[Charts] Authentication error in loadProjects');
+            return;
+        }
+
+        if (!res.ok) {
+            console.error('[Charts] Transactions API error:', res.status);
+            return;
+        }
+
         const data = await res.json();
+        console.log('[Charts] Transactions loaded for projects:', data.transactions?.length || 0);
+
         const select = document.getElementById('project-filter');
         if (!select) return;
 
         const uniqueProjects = new Set();
-        data.transactions.forEach((txn) => {
+        (data.transactions || []).forEach((txn) => {
             const project = txn.project || txn.Project;
             if (project && project.trim()) {
                 uniqueProjects.add(project.trim());
@@ -161,7 +229,7 @@ async function loadProjects() {
             select.appendChild(option);
         });
     } catch (e) {
-        console.error('Error loading projects:', e);
+        console.error('[Charts] Error loading projects:', e);
     }
 }
 
@@ -170,13 +238,24 @@ async function loadProjects() {
 async function loadSummary(category = 'All', startDate = null, endDate = null, project = 'All') {
     try {
         const url = buildApiUrl('/summary', category, startDate, endDate, project);
+        console.log('[Charts] Fetching summary from:', url);
         const res = await fetch(url);
-        const data = await res.json();
 
-        document.getElementById('kpi-total-income').textContent = data.total_income_formatted;
-        document.getElementById('kpi-total-expense').textContent = data.total_expense_formatted;
+        if (!res.ok) {
+            console.error('[Charts] Summary API error:', res.status, res.statusText);
+            return;
+        }
+
+        const data = await res.json();
+        console.log('[Charts] Summary data received:', data);
+
+        const incomeEl = document.getElementById('kpi-total-income');
+        const expenseEl = document.getElementById('kpi-total-expense');
+
+        if (incomeEl) incomeEl.textContent = data.total_income_formatted || '₹0';
+        if (expenseEl) expenseEl.textContent = data.total_expense_formatted || '₹0';
     } catch (e) {
-        console.error('Error loading summary:', e);
+        console.error('[Charts] Error loading summary:', e);
     }
 }
 
@@ -185,10 +264,29 @@ async function loadSummary(category = 'All', startDate = null, endDate = null, p
 async function loadCategoryChart(category = 'All', startDate = null, endDate = null, project = 'All') {
     try {
         const url = buildApiUrl('/category_breakdown', category, startDate, endDate, project);
+        console.log('[Charts] Fetching category breakdown from:', url);
         const res = await fetch(url);
-        const data = await res.json();
 
-        const ctx = document.getElementById('categoryChart').getContext('2d');
+        if (!res.ok) {
+            console.error('[Charts] Category chart API error:', res.status, res.statusText);
+            return;
+        }
+
+        const data = await res.json();
+        console.log('[Charts] Category data received:', data);
+
+        if (!data.categories || data.categories.length === 0) {
+            console.log('[Charts] No category data available');
+            return;
+        }
+
+        const canvas = document.getElementById('categoryChart');
+        if (!canvas) {
+            console.error('categoryChart canvas not found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
         if (charts.categoryChart) charts.categoryChart.destroy();
 
         if (data.top_category) {
@@ -275,10 +373,29 @@ async function loadCategoryChart(category = 'All', startDate = null, endDate = n
 async function loadVendorChart(category = 'All', startDate = null, endDate = null, project = 'All') {
     try {
         const url = buildApiUrl('/top_vendors', category, startDate, endDate, project);
+        console.log('[Charts] Fetching top vendors from:', url);
         const res = await fetch(url);
-        const data = await res.json();
 
-        const ctx = document.getElementById('vendorChart').getContext('2d');
+        if (!res.ok) {
+            console.error('[Charts] Vendor chart API error:', res.status, res.statusText);
+            return;
+        }
+
+        const data = await res.json();
+        console.log('[Charts] Vendor data received:', data);
+
+        if (!data.vendors || data.vendors.length === 0) {
+            console.log('[Charts] No vendor data available');
+            return;
+        }
+
+        const canvas = document.getElementById('vendorChart');
+        if (!canvas) {
+            console.error('vendorChart canvas not found');
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
         if (charts.vendorChart) charts.vendorChart.destroy();
 
         if (data.top_vendor) {
@@ -414,22 +531,74 @@ async function loadInsights(category = 'All', startDate = null, endDate = null, 
 /** Refresh **/
 
 async function runFullRefresh() {
+    console.log('[Charts] runFullRefresh starting...');
     showLoading();
-    await Promise.all([
-        loadSummary(currentCategory, currentStartDate, currentEndDate, currentProject),
-        loadCategoryChart(currentCategory, currentStartDate, currentEndDate, currentProject),
-        loadVendorChart(currentCategory, currentStartDate, currentEndDate, currentProject),
-        loadInsights(currentCategory, currentStartDate, currentEndDate, currentProject)
-    ]);
-    hideLoading();
+    try {
+        const results = await Promise.allSettled([
+            loadSummary(currentCategory, currentStartDate, currentEndDate, currentProject),
+            loadCategoryChart(currentCategory, currentStartDate, currentEndDate, currentProject),
+            loadVendorChart(currentCategory, currentStartDate, currentEndDate, currentProject),
+            loadInsights(currentCategory, currentStartDate, currentEndDate, currentProject)
+        ]);
+
+        // Log results of each promise
+        const names = ['Summary', 'CategoryChart', 'VendorChart', 'Insights'];
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                console.error(`[Charts] ${names[index]} failed:`, result.reason);
+            } else {
+                console.log(`[Charts] ${names[index]} loaded successfully`);
+            }
+        });
+    } catch (error) {
+        console.error('[Charts] Error refreshing charts:', error);
+    } finally {
+        hideLoading();
+        console.log('[Charts] runFullRefresh complete');
+    }
 }
 
 /** Init **/
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('[Charts] DOMContentLoaded - starting initialization');
+    console.log('[Charts] BANK_CODE:', BANK_CODE);
+
+    // Check if Chart.js is available
+    if (typeof Chart === 'undefined') {
+        console.error('[Charts] Chart.js not available - aborting initialization');
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.innerHTML = `
+                <div style="color: #ef4444; text-align: center; padding: 20px;">
+                    <h2>Charts Failed to Load</h2>
+                    <p>Chart.js library could not be loaded. Please refresh the page.</p>
+                    <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #4a6cf7; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                        Refresh Page
+                    </button>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    console.log('[Charts] Chart.js version:', Chart.version);
+
     showLoading();
 
-    await Promise.all([loadCategories(), loadDateRange(), loadProjects()]);
+    // Safety timeout - hide loading overlay after 15 seconds no matter what
+    const safetyTimeout = setTimeout(() => {
+        console.warn('[Charts] Safety timeout triggered - forcing loading overlay to hide');
+        hideLoading();
+    }, 15000);
+
+    try {
+        console.log('[Charts] Loading filters...');
+        await Promise.all([loadCategories(), loadDateRange(), loadProjects()]);
+        console.log('[Charts] Filters loaded successfully');
+    } catch (error) {
+        console.error('[Charts] Error loading filters:', error);
+    }
 
     currentCategory = 'All';
     currentProject = 'All';
@@ -539,5 +708,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         runFullRefresh();
     });
 
-    await runFullRefresh();
+    try {
+        console.log('[Charts] Running initial data refresh...');
+        await runFullRefresh();
+        console.log('[Charts] Initial refresh complete');
+    } catch (error) {
+        console.error('[Charts] Error during initial refresh:', error);
+    } finally {
+        clearTimeout(safetyTimeout);
+        hideLoading();
+        console.log('[Charts] Initialization complete');
+    }
 });

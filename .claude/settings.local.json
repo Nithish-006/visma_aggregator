@@ -9,7 +9,8 @@
       "Bash(git push:*)",
       "Bash(cat:*)",
       "Bash(git -C \"C:\\\\VISMA - AGGREGATOR\" log --oneline)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(node --check:*)"
     ]
   }
 }
