@@ -1029,6 +1029,9 @@ def upload_bank_statement(bank_code):
         if not allowed_file(file.filename):
             return jsonify({'error': 'Invalid file type. Only .xlsx and .xls files are allowed'}), 400
 
+        # Get optional password for encrypted files (especially KVB)
+        password = request.form.get('password', None)
+
         filename = secure_filename(file.filename)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"{bank_code}_{timestamp}_{filename}"
@@ -1038,7 +1041,7 @@ def upload_bank_statement(bank_code):
         print(f"[+] File saved: {filepath}")
 
         print(f"[*] Processing {bank_code} bank statement: {filename}")
-        df = process_bank_statement(filepath, bank_code)
+        df = process_bank_statement(filepath, bank_code, password=password)
 
         if app.config['USE_DATABASE']:
             print(f"[*] Inserting into database for {bank_code}...")

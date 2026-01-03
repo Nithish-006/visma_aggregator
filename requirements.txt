@@ -20,6 +20,7 @@ numpy
 # Excel File Handling
 openpyxl
 xlrd
+msoffcrypto-tool
 
 # Database Connectivity
 mysql-connector-python

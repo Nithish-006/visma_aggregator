@@ -26,8 +26,8 @@ python generate_secret_key.py
 
 ### Production
 ```bash
-# Uses Gunicorn (defined in Procfile)
-gunicorn app:app
+# Uses Gunicorn with nixpacks.toml config
+gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 ```
 
 ## Architecture
@@ -42,18 +42,19 @@ gunicorn app:app
 
 - **config.py**: Configuration and bank settings
   - `BANK_CONFIG` dict defines banks (currently `axis` and `kvb`) with table names and colors
+  - Helper functions: `get_bank_config()`, `get_bank_table()`, `allowed_file()`
   - Environment variables for database connection (DB_HOST, DB_USER, etc.)
   - `USE_DATABASE` toggle between MySQL and Excel file modes
 
 - **database.py**: `DatabaseManager` class handles MySQL operations
-  - Connection resilience with auto-reconnect (`ensure_connected()`, `execute_with_retry()`)
+  - Per-request connection pattern via `get_connection()` context manager
   - Bank-specific table routing via `get_table_name(bank_code)`
   - Bulk transaction insertion with duplicate detection
 
 - **bank_statement_processor.py**: Parses bank statement Excel files
   - Auto-detects header row in Excel files
   - Fuzzy column name matching for various statement formats
-  - Transaction categorization based on keyword patterns
+  - Transaction categorization based on keyword patterns in `CATEGORY_PATTERNS`
   - Extracts vendor names from UPI/IMPS/NEFT transaction descriptions
 
 ### Database Schema
@@ -61,19 +62,26 @@ gunicorn app:app
 - Legacy `transactions` table for backwards compatibility
 - `personal_transactions` for personal expense tracker
 - `bank_upload_history` logs file uploads per bank
-- `categories` reference table with 10 expense categories (OFFICE EXP, FACTORY EXP, etc.)
+- `categories` reference table with 10 expense categories
+- Analytics views: `v_axis_transaction_summary`, `v_kvb_transaction_summary`
 
-### Frontend Pages
-- **Hub** (`/`): Bank selection page showing transaction counts per bank
-- **Dashboard** (`/dashboard/<bank_code>`): Financial analytics with charts
-- **Edit Transactions** (`/edit-transactions/<bank_code>`): Bulk transaction editing
-- **Personal Tracker** (`/personal-tracker`): Manual expense entry
+### Frontend Structure
+- **Templates** (`/templates`): 6 HTML files with dark theme
+- **Static** (`/static`): CSS and JS files paired by feature (e.g., `personal_tracker.css` + `personal_tracker.js`)
+- Uses Chart.js for analytics visualizations
+
+### Key Routes
+- `/` → Hub (bank selection)
+- `/dashboard/<bank_code>` → Bank analytics dashboard
+- `/edit-transactions/<bank_code>` → Bulk transaction editing
+- `/charts/<bank_code>` → Analytics charts
+- `/personal-tracker` → Personal expense entry
 
 ### Key Patterns
 - API endpoints return Indian rupee formatting via `format_indian_number()` (lakhs/crores format)
 - Date filtering uses `filter_by_date_range()` helper
 - All protected routes use `@login_required` decorator
-- Database queries use `execute_with_retry()` for connection resilience
+- Bank code validation via `VALID_BANK_CODES` from config
 
 ## Environment Variables
 
@@ -86,6 +94,12 @@ DB_USER=<mysql-user>
 DB_PASSWORD=<mysql-password>
 DB_PORT=3306
 ```
+
+## Adding a New Bank
+
+1. Add entry to `BANK_CONFIG` in `config.py` with name, code, table, and color
+2. Create transaction table in `database_schema.sql` (copy from existing bank table)
+3. Add corresponding analytics view
 
 ## Transaction Categories
 

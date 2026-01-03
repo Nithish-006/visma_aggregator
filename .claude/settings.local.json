@@ -6,7 +6,10 @@
       "Bash(ls:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(cat:*)",
+      "Bash(git -C \"C:\\\\VISMA - AGGREGATOR\" log --oneline)",
+      "Bash(pip install:*)"
     ]
   }
 }
