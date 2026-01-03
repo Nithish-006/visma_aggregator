@@ -22,8 +22,8 @@ app.secret_key = os.environ.get('SECRET_KEY', 'visma-finance-secret-key-2024-sec
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
 # Login credentials
-VALID_USERNAME = 'visma_finance'
-VALID_PASSWORD = 'visma@1617'
+VALID_USERNAME = 'visma'
+VALID_PASSWORD = '1617'
 
 
 def login_required(f):

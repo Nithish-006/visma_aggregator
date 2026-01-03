@@ -208,8 +208,19 @@ class DatabaseManager:
             print(f"[!] Insert error: {e}")
             return False, str(e)
 
-    def insert_transactions_bulk(self, df: pd.DataFrame, bank_code: str = 'axis') -> Dict:
-        """Insert multiple transactions from a DataFrame"""
+    def insert_transactions_bulk(self, df: pd.DataFrame, bank_code: str = 'axis', batch_size: int = 100) -> Dict:
+        """
+        Insert multiple transactions from a DataFrame using batch inserts.
+        Uses a single connection and INSERT IGNORE for efficient bulk operations.
+
+        Args:
+            df: DataFrame with transactions
+            bank_code: Bank code for table routing
+            batch_size: Number of rows per batch insert (default 100)
+
+        Returns:
+            Dict with total, inserted, duplicates, errors counts
+        """
         results = {
             'total': len(df),
             'inserted': 0,
@@ -218,16 +229,86 @@ class DatabaseManager:
             'error_messages': []
         }
 
-        for idx, row in df.iterrows():
-            success, error = self.insert_transaction(row.to_dict(), bank_code)
-            if success:
-                results['inserted'] += 1
-            elif error == "Duplicate":
-                results['duplicates'] += 1
-            else:
-                results['errors'] += 1
-                if len(results['error_messages']) < 3:
-                    results['error_messages'].append(f"Row {idx}: {error}")
+        if len(df) == 0:
+            return results
+
+        table = self.get_table_name(bank_code)
+
+        # Use INSERT IGNORE to skip duplicates silently
+        query_template = f"""
+        INSERT IGNORE INTO {table} (
+            transaction_date, transaction_description, client_vendor,
+            category, broader_category, code,
+            dr_amount, cr_amount, running_balance, net,
+            project, dd, notes
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                conn.autocommit = False  # Use transaction for better performance
+
+                # Prepare all rows
+                rows_to_insert = []
+                for idx, row in df.iterrows():
+                    try:
+                        # Convert pandas Timestamp to Python datetime.date
+                        trans_date = row['Date']
+                        if hasattr(trans_date, 'date'):
+                            trans_date = trans_date.date()
+
+                        rows_to_insert.append((
+                            trans_date,
+                            row['Transaction Description'],
+                            row['Client/Vendor'],
+                            row['Category'],
+                            row['Broader Category'],
+                            row['Code'],
+                            float(row['DR Amount']),
+                            float(row['CR Amount']),
+                            float(row['Running Balance']),
+                            float(row['Net']),
+                            row.get('Project'),
+                            row.get('DD'),
+                            row.get('Notes')
+                        ))
+                    except Exception as e:
+                        results['errors'] += 1
+                        if len(results['error_messages']) < 3:
+                            results['error_messages'].append(f"Row {idx}: {str(e)}")
+
+                # Insert in batches
+                total_affected = 0
+                for i in range(0, len(rows_to_insert), batch_size):
+                    batch = rows_to_insert[i:i + batch_size]
+                    try:
+                        cursor.executemany(query_template, batch)
+                        total_affected += cursor.rowcount
+
+                        # Progress logging for large datasets
+                        if len(rows_to_insert) > 100:
+                            progress = min(i + batch_size, len(rows_to_insert))
+                            print(f"[*] Inserted batch {i//batch_size + 1}: {progress}/{len(rows_to_insert)} rows")
+                    except Exception as e:
+                        results['errors'] += len(batch)
+                        if len(results['error_messages']) < 3:
+                            results['error_messages'].append(f"Batch {i//batch_size + 1}: {str(e)}")
+
+                conn.commit()
+                cursor.close()
+
+                # Calculate results
+                # INSERT IGNORE returns rowcount = number of actually inserted rows
+                results['inserted'] = total_affected
+                results['duplicates'] = len(rows_to_insert) - total_affected - results['errors']
+
+                print(f"[+] Bulk insert complete: {results['inserted']} inserted, {results['duplicates']} duplicates, {results['errors']} errors")
+
+        except Exception as e:
+            print(f"[!] Bulk insert error: {e}")
+            results['errors'] = results['total']
+            results['error_messages'].append(str(e))
 
         return results
 
