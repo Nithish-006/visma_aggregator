@@ -1227,19 +1227,17 @@ def download_bank_transactions(bank_code):
     df_export['Date'] = df_export['date'].dt.strftime('%d-%m-%Y')
 
     export_columns = [
-        'Date', 'Transaction Description', 'Client/Vendor', 'Category',
-        'Broader Category', 'Code', 'DR Amount', 'CR Amount',
-        'Running Balance', 'Net', 'Project', 'DD', 'Notes'
+        'Date', 'Transaction Description', 'Client/Vendor',
+        'Category', 'Code', 'DR Amount', 'CR Amount', 'Project'
     ]
 
     df_final = pd.DataFrame()
     for col in export_columns:
-        if col in df_export.columns:
+        if col == 'Category':
+            # Use Broader Category as Category
+            df_final[col] = df_export.get('Broader Category', df_export.get('Category', None))
+        elif col in df_export.columns:
             df_final[col] = df_export[col]
-        elif col == 'Running Balance':
-            df_final[col] = df_export.get('running_balance', 0)
-        elif col == 'Net':
-            df_final[col] = df_export.get('net', 0)
         else:
             df_final[col] = None
 
@@ -2103,36 +2101,29 @@ def download_transactions():
     # Format date as DD-MM-YYYY to match original format
     df_export['Date'] = df_export['date'].dt.strftime('%d-%m-%Y')
 
-    # Select columns in the exact order of original schema
+    # Select columns in the simplified schema
     export_columns = [
         'Date',
         'Transaction Description',
         'Client/Vendor',
         'Category',
-        'Broader Category',
         'Code',
         'DR Amount',
         'CR Amount',
-        'Running Balance',
-        'Net',
-        'Project',
-        'DD',
-        'Notes'
+        'Project'
     ]
 
     # Create export dataframe with only existing columns
     df_final = pd.DataFrame()
     for col in export_columns:
-        if col in df_export.columns:
-            df_final[col] = df_export[col]
+        if col == 'Category':
+            # Use Broader Category as Category
+            df_final[col] = df_export.get('Broader Category', df_export.get('Category', None))
         elif col == 'Date':
             df_final[col] = df_export['Date']
-        elif col == 'Running Balance':
-            df_final[col] = df_export['running_balance'] if 'running_balance' in df_export.columns else df_export.get('Running Balance', 0)
-        elif col == 'Net':
-            df_final[col] = df_export['net'] if 'net' in df_export.columns else df_export.get('Net', 0)
+        elif col in df_export.columns:
+            df_final[col] = df_export[col]
         else:
-            # Add empty columns for Project, DD, Notes if they don't exist
             df_final[col] = None
 
     # Create Excel file in memory

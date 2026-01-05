@@ -190,13 +190,13 @@ async function loadTransactions(category = 'All', startDate = null, endDate = nu
             const row = document.createElement('tr');
 
             row.innerHTML = `
-                <td>${txn.date}</td>
-                <td>${txn.vendor}</td>
-                <td>${txn.category}</td>
-                <td>${txn.description || ''}</td>
-                <td>${txn.project || ''}</td>
-                <td class="text-right">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
-                <td class="text-right">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
+                <td data-label="Date">${txn.date}</td>
+                <td data-label="Vendor">${txn.vendor}</td>
+                <td data-label="Category">${txn.category}</td>
+                <td data-label="Description">${txn.description || ''}</td>
+                <td data-label="Project">${txn.project || ''}</td>
+                <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
+                <td class="text-right" data-label="Credit">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
             `;
             tbody.appendChild(row);
         });

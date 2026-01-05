@@ -454,10 +454,18 @@ input[type="checkbox"] {
     }
 }
 
-/* Mobile */
+/* ============================================================================
+   MOBILE CARD-BASED LAYOUT
+   ============================================================================ */
 @media (max-width: 768px) {
     .main-content {
         padding-top: 80px;
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    .container {
+        padding: 0;
     }
 
     /* Page header */
@@ -465,6 +473,7 @@ input[type="checkbox"] {
         flex-direction: column;
         align-items: stretch;
         gap: 16px;
+        padding-bottom: 16px;
     }
 
     .page-title {
@@ -472,26 +481,33 @@ input[type="checkbox"] {
     }
 
     .header-stats {
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         gap: 8px;
         width: 100%;
     }
 
     .stat-badge {
-        width: 100%;
         justify-content: space-between;
         display: flex;
+        padding: 10px 12px;
     }
 
     .header-stats button {
+        grid-column: span 2;
         width: 100%;
-        min-height: 44px;
+        min-height: 48px;
     }
 
-    /* Filter bar */
+    #modified-badge {
+        grid-column: span 2;
+    }
+
+    /* Filter bar - collapsible style */
     .edit-filter-bar {
         padding: 16px;
         gap: 12px;
+        border-radius: var(--radius-sm);
     }
 
     .filter-section {
@@ -502,27 +518,39 @@ input[type="checkbox"] {
     .filter-select {
         width: 100%;
         font-size: 16px;
+        min-height: 48px;
+        padding: 12px 14px;
     }
 
     .filter-actions {
-        flex-direction: column;
+        flex-direction: row;
         gap: 8px;
+        margin-top: 4px;
     }
 
     .filter-actions button {
-        width: 100%;
-        min-height: 44px;
+        flex: 1;
+        min-height: 48px;
+        font-size: 0.85rem;
     }
 
     /* Bulk edit bar */
     .bulk-edit-bar {
         padding: 16px;
         gap: 12px;
+        border-radius: var(--radius-sm);
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .bulk-info {
+        text-align: center;
+        font-size: 1.1rem;
     }
 
     .bulk-actions {
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
         width: 100%;
     }
 
@@ -531,96 +559,258 @@ input[type="checkbox"] {
         width: 100%;
         min-width: 100%;
         font-size: 16px;
-        min-height: 44px;
+        min-height: 48px;
     }
 
     .bulk-actions button {
         width: 100%;
-        min-height: 44px;
+        min-height: 48px;
     }
 
-    /* Edit table container */
+    /* ========== CARD-BASED TABLE TRANSFORMATION ========== */
     .edit-table-container {
-        max-height: calc(100vh - 450px);
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        position: relative;
+        background: transparent;
+        border: none;
+        padding: 0;
+        max-height: none;
+        overflow: visible;
     }
 
-    /* Scroll indicator for mobile */
     .edit-table-container::after {
-        content: 'Swipe to see more';
-        position: sticky;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: rgba(74, 108, 247, 0.15);
-        color: var(--primary-light);
-        text-align: center;
-        padding: 8px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        border-top: 1px solid var(--border-color);
+        display: none;
     }
 
     .edit-table {
-        min-width: 1200px;
+        display: block;
+        min-width: unset;
+        width: 100%;
+    }
+
+    /* Hide table header on mobile */
+    .edit-table thead {
+        display: none;
+    }
+
+    .edit-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    /* Transform each row into a card */
+    .edit-table tbody tr {
+        display: block;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        position: relative;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .edit-table tbody tr:nth-child(even) {
+        background: var(--bg-card);
+    }
+
+    .edit-table tbody tr:hover {
+        background: var(--bg-card);
+        border-color: var(--primary-color);
+    }
+
+    .edit-table tbody tr.selected {
+        border-left: 4px solid var(--primary-color);
+        background: rgba(74, 108, 247, 0.1);
+    }
+
+    .edit-table tbody tr.modified {
+        border-left: 4px solid #f59e0b;
+        background: rgba(245, 158, 11, 0.08);
+    }
+
+    /* Card cells styling */
+    .edit-table tbody td {
+        display: block;
+        padding: 8px 0;
+        border: none;
+        text-align: left !important;
+        position: relative;
+    }
+
+    /* Add labels before each cell using data attributes */
+    .edit-table tbody td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 4px;
+    }
+
+    /* Checkbox cell - position at top right */
+    .edit-table tbody td:first-child {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        padding: 0;
+        width: auto;
+    }
+
+    .edit-table tbody td:first-child::before {
+        display: none;
+    }
+
+    /* Date cell - prominent at top */
+    .edit-table tbody td:nth-child(2) {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--primary-light);
+        padding-right: 50px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 12px;
+        margin-bottom: 8px;
+    }
+
+    /* Vendor cell */
+    .edit-table tbody td:nth-child(3) {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-main);
+    }
+
+    /* Category cell */
+    .edit-table tbody td:nth-child(4) {
+        padding: 10px 0;
+    }
+
+    .edit-table tbody td:nth-child(4) .category-badge {
         font-size: 0.8rem;
+        padding: 6px 14px;
     }
 
-    .edit-table th,
-    .edit-table td {
-        padding: 10px 8px;
-        font-size: 0.75rem;
+    /* Description cell */
+    .edit-table tbody td:nth-child(5) {
+        font-size: 0.85rem;
+        line-height: 1.5;
+        color: var(--text-secondary);
+        padding: 10px 0;
+        border-top: 1px solid rgba(51, 65, 85, 0.3);
+        margin-top: 4px;
     }
 
-    .edit-table th {
-        font-size: 0.7rem;
+    .edit-table tbody td.description-full {
+        min-width: unset;
+        max-width: 100%;
     }
 
-    /* Editable cells */
+    /* Amount cells - side by side */
+    .edit-table tbody td:nth-child(6),
+    .edit-table tbody td:nth-child(7) {
+        display: inline-block;
+        width: 48%;
+        vertical-align: top;
+        padding: 10px 0;
+    }
+
+    .edit-table tbody td:nth-child(7) {
+        text-align: right !important;
+        margin-left: 4%;
+    }
+
+    /* Monetary pills larger on mobile */
+    .edit-table tbody .monetary-pill {
+        font-size: 1rem;
+        padding: 8px 16px;
+        font-weight: 700;
+    }
+
+    .edit-table tbody .monetary-pill.debit {
+        background: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+    }
+
+    .edit-table tbody .monetary-pill.credit {
+        background: rgba(34, 197, 94, 0.15);
+        color: #4ade80;
+    }
+
+    /* Project cell */
+    .edit-table tbody td:nth-child(8) {
+        padding-top: 12px;
+        border-top: 1px solid rgba(51, 65, 85, 0.3);
+        margin-top: 8px;
+    }
+
+    /* Status cell - position at top */
+    .edit-table tbody td:last-child {
+        position: absolute;
+        top: 16px;
+        right: 50px;
+        padding: 0;
+        width: auto;
+    }
+
+    .edit-table tbody td:last-child::before {
+        display: none;
+    }
+
+    /* Editable cells on mobile */
+    .editable-cell {
+        border-radius: var(--radius-sm);
+        padding: 8px 12px;
+        margin: -8px -12px;
+        background: rgba(74, 108, 247, 0.05);
+        border: 1px dashed rgba(74, 108, 247, 0.3);
+    }
+
+    .editable-cell:hover {
+        background: rgba(74, 108, 247, 0.1);
+        border-color: var(--primary-color);
+    }
+
     .editable-cell input,
     .editable-cell select,
     .editable-cell textarea {
         font-size: 16px;
-        min-height: 40px;
+        min-height: 48px;
+        padding: 12px;
     }
 
-    /* Category badges */
-    .category-badge {
-        font-size: 0.7rem;
-        padding: 4px 8px;
-    }
-
-    /* Monetary pills */
-    .monetary-pill {
-        font-size: 0.75rem;
-        padding: 3px 8px;
-        min-width: 50px;
+    /* Checkbox styling */
+    input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
     }
 
     /* Buttons touch-friendly */
     .btn {
-        min-height: 44px;
-        padding: 10px 16px;
-        font-size: 0.9rem;
+        min-height: 48px;
+        padding: 12px 20px;
+        font-size: 0.95rem;
     }
 
-    .row-action-btn {
-        min-height: 36px;
-        padding: 8px 12px;
-        font-size: 0.75rem;
+    .btn-primary {
+        font-weight: 600;
     }
 
-    /* Checkboxes larger for touch */
-    input[type="checkbox"] {
-        width: 20px;
-        height: 20px;
+    /* Save notification */
+    .save-notification {
+        left: 12px;
+        right: 12px;
+        top: auto;
+        bottom: 24px;
+        text-align: center;
     }
 }
 
 /* Small mobile devices */
 @media (max-width: 480px) {
+    .main-content {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
     .page-title {
         font-size: 1.2rem;
     }
@@ -629,18 +819,36 @@ input[type="checkbox"] {
         font-size: 0.8rem;
     }
 
-    .stat-badge {
-        font-size: 0.8rem;
-        padding: 6px 12px;
+    .header-stats {
+        grid-template-columns: 1fr;
     }
 
-    .edit-table {
-        font-size: 0.75rem;
+    .header-stats button {
+        grid-column: span 1;
     }
 
-    .edit-table th,
-    .edit-table td {
-        padding: 8px 6px;
-        font-size: 0.7rem;
+    #modified-badge {
+        grid-column: span 1;
+    }
+
+    .edit-table tbody tr {
+        padding: 14px;
+    }
+
+    .edit-table tbody td:nth-child(6),
+    .edit-table tbody td:nth-child(7) {
+        display: block;
+        width: 100%;
+        margin-left: 0;
+        text-align: left !important;
+    }
+
+    .filter-actions {
+        flex-direction: column;
+    }
+
+    .filter-actions button {
+        flex: unset;
+        width: 100%;
     }
 }

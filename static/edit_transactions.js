@@ -201,21 +201,19 @@
             const isCategoryUncategorized = txn.category === 'Uncategorized';
 
             row.innerHTML = `
-                <td>
+                <td data-label="">
                     <input type="checkbox" class="row-checkbox" data-index="${globalIndex}" ${isSelected ? 'checked' : ''}>
                 </td>
-                <td>${txn.date}</td>
-                <td class="editable-cell" data-field="vendor" data-index="${globalIndex}">${txn.vendor || ''}</td>
-                <td class="editable-cell" data-field="category" data-index="${globalIndex}">
+                <td data-label="Date">${txn.date}</td>
+                <td class="editable-cell" data-field="vendor" data-index="${globalIndex}" data-label="Vendor">${txn.vendor || ''}</td>
+                <td class="editable-cell" data-field="category" data-index="${globalIndex}" data-label="Category">
                     <span class="category-badge ${isCategoryUncategorized ? 'uncategorized' : ''}">${txn.category || ''}</span>
                 </td>
-                <td class="description-full">${escapeHtml(txn.description || txn['Transaction Description'] || '')}</td>
-                <td class="text-right">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
-                <td class="text-right">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
-                <td class="editable-cell" data-field="project" data-index="${globalIndex}">${txn.project || txn.Project || ''}</td>
-                <td class="editable-cell" data-field="dd" data-index="${globalIndex}">${txn.dd || txn.DD || ''}</td>
-                <td class="editable-cell" data-field="notes" data-index="${globalIndex}">${txn.notes || txn.Notes || ''}</td>
-                <td style="text-align: center;">
+                <td class="description-full" data-label="Description">${escapeHtml(txn.description || txn['Transaction Description'] || '')}</td>
+                <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
+                <td class="text-right" data-label="Credit">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
+                <td class="editable-cell" data-field="project" data-index="${globalIndex}" data-label="Project">${txn.project || txn.Project || ''}</td>
+                <td style="text-align: center;" data-label="">
                     ${isModified ? '<span style="color: #f59e0b; font-size: 18px;" title="Unsaved changes">●</span>' : ''}
                 </td>
             `;
@@ -253,10 +251,6 @@
             currentValue = txn.category || txn.Category || '';
         } else if (field === 'project') {
             currentValue = txn.project || txn.Project || '';
-        } else if (field === 'dd') {
-            currentValue = txn.dd || txn.DD || '';
-        } else if (field === 'notes') {
-            currentValue = txn.notes || txn.Notes || '';
         } else {
             currentValue = txn[field] || '';
         }
@@ -276,10 +270,6 @@
                 }
                 input.appendChild(option);
             });
-        } else if (field === 'notes') {
-            // Use textarea for notes
-            input = document.createElement('textarea');
-            input.value = currentValue;
         } else {
             // Use input for other fields
             input = document.createElement('input');
@@ -294,7 +284,7 @@
         // Save on blur or Enter
         input.addEventListener('blur', () => finishCellEdit(cell, input, field, index));
         input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && field !== 'notes') {
+            if (e.key === 'Enter') {
                 finishCellEdit(cell, input, field, index);
             }
         });
@@ -316,12 +306,6 @@
         } else if (field === 'project') {
             allTransactions[index]['Project'] = newValue;
             allTransactions[index]['project'] = newValue;
-        } else if (field === 'dd') {
-            allTransactions[index]['DD'] = newValue;
-            allTransactions[index]['dd'] = newValue;
-        } else if (field === 'notes') {
-            allTransactions[index]['Notes'] = newValue;
-            allTransactions[index]['notes'] = newValue;
         }
 
         // Mark as modified
@@ -535,9 +519,8 @@
     async function applyBulkEdit() {
         const bulkCategory = document.getElementById('bulk-category').value;
         const bulkProject = document.getElementById('bulk-project').value.trim();
-        const bulkDD = document.getElementById('bulk-dd').value.trim();
 
-        if (!bulkCategory && !bulkProject && !bulkDD) {
+        if (!bulkCategory && !bulkProject) {
             alert('Please select at least one field to update');
             return;
         }
@@ -559,10 +542,6 @@
                 txn.Project = bulkProject;
                 txn.project = bulkProject;
             }
-            if (bulkDD) {
-                txn.DD = bulkDD;
-                txn.dd = bulkDD;
-            }
 
             // Mark as modified (don't save immediately)
             modifiedTransactionIndices.add(txnIndex);
@@ -583,7 +562,6 @@
         // Clear bulk inputs
         document.getElementById('bulk-category').value = '';
         document.getElementById('bulk-project').value = '';
-        document.getElementById('bulk-dd').value = '';
 
         showNotification(`Bulk update complete! ${selectedTransactions.length} transactions marked for saving.`);
     }
