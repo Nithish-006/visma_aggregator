@@ -16,6 +16,10 @@
     let modifiedTransactionIndices = new Set();  // Track unsaved changes
     let categories = [];
 
+    // Pagination state
+    let currentPage = 1;
+    const ITEMS_PER_PAGE = 10;
+
     // Filter state
     let currentFilters = {
         category: 'All',
@@ -177,15 +181,23 @@
 
             return true;
         });
+
+        // Reset to page 1 when filters change
+        currentPage = 1;
     }
 
     /**
-     * Render the transactions table
+     * Render the transactions table (with pagination)
      */
     function renderTable() {
         tableBody.innerHTML = '';
 
-        filteredTransactions.forEach((txn, index) => {
+        // Calculate pagination
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        const endIndex = startIndex + ITEMS_PER_PAGE;
+        const pageTransactions = filteredTransactions.slice(startIndex, endIndex);
+
+        pageTransactions.forEach((txn, index) => {
             const row = document.createElement('tr');
             const globalIndex = allTransactions.indexOf(txn);
             const isSelected = selectedTransactionIndices.has(globalIndex);
@@ -230,6 +242,38 @@
         document.querySelectorAll('.editable-cell').forEach(cell => {
             cell.addEventListener('click', handleCellClick);
         });
+
+        // Update pagination controls
+        updatePaginationControls();
+    }
+
+    /**
+     * Update pagination controls
+     */
+    function updatePaginationControls() {
+        const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE) || 1;
+
+        document.getElementById('current-page').textContent = currentPage;
+        document.getElementById('total-pages').textContent = totalPages;
+
+        document.getElementById('prev-page').disabled = currentPage <= 1;
+        document.getElementById('next-page').disabled = currentPage >= totalPages;
+    }
+
+    /**
+     * Go to specific page
+     */
+    function goToPage(page) {
+        const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE) || 1;
+
+        if (page < 1) page = 1;
+        if (page > totalPages) page = totalPages;
+
+        currentPage = page;
+        renderTable();
+
+        // Scroll to top of table on mobile
+        document.querySelector('.edit-table-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     /**
@@ -660,6 +704,26 @@
         // Save/Discard all changes
         saveAllBtn.addEventListener('click', saveAllChanges);
         discardAllBtn.addEventListener('click', discardAllChanges);
+
+        // Pagination listeners
+        document.getElementById('prev-page')?.addEventListener('click', () => {
+            goToPage(currentPage - 1);
+        });
+
+        document.getElementById('next-page')?.addEventListener('click', () => {
+            goToPage(currentPage + 1);
+        });
+
+        // Mobile filter toggle
+        const filterToggle = document.getElementById('edit-filter-toggle');
+        const filterContent = document.getElementById('edit-filter-content');
+
+        if (filterToggle && filterContent) {
+            filterToggle.addEventListener('click', () => {
+                filterToggle.classList.toggle('active');
+                filterContent.classList.toggle('expanded');
+            });
+        }
     }
 
     /**

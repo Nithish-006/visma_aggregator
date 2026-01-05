@@ -14,6 +14,11 @@ let searchTimeout = null;
 let dataMinDate = null;
 let dataMaxDate = null;
 
+// Pagination state
+let allTransactions = [];
+let currentPage = 1;
+const ITEMS_PER_PAGE = 10;
+
 /** Utilities **/
 
 function formatIndianNumber(amount) {
@@ -182,27 +187,67 @@ async function loadTransactions(category = 'All', startDate = null, endDate = nu
         const res = await fetch(url);
         const data = await res.json();
 
-        const tbody = document.getElementById('transactions-body');
-        if (!tbody) return;
-        tbody.innerHTML = '';
+        // Store all transactions and reset to page 1
+        allTransactions = data.transactions;
+        currentPage = 1;
 
-        data.transactions.forEach((txn) => {
-            const row = document.createElement('tr');
-
-            row.innerHTML = `
-                <td data-label="Date">${txn.date}</td>
-                <td data-label="Vendor">${txn.vendor}</td>
-                <td data-label="Category">${txn.category}</td>
-                <td data-label="Description">${txn.description || ''}</td>
-                <td data-label="Project">${txn.project || ''}</td>
-                <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
-                <td class="text-right" data-label="Credit">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
-            `;
-            tbody.appendChild(row);
-        });
+        renderTransactionsPage();
+        updatePaginationControls();
     } catch (e) {
         console.error('Error loading transactions:', e);
     }
+}
+
+/** Render current page of transactions **/
+function renderTransactionsPage() {
+    const tbody = document.getElementById('transactions-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const pageTransactions = allTransactions.slice(startIndex, endIndex);
+
+    pageTransactions.forEach((txn) => {
+        const row = document.createElement('tr');
+
+        row.innerHTML = `
+            <td data-label="Date">${txn.date}</td>
+            <td data-label="Vendor">${txn.vendor}</td>
+            <td data-label="Category">${txn.category}</td>
+            <td data-label="Description">${txn.description || ''}</td>
+            <td data-label="Project">${txn.project || ''}</td>
+            <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
+            <td class="text-right" data-label="Credit">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+/** Update pagination controls **/
+function updatePaginationControls() {
+    const totalPages = Math.ceil(allTransactions.length / ITEMS_PER_PAGE) || 1;
+
+    document.getElementById('current-page').textContent = currentPage;
+    document.getElementById('total-pages').textContent = totalPages;
+
+    document.getElementById('prev-page').disabled = currentPage <= 1;
+    document.getElementById('next-page').disabled = currentPage >= totalPages;
+}
+
+/** Go to specific page **/
+function goToPage(page) {
+    const totalPages = Math.ceil(allTransactions.length / ITEMS_PER_PAGE) || 1;
+
+    if (page < 1) page = 1;
+    if (page > totalPages) page = totalPages;
+
+    currentPage = page;
+    renderTransactionsPage();
+    updatePaginationControls();
+
+    // Scroll to top of table on mobile
+    document.querySelector('.transactions-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /** Refresh **/
@@ -385,6 +430,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadTransactions(currentCategory, currentStartDate, currentEndDate, currentProject);
         });
     });
+
+    // Pagination listeners
+    document.getElementById('prev-page')?.addEventListener('click', () => {
+        goToPage(currentPage - 1);
+    });
+
+    document.getElementById('next-page')?.addEventListener('click', () => {
+        goToPage(currentPage + 1);
+    });
+
+    // Mobile filter toggle
+    const filterToggle = document.getElementById('filter-toggle');
+    const filterContent = document.getElementById('filter-content');
+
+    if (filterToggle && filterContent) {
+        filterToggle.addEventListener('click', () => {
+            filterToggle.classList.toggle('active');
+            filterContent.classList.toggle('expanded');
+        });
+    }
 
     await runFullRefresh();
 });
