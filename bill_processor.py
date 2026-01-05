@@ -163,26 +163,18 @@ def extract_from_image(image_path, client):
         if img.mode in ('RGBA', 'LA', 'P'):
             img = img.convert('RGB')
 
-        # Save to bytes for upload
-        img_bytes = BytesIO()
-        img.save(img_bytes, format='JPEG')
-        img_bytes.seek(0)
-
-        # Generate content with image using new API
+        # Generate content with image using Gemini 3 Flash Preview
         response = client.models.generate_content(
-            model='gemini-2.0-flash-exp',
+            model='gemini-3-flash-preview',
             contents=[
-                types.Content(
-                    role='user',
-                    parts=[
-                        types.Part.from_bytes(
-                            data=img_bytes.read(),
-                            mime_type='image/jpeg'
-                        ),
-                        types.Part.from_text(text=EXTRACTION_PROMPT)
-                    ]
+                img,
+                EXTRACTION_PROMPT
+            ],
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(
+                    thinking_level=types.ThinkingLevel.HIGH
                 )
-            ]
+            )
         )
 
         # Parse JSON response
@@ -225,23 +217,21 @@ def extract_from_pdf_page(pdf_path, page_num, client):
         with open(pdf_path, 'rb') as f:
             pdf_bytes = f.read()
 
-        # Upload PDF and generate content
+        # Upload PDF and generate content using Gemini 3 Flash Preview
         response = client.models.generate_content(
-            model='gemini-2.0-flash-exp',
+            model='gemini-3-flash-preview',
             contents=[
-                types.Content(
-                    role='user',
-                    parts=[
-                        types.Part.from_bytes(
-                            data=pdf_bytes,
-                            mime_type='application/pdf'
-                        ),
-                        types.Part.from_text(
-                            text=EXTRACTION_PROMPT + f"\n\nExtract data from page {page_num + 1} of this PDF."
-                        )
-                    ]
+                types.Part.from_bytes(
+                    data=pdf_bytes,
+                    mime_type='application/pdf'
+                ),
+                EXTRACTION_PROMPT + f"\n\nExtract data from page {page_num + 1} of this PDF."
+            ],
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(
+                    thinking_level=types.ThinkingLevel.HIGH
                 )
-            ]
+            )
         )
 
         response_text = response.text.strip()
