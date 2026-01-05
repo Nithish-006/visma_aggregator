@@ -266,10 +266,118 @@ UNION ALL
 SELECT 'categories' as table_name, COUNT(*) as count FROM categories;
 
 
--- USE visma_financial;
+-- ============================================================================
+-- BILL PROCESSOR TABLES
+-- ============================================================================
 
--- ALTER TABLE personal_transactions
--- ADD COLUMN transaction_type ENUM('expense', 'income') DEFAULT 'expense' AFTER amount;
+-- Main invoice/bill table
+CREATE TABLE IF NOT EXISTS bill_invoices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL,
+    page_number INT DEFAULT 1,
+    invoice_number VARCHAR(100),
+    invoice_date DATE,
+    irn VARCHAR(255),
+    ack_number VARCHAR(100),
+    eway_bill_number VARCHAR(100),
 
--- ALTER TABLE personal_transactions
--- ADD INDEX idx_transaction_type (transaction_type);
+    -- Vendor details
+    vendor_name VARCHAR(255),
+    vendor_gstin VARCHAR(20),
+    vendor_address TEXT,
+    vendor_state VARCHAR(100),
+    vendor_pan VARCHAR(20),
+    vendor_phone VARCHAR(50),
+    vendor_bank_name VARCHAR(255),
+    vendor_bank_account VARCHAR(50),
+    vendor_bank_ifsc VARCHAR(20),
+
+    -- Buyer details
+    buyer_name VARCHAR(255),
+    buyer_gstin VARCHAR(20),
+    buyer_address TEXT,
+    buyer_state VARCHAR(100),
+
+    -- Ship to details
+    ship_to_name VARCHAR(255),
+    ship_to_address TEXT,
+
+    -- Totals
+    subtotal DECIMAL(15, 2) DEFAULT 0.00,
+    total_cgst DECIMAL(15, 2) DEFAULT 0.00,
+    total_sgst DECIMAL(15, 2) DEFAULT 0.00,
+    total_igst DECIMAL(15, 2) DEFAULT 0.00,
+    other_charges DECIMAL(15, 2) DEFAULT 0.00,
+    round_off DECIMAL(10, 2) DEFAULT 0.00,
+    total_amount DECIMAL(15, 2) DEFAULT 0.00,
+    amount_in_words TEXT,
+
+    -- Transport
+    vehicle_number VARCHAR(50),
+    transporter_name VARCHAR(255),
+
+    -- Metadata
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    -- Indexes
+    INDEX idx_invoice_number (invoice_number),
+    INDEX idx_invoice_date (invoice_date),
+    INDEX idx_vendor_name (vendor_name),
+    INDEX idx_vendor_gstin (vendor_gstin),
+    INDEX idx_buyer_name (buyer_name),
+    INDEX idx_created_at (created_at),
+
+    -- Unique constraint to prevent duplicate uploads
+    UNIQUE KEY unique_invoice (invoice_number, invoice_date, vendor_gstin, total_amount)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Line items table (one-to-many with bill_invoices)
+CREATE TABLE IF NOT EXISTS bill_line_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    invoice_id INT NOT NULL,
+    sl_no INT,
+    description TEXT NOT NULL,
+    hsn_sac_code VARCHAR(20),
+    quantity DECIMAL(15, 3) DEFAULT 0,
+    uom VARCHAR(20),
+    rate_per_unit DECIMAL(15, 2) DEFAULT 0.00,
+    discount_percent DECIMAL(5, 2) DEFAULT 0.00,
+    discount_amount DECIMAL(15, 2) DEFAULT 0.00,
+    taxable_value DECIMAL(15, 2) DEFAULT 0.00,
+    cgst_rate DECIMAL(5, 2) DEFAULT 0.00,
+    cgst_amount DECIMAL(15, 2) DEFAULT 0.00,
+    sgst_rate DECIMAL(5, 2) DEFAULT 0.00,
+    sgst_amount DECIMAL(15, 2) DEFAULT 0.00,
+    igst_rate DECIMAL(5, 2) DEFAULT 0.00,
+    igst_amount DECIMAL(15, 2) DEFAULT 0.00,
+    amount DECIMAL(15, 2) DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Foreign key
+    FOREIGN KEY (invoice_id) REFERENCES bill_invoices(id) ON DELETE CASCADE,
+
+    -- Indexes
+    INDEX idx_invoice_id (invoice_id),
+    INDEX idx_hsn_code (hsn_sac_code),
+    INDEX idx_description (description(100))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- View for bill summary
+CREATE OR REPLACE VIEW v_bill_summary AS
+SELECT
+    bi.id,
+    bi.invoice_number,
+    bi.invoice_date,
+    bi.vendor_name,
+    bi.vendor_gstin,
+    bi.buyer_name,
+    bi.total_amount,
+    bi.vehicle_number,
+    bi.eway_bill_number,
+    COUNT(bli.id) as line_item_count,
+    bi.created_at
+FROM bill_invoices bi
+LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
+GROUP BY bi.id
+ORDER BY bi.created_at DESC;

@@ -303,6 +303,24 @@ body {
     color: #a78bfa;
 }
 
+/* Bill Processor Card */
+.bill-card {
+    border-left: 4px solid #f59e0b;
+}
+
+.bill-card:hover {
+    background: linear-gradient(135deg, var(--bg-card-hover) 0%, rgba(245, 158, 11, 0.1) 100%);
+    border-color: #f59e0b;
+}
+
+.bill-card .card-icon svg {
+    stroke: #f59e0b;
+}
+
+.bill-card .stat-value {
+    color: #fbbf24;
+}
+
 /* Placeholder Cards */
 .placeholder-card {
     opacity: 0.6;

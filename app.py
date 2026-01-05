@@ -11,6 +11,7 @@ from werkzeug.utils import secure_filename
 from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank_config, get_bank_table
 from database import DatabaseManager
 from bank_statement_processor import process_bank_statement
+from bill_processor import process_bill_file, generate_excel, format_extracted_data_for_display
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -1642,6 +1643,217 @@ def get_personal_vendors():
     except Exception as e:
         print(f"[!] Error fetching vendors: {e}")
         return jsonify({'vendors': []})
+
+
+# ============================================================================
+# BILL PROCESSOR API ENDPOINTS
+# ============================================================================
+
+@app.route('/bill-processor')
+@login_required
+def bill_processor_page():
+    """Render bill processor page"""
+    return render_template('bill_processor.html')
+
+
+@app.route('/api/bills/process', methods=['POST'])
+@login_required
+def process_bill():
+    """Process an uploaded bill image/PDF and extract data using Gemini Vision"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+        # Check file extension
+        allowed_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.webp'}
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in allowed_extensions:
+            return jsonify({'success': False, 'error': f'Unsupported file type: {ext}'}), 400
+
+        # Save file temporarily
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        temp_filename = f"bill_{timestamp}_{filename}"
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
+
+        file.save(temp_path)
+        print(f"[+] Bill file saved: {temp_path}")
+
+        # Process the bill
+        print(f"[*] Processing bill with Gemini Vision: {filename}")
+        results = process_bill_file(temp_path, filename)
+
+        # Save to database
+        db_results = []
+        for bill in results:
+            if bill.get('success'):
+                success, invoice_id, error = db_manager.insert_bill(bill)
+                db_results.append({
+                    'saved': success,
+                    'invoice_id': invoice_id,
+                    'db_error': error
+                })
+            else:
+                db_results.append({'saved': False, 'invoice_id': None, 'db_error': 'Extraction failed'})
+
+        # Format for display
+        display_data = format_extracted_data_for_display(results)
+
+        # Add DB status to display data
+        for i, display_item in enumerate(display_data):
+            if i < len(db_results):
+                display_item['db_saved'] = db_results[i]['saved']
+                display_item['invoice_id'] = db_results[i]['invoice_id']
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'display_data': display_data,
+            'db_results': db_results
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/bills/download', methods=['POST'])
+@login_required
+def download_bills_excel():
+    """Generate and download Excel file from extracted bill data"""
+    try:
+        data = request.json
+        results = data.get('results', [])
+
+        if not results:
+            return jsonify({'error': 'No data to download'}), 400
+
+        # Generate Excel file
+        excel_buffer = generate_excel(results)
+
+        # Create filename with timestamp
+        filename = f"bills_extracted_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        return send_file(
+            excel_buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/bills/stored')
+@login_required
+def get_stored_bills():
+    """Get all stored bills from database"""
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        offset = request.args.get('offset', 0, type=int)
+
+        bills = db_manager.get_all_bills(limit=limit, offset=offset)
+        total = db_manager.get_bill_count()
+
+        return jsonify({
+            'success': True,
+            'bills': bills,
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+    except Exception as e:
+        print(f"[!] Error fetching stored bills: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bills/stored/<int:invoice_id>')
+@login_required
+def get_stored_bill_detail(invoice_id):
+    """Get detailed bill information including line items"""
+    try:
+        bill = db_manager.get_bill_detail(invoice_id)
+
+        if not bill:
+            return jsonify({'success': False, 'error': 'Bill not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'bill': bill
+        })
+    except Exception as e:
+        print(f"[!] Error fetching bill detail: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bills/stored/<int:invoice_id>', methods=['DELETE'])
+@login_required
+def delete_stored_bill(invoice_id):
+    """Delete a stored bill"""
+    try:
+        success = db_manager.delete_bill(invoice_id)
+
+        if success:
+            return jsonify({'success': True, 'message': 'Bill deleted'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete bill'}), 500
+    except Exception as e:
+        print(f"[!] Error deleting bill: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bills/summary')
+@login_required
+def get_bills_summary():
+    """Get summary statistics for stored bills"""
+    try:
+        total_bills = db_manager.get_bill_count()
+
+        # Get totals
+        query = """
+        SELECT
+            COUNT(*) as total_invoices,
+            COALESCE(SUM(total_amount), 0) as total_value,
+            COALESCE(SUM(total_cgst + total_sgst + total_igst), 0) as total_gst,
+            COUNT(DISTINCT vendor_name) as unique_vendors
+        FROM bill_invoices
+        """
+        result = db_manager.fetch_all(query)
+
+        if result:
+            return jsonify({
+                'success': True,
+                'summary': {
+                    'total_invoices': result[0][0] or 0,
+                    'total_value': float(result[0][1] or 0),
+                    'total_gst': float(result[0][2] or 0),
+                    'unique_vendors': result[0][3] or 0
+                }
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'summary': {
+                    'total_invoices': 0,
+                    'total_value': 0,
+                    'total_gst': 0,
+                    'unique_vendors': 0
+                }
+            })
+    except Exception as e:
+        print(f"[!] Error fetching bills summary: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================================================

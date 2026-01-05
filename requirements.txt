@@ -31,3 +31,8 @@ pytz
 
 # Environment Variables
 python-dotenv
+
+# Bill Processing (Gemini Vision)
+google-genai
+Pillow
+PyPDF2

@@ -412,6 +412,245 @@ class DatabaseManager:
         """Clear all transactions for a specific bank (use with caution!)"""
         return self.execute_query(f"DELETE FROM {self.get_table_name(bank_code)}")
 
+    # ========================================================================
+    # BILL PROCESSOR DATABASE METHODS
+    # ========================================================================
+
+    def insert_bill(self, bill_data: Dict) -> Tuple[bool, Optional[int], Optional[str]]:
+        """
+        Insert a bill invoice and its line items into the database.
+
+        Args:
+            bill_data: Extracted bill data from Gemini Vision
+
+        Returns:
+            Tuple of (success, invoice_id, error_message)
+        """
+        if not bill_data.get('success') or not bill_data.get('data'):
+            return False, None, "No valid bill data"
+
+        data = bill_data['data']
+        header = data.get('invoice_header', {})
+        vendor = data.get('vendor', {})
+        buyer = data.get('buyer', {})
+        ship_to = data.get('ship_to', {})
+        taxes = data.get('taxes', {})
+        transport = data.get('transport', {})
+        line_items = data.get('line_items', [])
+        other_charges = data.get('other_charges', [])
+
+        # Parse invoice date
+        invoice_date = None
+        date_str = header.get('invoice_date', '')
+        if date_str:
+            try:
+                from dateutil import parser
+                invoice_date = parser.parse(date_str, dayfirst=True).date()
+            except:
+                pass
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                conn.autocommit = False
+
+                # Insert main invoice record
+                invoice_query = """
+                INSERT INTO bill_invoices (
+                    filename, page_number, invoice_number, invoice_date, irn, ack_number, eway_bill_number,
+                    vendor_name, vendor_gstin, vendor_address, vendor_state, vendor_pan, vendor_phone,
+                    vendor_bank_name, vendor_bank_account, vendor_bank_ifsc,
+                    buyer_name, buyer_gstin, buyer_address, buyer_state,
+                    ship_to_name, ship_to_address,
+                    subtotal, total_cgst, total_sgst, total_igst, other_charges, round_off, total_amount, amount_in_words,
+                    vehicle_number, transporter_name
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s
+                )
+                """
+
+                # Calculate other charges total
+                other_charges_total = sum(c.get('amount', 0) or 0 for c in other_charges if c.get('description'))
+
+                cursor.execute(invoice_query, (
+                    bill_data.get('filename', ''),
+                    bill_data.get('page', 1),
+                    header.get('invoice_number', ''),
+                    invoice_date,
+                    header.get('irn', ''),
+                    header.get('ack_number', ''),
+                    header.get('eway_bill_number', ''),
+                    vendor.get('name', ''),
+                    vendor.get('gstin', ''),
+                    vendor.get('address', ''),
+                    vendor.get('state', ''),
+                    vendor.get('pan', ''),
+                    vendor.get('phone', ''),
+                    vendor.get('bank_name', ''),
+                    vendor.get('bank_account', ''),
+                    vendor.get('bank_ifsc', ''),
+                    buyer.get('name', ''),
+                    buyer.get('gstin', ''),
+                    buyer.get('address', ''),
+                    buyer.get('state', ''),
+                    ship_to.get('name', ''),
+                    ship_to.get('address', ''),
+                    float(taxes.get('subtotal', 0) or taxes.get('taxable_amount', 0) or 0),
+                    float(taxes.get('total_cgst', 0) or taxes.get('cgst_amount', 0) or 0),
+                    float(taxes.get('total_sgst', 0) or taxes.get('sgst_amount', 0) or 0),
+                    float(taxes.get('total_igst', 0) or taxes.get('igst_amount', 0) or 0),
+                    float(other_charges_total),
+                    float(taxes.get('round_off', 0) or 0),
+                    float(taxes.get('total_amount', 0) or 0),
+                    taxes.get('amount_in_words', ''),
+                    transport.get('vehicle_number', ''),
+                    transport.get('transporter_name', '')
+                ))
+
+                invoice_id = cursor.lastrowid
+
+                # Insert line items
+                if line_items:
+                    line_item_query = """
+                    INSERT INTO bill_line_items (
+                        invoice_id, sl_no, description, hsn_sac_code, quantity, uom,
+                        rate_per_unit, discount_percent, discount_amount, taxable_value,
+                        cgst_rate, cgst_amount, sgst_rate, sgst_amount, igst_rate, igst_amount, amount
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+
+                    for item in line_items:
+                        if item.get('description'):  # Only insert if has description
+                            cursor.execute(line_item_query, (
+                                invoice_id,
+                                item.get('sl_no', 0),
+                                item.get('description', ''),
+                                item.get('hsn_sac_code', '') or item.get('hsn_code', ''),
+                                float(item.get('quantity', 0) or 0),
+                                item.get('uom', ''),
+                                float(item.get('rate_per_unit', 0) or item.get('rate', 0) or 0),
+                                float(item.get('discount_percent', 0) or 0),
+                                float(item.get('discount_amount', 0) or 0),
+                                float(item.get('taxable_value', 0) or 0),
+                                float(item.get('cgst_rate', 0) or 0),
+                                float(item.get('cgst_amount', 0) or 0),
+                                float(item.get('sgst_rate', 0) or 0),
+                                float(item.get('sgst_amount', 0) or 0),
+                                float(item.get('igst_rate', 0) or 0),
+                                float(item.get('igst_amount', 0) or 0),
+                                float(item.get('amount', 0) or 0)
+                            ))
+
+                conn.commit()
+                cursor.close()
+
+                print(f"[+] Saved bill to DB: Invoice #{header.get('invoice_number', 'N/A')} (ID: {invoice_id})")
+                return True, invoice_id, None
+
+        except mysql.connector.IntegrityError as e:
+            if e.errno == 1062:  # Duplicate key
+                print(f"[!] Duplicate bill: {header.get('invoice_number', '')}")
+                return False, None, "Duplicate invoice"
+            return False, None, str(e)
+        except Exception as e:
+            print(f"[!] Error saving bill: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, None, str(e)
+
+    def get_all_bills(self, limit: int = 100, offset: int = 0) -> List[Dict]:
+        """Get all bills from database with pagination"""
+        query = """
+        SELECT
+            bi.id, bi.filename, bi.page_number, bi.invoice_number, bi.invoice_date,
+            bi.vendor_name, bi.vendor_gstin, bi.buyer_name, bi.buyer_gstin,
+            bi.subtotal, bi.total_cgst, bi.total_sgst, bi.total_igst,
+            bi.total_amount, bi.vehicle_number, bi.eway_bill_number, bi.irn,
+            bi.created_at,
+            COUNT(bli.id) as line_item_count
+        FROM bill_invoices bi
+        LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
+        GROUP BY bi.id
+        ORDER BY bi.created_at DESC
+        LIMIT %s OFFSET %s
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(query, (limit, offset))
+                results = cursor.fetchall()
+                cursor.close()
+
+                # Convert date objects to strings for JSON serialization
+                for row in results:
+                    if row.get('invoice_date'):
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                    if row.get('created_at'):
+                        row['created_at'] = row['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+
+                return results
+        except Exception as e:
+            print(f"[!] Error fetching bills: {e}")
+            return []
+
+    def get_bill_detail(self, invoice_id: int) -> Optional[Dict]:
+        """Get full bill detail including line items"""
+        try:
+            with self.get_connection() as conn:
+                # Get invoice
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT * FROM bill_invoices WHERE id = %s", (invoice_id,))
+                invoice = cursor.fetchone()
+
+                if not invoice:
+                    cursor.close()
+                    return None
+
+                # Convert dates
+                if invoice.get('invoice_date'):
+                    invoice['invoice_date'] = invoice['invoice_date'].strftime('%d-%b-%Y')
+                if invoice.get('created_at'):
+                    invoice['created_at'] = invoice['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                if invoice.get('updated_at'):
+                    invoice['updated_at'] = invoice['updated_at'].strftime('%Y-%m-%d %H:%M:%S')
+
+                # Get line items
+                cursor.execute("""
+                    SELECT * FROM bill_line_items WHERE invoice_id = %s ORDER BY sl_no
+                """, (invoice_id,))
+                line_items = cursor.fetchall()
+                cursor.close()
+
+                # Convert decimals to floats for JSON
+                for item in line_items:
+                    for key in ['quantity', 'rate_per_unit', 'discount_percent', 'discount_amount',
+                               'taxable_value', 'cgst_rate', 'cgst_amount', 'sgst_rate', 'sgst_amount',
+                               'igst_rate', 'igst_amount', 'amount']:
+                        if item.get(key) is not None:
+                            item[key] = float(item[key])
+
+                invoice['line_items'] = line_items
+                return invoice
+
+        except Exception as e:
+            print(f"[!] Error fetching bill detail: {e}")
+            return None
+
+    def get_bill_count(self) -> int:
+        """Get total number of stored bills"""
+        result = self.fetch_all("SELECT COUNT(*) FROM bill_invoices")
+        return result[0][0] if result else 0
+
+    def delete_bill(self, invoice_id: int) -> bool:
+        """Delete a bill and its line items"""
+        return self.execute_query("DELETE FROM bill_invoices WHERE id = %s", (invoice_id,))
+
 
 # ============================================================================
 # Helper Functions
