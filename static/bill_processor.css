@@ -298,6 +298,15 @@ body {
     text-overflow: ellipsis;
 }
 
+.data-table .cell-wrap {
+    max-width: 180px;
+    min-width: 100px;
+    word-wrap: break-word;
+    white-space: normal;
+    line-height: 1.4;
+    font-size: 0.8125rem;
+}
+
 .action-buttons {
     display: flex;
     gap: 8px;

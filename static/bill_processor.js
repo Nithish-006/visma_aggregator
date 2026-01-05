@@ -181,9 +181,9 @@ function renderInvoicesTable() {
             <tr>
                 <td class="cell-link" onclick="viewInvoiceDetail(${bill.id})">${bill.invoice_number || '-'}</td>
                 <td>${bill.invoice_date || '-'}</td>
-                <td title="${bill.vendor_name || ''}">${truncate(bill.vendor_name, 25) || '-'}</td>
+                <td class="cell-wrap">${bill.vendor_name || '-'}</td>
                 <td>${bill.vendor_gstin || '-'}</td>
-                <td title="${bill.buyer_name || ''}">${truncate(bill.buyer_name, 20) || '-'}</td>
+                <td class="cell-wrap">${bill.buyer_name || '-'}</td>
                 <td>${bill.line_item_count || 0}</td>
                 <td class="text-right">${formatIndianCurrency(bill.subtotal)}</td>
                 <td class="text-right">${formatIndianCurrency(gst)}</td>
@@ -231,9 +231,9 @@ function renderLineItemsTable() {
             <tr>
                 <td>${item.invoice_number || '-'}</td>
                 <td>${item.invoice_date || '-'}</td>
-                <td title="${item.vendor_name || ''}">${truncate(item.vendor_name, 20) || '-'}</td>
+                <td class="cell-wrap">${item.vendor_name || '-'}</td>
                 <td>${item.sl_no || '-'}</td>
-                <td class="cell-description" title="${item.description || ''}">${item.description || '-'}</td>
+                <td class="cell-wrap">${item.description || '-'}</td>
                 <td>${item.hsn_sac_code || '-'}</td>
                 <td class="text-right">${item.quantity || 0}</td>
                 <td>${item.uom || '-'}</td>
