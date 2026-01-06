@@ -24,6 +24,7 @@ const toast = document.getElementById('toast');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', init);
+console.log('[Bill Processor] JavaScript loaded successfully');
 
 function init() {
     // Load data on page load
@@ -203,8 +204,8 @@ function renderInvoicesTable() {
                 <td class="text-right">${formatIndianCurrency(bill.subtotal)}</td>
                 <td class="text-right">${formatIndianCurrency(gst)}</td>
                 <td class="text-right cell-amount">${formatIndianCurrency(bill.total_amount)}</td>
-                <td class="project-cell" data-bill-id="${bill.id}" data-project="${projectDisplay}">
-                    <div class="project-display" onclick="openProjectEdit(${bill.id}, '${escapeHtml(projectDisplay)}')">
+                <td class="project-cell" data-bill-id="${bill.id}" data-project="${escapeForAttr(projectDisplay)}">
+                    <div class="project-display" onclick="openProjectEdit(${bill.id}, '${escapeForAttr(projectDisplay)}')">
                         <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
                         <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -249,12 +250,25 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function escapeForAttr(text) {
+    if (!text) return '';
+    return text.replace(/\\/g, '\\\\')
+               .replace(/'/g, "\\'")
+               .replace(/"/g, '&quot;')
+               .replace(/\n/g, '\\n')
+               .replace(/\r/g, '\\r');
+}
+
 function openProjectEdit(billId, currentProject) {
+    console.log('[Bill Processor] openProjectEdit called:', billId, currentProject);
     // Close any existing edit
     closeProjectEdit();
 
     const cell = document.querySelector(`.project-cell[data-bill-id="${billId}"]`);
-    if (!cell) return;
+    if (!cell) {
+        console.log('[Bill Processor] Cell not found for billId:', billId);
+        return;
+    }
 
     activeProjectEdit = billId;
 
@@ -289,7 +303,7 @@ function closeProjectEdit() {
         const projectText = project || 'Click to add';
 
         cell.innerHTML = `
-            <div class="project-display" onclick="openProjectEdit(${activeProjectEdit}, '${escapeHtml(project)}')">
+            <div class="project-display" onclick="openProjectEdit(${activeProjectEdit}, '${escapeForAttr(project)}')">
                 <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
                 <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -327,7 +341,7 @@ function filterProjectSuggestions(billId) {
         const isNew = project.endsWith(' (new)');
         const displayText = isNew ? project : project;
         const selectValue = isNew ? input.value : project;
-        return `<div class="project-suggestion" onclick="selectProject(${billId}, '${escapeHtml(selectValue)}')">${escapeHtml(displayText)}</div>`;
+        return `<div class="project-suggestion" onclick="selectProject(${billId}, '${escapeForAttr(selectValue)}')">${escapeHtml(displayText)}</div>`;
     }).join('');
 
     suggestionsEl.style.display = 'block';
@@ -915,3 +929,13 @@ function showToast(message, type = 'info') {
     toast.className = 'toast show ' + type;
     setTimeout(() => toast.classList.remove('show'), 3000);
 }
+
+// ============================================================================
+// EXPOSE FUNCTIONS TO GLOBAL SCOPE (for inline onclick handlers)
+// ============================================================================
+window.openProjectEdit = openProjectEdit;
+window.selectProject = selectProject;
+window.handleProjectKeydown = handleProjectKeydown;
+window.filterProjectSuggestions = filterProjectSuggestions;
+window.viewInvoiceDetail = viewInvoiceDetail;
+window.deleteInvoice = deleteInvoice;
