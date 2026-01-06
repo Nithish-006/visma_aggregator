@@ -1840,14 +1840,36 @@ body {
         max-width: 100%;
     }
 
-    /* ========== COMPACT SCROLLABLE LIST FOR MOBILE ========== */
+    /* ========== CLEAN SCROLLABLE LIST FOR MOBILE (Personal Tracker Style) ========== */
+
+    /* Remove padding from transactions section on mobile */
+    .transactions-section {
+        padding: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        margin-left: -1rem;
+        margin-right: -1rem;
+        width: calc(100% + 2rem);
+    }
+
+    .section-header {
+        padding: 1rem;
+        margin-bottom: 0;
+    }
+
+    .transactions-toolbar {
+        padding: 0 1rem 1rem;
+    }
+
     .table-container {
-        max-height: 70vh;
+        max-height: 65vh;
         overflow-y: auto;
         overflow-x: hidden;
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-md);
+        background: var(--bg-dark);
+        border: none;
+        border-radius: 0;
+        border-top: 1px solid var(--border-color);
         -webkit-overflow-scrolling: touch;
     }
 
@@ -1855,7 +1877,6 @@ body {
         display: block;
         min-width: unset;
         width: 100%;
-        font-size: 0.85rem;
     }
 
     /* Hide table header on mobile */
@@ -1864,29 +1885,23 @@ body {
     }
 
     .transactions-table tbody {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
+        display: block;
     }
 
-    /* Compact row style - NOT cards */
+    /* Clean row style - full width */
     .transactions-table tbody tr {
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto auto;
         align-items: center;
-        justify-content: space-between;
-        background: var(--bg-card);
+        background: var(--bg-dark);
         border-bottom: 1px solid var(--border-color);
-        padding: 12px 14px;
-        gap: 10px;
+        padding: 14px 16px;
+        gap: 4px 12px;
     }
 
-    .transactions-table tbody tr:nth-child(even) {
-        background: rgba(30, 41, 59, 0.5);
-    }
-
-    .transactions-table tbody tr:hover,
     .transactions-table tbody tr:active {
-        background: rgba(74, 108, 247, 0.1);
+        background: var(--bg-card-hover);
     }
 
     .transactions-table tbody tr:last-child {
@@ -1896,6 +1911,8 @@ body {
     /* Hide all cells by default */
     .transactions-table tbody td {
         display: none;
+        padding: 0;
+        border: none;
     }
 
     /* Remove all ::before labels */
@@ -1904,33 +1921,27 @@ body {
         content: none !important;
     }
 
-    /* Show only Date (1st), Vendor (2nd), Debit (6th), Credit (7th) */
-
-    /* Date cell - compact */
+    /* Date cell - top left, small muted text */
     .transactions-table tbody td:nth-child(1) {
         display: block;
+        grid-column: 1;
+        grid-row: 1;
         font-size: 0.75rem;
         font-weight: 500;
         color: var(--text-muted);
-        min-width: 70px;
-        flex-shrink: 0;
-        padding: 0;
-        border: none;
+        letter-spacing: 0.02em;
     }
 
-    /* Vendor cell - takes remaining space, wraps to multiple lines */
+    /* Vendor cell - bottom left, prominent */
     .transactions-table tbody td:nth-child(2) {
         display: block;
-        font-size: 0.9rem;
+        grid-column: 1;
+        grid-row: 2;
+        font-size: 1rem;
         font-weight: 600;
         color: var(--text-main);
-        flex: 1;
-        white-space: normal;
-        word-wrap: break-word;
-        line-height: 1.3;
-        padding: 0;
-        border: none;
-        min-width: 0;
+        line-height: 1.4;
+        padding-right: 8px;
     }
 
     /* Hide Category (3rd), Description (4th), Project (5th) */
@@ -1940,29 +1951,40 @@ body {
         display: none !important;
     }
 
-    /* Amount cells - show only one (debit OR credit) */
+    /* Amount cells - right side, spans both rows vertically centered */
     .transactions-table tbody td:nth-child(6),
     .transactions-table tbody td:nth-child(7) {
-        display: block;
-        padding: 0;
-        border: none;
-        text-align: right !important;
-        flex-shrink: 0;
-    }
-
-    /* Monetary pills compact on mobile */
-    .transactions-table tbody .monetary-pill {
-        font-size: 0.85rem;
-        padding: 4px 10px;
-        font-weight: 600;
-        min-width: 70px;
+        display: flex;
+        align-items: center;
         justify-content: flex-end;
+        grid-column: 2;
+        grid-row: 1 / 3;
+        text-align: right !important;
     }
 
-    /* Hide empty amount cells (no pill inside) */
+    /* Hide empty amount cells */
     .transactions-table tbody td:nth-child(6):empty,
     .transactions-table tbody td:nth-child(7):empty {
         display: none;
+    }
+
+    /* Monetary pills - clean and prominent */
+    .transactions-table tbody .monetary-pill {
+        font-size: 1rem;
+        padding: 0;
+        font-weight: 600;
+        background: transparent;
+        min-width: auto;
+    }
+
+    .transactions-table tbody .monetary-pill.debit {
+        color: #f87171;
+        background: transparent;
+    }
+
+    .transactions-table tbody .monetary-pill.credit {
+        color: #4ade80;
+        background: transparent;
     }
 
     /* Hide pagination on mobile - all transactions shown in scrollable list */
@@ -1970,20 +1992,21 @@ body {
         display: none !important;
     }
 
-    /* Action buttons - show on mobile as grid */
+    /* Action buttons - full width grid below the list */
     .table-actions {
         display: grid !important;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
-        margin-top: 16px;
+        margin: 16px 16px 0;
         padding: 0;
+        border-top: none;
     }
 
     .table-actions .action-btn {
         width: 100%;
         min-height: 48px;
         justify-content: center;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
     }
 
     .table-actions .upload-btn {
@@ -2082,30 +2105,28 @@ body {
         padding: 0.4rem 0.6rem;
     }
 
-    /* Compact list on small screens - same layout, just smaller */
+    /* Slightly tighter on very small screens */
     .transactions-table tbody tr {
-        padding: 10px 12px;
-        gap: 8px;
+        padding: 12px 14px;
+        gap: 3px 10px;
     }
 
     .transactions-table tbody td:nth-child(1) {
         font-size: 0.7rem;
-        min-width: 60px;
     }
 
     .transactions-table tbody td:nth-child(2) {
-        font-size: 0.85rem;
+        font-size: 0.95rem;
     }
 
     .transactions-table tbody .monetary-pill {
-        font-size: 0.8rem;
-        padding: 3px 8px;
-        min-width: 60px;
+        font-size: 0.95rem;
     }
 
     /* Action buttons single column */
     .table-actions {
         grid-template-columns: 1fr;
+        margin: 12px 14px 0;
     }
 
     .table-actions .upload-btn {
