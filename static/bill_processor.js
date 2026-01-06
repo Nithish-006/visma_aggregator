@@ -40,6 +40,9 @@ function init() {
     document.getElementById('refreshBtn').addEventListener('click', refreshData);
     document.getElementById('exportAllBtn').addEventListener('click', exportAllBills);
 
+    // Event delegation for project cell clicks
+    document.getElementById('invoicesBody').addEventListener('click', handleTableClick);
+
     // Close project edit on outside click
     document.addEventListener('click', handleOutsideClick);
 
@@ -116,6 +119,29 @@ function handleProjectFilterChange(e) {
 function handleOutsideClick(e) {
     if (activeProjectEdit && !e.target.closest('.project-cell')) {
         closeProjectEdit();
+    }
+}
+
+function handleTableClick(e) {
+    // Handle project cell clicks
+    const projectDisplay = e.target.closest('.project-display');
+    if (projectDisplay) {
+        const cell = projectDisplay.closest('.project-cell');
+        if (cell) {
+            const billId = parseInt(cell.dataset.billId);
+            const project = cell.dataset.project || '';
+            console.log('[Bill Processor] Project cell clicked:', billId, project);
+            openProjectEdit(billId, project);
+            e.stopPropagation();
+            return;
+        }
+    }
+
+    // Handle suggestion clicks
+    const suggestion = e.target.closest('.project-suggestion');
+    if (suggestion) {
+        e.stopPropagation();
+        return;
     }
 }
 
@@ -205,7 +231,7 @@ function renderInvoicesTable() {
                 <td class="text-right">${formatIndianCurrency(gst)}</td>
                 <td class="text-right cell-amount">${formatIndianCurrency(bill.total_amount)}</td>
                 <td class="project-cell" data-bill-id="${bill.id}" data-project="${escapeForAttr(projectDisplay)}">
-                    <div class="project-display" onclick="openProjectEdit(${bill.id}, '${escapeForAttr(projectDisplay)}')">
+                    <div class="project-display">
                         <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
                         <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -276,9 +302,7 @@ function openProjectEdit(billId, currentProject) {
     const editHtml = `
         <div class="project-edit-container">
             <input type="text" class="project-input" id="projectInput-${billId}"
-                   value="${escapeHtml(currentProject)}" placeholder="Enter project name"
-                   onkeydown="handleProjectKeydown(event, ${billId})"
-                   oninput="filterProjectSuggestions(${billId})">
+                   value="${escapeHtml(currentProject)}" placeholder="Enter project name">
             <div class="project-suggestions" id="projectSuggestions-${billId}"></div>
         </div>
     `;
@@ -286,6 +310,11 @@ function openProjectEdit(billId, currentProject) {
     cell.innerHTML = editHtml;
 
     const input = document.getElementById(`projectInput-${billId}`);
+
+    // Add event listeners
+    input.addEventListener('keydown', (e) => handleProjectKeydown(e, billId));
+    input.addEventListener('input', () => filterProjectSuggestions(billId));
+
     input.focus();
     input.select();
 
@@ -303,7 +332,7 @@ function closeProjectEdit() {
         const projectText = project || 'Click to add';
 
         cell.innerHTML = `
-            <div class="project-display" onclick="openProjectEdit(${activeProjectEdit}, '${escapeForAttr(project)}')">
+            <div class="project-display">
                 <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
                 <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -341,8 +370,17 @@ function filterProjectSuggestions(billId) {
         const isNew = project.endsWith(' (new)');
         const displayText = isNew ? project : project;
         const selectValue = isNew ? input.value : project;
-        return `<div class="project-suggestion" onclick="selectProject(${billId}, '${escapeForAttr(selectValue)}')">${escapeHtml(displayText)}</div>`;
+        return `<div class="project-suggestion" data-value="${escapeForAttr(selectValue)}">${escapeHtml(displayText)}</div>`;
     }).join('');
+
+    // Add click handlers to suggestions
+    suggestionsEl.querySelectorAll('.project-suggestion').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const value = el.dataset.value;
+            selectProject(billId, value);
+        });
+    });
 
     suggestionsEl.style.display = 'block';
 }
@@ -931,11 +969,7 @@ function showToast(message, type = 'info') {
 }
 
 // ============================================================================
-// EXPOSE FUNCTIONS TO GLOBAL SCOPE (for inline onclick handlers)
+// EXPOSE FUNCTIONS TO GLOBAL SCOPE (for remaining inline onclick handlers)
 // ============================================================================
-window.openProjectEdit = openProjectEdit;
-window.selectProject = selectProject;
-window.handleProjectKeydown = handleProjectKeydown;
-window.filterProjectSuggestions = filterProjectSuggestions;
 window.viewInvoiceDetail = viewInvoiceDetail;
 window.deleteInvoice = deleteInvoice;
