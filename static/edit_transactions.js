@@ -187,15 +187,28 @@
     }
 
     /**
-     * Render the transactions table (with pagination)
+     * Check if mobile view is active
+     */
+    function isMobileView() {
+        return window.innerWidth <= 768;
+    }
+
+    /**
+     * Render the transactions table (with pagination on desktop, all on mobile)
      */
     function renderTable() {
         tableBody.innerHTML = '';
 
-        // Calculate pagination
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        const endIndex = startIndex + ITEMS_PER_PAGE;
-        const pageTransactions = filteredTransactions.slice(startIndex, endIndex);
+        // On mobile, render all transactions (scrollable list)
+        // On desktop, render paginated view
+        let pageTransactions;
+        if (isMobileView()) {
+            pageTransactions = filteredTransactions;
+        } else {
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+            const endIndex = startIndex + ITEMS_PER_PAGE;
+            pageTransactions = filteredTransactions.slice(startIndex, endIndex);
+        }
 
         pageTransactions.forEach((txn, index) => {
             const row = document.createElement('tr');
@@ -724,6 +737,16 @@
                 filterContent.classList.toggle('expanded');
             });
         }
+
+        // Re-render on window resize (for mobile/desktop switching)
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                renderTable();
+                updatePaginationControls();
+            }, 250);
+        });
     }
 
     /**

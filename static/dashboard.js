@@ -198,15 +198,27 @@ async function loadTransactions(category = 'All', startDate = null, endDate = nu
     }
 }
 
+/** Check if mobile view is active **/
+function isMobileView() {
+    return window.innerWidth <= 768;
+}
+
 /** Render current page of transactions **/
 function renderTransactionsPage() {
     const tbody = document.getElementById('transactions-body');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const pageTransactions = allTransactions.slice(startIndex, endIndex);
+    // On mobile, render all transactions (scrollable list)
+    // On desktop, render paginated view
+    let pageTransactions;
+    if (isMobileView()) {
+        pageTransactions = allTransactions;
+    } else {
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+        const endIndex = startIndex + ITEMS_PER_PAGE;
+        pageTransactions = allTransactions.slice(startIndex, endIndex);
+    }
 
     pageTransactions.forEach((txn) => {
         const row = document.createElement('tr');
@@ -450,6 +462,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             filterContent.classList.toggle('expanded');
         });
     }
+
+    // Re-render on window resize (for mobile/desktop switching)
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            renderTransactionsPage();
+            updatePaginationControls();
+        }, 250);
+    });
 
     await runFullRefresh();
 });

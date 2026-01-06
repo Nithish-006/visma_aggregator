@@ -649,13 +649,16 @@ input[type="checkbox"] {
         min-height: 48px;
     }
 
-    /* ========== CARD-BASED TABLE TRANSFORMATION ========== */
+    /* ========== COMPACT SCROLLABLE LIST FOR MOBILE ========== */
     .edit-table-container {
-        background: transparent;
-        border: none;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
         padding: 0;
-        max-height: none;
-        overflow: visible;
+        max-height: 70vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
     }
 
     .edit-table-container::after {
@@ -676,135 +679,120 @@ input[type="checkbox"] {
     .edit-table tbody {
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 0;
     }
 
-    /* Transform each row into a card */
+    /* Compact row style - NOT cards */
     .edit-table tbody tr {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-md);
-        padding: 16px;
-        position: relative;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        border-bottom: 1px solid var(--border-color);
+        padding: 12px 14px;
+        gap: 10px;
     }
 
     .edit-table tbody tr:nth-child(even) {
-        background: var(--bg-card);
+        background: rgba(30, 41, 59, 0.5);
     }
 
-    .edit-table tbody tr:hover {
-        background: var(--bg-card);
-        border-color: var(--primary-color);
-    }
-
-    .edit-table tbody tr.selected {
-        border-left: 4px solid var(--primary-color);
+    .edit-table tbody tr:hover,
+    .edit-table tbody tr:active {
         background: rgba(74, 108, 247, 0.1);
     }
 
+    .edit-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .edit-table tbody tr.selected {
+        background: rgba(74, 108, 247, 0.15);
+        border-left: 3px solid var(--primary-color);
+    }
+
     .edit-table tbody tr.modified {
-        border-left: 4px solid #f59e0b;
-        background: rgba(245, 158, 11, 0.08);
+        background: rgba(245, 158, 11, 0.1);
+        border-left: 3px solid #f59e0b;
     }
 
-    /* Card cells styling */
+    /* Hide all cells by default */
     .edit-table tbody td {
-        display: block;
-        padding: 8px 0;
-        border: none;
-        text-align: left !important;
-        position: relative;
-    }
-
-    /* Add labels before each cell using data attributes */
-    .edit-table tbody td::before {
-        content: attr(data-label);
-        display: block;
-        font-size: 0.65rem;
-        font-weight: 700;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-bottom: 4px;
-    }
-
-    /* Checkbox cell - position at top right */
-    .edit-table tbody td:first-child {
-        position: absolute;
-        top: 16px;
-        right: 16px;
-        padding: 0;
-        width: auto;
-    }
-
-    .edit-table tbody td:first-child::before {
         display: none;
     }
 
-    /* Date cell - prominent at top */
+    /* Remove all ::before labels */
+    .edit-table tbody td::before {
+        display: none !important;
+        content: none !important;
+    }
+
+    /* Show only: Checkbox (1st), Date (2nd), Vendor (3rd), Debit (6th), Credit (7th) */
+
+    /* Checkbox cell - keep visible */
+    .edit-table tbody td:first-child {
+        display: flex;
+        align-items: center;
+        padding: 0;
+        flex-shrink: 0;
+    }
+
+    /* Date cell - compact */
     .edit-table tbody td:nth-child(2) {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        min-width: 70px;
+        flex-shrink: 0;
+        padding: 0;
+        border: none;
+    }
+
+    /* Vendor cell - takes remaining space */
+    .edit-table tbody td:nth-child(3) {
+        display: block;
         font-size: 0.9rem;
         font-weight: 600;
-        color: var(--primary-light);
-        padding-right: 50px;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 12px;
-        margin-bottom: 8px;
-    }
-
-    /* Vendor cell */
-    .edit-table tbody td:nth-child(3) {
-        font-size: 1rem;
-        font-weight: 600;
         color: var(--text-main);
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding: 0;
+        border: none;
+        min-width: 0;
     }
 
-    /* Category cell */
-    .edit-table tbody td:nth-child(4) {
-        padding: 10px 0;
-    }
-
-    .edit-table tbody td:nth-child(4) .category-badge {
-        font-size: 0.8rem;
-        padding: 6px 14px;
-    }
-
-    /* Description cell */
-    .edit-table tbody td:nth-child(5) {
-        font-size: 0.85rem;
-        line-height: 1.5;
-        color: var(--text-secondary);
-        padding: 10px 0;
-        border-top: 1px solid rgba(51, 65, 85, 0.3);
-        margin-top: 4px;
+    /* Hide Category (4th), Description (5th), Project (8th), Status (9th) */
+    .edit-table tbody td:nth-child(4),
+    .edit-table tbody td:nth-child(5),
+    .edit-table tbody td:nth-child(8),
+    .edit-table tbody td:last-child {
+        display: none !important;
     }
 
     .edit-table tbody td.description-full {
-        min-width: unset;
-        max-width: 100%;
+        display: none !important;
     }
 
-    /* Amount cells - side by side */
+    /* Amount cells - show both (debit AND credit) */
     .edit-table tbody td:nth-child(6),
     .edit-table tbody td:nth-child(7) {
-        display: inline-block;
-        width: 48%;
-        vertical-align: top;
-        padding: 10px 0;
-    }
-
-    .edit-table tbody td:nth-child(7) {
+        display: block;
+        padding: 0;
+        border: none;
         text-align: right !important;
-        margin-left: 4%;
+        flex-shrink: 0;
     }
 
-    /* Monetary pills larger on mobile */
+    /* Monetary pills compact on mobile */
     .edit-table tbody .monetary-pill {
-        font-size: 1rem;
-        padding: 8px 16px;
-        font-weight: 700;
+        font-size: 0.85rem;
+        padding: 4px 10px;
+        font-weight: 600;
+        min-width: 70px;
+        justify-content: flex-end;
     }
 
     .edit-table tbody .monetary-pill.debit {
@@ -817,52 +805,29 @@ input[type="checkbox"] {
         color: #4ade80;
     }
 
-    /* Project cell */
-    .edit-table tbody td:nth-child(8) {
-        padding-top: 12px;
-        border-top: 1px solid rgba(51, 65, 85, 0.3);
-        margin-top: 8px;
-    }
-
-    /* Status cell - position at top */
-    .edit-table tbody td:last-child {
-        position: absolute;
-        top: 16px;
-        right: 50px;
-        padding: 0;
-        width: auto;
-    }
-
-    .edit-table tbody td:last-child::before {
+    /* Hide empty amount cells */
+    .edit-table tbody td:nth-child(6):empty,
+    .edit-table tbody td:nth-child(7):empty {
         display: none;
     }
 
-    /* Editable cells on mobile */
+    /* Editable cells - disable visual editing cues on mobile compact view */
     .editable-cell {
-        border-radius: var(--radius-sm);
-        padding: 8px 12px;
-        margin: -8px -12px;
-        background: rgba(74, 108, 247, 0.05);
-        border: 1px dashed rgba(74, 108, 247, 0.3);
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin: 0;
     }
 
     .editable-cell:hover {
-        background: rgba(74, 108, 247, 0.1);
-        border-color: var(--primary-color);
+        background: transparent;
+        border: none;
     }
 
-    .editable-cell input,
-    .editable-cell select,
-    .editable-cell textarea {
-        font-size: 16px;
-        min-height: 48px;
-        padding: 12px;
-    }
-
-    /* Checkbox styling */
+    /* Checkbox styling - smaller for compact view */
     input[type="checkbox"] {
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
     }
 
     /* Buttons touch-friendly */
@@ -876,22 +841,9 @@ input[type="checkbox"] {
         font-weight: 600;
     }
 
-    /* Pagination on mobile */
+    /* Hide pagination on mobile - all transactions shown in scrollable list */
     .pagination-controls {
-        padding: 0.75rem;
-        gap: 0.5rem;
-        margin-top: 1rem;
-    }
-
-    .pagination-btn {
-        padding: 0.75rem 1rem;
-        font-size: 0.8rem;
-        min-height: 44px;
-    }
-
-    .pagination-info {
-        font-size: 0.8rem;
-        min-width: 90px;
+        display: none !important;
     }
 
     /* Save notification */
@@ -931,16 +883,31 @@ input[type="checkbox"] {
         grid-column: span 1;
     }
 
+    /* Compact list on small screens - same layout, just smaller */
     .edit-table tbody tr {
-        padding: 14px;
+        padding: 10px 12px;
+        gap: 8px;
     }
 
-    .edit-table tbody td:nth-child(6),
-    .edit-table tbody td:nth-child(7) {
-        display: block;
-        width: 100%;
-        margin-left: 0;
-        text-align: left !important;
+    .edit-table tbody td:nth-child(2) {
+        font-size: 0.7rem;
+        min-width: 60px;
+    }
+
+    .edit-table tbody td:nth-child(3) {
+        font-size: 0.85rem;
+    }
+
+    .edit-table tbody .monetary-pill {
+        font-size: 0.8rem;
+        padding: 3px 8px;
+        min-width: 60px;
+    }
+
+    /* Checkbox smaller */
+    input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
     }
 
     .filter-actions {
