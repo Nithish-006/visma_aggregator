@@ -316,6 +316,9 @@ CREATE TABLE IF NOT EXISTS bill_invoices (
     vehicle_number VARCHAR(50),
     transporter_name VARCHAR(255),
 
+    -- Project tracking
+    project VARCHAR(255) DEFAULT NULL,
+
     -- Metadata
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -327,6 +330,7 @@ CREATE TABLE IF NOT EXISTS bill_invoices (
     INDEX idx_vendor_gstin (vendor_gstin),
     INDEX idx_buyer_name (buyer_name),
     INDEX idx_created_at (created_at),
+    INDEX idx_project (project),
 
     -- Unique constraint to prevent duplicate uploads
     UNIQUE KEY unique_invoice (invoice_number, invoice_date, vendor_gstin, total_amount)
@@ -375,9 +379,16 @@ SELECT
     bi.total_amount,
     bi.vehicle_number,
     bi.eway_bill_number,
+    bi.project,
     COUNT(bli.id) as line_item_count,
     bi.created_at
 FROM bill_invoices bi
 LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
 GROUP BY bi.id
 ORDER BY bi.created_at DESC;
+
+-- ============================================================================
+-- MIGRATION: Add project column to bill_invoices (run this for existing databases)
+-- ============================================================================
+-- ALTER TABLE bill_invoices ADD COLUMN project VARCHAR(255) DEFAULT NULL AFTER transporter_name;
+-- ALTER TABLE bill_invoices ADD INDEX idx_project (project);

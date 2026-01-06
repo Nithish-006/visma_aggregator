@@ -4,10 +4,12 @@
 
 // State
 let storedBills = [];
-let allLineItems = [];
+let allProjects = [];
+let currentProjectFilter = '';
 let fileQueue = [];
 let processedResults = [];
 let rawResults = [];
+let activeProjectEdit = null;
 
 // DOM Elements
 const uploadModal = document.getElementById('uploadModal');
@@ -25,18 +27,20 @@ document.addEventListener('DOMContentLoaded', init);
 
 function init() {
     // Load data on page load
+    loadProjects();
     loadSummary();
     loadStoredBills();
 
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
-    });
+    // Project filter
+    document.getElementById('projectFilter').addEventListener('change', handleProjectFilterChange);
 
     // Header buttons
     document.getElementById('newBillBtn').addEventListener('click', openUploadModal);
     document.getElementById('refreshBtn').addEventListener('click', refreshData);
     document.getElementById('exportAllBtn').addEventListener('click', exportAllBills);
+
+    // Close project edit on outside click
+    document.addEventListener('click', handleOutsideClick);
 
     // Upload modal events
     document.getElementById('closeUploadModal').addEventListener('click', closeUploadModal);
@@ -73,9 +77,55 @@ function init() {
 // DATA LOADING
 // ============================================================================
 
+async function loadProjects() {
+    try {
+        const response = await fetch('/api/bills/projects');
+        const data = await response.json();
+
+        if (data.success) {
+            allProjects = data.projects;
+            populateProjectFilter();
+        }
+    } catch (error) {
+        console.error('Error loading projects:', error);
+    }
+}
+
+function populateProjectFilter() {
+    const select = document.getElementById('projectFilter');
+    const currentValue = select.value;
+
+    // Keep "All Projects" option and add projects
+    select.innerHTML = '<option value="">All Projects</option>';
+    allProjects.forEach(project => {
+        const option = document.createElement('option');
+        option.value = project;
+        option.textContent = project;
+        if (project === currentValue) option.selected = true;
+        select.appendChild(option);
+    });
+}
+
+function handleProjectFilterChange(e) {
+    currentProjectFilter = e.target.value;
+    loadSummary();
+    loadStoredBills();
+}
+
+function handleOutsideClick(e) {
+    if (activeProjectEdit && !e.target.closest('.project-cell')) {
+        closeProjectEdit();
+    }
+}
+
 async function loadSummary() {
     try {
-        const response = await fetch('/api/bills/summary');
+        let url = '/api/bills/summary';
+        if (currentProjectFilter) {
+            url += `?project=${encodeURIComponent(currentProjectFilter)}`;
+        }
+
+        const response = await fetch(url);
         const data = await response.json();
 
         if (data.success) {
@@ -91,13 +141,17 @@ async function loadSummary() {
 
 async function loadStoredBills() {
     try {
-        const response = await fetch('/api/bills/stored?limit=500');
+        let url = '/api/bills/stored?limit=500';
+        if (currentProjectFilter) {
+            url += `&project=${encodeURIComponent(currentProjectFilter)}`;
+        }
+
+        const response = await fetch(url);
         const data = await response.json();
 
         if (data.success) {
             storedBills = data.bills;
             renderInvoicesTable();
-            loadAllLineItems();
         } else {
             showEmptyState('invoices');
         }
@@ -107,53 +161,11 @@ async function loadStoredBills() {
     }
 }
 
-async function loadAllLineItems() {
-    // Collect all line items from stored bills
-    allLineItems = [];
-
-    for (const bill of storedBills) {
-        try {
-            const response = await fetch(`/api/bills/stored/${bill.id}`);
-            const data = await response.json();
-
-            if (data.success && data.bill.line_items) {
-                data.bill.line_items.forEach(item => {
-                    allLineItems.push({
-                        ...item,
-                        invoice_number: bill.invoice_number,
-                        invoice_date: bill.invoice_date,
-                        vendor_name: bill.vendor_name
-                    });
-                });
-            }
-        } catch (error) {
-            console.error(`Error loading line items for bill ${bill.id}:`, error);
-        }
-    }
-
-    renderLineItemsTable();
-}
-
 function refreshData() {
+    loadProjects();
     loadSummary();
     loadStoredBills();
     showToast('Data refreshed', 'success');
-}
-
-// ============================================================================
-// TAB SWITCHING
-// ============================================================================
-
-function switchTab(tabName) {
-    // Update tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabName);
-    });
-
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.toggle('active', content.id === tabName + 'Tab');
-    });
 }
 
 // ============================================================================
@@ -176,6 +188,9 @@ function renderInvoicesTable() {
 
     tbody.innerHTML = storedBills.map(bill => {
         const gst = (parseFloat(bill.total_cgst) || 0) + (parseFloat(bill.total_sgst) || 0) + (parseFloat(bill.total_igst) || 0);
+        const projectDisplay = bill.project || '';
+        const projectClass = projectDisplay ? '' : 'empty';
+        const projectText = projectDisplay || 'Click to add';
 
         return `
             <tr>
@@ -188,6 +203,15 @@ function renderInvoicesTable() {
                 <td class="text-right">${formatIndianCurrency(bill.subtotal)}</td>
                 <td class="text-right">${formatIndianCurrency(gst)}</td>
                 <td class="text-right cell-amount">${formatIndianCurrency(bill.total_amount)}</td>
+                <td class="project-cell" data-bill-id="${bill.id}" data-project="${projectDisplay}">
+                    <div class="project-display" onclick="openProjectEdit(${bill.id}, '${escapeHtml(projectDisplay)}')">
+                        <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
+                        <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </div>
+                </td>
                 <td>
                     <div class="action-buttons">
                         <button class="btn-icon" onclick="viewInvoiceDetail(${bill.id})" title="View Details">
@@ -209,50 +233,164 @@ function renderInvoicesTable() {
     }).join('');
 }
 
-function renderLineItemsTable() {
-    const tbody = document.getElementById('lineItemsBody');
-    const emptyState = document.getElementById('lineItemsEmpty');
-    const tableContainer = document.querySelector('#lineitemsTab .table-container');
+function showEmptyState() {
+    document.querySelector('#invoicesTab .table-container').style.display = 'none';
+    document.getElementById('invoicesEmpty').style.display = 'flex';
+}
 
-    if (allLineItems.length === 0) {
-        tableContainer.style.display = 'none';
-        emptyState.style.display = 'flex';
+// ============================================================================
+// PROJECT EDITING
+// ============================================================================
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function openProjectEdit(billId, currentProject) {
+    // Close any existing edit
+    closeProjectEdit();
+
+    const cell = document.querySelector(`.project-cell[data-bill-id="${billId}"]`);
+    if (!cell) return;
+
+    activeProjectEdit = billId;
+
+    // Create edit container
+    const editHtml = `
+        <div class="project-edit-container">
+            <input type="text" class="project-input" id="projectInput-${billId}"
+                   value="${escapeHtml(currentProject)}" placeholder="Enter project name"
+                   onkeydown="handleProjectKeydown(event, ${billId})"
+                   oninput="filterProjectSuggestions(${billId})">
+            <div class="project-suggestions" id="projectSuggestions-${billId}"></div>
+        </div>
+    `;
+
+    cell.innerHTML = editHtml;
+
+    const input = document.getElementById(`projectInput-${billId}`);
+    input.focus();
+    input.select();
+
+    // Show suggestions
+    filterProjectSuggestions(billId);
+}
+
+function closeProjectEdit() {
+    if (!activeProjectEdit) return;
+
+    const cell = document.querySelector(`.project-cell[data-bill-id="${activeProjectEdit}"]`);
+    if (cell) {
+        const project = cell.dataset.project || '';
+        const projectClass = project ? '' : 'empty';
+        const projectText = project || 'Click to add';
+
+        cell.innerHTML = `
+            <div class="project-display" onclick="openProjectEdit(${activeProjectEdit}, '${escapeHtml(project)}')">
+                <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
+                <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+            </div>
+        `;
+    }
+
+    activeProjectEdit = null;
+}
+
+function filterProjectSuggestions(billId) {
+    const input = document.getElementById(`projectInput-${billId}`);
+    const suggestionsEl = document.getElementById(`projectSuggestions-${billId}`);
+
+    if (!input || !suggestionsEl) return;
+
+    const value = input.value.toLowerCase().trim();
+
+    // Filter projects that match
+    let filtered = allProjects.filter(p => p.toLowerCase().includes(value));
+
+    // If current value is not in suggestions and not empty, add it as "new" option
+    if (value && !allProjects.some(p => p.toLowerCase() === value)) {
+        filtered = [`${input.value} (new)`, ...filtered];
+    }
+
+    if (filtered.length === 0) {
+        suggestionsEl.style.display = 'none';
         return;
     }
 
-    tableContainer.style.display = 'block';
-    emptyState.style.display = 'none';
-
-    tbody.innerHTML = allLineItems.map(item => {
-        const gst = (parseFloat(item.cgst_amount) || 0) + (parseFloat(item.sgst_amount) || 0) + (parseFloat(item.igst_amount) || 0);
-        const gstRate = (parseFloat(item.cgst_rate) || 0) + (parseFloat(item.sgst_rate) || 0) + (parseFloat(item.igst_rate) || 0);
-
-        return `
-            <tr>
-                <td>${item.invoice_number || '-'}</td>
-                <td>${item.invoice_date || '-'}</td>
-                <td class="cell-wrap">${item.vendor_name || '-'}</td>
-                <td>${item.sl_no || '-'}</td>
-                <td class="cell-wrap">${item.description || '-'}</td>
-                <td>${item.hsn_sac_code || '-'}</td>
-                <td class="text-right">${item.quantity || 0}</td>
-                <td>${item.uom || '-'}</td>
-                <td class="text-right">${formatNumber(item.rate_per_unit)}</td>
-                <td class="text-right">${formatNumber(item.taxable_value)}</td>
-                <td class="text-right">${formatNumber(gst)}${gstRate ? ' (' + gstRate + '%)' : ''}</td>
-                <td class="text-right cell-amount">${formatNumber(item.amount)}</td>
-            </tr>
-        `;
+    suggestionsEl.innerHTML = filtered.map(project => {
+        const isNew = project.endsWith(' (new)');
+        const displayText = isNew ? project : project;
+        const selectValue = isNew ? input.value : project;
+        return `<div class="project-suggestion" onclick="selectProject(${billId}, '${escapeHtml(selectValue)}')">${escapeHtml(displayText)}</div>`;
     }).join('');
+
+    suggestionsEl.style.display = 'block';
 }
 
-function showEmptyState(type) {
-    if (type === 'invoices') {
-        document.querySelector('#invoicesTab .table-container').style.display = 'none';
-        document.getElementById('invoicesEmpty').style.display = 'flex';
-    } else {
-        document.querySelector('#lineitemsTab .table-container').style.display = 'none';
-        document.getElementById('lineItemsEmpty').style.display = 'flex';
+function handleProjectKeydown(event, billId) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        const input = document.getElementById(`projectInput-${billId}`);
+        if (input) {
+            saveProject(billId, input.value);
+        }
+    } else if (event.key === 'Escape') {
+        closeProjectEdit();
+    }
+}
+
+function selectProject(billId, project) {
+    saveProject(billId, project);
+}
+
+async function saveProject(billId, project) {
+    const trimmedProject = project.trim();
+
+    try {
+        const response = await fetch(`/api/bills/stored/${billId}/project`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project: trimmedProject })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Update local state
+            const bill = storedBills.find(b => b.id === billId);
+            if (bill) {
+                bill.project = trimmedProject;
+            }
+
+            // Update cell data attribute
+            const cell = document.querySelector(`.project-cell[data-bill-id="${billId}"]`);
+            if (cell) {
+                cell.dataset.project = trimmedProject;
+            }
+
+            // Close edit and refresh display
+            closeProjectEdit();
+
+            // Add to projects list if new
+            if (trimmedProject && !allProjects.includes(trimmedProject)) {
+                allProjects.push(trimmedProject);
+                allProjects.sort();
+                populateProjectFilter();
+            }
+
+            showToast('Project updated', 'success');
+        } else {
+            showToast(data.error || 'Failed to update project', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving project:', error);
+        showToast('Failed to save project', 'error');
     }
 }
 
@@ -695,6 +833,7 @@ async function exportAllBills() {
                         transport: {
                             vehicle_number: data.bill.vehicle_number
                         },
+                        project: data.bill.project,
                         line_items: data.bill.line_items
                     },
                     filename: data.bill.filename

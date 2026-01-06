@@ -1762,9 +1762,10 @@ def get_stored_bills():
     try:
         limit = request.args.get('limit', 100, type=int)
         offset = request.args.get('offset', 0, type=int)
+        project = request.args.get('project', None)
 
-        bills = db_manager.get_all_bills(limit=limit, offset=offset)
-        total = db_manager.get_bill_count()
+        bills = db_manager.get_all_bills(limit=limit, offset=offset, project=project)
+        total = db_manager.get_bill_count(project=project)
 
         return jsonify({
             'success': True,
@@ -1813,23 +1814,69 @@ def delete_stored_bill(invoice_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/bills/stored/<int:invoice_id>/project', methods=['PUT'])
+@login_required
+def update_bill_project(invoice_id):
+    """Update the project field for a bill"""
+    try:
+        data = request.json
+        project = data.get('project', '').strip() if data else ''
+
+        success = db_manager.update_bill_project(invoice_id, project)
+
+        if success:
+            return jsonify({'success': True, 'message': 'Project updated', 'project': project})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to update project'}), 500
+    except Exception as e:
+        print(f"[!] Error updating bill project: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bills/projects')
+@login_required
+def get_bill_projects():
+    """Get all unique project names from bills"""
+    try:
+        projects = db_manager.get_unique_projects()
+        return jsonify({
+            'success': True,
+            'projects': projects
+        })
+    except Exception as e:
+        print(f"[!] Error fetching projects: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/bills/summary')
 @login_required
 def get_bills_summary():
     """Get summary statistics for stored bills"""
     try:
-        total_bills = db_manager.get_bill_count()
+        project = request.args.get('project', None)
 
-        # Get totals
-        query = """
-        SELECT
-            COUNT(*) as total_invoices,
-            COALESCE(SUM(total_amount), 0) as total_value,
-            COALESCE(SUM(total_cgst + total_sgst + total_igst), 0) as total_gst,
-            COUNT(DISTINCT vendor_name) as unique_vendors
-        FROM bill_invoices
-        """
-        result = db_manager.fetch_all(query)
+        # Get totals with optional project filter
+        if project:
+            query = """
+            SELECT
+                COUNT(*) as total_invoices,
+                COALESCE(SUM(total_amount), 0) as total_value,
+                COALESCE(SUM(total_cgst + total_sgst + total_igst), 0) as total_gst,
+                COUNT(DISTINCT vendor_name) as unique_vendors
+            FROM bill_invoices
+            WHERE project = %s
+            """
+            result = db_manager.fetch_all(query, (project,))
+        else:
+            query = """
+            SELECT
+                COUNT(*) as total_invoices,
+                COALESCE(SUM(total_amount), 0) as total_value,
+                COALESCE(SUM(total_cgst + total_sgst + total_igst), 0) as total_gst,
+                COUNT(DISTINCT vendor_name) as unique_vendors
+            FROM bill_invoices
+            """
+            result = db_manager.fetch_all(query)
 
         if result:
             return jsonify({

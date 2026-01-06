@@ -217,6 +217,64 @@ body {
     border-color: var(--accent-color);
 }
 
+.tabs-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.filter-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 24px;
+}
+
+.filter-section label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.select-wrapper {
+    position: relative;
+}
+
+.filter-select {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 32px 8px 12px;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    appearance: none;
+    min-width: 180px;
+    font-family: inherit;
+}
+
+.filter-select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.select-wrapper::after {
+    content: '';
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid var(--text-secondary);
+    pointer-events: none;
+}
+
 .tabs-actions {
     margin-left: auto;
     display: flex;
@@ -305,6 +363,103 @@ body {
     white-space: normal;
     line-height: 1.4;
     font-size: 0.8125rem;
+}
+
+/* Editable Project Cell */
+.project-cell {
+    position: relative;
+    min-width: 120px;
+}
+
+.project-display {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.project-display:hover {
+    background: var(--bg-hover);
+}
+
+.project-display .project-text {
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+}
+
+.project-display .project-text.empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.project-display .edit-icon {
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.project-display:hover .edit-icon {
+    opacity: 1;
+}
+
+.project-edit-container {
+    position: relative;
+}
+
+.project-input {
+    width: 100%;
+    min-width: 140px;
+    padding: 6px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--accent-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.project-input:focus {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.project-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-top: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.project-suggestion {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    transition: background 0.2s;
+}
+
+.project-suggestion:hover,
+.project-suggestion.highlighted {
+    background: var(--bg-hover);
+}
+
+.project-suggestion:first-child {
+    border-radius: 6px 6px 0 0;
+}
+
+.project-suggestion:last-child {
+    border-radius: 0 0 6px 6px;
 }
 
 .action-buttons {
@@ -963,16 +1118,30 @@ body {
 
     .tabs-header {
         flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .tabs-title {
+        width: 100%;
+    }
+
+    .filter-section {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .filter-select {
+        flex: 1;
+        min-width: 0;
     }
 
     .tabs-actions {
         width: 100%;
         margin-left: 0;
-        margin-top: 12px;
     }
 
     .data-table {
-        min-width: 800px;
+        min-width: 900px;
     }
 
     .detail-grid {

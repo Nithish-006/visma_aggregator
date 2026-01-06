@@ -338,6 +338,7 @@ def generate_excel(bill_data_list):
                             (taxes.get('other_charges', 0) or 0),
             'Round Off': taxes.get('round_off', 0),
             'Total Amount': taxes.get('total_amount', 0),
+            'Project': data.get('project', ''),
             'Vehicle Number': transport.get('vehicle_number', ''),
             'E-Way Bill': header.get('eway_bill_number', ''),
             'IRN': header.get('irn', ''),
@@ -345,11 +346,13 @@ def generate_excel(bill_data_list):
 
         # Line items
         items = data.get('line_items', [])
+        project = data.get('project', '')
         for item in items:
             line_items_rows.append({
                 'Invoice Number': header.get('invoice_number', ''),
                 'Invoice Date': header.get('invoice_date', ''),
                 'Vendor Name': vendor.get('name', ''),
+                'Project': project,
                 'S.No': item.get('sl_no', ''),
                 'Description of Goods': item.get('description', ''),
                 'HSN/SAC Code': item.get('hsn_sac_code', '') or item.get('hsn_code', ''),
@@ -377,6 +380,7 @@ def generate_excel(bill_data_list):
                     'Invoice Number': header.get('invoice_number', ''),
                     'Invoice Date': header.get('invoice_date', ''),
                     'Vendor Name': vendor.get('name', ''),
+                    'Project': project,
                     'S.No': '-',
                     'Description of Goods': f"[CHARGE] {charge.get('description', '')}",
                     'HSN/SAC Code': charge.get('hsn_code', ''),

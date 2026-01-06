@@ -564,26 +564,36 @@ class DatabaseManager:
             traceback.print_exc()
             return False, None, str(e)
 
-    def get_all_bills(self, limit: int = 100, offset: int = 0) -> List[Dict]:
-        """Get all bills from database with pagination"""
+    def get_all_bills(self, limit: int = 100, offset: int = 0, project: str = None) -> List[Dict]:
+        """Get all bills from database with pagination and optional project filter"""
         query = """
         SELECT
             bi.id, bi.filename, bi.page_number, bi.invoice_number, bi.invoice_date,
             bi.vendor_name, bi.vendor_gstin, bi.buyer_name, bi.buyer_gstin,
             bi.subtotal, bi.total_cgst, bi.total_sgst, bi.total_igst,
             bi.total_amount, bi.vehicle_number, bi.eway_bill_number, bi.irn,
-            bi.created_at,
+            bi.project, bi.created_at,
             COUNT(bli.id) as line_item_count
         FROM bill_invoices bi
         LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
+        """
+        params = []
+
+        if project:
+            query += " WHERE bi.project = %s"
+            params.append(project)
+
+        query += """
         GROUP BY bi.id
         ORDER BY bi.created_at DESC
         LIMIT %s OFFSET %s
         """
+        params.extend([limit, offset])
+
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute(query, (limit, offset))
+                cursor.execute(query, tuple(params))
                 results = cursor.fetchall()
                 cursor.close()
 
@@ -642,14 +652,41 @@ class DatabaseManager:
             print(f"[!] Error fetching bill detail: {e}")
             return None
 
-    def get_bill_count(self) -> int:
-        """Get total number of stored bills"""
-        result = self.fetch_all("SELECT COUNT(*) FROM bill_invoices")
-        return result[0][0] if result else 0
-
     def delete_bill(self, invoice_id: int) -> bool:
         """Delete a bill and its line items"""
         return self.execute_query("DELETE FROM bill_invoices WHERE id = %s", (invoice_id,))
+
+    def update_bill_project(self, invoice_id: int, project: str) -> bool:
+        """Update the project field for a bill"""
+        return self.execute_query(
+            "UPDATE bill_invoices SET project = %s WHERE id = %s",
+            (project if project else None, invoice_id)
+        )
+
+    def get_unique_projects(self) -> List[str]:
+        """Get all unique project names from bills"""
+        query = """
+        SELECT DISTINCT project FROM bill_invoices
+        WHERE project IS NOT NULL AND project != ''
+        ORDER BY project
+        """
+        try:
+            results = self.fetch_all(query)
+            return [row[0] for row in results if row[0]]
+        except Exception as e:
+            print(f"[!] Error fetching unique projects: {e}")
+            return []
+
+    def get_bill_count(self, project: str = None) -> int:
+        """Get total number of stored bills, optionally filtered by project"""
+        if project:
+            result = self.fetch_all(
+                "SELECT COUNT(*) FROM bill_invoices WHERE project = %s",
+                (project,)
+            )
+        else:
+            result = self.fetch_all("SELECT COUNT(*) FROM bill_invoices")
+        return result[0][0] if result else 0
 
 
 # ============================================================================
