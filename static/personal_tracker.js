@@ -76,6 +76,7 @@
         saveBtn: document.getElementById('save-btn'),
         typeExpenseBtn: document.getElementById('type-expense-btn'),
         typeIncomeBtn: document.getElementById('type-income-btn'),
+        deleteBtn: document.getElementById('delete-btn'),
 
         // Custom Dropdowns
         vendorDropdown: document.getElementById('vendor-dropdown'),
@@ -134,6 +135,9 @@
         // Transaction type toggle
         elements.typeExpenseBtn.addEventListener('click', () => setTransactionType('expense'));
         elements.typeIncomeBtn.addEventListener('click', () => setTransactionType('income'));
+
+        // Delete button in edit modal
+        elements.deleteBtn.addEventListener('click', handleDeleteFromEdit);
 
         // Form submit
         elements.transactionForm.addEventListener('submit', handleFormSubmit);
@@ -647,6 +651,7 @@
     function openAddModal() {
         elements.modalTitle.textContent = 'Add Transaction';
         elements.saveBtn.textContent = 'Save';
+        elements.deleteBtn.style.display = 'none';
         elements.transactionId.value = '';
         elements.transactionForm.reset();
         setDefaultDate();
@@ -658,6 +663,7 @@
     function openEditModal(transaction) {
         elements.modalTitle.textContent = 'Edit Transaction';
         elements.saveBtn.textContent = 'Update';
+        elements.deleteBtn.style.display = 'block';
         elements.transactionId.value = transaction.id;
         elements.transactionDate.value = transaction.date;
         elements.transactionAmount.value = transaction.amount;
@@ -682,6 +688,17 @@
     function closeDeleteModal() {
         elements.deleteModal.classList.remove('show');
         deleteTargetId = null;
+    }
+
+    function handleDeleteFromEdit() {
+        const id = elements.transactionId.value;
+        if (!id) return;
+
+        const transaction = allTransactions.find(t => t.id == id);
+        if (transaction) {
+            closeModal();
+            openDeleteModal(transaction);
+        }
     }
 
     function setDefaultDate() {
@@ -853,12 +870,7 @@
     window.handleTransactionClick = function(id) {
         const transaction = allTransactions.find(t => t.id === id);
         if (transaction) {
-            // Show action sheet or edit modal
-            if (confirm(`Edit "${transaction.vendor}"?\n\nCancel to delete instead.`)) {
-                openEditModal(transaction);
-            } else if (confirm('Delete this transaction?')) {
-                openDeleteModal(transaction);
-            }
+            openEditModal(transaction);
         }
     };
 
