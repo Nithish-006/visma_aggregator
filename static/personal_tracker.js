@@ -162,14 +162,21 @@
     }
 
     function setupCustomDropdown(type, input, menu, getItems) {
+        // Flag to prevent menu from reopening after selection
+        let justSelected = false;
+
         input.addEventListener('focus', () => {
-            renderDropdownPills(menu, getItems(), input);
+            if (justSelected) {
+                justSelected = false;
+                return;
+            }
+            renderDropdownPills(menu, getItems(), input, () => { justSelected = true; });
             menu.classList.add('show');
         });
 
         input.addEventListener('input', () => {
             const filtered = filterItems(getItems(), input.value);
-            renderDropdownPills(menu, filtered, input);
+            renderDropdownPills(menu, filtered, input, () => { justSelected = true; });
             if (filtered.length > 0) {
                 menu.classList.add('show');
             } else {
@@ -184,7 +191,7 @@
         return items.filter(item => item.toLowerCase().includes(q));
     }
 
-    function renderDropdownPills(menu, items, input) {
+    function renderDropdownPills(menu, items, input, onSelect) {
         if (!items || items.length === 0) {
             menu.innerHTML = '';
             return;
@@ -202,6 +209,8 @@
                 e.stopPropagation();
                 input.value = pill.dataset.value;
                 menu.classList.remove('show');
+                // Call the onSelect callback before focusing to prevent menu from reopening
+                if (onSelect) onSelect();
                 input.focus();
             });
         });
@@ -421,6 +430,10 @@
                 const category = getCategoryInfo(t);
                 const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
 
+                const projectText = escapeHtml(t.project || 'General');
+                const descText = t.description ? escapeHtml(t.description) : '';
+                const metaText = descText ? `${projectText} • ${descText}` : projectText;
+
                 html += `
                     <div class="transaction-row" data-id="${t.id}" onclick="handleTransactionClick(${t.id})">
                         <div class="transaction-category">
@@ -429,7 +442,7 @@
                         </div>
                         <div class="transaction-details">
                             <div class="transaction-vendor">${escapeHtml(t.vendor)}</div>
-                            <div class="transaction-project">${escapeHtml(t.project || 'General')}</div>
+                            <div class="transaction-project">${metaText}</div>
                         </div>
                         <div class="transaction-amount ${typeClass}">${formatCompact(t.amount)}</div>
                     </div>
