@@ -433,17 +433,9 @@ input[type="checkbox"] {
     text-align: right;
 }
 
-/* Pagination Controls */
+/* Pagination Controls - Hidden (using scrollable list instead) */
 .pagination-controls {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: var(--bg-card);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
+    display: none;
 }
 
 .pagination-btn {
@@ -838,11 +830,6 @@ input[type="checkbox"] {
 
     .btn-primary {
         font-weight: 600;
-    }
-
-    /* Hide pagination on mobile - all transactions shown in scrollable list */
-    .pagination-controls {
-        display: none !important;
     }
 
     /* Save notification */

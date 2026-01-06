@@ -1291,7 +1291,7 @@ def get_personal_transactions():
     try:
         query = """
         SELECT id, transaction_date, vendor, description, project, amount,
-               COALESCE(transaction_type, 'expense') as transaction_type, created_at
+               COALESCE(transaction_type, 'expense') as transaction_type, bank, created_at
         FROM personal_transactions
         WHERE 1=1
         """
@@ -1337,7 +1337,8 @@ def get_personal_transactions():
                 'project': row['project'],
                 'amount': float(row['amount']),
                 'amount_formatted': format_indian_number(row['amount']),
-                'transaction_type': trans_type
+                'transaction_type': trans_type,
+                'bank': row.get('bank')
             })
         return jsonify({'transactions': transactions})
     except Exception as e:
@@ -1359,10 +1360,15 @@ def add_personal_transaction():
     project = data.get('project', 'General').strip() or 'General'
     amount = data.get('amount')
     transaction_type = data.get('transaction_type', 'expense').strip().lower()
+    bank = data.get('bank')
 
     # Validate transaction_type
     if transaction_type not in ['expense', 'income']:
         transaction_type = 'expense'
+
+    # Validate bank
+    if bank and bank not in ['axis', 'kvb']:
+        bank = None
 
     if not transaction_date or not vendor or amount is None:
         return jsonify({'error': 'Missing required fields (date, vendor, amount)'}), 400
@@ -1377,11 +1383,11 @@ def add_personal_transaction():
     try:
         with db_manager.get_connection() as conn:
             query = """
-            INSERT INTO personal_transactions (transaction_date, vendor, description, project, amount, transaction_type)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO personal_transactions (transaction_date, vendor, description, project, amount, transaction_type, bank)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor = conn.cursor()
-            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type))
+            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type, bank))
             conn.commit()
             new_id = cursor.lastrowid
             cursor.close()
@@ -1410,10 +1416,15 @@ def update_personal_transaction(transaction_id):
     project = data.get('project', 'General').strip() or 'General'
     amount = data.get('amount')
     transaction_type = data.get('transaction_type', 'expense').strip().lower()
+    bank = data.get('bank')
 
     # Validate transaction_type
     if transaction_type not in ['expense', 'income']:
         transaction_type = 'expense'
+
+    # Validate bank
+    if bank and bank not in ['axis', 'kvb']:
+        bank = None
 
     if not transaction_date or not vendor or amount is None:
         return jsonify({'error': 'Missing required fields (date, vendor, amount)'}), 400
@@ -1430,11 +1441,11 @@ def update_personal_transaction(transaction_id):
             query = """
             UPDATE personal_transactions
             SET transaction_date = %s, vendor = %s, description = %s, project = %s, amount = %s,
-                transaction_type = %s, updated_at = CURRENT_TIMESTAMP
+                transaction_type = %s, bank = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
             """
             cursor = conn.cursor()
-            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type, transaction_id))
+            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type, bank, transaction_id))
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()

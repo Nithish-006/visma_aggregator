@@ -242,18 +242,24 @@ CREATE TABLE IF NOT EXISTS personal_transactions (
     project VARCHAR(255) DEFAULT 'General',
     amount DECIMAL(15, 2) NOT NULL,
     transaction_type ENUM('expense', 'income') DEFAULT 'expense',
+    bank ENUM('axis', 'kvb') DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_transaction_date (transaction_date),
     INDEX idx_project (project),
     INDEX idx_vendor (vendor),
-    INDEX idx_transaction_type (transaction_type)
+    INDEX idx_transaction_type (transaction_type),
+    INDEX idx_bank (bank)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Migration: Add transaction_type column if not exists (run this for existing databases)
 -- ALTER TABLE personal_transactions ADD COLUMN transaction_type ENUM('expense', 'income') DEFAULT 'expense' AFTER amount;
 -- ALTER TABLE personal_transactions ADD INDEX idx_transaction_type (transaction_type);
+
+-- Migration: Add bank column if not exists (run this for existing databases)
+-- ALTER TABLE personal_transactions ADD COLUMN bank ENUM('axis', 'kvb') DEFAULT NULL AFTER transaction_type;
+-- ALTER TABLE personal_transactions ADD INDEX idx_bank (bank);
 
 -- ============================================================================
 

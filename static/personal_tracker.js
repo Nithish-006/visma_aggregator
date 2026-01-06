@@ -77,6 +77,9 @@
         typeExpenseBtn: document.getElementById('type-expense-btn'),
         typeIncomeBtn: document.getElementById('type-income-btn'),
         deleteBtn: document.getElementById('delete-btn'),
+        bankAxisBtn: document.getElementById('bank-axis-btn'),
+        bankKvbBtn: document.getElementById('bank-kvb-btn'),
+        transactionBank: document.getElementById('transaction-bank'),
 
         // Custom Dropdowns
         vendorDropdown: document.getElementById('vendor-dropdown'),
@@ -135,6 +138,10 @@
         // Transaction type toggle
         elements.typeExpenseBtn.addEventListener('click', () => setTransactionType('expense'));
         elements.typeIncomeBtn.addEventListener('click', () => setTransactionType('income'));
+
+        // Bank selection
+        elements.bankAxisBtn.addEventListener('click', () => setBank('axis'));
+        elements.bankKvbBtn.addEventListener('click', () => setBank('kvb'));
 
         // Delete button in edit modal
         elements.deleteBtn.addEventListener('click', handleDeleteFromEdit);
@@ -438,6 +445,14 @@
                 const descText = t.description ? escapeHtml(t.description) : '';
                 const metaText = descText ? `${projectText} • ${descText}` : projectText;
 
+                // Bank badge
+                let bankBadge = '';
+                if (t.bank) {
+                    const bankClass = t.bank === 'axis' ? 'bank-axis' : 'bank-kvb';
+                    const bankName = t.bank.toUpperCase();
+                    bankBadge = `<span class="bank-badge ${bankClass}">${bankName}</span>`;
+                }
+
                 html += `
                     <div class="transaction-row" data-id="${t.id}" onclick="handleTransactionClick(${t.id})">
                         <div class="transaction-category">
@@ -445,7 +460,7 @@
                             <span class="category-name">${category.name}</span>
                         </div>
                         <div class="transaction-details">
-                            <div class="transaction-vendor">${escapeHtml(t.vendor)}</div>
+                            <div class="transaction-vendor">${escapeHtml(t.vendor)}${bankBadge}</div>
                             <div class="transaction-project">${metaText}</div>
                         </div>
                         <div class="transaction-amount ${typeClass}">${formatCompact(t.amount)}</div>
@@ -656,6 +671,7 @@
         elements.transactionForm.reset();
         setDefaultDate();
         setTransactionType('expense');
+        setBank(''); // Clear bank selection
         elements.transactionModal.classList.add('show');
         setTimeout(() => elements.transactionAmount.focus(), 100);
     }
@@ -671,6 +687,7 @@
         elements.transactionDescription.value = transaction.description || '';
         elements.transactionProject.value = transaction.project || 'General';
         setTransactionType(transaction.transaction_type || 'expense');
+        setBank(transaction.bank || '');
         elements.transactionModal.classList.add('show');
     }
 
@@ -719,6 +736,23 @@
         }
     }
 
+    function setBank(bank) {
+        elements.transactionBank.value = bank;
+
+        // Update bubble styles
+        if (bank === 'axis') {
+            elements.bankAxisBtn.classList.add('active');
+            elements.bankKvbBtn.classList.remove('active');
+        } else if (bank === 'kvb') {
+            elements.bankKvbBtn.classList.add('active');
+            elements.bankAxisBtn.classList.remove('active');
+        } else {
+            // Clear both if no bank selected
+            elements.bankAxisBtn.classList.remove('active');
+            elements.bankKvbBtn.classList.remove('active');
+        }
+    }
+
     // ============================================================================
     // FORM HANDLING
     // ============================================================================
@@ -727,13 +761,15 @@
         e.preventDefault();
 
         const id = elements.transactionId.value;
+        const bankValue = elements.transactionBank.value;
         const data = {
             date: elements.transactionDate.value,
             amount: parseFloat(elements.transactionAmount.value),
             vendor: elements.transactionVendor.value.trim(),
             description: elements.transactionDescription.value.trim(),
             project: elements.transactionProject.value.trim() || 'General',
-            transaction_type: elements.transactionType.value
+            transaction_type: elements.transactionType.value,
+            bank: bankValue || null
         };
 
         if (!data.date || !data.vendor || !data.amount) {

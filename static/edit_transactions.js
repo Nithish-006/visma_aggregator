@@ -194,21 +194,13 @@
     }
 
     /**
-     * Render the transactions table (with pagination on desktop, all on mobile)
+     * Render the transactions table (scrollable list on both desktop and mobile)
      */
     function renderTable() {
         tableBody.innerHTML = '';
 
-        // On mobile, render all transactions (scrollable list)
-        // On desktop, render paginated view
-        let pageTransactions;
-        if (isMobileView()) {
-            pageTransactions = filteredTransactions;
-        } else {
-            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-            const endIndex = startIndex + ITEMS_PER_PAGE;
-            pageTransactions = filteredTransactions.slice(startIndex, endIndex);
-        }
+        // Render all transactions as a scrollable list (both desktop and mobile)
+        let pageTransactions = filteredTransactions;
 
         pageTransactions.forEach((txn, index) => {
             const row = document.createElement('tr');
