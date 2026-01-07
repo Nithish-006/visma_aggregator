@@ -166,10 +166,8 @@ class DatabaseManager:
         query = f"""
         INSERT INTO {table} (
             transaction_date, transaction_description, client_vendor,
-            category, broader_category, code,
-            dr_amount, cr_amount, running_balance, net,
-            project, dd, notes
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            category, code, dr_amount, cr_amount, project
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         try:
@@ -186,15 +184,10 @@ class DatabaseManager:
                     transaction['Transaction Description'],
                     transaction['Client/Vendor'],
                     transaction['Category'],
-                    transaction['Broader Category'],
                     transaction['Code'],
                     float(transaction['DR Amount']),
                     float(transaction['CR Amount']),
-                    float(transaction['Running Balance']),
-                    float(transaction['Net']),
-                    transaction.get('Project'),
-                    transaction.get('DD'),
-                    transaction.get('Notes')
+                    transaction.get('Project')
                 ))
                 conn.commit()
                 cursor.close()
@@ -238,10 +231,8 @@ class DatabaseManager:
         query_template = f"""
         INSERT IGNORE INTO {table} (
             transaction_date, transaction_description, client_vendor,
-            category, broader_category, code,
-            dr_amount, cr_amount, running_balance, net,
-            project, dd, notes
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            category, code, dr_amount, cr_amount, project
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         try:
@@ -263,15 +254,10 @@ class DatabaseManager:
                             row['Transaction Description'],
                             row['Client/Vendor'],
                             row['Category'],
-                            row['Broader Category'],
                             row['Code'],
                             float(row['DR Amount']),
                             float(row['CR Amount']),
-                            float(row['Running Balance']),
-                            float(row['Net']),
-                            row.get('Project'),
-                            row.get('DD'),
-                            row.get('Notes')
+                            row.get('Project')
                         ))
                     except Exception as e:
                         results['errors'] += 1
@@ -346,15 +332,10 @@ class DatabaseManager:
             transaction_description as `Transaction Description`,
             client_vendor as `Client/Vendor`,
             category as Category,
-            broader_category as `Broader Category`,
             code as Code,
             dr_amount as `DR Amount`,
             cr_amount as `CR Amount`,
-            running_balance as `Running Balance`,
-            net as Net,
-            project as Project,
-            dd as DD,
-            notes as Notes
+            project as Project
         FROM {table}
         ORDER BY transaction_date
         """

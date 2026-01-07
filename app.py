@@ -87,21 +87,19 @@ def load_bank_data_from_db(bank_code='axis'):
         # Ensure numeric columns
         df['DR Amount'] = pd.to_numeric(df['DR Amount'], errors='coerce').fillna(0)
         df['CR Amount'] = pd.to_numeric(df['CR Amount'], errors='coerce').fillna(0)
-        df['Running Balance'] = pd.to_numeric(df['Running Balance'], errors='coerce').fillna(0)
 
-        # Derived fields
+        # Sort by date first
+        df = df.sort_values('date')
+
+        # Compute derived fields
         df['month_name'] = df['date'].dt.strftime('%B %Y')
         df['month'] = df['date'].dt.to_period('M').astype(str)
-        df['net'] = df['Net']
-        df['running_balance'] = df['Running Balance']
+        df['net'] = df['CR Amount'] - df['DR Amount']
+        df['running_balance'] = df['net'].cumsum()
 
         # Clean categories
-        df['Broader Category'] = df['Broader Category'].fillna('Uncategorized')
         df['Category'] = df['Category'].fillna('Uncategorized')
         df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
-
-        # Sort by date
-        df = df.sort_values('date')
 
         print(f"[+] Loaded {len(df)} transactions from database for {bank_code}")
         return df
@@ -163,15 +161,16 @@ def load_financial_data_from_excel():
         df['CR Amount'] = df['CR Amount'].astype(str).str.replace(',', '').replace('nan', '')
         df['CR Amount'] = pd.to_numeric(df['CR Amount'], errors='coerce').fillna(0)
 
+        # Sort by date first
+        df = df.sort_values('date')
+
         # Derived fields
         df['month_name'] = df['date'].dt.strftime('%B %Y')
         df['month'] = df['date'].dt.to_period('M').astype(str)
         df['net'] = df['CR Amount'] - df['DR Amount']
-        df = df.sort_values('date')
         df['running_balance'] = df['net'].cumsum()
 
         # Clean categories
-        df['Broader Category'] = df['Broader Category'].fillna('Uncategorized')
         df['Category'] = df['Category'].fillna('Uncategorized')
         df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
 
@@ -588,7 +587,7 @@ def get_bank_summary(bank_code):
         })
 
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
 
@@ -611,8 +610,8 @@ def get_bank_summary(bank_code):
 
         expenses_df = df[df['DR Amount'] > 0]
         if len(expenses_df) > 0:
-            biggest_category = expenses_df.groupby('Broader Category')['DR Amount'].sum().idxmax()
-            biggest_category_amount = float(expenses_df.groupby('Broader Category')['DR Amount'].sum().max())
+            biggest_category = expenses_df.groupby('Category')['DR Amount'].sum().idxmax()
+            biggest_category_amount = float(expenses_df.groupby('Category')['DR Amount'].sum().max())
         else:
             biggest_category = None
             biggest_category_amount = 0
@@ -666,7 +665,7 @@ def get_bank_monthly_trend(bank_code):
         return jsonify({'months': [], 'income': [], 'expense': [], 'net': []})
 
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
 
@@ -717,14 +716,14 @@ def get_bank_category_breakdown(bank_code):
 
     expense_df = df[df['DR Amount'] > 0]
     if category != 'All':
-        expense_df = expense_df[expense_df['Broader Category'] == category]
+        expense_df = expense_df[expense_df['Category'] == category]
     expense_df = filter_by_date_range(expense_df, start_date, end_date)
     expense_df = filter_by_project(expense_df, project)
 
     if expense_df.empty:
         return jsonify({'categories': [], 'amounts': []})
 
-    category_totals = expense_df.groupby('Broader Category')['DR Amount'].sum().sort_values(ascending=False)
+    category_totals = expense_df.groupby('Category')['DR Amount'].sum().sort_values(ascending=False)
 
     top_category = category_totals.index[0] if len(category_totals) > 0 else None
     top_category_amount = float(category_totals.iloc[0]) if len(category_totals) > 0 else 0
@@ -758,7 +757,7 @@ def get_bank_running_balance(bank_code):
         return jsonify({'dates': [], 'balance': [], 'sparkline_dates': [], 'sparkline_balance': []})
 
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
 
@@ -818,7 +817,7 @@ def get_bank_top_vendors(bank_code):
 
     expense_df = df[df['DR Amount'] > 0]
     if category != 'All':
-        expense_df = expense_df[expense_df['Broader Category'] == category]
+        expense_df = expense_df[expense_df['Category'] == category]
     expense_df = filter_by_date_range(expense_df, start_date, end_date)
     expense_df = filter_by_project(expense_df, project)
 
@@ -844,7 +843,7 @@ def get_bank_top_vendors(bank_code):
 @app.route('/api/<bank_code>/categories')
 @login_required
 def get_bank_categories(bank_code):
-    """Get list of all broader categories for a specific bank"""
+    """Get list of all categories for a specific bank"""
     if bank_code not in VALID_BANK_CODES:
         return jsonify({'error': 'Invalid bank code'}), 400
 
@@ -852,7 +851,7 @@ def get_bank_categories(bank_code):
     if df.empty:
         return jsonify({'categories': ['All']})
 
-    categories = ['All'] + sorted(df['Broader Category'].unique().tolist())
+    categories = ['All'] + sorted(df['Category'].unique().tolist())
     return jsonify({'categories': categories})
 
 
@@ -897,7 +896,7 @@ def get_bank_transactions(bank_code):
         return jsonify({'transactions': []})
 
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
 
@@ -905,7 +904,7 @@ def get_bank_transactions(bank_code):
         df = df[
             df['Transaction Description'].astype(str).str.lower().str.contains(search_query, na=False) |
             df['Client/Vendor'].astype(str).str.lower().str.contains(search_query, na=False) |
-            df['Broader Category'].astype(str).str.lower().str.contains(search_query, na=False)
+            df['Category'].astype(str).str.lower().str.contains(search_query, na=False)
         ]
 
     ascending = (sort_order == 'asc')
@@ -925,7 +924,7 @@ def get_bank_transactions(bank_code):
             'date_raw': row['date'].strftime('%Y-%m-%d'),
             'description': row['Transaction Description'],
             'vendor': row['Client/Vendor'],
-            'category': row['Broader Category'],
+            'category': row['Category'],
             'code': row.get('Code', ''),
             'dr_amount': float(row['DR Amount']),
             'dr_amount_formatted': format_indian_number(row['DR Amount']) if row['DR Amount'] > 0 else '',
@@ -968,7 +967,7 @@ def get_bank_insights(bank_code):
         })
 
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
 
@@ -1134,10 +1133,9 @@ def update_bank_transaction(bank_code):
         cr_amount = data.get('credit') if data.get('credit') is not None else data.get('cr_amount')
 
         category = data.get('category')
+        code = data.get('code')
         vendor = data.get('vendor')
         project = data.get('project')
-        dd = data.get('dd')
-        notes = data.get('notes')
 
         if not all([transaction_date, description is not None]):
             return jsonify({
@@ -1151,11 +1149,9 @@ def update_bank_transaction(bank_code):
                 UPDATE {table}
                 SET
                     category = %s,
-                    broader_category = %s,
+                    code = %s,
                     client_vendor = %s,
                     project = %s,
-                    dd = %s,
-                    notes = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE transaction_date = %s
                   AND transaction_description = %s
@@ -1167,11 +1163,9 @@ def update_bank_transaction(bank_code):
                 cursor = conn.cursor()
                 cursor.execute(query, (
                     category,
-                    category,
+                    code,
                     vendor,
                     project,
-                    dd,
-                    notes,
                     transaction_date,
                     description,
                     dr_amount,
@@ -1278,10 +1272,8 @@ def split_bank_transaction(bank_code):
                 insert_query = f"""
                 INSERT INTO {table} (
                     transaction_date, transaction_description, client_vendor,
-                    category, broader_category, code,
-                    dr_amount, cr_amount, running_balance, net,
-                    project, dd, notes
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    category, code, dr_amount, cr_amount, project
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """
 
                 for idx, split in enumerate(splits):
@@ -1289,44 +1281,38 @@ def split_bank_transaction(bank_code):
                     split_vendor = split.get('vendor', 'Unknown')
                     split_category = split.get('category', 'Uncategorized')
                     split_project = split.get('project')
-                    split_notes = split.get('notes')
+                    split_code = split.get('code')
 
                     # Create unique description for each split
                     split_desc = f"{original_desc} [SPLIT {idx + 1}/{len(splits)}]"
 
-                    # Determine category code
-                    category_codes = {
-                        'OFFICE EXP': 'OE', 'FACTORY EXP': 'FE', 'SITE EXP': 'SE',
-                        'TRANSPORT EXP': 'TE', 'MATERIAL PURCHASE': 'MP',
-                        'DUTIES & TAX': 'DT', 'SALARY AC': 'SA', 'BANK CHARGES': 'BC',
-                        'AMOUNT RECEIVED': 'AR', 'Uncategorized': 'UC'
-                    }
-                    code = category_codes.get(split_category, 'UC')
+                    # Determine category code if not provided
+                    if not split_code:
+                        category_codes = {
+                            'OFFICE EXP': 'OE', 'FACTORY EXP': 'FE', 'SITE EXP': 'SE',
+                            'TRANSPORT EXP': 'TE', 'MATERIAL PURCHASE': 'MP',
+                            'DUTIES & TAX': 'DT', 'SALARY AC': 'SA', 'BANK CHARGES': 'BC',
+                            'AMOUNT RECEIVED': 'AR', 'Uncategorized': 'UC'
+                        }
+                        split_code = category_codes.get(split_category, 'UC')
 
                     # Set debit/credit based on original
                     if is_debit:
                         dr_amount = split_amount
                         cr_amount = 0.0
-                        net = -split_amount
                     else:
                         dr_amount = 0.0
                         cr_amount = split_amount
-                        net = split_amount
 
                     cursor.execute(insert_query, (
                         original_date,
                         split_desc,
                         split_vendor,
                         split_category,
-                        split_category,  # broader_category same as category
-                        code,
+                        split_code,
                         dr_amount,
                         cr_amount,
-                        0.0,  # running_balance (will be recalculated)
-                        net,
-                        split_project,
-                        None,  # dd
-                        split_notes
+                        split_project
                     ))
 
                 conn.commit()
@@ -1368,7 +1354,7 @@ def download_bank_transactions(bank_code):
 
     df = get_bank_df(bank_code).copy()
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
 
@@ -1383,8 +1369,8 @@ def download_bank_transactions(bank_code):
     df_final = pd.DataFrame()
     for col in export_columns:
         if col == 'Category':
-            # Use Broader Category as Category
-            df_final[col] = df_export.get('Broader Category', df_export.get('Category', None))
+            # Use Category field
+            df_final[col] = df_export.get('Category', None)
         elif col in df_export.columns:
             df_final[col] = df_export[col]
         else:
@@ -2096,7 +2082,7 @@ def get_summary():
     # Filter data
     df = df_global.copy()
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
 
     current_balance = float(df['running_balance'].iloc[-1]) if len(df) > 0 else 0
@@ -2120,8 +2106,8 @@ def get_summary():
         # Biggest category in the filtered period
         expenses_df = df[df['DR Amount'] > 0]
         if len(expenses_df) > 0:
-            biggest_category = expenses_df.groupby('Broader Category')['DR Amount'].sum().idxmax()
-            biggest_category_amount = float(expenses_df.groupby('Broader Category')['DR Amount'].sum().max())
+            biggest_category = expenses_df.groupby('Category')['DR Amount'].sum().idxmax()
+            biggest_category_amount = float(expenses_df.groupby('Category')['DR Amount'].sum().max())
         else:
             biggest_category = None
             biggest_category_amount = 0
@@ -2171,7 +2157,7 @@ def get_monthly_trend():
 
     df = df_global.copy()
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
 
     monthly = df.groupby('month_name').agg({
@@ -2213,10 +2199,10 @@ def get_category_breakdown():
     expense_df = df[df['DR Amount'] > 0]
 
     if category != 'All':
-        expense_df = expense_df[expense_df['Broader Category'] == category]
+        expense_df = expense_df[expense_df['Category'] == category]
     expense_df = filter_by_date_range(expense_df, start_date, end_date)
 
-    category_totals = expense_df.groupby('Broader Category')['DR Amount'].sum().sort_values(ascending=False)
+    category_totals = expense_df.groupby('Category')['DR Amount'].sum().sort_values(ascending=False)
 
     # Find top category
     top_category = category_totals.index[0] if len(category_totals) > 0 else None
@@ -2243,7 +2229,7 @@ def get_running_balance():
 
     df = df_global.copy()
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
 
     # Sample data for performance (take every 5th point if more than 100 points)
@@ -2295,7 +2281,7 @@ def get_top_vendors():
     expense_df = df[df['DR Amount'] > 0]
 
     if category != 'All':
-        expense_df = expense_df[expense_df['Broader Category'] == category]
+        expense_df = expense_df[expense_df['Category'] == category]
     expense_df = filter_by_date_range(expense_df, start_date, end_date)
 
     vendor_totals = expense_df.groupby('Client/Vendor')['DR Amount'].sum().sort_values(ascending=False).head(10)
@@ -2319,8 +2305,8 @@ def get_top_vendors():
 @app.route('/api/categories')
 @login_required
 def get_categories():
-    """Get list of all broader categories"""
-    categories = ['All'] + sorted(df_global['Broader Category'].unique().tolist())
+    """Get list of all categories"""
+    categories = ['All'] + sorted(df_global['Category'].unique().tolist())
     return jsonify({'categories': categories})
 
 @app.route('/api/months')
@@ -2374,7 +2360,7 @@ def get_transactions():
 
     df = df_global.copy()
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
 
     # Apply Search
@@ -2383,7 +2369,7 @@ def get_transactions():
         df = df[
             df['Transaction Description'].astype(str).str.lower().str.contains(search_query, na=False) |
             df['Client/Vendor'].astype(str).str.lower().str.contains(search_query, na=False) |
-            df['Broader Category'].astype(str).str.lower().str.contains(search_query, na=False)
+            df['Category'].astype(str).str.lower().str.contains(search_query, na=False)
         ]
 
     # Apply Sorting
@@ -2406,7 +2392,7 @@ def get_transactions():
             'date_raw': row['date'].strftime('%Y-%m-%d'),
             'description': row['Transaction Description'],
             'vendor': row['Client/Vendor'],
-            'category': row['Broader Category'],
+            'category': row['Category'],
             'code': row.get('Code', ''),
             'dr_amount': float(row['DR Amount']),
             'dr_amount_formatted': format_indian_number(row['DR Amount']) if row['DR Amount'] > 0 else '',
@@ -2440,10 +2426,9 @@ def update_transaction():
 
         # Editable fields
         category = data.get('category')
+        code = data.get('code')
         vendor = data.get('vendor')
         project = data.get('project')
-        dd = data.get('dd')
-        notes = data.get('notes')
 
         print(f"[DEBUG] Parsed fields - date: {transaction_date}, desc: {description[:50]}..., dr: {dr_amount}, cr: {cr_amount}")
 
@@ -2462,11 +2447,9 @@ def update_transaction():
                 UPDATE transactions
                 SET
                     category = %s,
-                    broader_category = %s,
+                    code = %s,
                     client_vendor = %s,
                     project = %s,
-                    dd = %s,
-                    notes = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE transaction_date = %s
                   AND transaction_description = %s
@@ -2478,11 +2461,9 @@ def update_transaction():
                 cursor = conn.cursor()
                 cursor.execute(query, (
                     category,
-                    category,  # broader_category same as category
+                    code,
                     vendor,
                     project,
-                    dd,
-                    notes,
                     transaction_date,
                     description,
                     dr_amount,
@@ -2529,7 +2510,7 @@ def download_transactions():
 
     df = df_global.copy()
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
 
     # Sort and prepare for export
@@ -2554,8 +2535,8 @@ def download_transactions():
     df_final = pd.DataFrame()
     for col in export_columns:
         if col == 'Category':
-            # Use Broader Category as Category
-            df_final[col] = df_export.get('Broader Category', df_export.get('Category', None))
+            # Use Category field
+            df_final[col] = df_export.get('Category', None)
         elif col == 'Date':
             df_final[col] = df_export['Date']
         elif col in df_export.columns:
@@ -2598,7 +2579,7 @@ def get_insights():
 
     df = df_global.copy()
     if category != 'All':
-        df = df[df['Broader Category'] == category]
+        df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
 
     # Calculate average monthly expense

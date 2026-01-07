@@ -7,7 +7,8 @@ CREATE DATABASE IF NOT EXISTS visma_financial;
 USE visma_financial;
 
 -- ============================================================================
--- AXIS BANK TRANSACTIONS TABLE
+-- AXIS BANK TRANSACTIONS TABLE (Simplified Schema)
+-- Fields: Date, Transaction Description, Client/Vendor, Category, Code, DR Amount, CR Amount, Project
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS axis_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -15,15 +16,10 @@ CREATE TABLE IF NOT EXISTS axis_transactions (
     transaction_description TEXT NOT NULL,
     client_vendor VARCHAR(255) DEFAULT 'Unknown',
     category VARCHAR(100) NOT NULL,
-    broader_category VARCHAR(100) NOT NULL,
     code VARCHAR(10) NOT NULL,
     dr_amount DECIMAL(15, 2) DEFAULT 0.00,
     cr_amount DECIMAL(15, 2) DEFAULT 0.00,
-    running_balance DECIMAL(15, 2) NOT NULL,
-    net DECIMAL(15, 2) DEFAULT 0.00,
     project VARCHAR(255) DEFAULT NULL,
-    dd VARCHAR(255) DEFAULT NULL,
-    notes TEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -31,15 +27,16 @@ CREATE TABLE IF NOT EXISTS axis_transactions (
     INDEX idx_transaction_date (transaction_date),
     INDEX idx_category (category),
     INDEX idx_client_vendor (client_vendor),
-    INDEX idx_broader_category (broader_category),
     INDEX idx_code (code),
+    INDEX idx_project (project),
 
     -- Unique constraint to prevent duplicate transactions
     UNIQUE KEY unique_transaction (transaction_date, transaction_description(500), dr_amount, cr_amount)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- KARUR VYSYA BANK (KVB) TRANSACTIONS TABLE
+-- KARUR VYSYA BANK (KVB) TRANSACTIONS TABLE (Simplified Schema)
+-- Fields: Date, Transaction Description, Client/Vendor, Category, Code, DR Amount, CR Amount, Project
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS kvb_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -47,15 +44,10 @@ CREATE TABLE IF NOT EXISTS kvb_transactions (
     transaction_description TEXT NOT NULL,
     client_vendor VARCHAR(255) DEFAULT 'Unknown',
     category VARCHAR(100) NOT NULL,
-    broader_category VARCHAR(100) NOT NULL,
     code VARCHAR(10) NOT NULL,
     dr_amount DECIMAL(15, 2) DEFAULT 0.00,
     cr_amount DECIMAL(15, 2) DEFAULT 0.00,
-    running_balance DECIMAL(15, 2) NOT NULL,
-    net DECIMAL(15, 2) DEFAULT 0.00,
     project VARCHAR(255) DEFAULT NULL,
-    dd VARCHAR(255) DEFAULT NULL,
-    notes TEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -63,8 +55,8 @@ CREATE TABLE IF NOT EXISTS kvb_transactions (
     INDEX idx_transaction_date (transaction_date),
     INDEX idx_category (category),
     INDEX idx_client_vendor (client_vendor),
-    INDEX idx_broader_category (broader_category),
     INDEX idx_code (code),
+    INDEX idx_project (project),
 
     -- Unique constraint to prevent duplicate transactions
     UNIQUE KEY unique_transaction (transaction_date, transaction_description(500), dr_amount, cr_amount)
@@ -89,30 +81,25 @@ CREATE TABLE IF NOT EXISTS bank_upload_history (
     INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Legacy table for backwards compatibility (keep existing data)
+-- Legacy table for backwards compatibility (Simplified Schema)
 CREATE TABLE IF NOT EXISTS transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     transaction_date DATE NOT NULL,
     transaction_description TEXT NOT NULL,
     client_vendor VARCHAR(255) DEFAULT 'Unknown',
     category VARCHAR(100) NOT NULL,
-    broader_category VARCHAR(100) NOT NULL,
     code VARCHAR(10) NOT NULL,
     dr_amount DECIMAL(15, 2) DEFAULT 0.00,
     cr_amount DECIMAL(15, 2) DEFAULT 0.00,
-    running_balance DECIMAL(15, 2) NOT NULL,
-    net DECIMAL(15, 2) DEFAULT 0.00,
     project VARCHAR(255) DEFAULT NULL,
-    dd VARCHAR(255) DEFAULT NULL,
-    notes TEXT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     INDEX idx_transaction_date (transaction_date),
     INDEX idx_category (category),
     INDEX idx_client_vendor (client_vendor),
-    INDEX idx_broader_category (broader_category),
     INDEX idx_code (code),
+    INDEX idx_project (project),
 
     UNIQUE KEY unique_transaction (transaction_date, transaction_description(500), dr_amount, cr_amount)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -155,25 +142,23 @@ INSERT INTO categories (category_name, category_code, description) VALUES
 ('Uncategorized', 'UC', 'Transactions requiring manual categorization')
 ON DUPLICATE KEY UPDATE description=VALUES(description);
 
--- Create views for easy querying (per bank)
+-- Create views for easy querying (per bank) - Simplified Schema
 CREATE OR REPLACE VIEW v_axis_transaction_summary AS
 SELECT
     'axis' as bank_code,
     DATE_FORMAT(transaction_date, '%Y-%m') as month,
     DATE_FORMAT(transaction_date, '%M %Y') as month_name,
     category,
-    broader_category,
     code,
     COUNT(*) as transaction_count,
     SUM(dr_amount) as total_debit,
     SUM(cr_amount) as total_credit,
-    SUM(net) as net_amount
+    SUM(cr_amount - dr_amount) as net_amount
 FROM axis_transactions
 GROUP BY
     DATE_FORMAT(transaction_date, '%Y-%m'),
     DATE_FORMAT(transaction_date, '%M %Y'),
     category,
-    broader_category,
     code;
 
 CREATE OR REPLACE VIEW v_kvb_transaction_summary AS
@@ -182,38 +167,34 @@ SELECT
     DATE_FORMAT(transaction_date, '%Y-%m') as month,
     DATE_FORMAT(transaction_date, '%M %Y') as month_name,
     category,
-    broader_category,
     code,
     COUNT(*) as transaction_count,
     SUM(dr_amount) as total_debit,
     SUM(cr_amount) as total_credit,
-    SUM(net) as net_amount
+    SUM(cr_amount - dr_amount) as net_amount
 FROM kvb_transactions
 GROUP BY
     DATE_FORMAT(transaction_date, '%Y-%m'),
     DATE_FORMAT(transaction_date, '%M %Y'),
     category,
-    broader_category,
     code;
 
--- Legacy view for backwards compatibility
+-- Legacy view for backwards compatibility - Simplified Schema
 CREATE OR REPLACE VIEW v_transaction_summary AS
 SELECT
     DATE_FORMAT(transaction_date, '%Y-%m') as month,
     DATE_FORMAT(transaction_date, '%M %Y') as month_name,
     category,
-    broader_category,
     code,
     COUNT(*) as transaction_count,
     SUM(dr_amount) as total_debit,
     SUM(cr_amount) as total_credit,
-    SUM(net) as net_amount
+    SUM(cr_amount - dr_amount) as net_amount
 FROM transactions
 GROUP BY
     DATE_FORMAT(transaction_date, '%Y-%m'),
     DATE_FORMAT(transaction_date, '%M %Y'),
     category,
-    broader_category,
     code;
 
 -- ============================================================================
