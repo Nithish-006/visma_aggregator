@@ -32,10 +32,10 @@ import sys
 
 # Database connection settings
 DB_CONFIG = {
-    'host': 'yamanote.proxy.rlwy.net',
-    'port': 57844,
+    'host': 'localhost',
+    'port': 3306,
     'user': 'root',
-    'password': 'uxozNadQzagwhWazsWnfDZMSNvKHRwvi',
+    'password': '12345',
     'database': 'visma_financial'
 }
 

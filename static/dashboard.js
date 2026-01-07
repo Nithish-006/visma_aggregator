@@ -213,9 +213,20 @@ function renderTransactionsPage() {
     allTransactions.forEach((txn) => {
         const row = document.createElement('tr');
 
+        // Build mobile metadata (project and category)
+        const project = txn.project || '';
+        const category = txn.category || '';
+        let metaParts = [];
+        if (project) metaParts.push(project);
+        if (category && category !== 'All') metaParts.push(category);
+        const metaText = metaParts.join(' • ');
+
         row.innerHTML = `
             <td data-label="Date">${txn.date}</td>
-            <td data-label="Vendor">${txn.vendor}</td>
+            <td data-label="Vendor">
+                <span class="vendor-name">${txn.vendor}</span>
+                ${metaText ? `<span class="vendor-meta">${metaText}</span>` : ''}
+            </td>
             <td data-label="Category">${txn.category}</td>
             <td data-label="Description">${txn.description || ''}</td>
             <td data-label="Project">${txn.project || ''}</td>
