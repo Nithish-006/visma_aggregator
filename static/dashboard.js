@@ -203,24 +203,14 @@ function isMobileView() {
     return window.innerWidth <= 768;
 }
 
-/** Render current page of transactions **/
+/** Render all transactions as scrollable list **/
 function renderTransactionsPage() {
     const tbody = document.getElementById('transactions-body');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    // On mobile, render all transactions (scrollable list)
-    // On desktop, render paginated view
-    let pageTransactions;
-    if (isMobileView()) {
-        pageTransactions = allTransactions;
-    } else {
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-        const endIndex = startIndex + ITEMS_PER_PAGE;
-        pageTransactions = allTransactions.slice(startIndex, endIndex);
-    }
-
-    pageTransactions.forEach((txn) => {
+    // Render all transactions as scrollable list (both desktop and mobile)
+    allTransactions.forEach((txn) => {
         const row = document.createElement('tr');
 
         row.innerHTML = `

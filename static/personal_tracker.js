@@ -15,6 +15,9 @@
     let currentTab = 'daily';
     let searchQuery = '';
 
+    // Filter state
+    let bankFilter = 'all'; // 'all', 'axis', 'kvb'
+
     // Category icons mapping
     const categoryIcons = {
         'Salary': { icon: '💰', name: 'Salary' },
@@ -96,7 +99,10 @@
 
         // Toast
         toast: document.getElementById('toast'),
-        toastMessage: document.getElementById('toast-message')
+        toastMessage: document.getElementById('toast-message'),
+
+        // Bank Filter
+        bankBtns: document.querySelectorAll('.bank-btn')
     };
 
     // ============================================================================
@@ -170,6 +176,11 @@
                 elements.projectMenu.classList.remove('show');
             }
         });
+
+        // Bank filter buttons
+        elements.bankBtns.forEach(btn => {
+            btn.addEventListener('click', () => handleBankFilterClick(btn.dataset.bank));
+        });
     }
 
     function setupCustomDropdown(type, input, menu, getItems) {
@@ -234,7 +245,7 @@
     function navigateMonth(delta) {
         currentMonth.setMonth(currentMonth.getMonth() + delta);
         updateMonthLabel();
-        loadTransactions();
+        applyFilters();
     }
 
     function updateMonthLabel() {
@@ -263,6 +274,58 @@
     function handleSearch() {
         searchQuery = elements.searchInput.value.toLowerCase().trim();
         renderCurrentTab();
+    }
+
+    // ============================================================================
+    // FILTERS
+    // ============================================================================
+
+    function handleBankFilterClick(bank) {
+        bankFilter = bank;
+        updateBankFilterUI();
+        applyFilters();
+    }
+
+    function updateBankFilterUI() {
+        elements.bankBtns.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.bank === bankFilter);
+        });
+    }
+
+    function applyFilters() {
+        filterTransactionsByFilters();
+        updateSummary();
+        renderCurrentTab();
+    }
+
+    function filterTransactionsByFilters() {
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth();
+
+        transactions = allTransactions.filter(t => {
+            const date = new Date(t.date);
+
+            // Apply month filter
+            if (date.getFullYear() !== year || date.getMonth() !== month) {
+                return false;
+            }
+
+            // Apply bank filter
+            if (bankFilter !== 'all') {
+                if (t.bank !== bankFilter) return false;
+            }
+
+            // Apply search filter
+            if (searchQuery) {
+                const matchesSearch =
+                    t.vendor.toLowerCase().includes(searchQuery) ||
+                    (t.description && t.description.toLowerCase().includes(searchQuery)) ||
+                    (t.project && t.project.toLowerCase().includes(searchQuery));
+                if (!matchesSearch) return false;
+            }
+
+            return true;
+        });
     }
 
     // ============================================================================
@@ -347,30 +410,11 @@
             }
 
             allTransactions = data.transactions || [];
-            filterTransactionsByMonth();
+            filterTransactionsByFilters();
             updateSummary();
             renderCurrentTab();
         } catch (error) {
             console.error('Error loading transactions:', error);
-        }
-    }
-
-    function filterTransactionsByMonth() {
-        const year = currentMonth.getFullYear();
-        const month = currentMonth.getMonth();
-
-        transactions = allTransactions.filter(t => {
-            const date = new Date(t.date);
-            return date.getFullYear() === year && date.getMonth() === month;
-        });
-
-        // Apply search filter
-        if (searchQuery) {
-            transactions = transactions.filter(t =>
-                t.vendor.toLowerCase().includes(searchQuery) ||
-                (t.description && t.description.toLowerCase().includes(searchQuery)) ||
-                (t.project && t.project.toLowerCase().includes(searchQuery))
-            );
         }
     }
 
@@ -395,7 +439,7 @@
     // ============================================================================
 
     function renderDailyView() {
-        filterTransactionsByMonth();
+        filterTransactionsByFilters();
         updateSummary();
 
         if (transactions.length === 0) {
@@ -914,7 +958,7 @@
         currentMonth = new Date(year, month, 1);
         updateMonthLabel();
         switchTab('daily');
-        loadTransactions();
+        applyFilters();
     };
 
     // ============================================================================

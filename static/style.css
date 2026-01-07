@@ -531,12 +531,12 @@ body {
     box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
 }
 
-/* Table Container */
+/* Table Container - Scrollable list for all transactions */
 .table-container {
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     overflow: auto;
-    max-height: 550px;
+    max-height: calc(100vh - 350px);
 }
 
 .table-container::-webkit-scrollbar {
@@ -795,9 +795,9 @@ body {
     box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
 }
 
-/* Pagination Controls */
+/* Pagination Controls - Hidden (using scrollable list instead) */
 .pagination-controls {
-    display: flex;
+    display: none;
     justify-content: center;
     align-items: center;
     gap: 1rem;

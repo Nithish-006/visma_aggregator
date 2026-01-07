@@ -156,6 +156,7 @@
                     </select>
                     <input type="text" id="bulk-project" class="bulk-input" placeholder="Set Project...">
                     <button id="apply-bulk-edit" class="btn btn-primary">Apply to Selected</button>
+                    <button id="split-transaction-btn" class="btn btn-secondary" style="display: none;">Split Transaction</button>
                     <button id="cancel-bulk-edit" class="btn btn-secondary">Cancel</button>
                 </div>
             </div>
@@ -205,6 +206,70 @@
 
         </div>
     </main>
+
+    <!-- Split Transaction Modal -->
+    <div id="split-modal" class="split-modal-overlay" style="display: none;">
+        <div class="split-modal">
+            <div class="split-modal-header">
+                <h2>Split Transaction</h2>
+                <button id="close-split-modal" class="split-modal-close">&times;</button>
+            </div>
+
+            <div class="split-modal-body">
+                <!-- Original Transaction Summary -->
+                <div class="split-original-summary">
+                    <h3>Original Transaction</h3>
+                    <div class="split-original-details">
+                        <div class="split-detail-row">
+                            <span class="split-label">Date:</span>
+                            <span id="split-original-date" class="split-value">-</span>
+                        </div>
+                        <div class="split-detail-row">
+                            <span class="split-label">Description:</span>
+                            <span id="split-original-desc" class="split-value">-</span>
+                        </div>
+                        <div class="split-detail-row">
+                            <span class="split-label">Vendor:</span>
+                            <span id="split-original-vendor" class="split-value">-</span>
+                        </div>
+                        <div class="split-detail-row">
+                            <span class="split-label">Amount:</span>
+                            <span id="split-original-amount" class="split-value amount-highlight">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Split Rows Container -->
+                <div class="split-rows-section">
+                    <div class="split-rows-header">
+                        <h3>Split Into</h3>
+                        <button id="add-split-row" class="btn btn-small btn-primary">+ Add Row</button>
+                    </div>
+                    <div id="split-rows-container">
+                        <!-- Split rows will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Validation Summary -->
+                <div class="split-validation-summary">
+                    <div class="split-amounts-row">
+                        <span>Total Split Amount:</span>
+                        <span id="split-total-amount" class="split-total">0.00</span>
+                    </div>
+                    <div class="split-amounts-row">
+                        <span>Remaining:</span>
+                        <span id="split-remaining" class="split-remaining">0.00</span>
+                    </div>
+                    <div id="split-validation-message" class="split-validation-message"></div>
+                </div>
+            </div>
+
+            <div class="split-modal-footer">
+                <button id="cancel-split" class="btn btn-secondary">Cancel</button>
+                <button id="apply-split" class="btn btn-primary" disabled>Apply Split</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Footer -->
     <footer class="footer">

@@ -1206,6 +1206,154 @@ def update_bank_transaction(bank_code):
         }), 500
 
 
+@app.route('/api/<bank_code>/transaction/split', methods=['POST'])
+@login_required
+def split_bank_transaction(bank_code):
+    """Split a transaction into multiple transactions"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    try:
+        data = request.json
+        table = get_bank_table(bank_code)
+
+        original = data.get('original', {})
+        splits = data.get('splits', [])
+        is_debit = data.get('isDebit', True)
+
+        # Validate input
+        if not original or not splits or len(splits) < 2:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid split data. Need original transaction and at least 2 splits.'
+            }), 400
+
+        original_date = original.get('date')
+        original_desc = original.get('description')
+        original_debit = float(original.get('debit', 0) or 0)
+        original_credit = float(original.get('credit', 0) or 0)
+
+        # Validate amounts
+        original_amount = original_debit if is_debit else original_credit
+        total_split = sum(float(s.get('amount', 0) or 0) for s in splits)
+
+        if abs(original_amount - total_split) >= 0.01:
+            return jsonify({
+                'success': False,
+                'error': f'Split amounts ({total_split}) do not match original ({original_amount})'
+            }), 400
+
+        if not app.config['USE_DATABASE']:
+            return jsonify({'error': 'Database not available'}), 503
+
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor()
+            conn.autocommit = False
+
+            try:
+                # Step 1: Delete the original transaction
+                delete_query = f"""
+                DELETE FROM {table}
+                WHERE transaction_date = %s
+                  AND transaction_description = %s
+                  AND dr_amount = %s
+                  AND cr_amount = %s
+                LIMIT 1
+                """
+                cursor.execute(delete_query, (
+                    original_date,
+                    original_desc,
+                    original_debit,
+                    original_credit
+                ))
+
+                if cursor.rowcount == 0:
+                    conn.rollback()
+                    return jsonify({
+                        'success': False,
+                        'error': 'Original transaction not found'
+                    }), 404
+
+                # Step 2: Insert split transactions
+                insert_query = f"""
+                INSERT INTO {table} (
+                    transaction_date, transaction_description, client_vendor,
+                    category, broader_category, code,
+                    dr_amount, cr_amount, running_balance, net,
+                    project, dd, notes
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+
+                for idx, split in enumerate(splits):
+                    split_amount = float(split.get('amount', 0) or 0)
+                    split_vendor = split.get('vendor', 'Unknown')
+                    split_category = split.get('category', 'Uncategorized')
+                    split_project = split.get('project')
+                    split_notes = split.get('notes')
+
+                    # Create unique description for each split
+                    split_desc = f"{original_desc} [SPLIT {idx + 1}/{len(splits)}]"
+
+                    # Determine category code
+                    category_codes = {
+                        'OFFICE EXP': 'OE', 'FACTORY EXP': 'FE', 'SITE EXP': 'SE',
+                        'TRANSPORT EXP': 'TE', 'MATERIAL PURCHASE': 'MP',
+                        'DUTIES & TAX': 'DT', 'SALARY AC': 'SA', 'BANK CHARGES': 'BC',
+                        'AMOUNT RECEIVED': 'AR', 'Uncategorized': 'UC'
+                    }
+                    code = category_codes.get(split_category, 'UC')
+
+                    # Set debit/credit based on original
+                    if is_debit:
+                        dr_amount = split_amount
+                        cr_amount = 0.0
+                        net = -split_amount
+                    else:
+                        dr_amount = 0.0
+                        cr_amount = split_amount
+                        net = split_amount
+
+                    cursor.execute(insert_query, (
+                        original_date,
+                        split_desc,
+                        split_vendor,
+                        split_category,
+                        split_category,  # broader_category same as category
+                        code,
+                        dr_amount,
+                        cr_amount,
+                        0.0,  # running_balance (will be recalculated)
+                        net,
+                        split_project,
+                        None,  # dd
+                        split_notes
+                    ))
+
+                conn.commit()
+                cursor.close()
+
+                # Reload bank data cache
+                reload_bank_data(bank_code)
+
+                return jsonify({
+                    'success': True,
+                    'message': f'Transaction split into {len(splits)} parts successfully'
+                })
+
+            except Exception as e:
+                conn.rollback()
+                raise e
+
+    except Exception as e:
+        print(f"[!] Error splitting transaction: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Error splitting transaction',
+            'details': str(e)
+        }), 500
+
+
 @app.route('/api/<bank_code>/download_transactions')
 @login_required
 def download_bank_transactions(bank_code):
@@ -1912,6 +2060,25 @@ def get_bills_summary():
     except Exception as e:
         print(f"[!] Error fetching bills summary: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bills/stats')
+@login_required
+def get_bills_stats():
+    """Get bill processor stats for hub page"""
+    try:
+        invoice_count = db_manager.get_bill_count()
+        return jsonify({
+            'success': True,
+            'invoice_count': invoice_count
+        })
+    except Exception as e:
+        print(f"[!] Error fetching bill stats: {e}")
+        return jsonify({
+            'success': False,
+            'invoice_count': 0,
+            'error': str(e)
+        }), 500
 
 
 # ============================================================================

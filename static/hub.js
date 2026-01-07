@@ -3,12 +3,15 @@
  * Handles dynamic content for the multi-bank hub dashboard
  */
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Refresh stats periodically (optional)
     // refreshBankStats();
 
     // Load personal tracker count
     loadPersonalTrackerCount();
+
+    // Load bill processor count
+    loadBillProcessorCount();
 
     // Add animation on card hover
     initCardAnimations();
@@ -21,11 +24,11 @@ function initCardAnimations() {
     const cards = document.querySelectorAll('.bank-card');
 
     cards.forEach(card => {
-        card.addEventListener('mouseenter', function() {
+        card.addEventListener('mouseenter', function () {
             this.style.transform = 'translateY(-4px)';
         });
 
-        card.addEventListener('mouseleave', function() {
+        card.addEventListener('mouseleave', function () {
             this.style.transform = 'translateY(0)';
         });
     });
@@ -83,6 +86,30 @@ async function loadPersonalTrackerCount() {
         const personalCount = document.getElementById('personal-count');
         if (personalCount) {
             personalCount.textContent = '0';
+        }
+    }
+}
+
+/**
+ * Load bill processor invoice count
+ */
+async function loadBillProcessorCount() {
+    try {
+        const response = await fetch('/api/bills/stats');
+        if (!response.ok) {
+            throw new Error('Failed to fetch bill stats');
+        }
+
+        const data = await response.json();
+        const billCount = document.getElementById('bill-count');
+        if (billCount && data.invoice_count !== undefined) {
+            billCount.textContent = formatNumber(data.invoice_count);
+        }
+    } catch (error) {
+        console.error('Error loading bill processor count:', error);
+        const billCount = document.getElementById('bill-count');
+        if (billCount) {
+            billCount.textContent = '0';
         }
     }
 }

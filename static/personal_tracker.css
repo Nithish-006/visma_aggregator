@@ -207,6 +207,56 @@ body {
 }
 
 /* ============================================================================
+   FILTER BAR
+   ============================================================================ */
+
+.filter-bar {
+    padding: 10px 16px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: center;
+}
+
+.bank-filter {
+    display: inline-flex;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+}
+
+.bank-btn {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.bank-btn:active {
+    transform: scale(0.97);
+}
+
+.bank-btn.active {
+    background: var(--tab-active);
+    color: white;
+}
+
+.bank-btn.axis.active {
+    background: #dc2626;
+}
+
+.bank-btn.kvb.active {
+    background: #16a34a;
+}
+
+/* ============================================================================
    SUMMARY BAR
    ============================================================================ */
 
@@ -626,8 +676,13 @@ body {
 }
 
 @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
 }
 
 .modal-small {
@@ -974,6 +1029,8 @@ body {
         max-width: 1200px;
         margin: 0 auto;
         background: var(--bg-primary);
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
     }
 
     .tabs {
@@ -981,6 +1038,28 @@ body {
         max-width: 1200px;
         margin: 0 auto;
         background: var(--bg-primary);
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+    }
+
+    .filter-bar {
+        padding: 12px 32px;
+        max-width: 1200px;
+        margin: 0 auto;
+        justify-content: center;
+        background: var(--bg-secondary);
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+    }
+
+    .bank-btn {
+        padding: 8px 24px;
+        font-size: 0.875rem;
+    }
+
+    .bank-btn:hover:not(.active) {
+        background: var(--bg-hover);
+        color: var(--text-secondary);
     }
 
     .tab {
@@ -1094,6 +1173,10 @@ body {
         max-height: 85vh;
     }
 
+    .modal-content.modal-small {
+        max-width: 380px;
+    }
+
     .modal {
         align-items: center;
         padding: 20px;
@@ -1108,6 +1191,7 @@ body {
             opacity: 0;
             transform: scale(0.95);
         }
+
         to {
             opacity: 1;
             transform: scale(1);
@@ -1120,8 +1204,10 @@ body {
    ============================================================================ */
 
 @media (min-width: 1200px) {
+
     .header,
     .tabs,
+    .filter-bar,
     .summary-bar,
     .main-content {
         max-width: 1000px;

@@ -780,7 +780,429 @@
         return text.substring(0, maxLength) + '...';
     }
 
+    // ========================================================================
+    // SPLIT TRANSACTION FUNCTIONALITY
+    // ========================================================================
+
+    // Split modal state
+    let splitOriginalTransaction = null;
+    let splitRows = [];
+    let isDebitSplit = true; // true if splitting debit, false if splitting credit
+
+    // Split modal DOM elements
+    const splitModal = document.getElementById('split-modal');
+    const splitRowsContainer = document.getElementById('split-rows-container');
+    const splitOriginalDate = document.getElementById('split-original-date');
+    const splitOriginalDesc = document.getElementById('split-original-desc');
+    const splitOriginalVendor = document.getElementById('split-original-vendor');
+    const splitOriginalAmount = document.getElementById('split-original-amount');
+    const splitTotalAmount = document.getElementById('split-total-amount');
+    const splitRemaining = document.getElementById('split-remaining');
+    const splitValidationMessage = document.getElementById('split-validation-message');
+    const applySplitBtn = document.getElementById('apply-split');
+    const splitTransactionBtn = document.getElementById('split-transaction-btn');
+
+    /**
+     * Show or hide the split button based on selection
+     */
+    function updateSplitButtonVisibility() {
+        if (splitTransactionBtn) {
+            // Show split button only when exactly 1 transaction is selected
+            if (selectedTransactionIndices.size === 1) {
+                splitTransactionBtn.style.display = 'inline-block';
+            } else {
+                splitTransactionBtn.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * Show the split modal
+     */
+    function showSplitModal() {
+        if (selectedTransactionIndices.size !== 1) {
+            alert('Please select exactly one transaction to split.');
+            return;
+        }
+
+        // Get the selected transaction
+        const selectedIndex = Array.from(selectedTransactionIndices)[0];
+        splitOriginalTransaction = allTransactions[selectedIndex];
+
+        // Determine if we're splitting debit or credit
+        const drAmount = parseFloat(splitOriginalTransaction.dr_amount || splitOriginalTransaction['DR Amount'] || 0);
+        const crAmount = parseFloat(splitOriginalTransaction.cr_amount || splitOriginalTransaction['CR Amount'] || 0);
+
+        if (drAmount <= 0 && crAmount <= 0) {
+            alert('Cannot split a transaction with zero amount.');
+            return;
+        }
+
+        isDebitSplit = drAmount > 0;
+        const originalAmount = isDebitSplit ? drAmount : crAmount;
+
+        // Populate original transaction summary
+        splitOriginalDate.textContent = splitOriginalTransaction.date || '-';
+        splitOriginalDesc.textContent = truncateText(splitOriginalTransaction.description || splitOriginalTransaction['Transaction Description'] || '-', 80);
+        splitOriginalVendor.textContent = splitOriginalTransaction.vendor || splitOriginalTransaction['Client/Vendor'] || '-';
+        splitOriginalAmount.textContent = `₹ ${formatIndianNumber(originalAmount)} (${isDebitSplit ? 'Debit' : 'Credit'})`;
+
+        // Initialize with 2 split rows
+        splitRows = [
+            createEmptySplitRow(0),
+            createEmptySplitRow(1)
+        ];
+
+        // Render split rows
+        renderSplitRows();
+        updateSplitValidation();
+
+        // Show modal
+        splitModal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    /**
+     * Create an empty split row object
+     */
+    function createEmptySplitRow(index) {
+        return {
+            amount: '',
+            vendor: splitOriginalTransaction.vendor || splitOriginalTransaction['Client/Vendor'] || '',
+            category: splitOriginalTransaction.category || splitOriginalTransaction.Category || 'Uncategorized',
+            project: splitOriginalTransaction.project || splitOriginalTransaction.Project || '',
+            notes: ''
+        };
+    }
+
+    /**
+     * Render all split rows in the modal
+     */
+    function renderSplitRows() {
+        splitRowsContainer.innerHTML = '';
+
+        splitRows.forEach((row, index) => {
+            const rowCard = document.createElement('div');
+            rowCard.className = 'split-row-card';
+            rowCard.dataset.index = index;
+
+            // Build category options
+            let categoryOptions = categories.map(cat =>
+                `<option value="${cat}" ${row.category === cat ? 'selected' : ''}>${cat}</option>`
+            ).join('');
+
+            rowCard.innerHTML = `
+                <div class="split-row-header">
+                    <span class="split-row-number">Split ${index + 1}</span>
+                    <button class="split-row-remove" data-index="${index}" ${splitRows.length <= 2 ? 'disabled' : ''}>Remove</button>
+                </div>
+                <div class="split-row-fields">
+                    <div class="split-field">
+                        <label>Amount *</label>
+                        <input type="number" step="0.01" min="0" class="split-amount-input" data-index="${index}" value="${row.amount}" placeholder="0.00">
+                    </div>
+                    <div class="split-field">
+                        <label>Category</label>
+                        <select class="split-category-select" data-index="${index}">
+                            ${categoryOptions}
+                        </select>
+                    </div>
+                    <div class="split-field">
+                        <label>Vendor</label>
+                        <input type="text" class="split-vendor-input" data-index="${index}" value="${escapeHtml(row.vendor)}" placeholder="Vendor name">
+                    </div>
+                    <div class="split-field">
+                        <label>Project</label>
+                        <input type="text" class="split-project-input" data-index="${index}" value="${escapeHtml(row.project)}" placeholder="Project name">
+                    </div>
+                    <div class="split-field full-width">
+                        <label>Notes</label>
+                        <input type="text" class="split-notes-input" data-index="${index}" value="${escapeHtml(row.notes)}" placeholder="Optional notes">
+                    </div>
+                </div>
+            `;
+
+            splitRowsContainer.appendChild(rowCard);
+        });
+
+        // Attach event listeners
+        document.querySelectorAll('.split-amount-input').forEach(input => {
+            input.addEventListener('input', handleSplitAmountChange);
+        });
+
+        document.querySelectorAll('.split-category-select').forEach(select => {
+            select.addEventListener('change', handleSplitFieldChange);
+        });
+
+        document.querySelectorAll('.split-vendor-input, .split-project-input, .split-notes-input').forEach(input => {
+            input.addEventListener('input', handleSplitFieldChange);
+        });
+
+        document.querySelectorAll('.split-row-remove').forEach(btn => {
+            btn.addEventListener('click', handleRemoveSplitRow);
+        });
+    }
+
+    /**
+     * Handle split amount change
+     */
+    function handleSplitAmountChange(e) {
+        const index = parseInt(e.target.dataset.index);
+        splitRows[index].amount = e.target.value;
+        updateSplitValidation();
+    }
+
+    /**
+     * Handle other field changes
+     */
+    function handleSplitFieldChange(e) {
+        const index = parseInt(e.target.dataset.index);
+        const field = e.target.className.includes('category') ? 'category' :
+                      e.target.className.includes('vendor') ? 'vendor' :
+                      e.target.className.includes('project') ? 'project' : 'notes';
+        splitRows[index][field] = e.target.value;
+    }
+
+    /**
+     * Add a new split row
+     */
+    function addSplitRow() {
+        splitRows.push(createEmptySplitRow(splitRows.length));
+        renderSplitRows();
+        updateSplitValidation();
+    }
+
+    /**
+     * Remove a split row
+     */
+    function handleRemoveSplitRow(e) {
+        if (splitRows.length <= 2) return;
+
+        const index = parseInt(e.target.dataset.index);
+        splitRows.splice(index, 1);
+        renderSplitRows();
+        updateSplitValidation();
+    }
+
+    /**
+     * Update split validation
+     */
+    function updateSplitValidation() {
+        const drAmount = parseFloat(splitOriginalTransaction.dr_amount || splitOriginalTransaction['DR Amount'] || 0);
+        const crAmount = parseFloat(splitOriginalTransaction.cr_amount || splitOriginalTransaction['CR Amount'] || 0);
+        const originalAmount = isDebitSplit ? drAmount : crAmount;
+
+        // Calculate total split amount
+        let totalSplit = 0;
+        let hasEmptyAmount = false;
+        let hasInvalidAmount = false;
+
+        splitRows.forEach((row, index) => {
+            const amount = parseFloat(row.amount) || 0;
+            totalSplit += amount;
+
+            if (row.amount === '' || row.amount === null) {
+                hasEmptyAmount = true;
+            }
+            if (amount < 0) {
+                hasInvalidAmount = true;
+            }
+        });
+
+        // Update display
+        splitTotalAmount.textContent = formatIndianNumber(totalSplit);
+
+        const remaining = originalAmount - totalSplit;
+        splitRemaining.textContent = formatIndianNumber(Math.abs(remaining));
+
+        // Validate
+        const isValid = Math.abs(remaining) < 0.01 && !hasEmptyAmount && !hasInvalidAmount && splitRows.length >= 2;
+
+        if (remaining > 0.01) {
+            splitRemaining.className = 'split-remaining invalid';
+            splitRemaining.textContent = `₹ ${formatIndianNumber(remaining)} remaining`;
+        } else if (remaining < -0.01) {
+            splitRemaining.className = 'split-remaining invalid';
+            splitRemaining.textContent = `₹ ${formatIndianNumber(Math.abs(remaining))} over`;
+        } else {
+            splitRemaining.className = 'split-remaining valid';
+            splitRemaining.textContent = '₹ 0.00 - Balanced';
+        }
+
+        // Update validation message
+        if (hasEmptyAmount) {
+            splitValidationMessage.textContent = 'Please enter an amount for all split rows.';
+            splitValidationMessage.className = 'split-validation-message error';
+        } else if (hasInvalidAmount) {
+            splitValidationMessage.textContent = 'Amounts must be greater than zero.';
+            splitValidationMessage.className = 'split-validation-message error';
+        } else if (Math.abs(remaining) >= 0.01) {
+            splitValidationMessage.textContent = `Split amounts must equal the original amount (₹ ${formatIndianNumber(originalAmount)}).`;
+            splitValidationMessage.className = 'split-validation-message error';
+        } else {
+            splitValidationMessage.textContent = 'Ready to split!';
+            splitValidationMessage.className = 'split-validation-message success';
+        }
+
+        // Enable/disable apply button
+        applySplitBtn.disabled = !isValid;
+    }
+
+    /**
+     * Format number in Indian format (lakhs, crores)
+     */
+    function formatIndianNumber(num) {
+        if (num === null || num === undefined || isNaN(num)) return '0.00';
+        num = parseFloat(num);
+        const fixed = num.toFixed(2);
+        const parts = fixed.split('.');
+        let intPart = parts[0];
+        const decPart = parts[1];
+
+        // Indian number formatting
+        const lastThree = intPart.slice(-3);
+        const otherNumbers = intPart.slice(0, -3);
+        if (otherNumbers !== '') {
+            intPart = otherNumbers.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + lastThree;
+        }
+        return intPart + '.' + decPart;
+    }
+
+    /**
+     * Close the split modal
+     */
+    function closeSplitModal() {
+        splitModal.style.display = 'none';
+        document.body.style.overflow = '';
+        splitOriginalTransaction = null;
+        splitRows = [];
+    }
+
+    /**
+     * Apply the split - send to API
+     */
+    async function applySplit() {
+        if (!splitOriginalTransaction || splitRows.length < 2) {
+            alert('Invalid split configuration.');
+            return;
+        }
+
+        // Validate one more time
+        const drAmount = parseFloat(splitOriginalTransaction.dr_amount || splitOriginalTransaction['DR Amount'] || 0);
+        const crAmount = parseFloat(splitOriginalTransaction.cr_amount || splitOriginalTransaction['CR Amount'] || 0);
+        const originalAmount = isDebitSplit ? drAmount : crAmount;
+
+        let totalSplit = 0;
+        splitRows.forEach(row => {
+            totalSplit += parseFloat(row.amount) || 0;
+        });
+
+        if (Math.abs(originalAmount - totalSplit) >= 0.01) {
+            alert('Split amounts do not match the original amount.');
+            return;
+        }
+
+        // Disable button and show loading
+        applySplitBtn.disabled = true;
+        applySplitBtn.textContent = 'Splitting...';
+        showLoading();
+
+        try {
+            const response = await fetch(`/api/${BANK_CODE}/transaction/split`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    original: {
+                        date: splitOriginalTransaction.date_raw || splitOriginalTransaction.Date,
+                        description: splitOriginalTransaction.description || splitOriginalTransaction['Transaction Description'],
+                        debit: drAmount,
+                        credit: crAmount
+                    },
+                    isDebit: isDebitSplit,
+                    splits: splitRows.map((row, index) => ({
+                        amount: parseFloat(row.amount) || 0,
+                        vendor: row.vendor,
+                        category: row.category,
+                        project: row.project || null,
+                        notes: row.notes || null
+                    }))
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                showNotification(`Transaction split into ${splitRows.length} parts successfully!`);
+                closeSplitModal();
+
+                // Clear selection and reload
+                selectedTransactionIndices.clear();
+                updateSelectionUI();
+                await loadTransactions();
+            } else {
+                showNotification(result.error || 'Failed to split transaction', 'error');
+            }
+        } catch (error) {
+            console.error('Error splitting transaction:', error);
+            showNotification('Error splitting transaction. Please try again.', 'error');
+        } finally {
+            hideLoading();
+            applySplitBtn.disabled = false;
+            applySplitBtn.textContent = 'Apply Split';
+        }
+    }
+
+    /**
+     * Setup split event listeners
+     */
+    function setupSplitEventListeners() {
+        // Split button in bulk edit bar
+        if (splitTransactionBtn) {
+            splitTransactionBtn.addEventListener('click', showSplitModal);
+        }
+
+        // Modal close buttons
+        document.getElementById('close-split-modal')?.addEventListener('click', closeSplitModal);
+        document.getElementById('cancel-split')?.addEventListener('click', closeSplitModal);
+
+        // Add row button
+        document.getElementById('add-split-row')?.addEventListener('click', addSplitRow);
+
+        // Apply split button
+        if (applySplitBtn) {
+            applySplitBtn.addEventListener('click', applySplit);
+        }
+
+        // Close on overlay click
+        if (splitModal) {
+            splitModal.addEventListener('click', (e) => {
+                if (e.target === splitModal) {
+                    closeSplitModal();
+                }
+            });
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && splitModal && splitModal.style.display !== 'none') {
+                closeSplitModal();
+            }
+        });
+    }
+
+    // Override updateSelectionUI to include split button visibility
+    const originalUpdateSelectionUI = updateSelectionUI;
+    updateSelectionUI = function() {
+        originalUpdateSelectionUI();
+        updateSplitButtonVisibility();
+    };
+
     // Initialize on DOM ready
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', () => {
+        init();
+        setupSplitEventListeners();
+    });
 
 })();
