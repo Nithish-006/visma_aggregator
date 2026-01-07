@@ -101,10 +101,24 @@ async function loadDateRange() {
                 startInput.value = '';
                 endInput.value = '';
             }
+
+            // Update the "Updated as of" badge with formatted date
+            const updatedDateEl = document.getElementById('data-updated-date');
+            if (updatedDateEl && data.max_date) {
+                updatedDateEl.textContent = formatDisplayDate(data.max_date);
+            }
         }
     } catch (e) {
         console.error('Error loading date range:', e);
     }
+}
+
+/** Format date for display (e.g., "05 Jan 2026") **/
+function formatDisplayDate(dateStr) {
+    if (!dateStr) return '--';
+    const date = new Date(dateStr);
+    const options = { day: '2-digit', month: 'short', year: 'numeric' };
+    return date.toLocaleDateString('en-IN', options);
 }
 
 async function loadCategories() {

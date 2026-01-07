@@ -227,6 +227,29 @@ body {
     font-weight: 500;
 }
 
+.data-updated-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.data-updated-badge svg {
+    color: var(--success-color);
+    flex-shrink: 0;
+}
+
+.data-updated-badge strong {
+    color: var(--success-color);
+    font-weight: 600;
+}
+
 .user-badge {
     display: flex;
     align-items: center;
@@ -1723,9 +1746,31 @@ body {
         display: none;
     }
 
+    /* Show updated badge prominently on mobile below the header */
+    .data-updated-badge {
+        position: fixed;
+        top: 60px;
+        left: 0;
+        right: 0;
+        z-index: 99;
+        justify-content: center;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        padding: 0.4rem 1rem;
+        font-size: 0.75rem;
+        background: rgba(34, 197, 94, 0.08);
+        border-top: none;
+    }
+
+    .data-updated-badge svg {
+        width: 12px;
+        height: 12px;
+    }
+
     /* Filter bar - Collapsible on Mobile */
     .filter-bar {
-        margin-top: 60px;
+        margin-top: 88px; /* Account for header (60px) + updated badge (28px) */
         padding: 0.75rem 1rem;
     }
 
