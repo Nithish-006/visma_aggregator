@@ -19,7 +19,10 @@
       "Bash(.venvScriptspython.exe -c \"import app; print\\(''Import successful''\\)\")",
       "Bash(\"venv/Scripts/python.exe\" -c \"import app; print\\(''Import successful''\\)\")",
       "Bash(\"venv/Scripts/python.exe\":*)",
-      "Bash(\"venv/Scripts/python.exe\" -m py_compile:*)"
+      "Bash(\"venv/Scripts/python.exe\" -m py_compile:*)",
+      "Bash(dir \"C:\\\\VISMA - AGGREGATOR\\\\uploads\")",
+      "Bash(dir \"C:\\\\VISMA - AGGREGATOR\\\\uploads\" /b)",
+      "Bash(findstr:*)"
     ]
   }
 }

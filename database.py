@@ -810,6 +810,153 @@ class DatabaseManager:
             result = self.fetch_all("SELECT COUNT(*) FROM bill_invoices")
         return result[0][0] if result else 0
 
+    def update_bill(self, invoice_id: int, bill_data: Dict) -> Tuple[bool, Optional[str]]:
+        """
+        Update a bill invoice and its line items in the database.
+
+        Args:
+            invoice_id: The ID of the invoice to update
+            bill_data: Updated bill data with all fields and line_items
+
+        Returns:
+            Tuple of (success, error_message)
+        """
+        # Parse invoice date
+        invoice_date = None
+        date_str = bill_data.get('invoice_date', '')
+        if date_str:
+            try:
+                from dateutil import parser
+                invoice_date = parser.parse(date_str, dayfirst=True).date()
+            except:
+                pass
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                conn.autocommit = False
+
+                # Update main invoice record
+                update_query = """
+                UPDATE bill_invoices SET
+                    invoice_number = %s,
+                    invoice_date = %s,
+                    irn = %s,
+                    ack_number = %s,
+                    eway_bill_number = %s,
+                    vendor_name = %s,
+                    vendor_gstin = %s,
+                    vendor_address = %s,
+                    vendor_state = %s,
+                    vendor_pan = %s,
+                    vendor_phone = %s,
+                    vendor_bank_name = %s,
+                    vendor_bank_account = %s,
+                    vendor_bank_ifsc = %s,
+                    buyer_name = %s,
+                    buyer_gstin = %s,
+                    buyer_address = %s,
+                    buyer_state = %s,
+                    ship_to_name = %s,
+                    ship_to_address = %s,
+                    subtotal = %s,
+                    total_cgst = %s,
+                    total_sgst = %s,
+                    total_igst = %s,
+                    other_charges = %s,
+                    round_off = %s,
+                    total_amount = %s,
+                    amount_in_words = %s,
+                    vehicle_number = %s,
+                    transporter_name = %s,
+                    project = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """
+
+                cursor.execute(update_query, (
+                    bill_data.get('invoice_number', ''),
+                    invoice_date,
+                    bill_data.get('irn', ''),
+                    bill_data.get('ack_number', ''),
+                    bill_data.get('eway_bill_number', ''),
+                    bill_data.get('vendor_name', ''),
+                    bill_data.get('vendor_gstin', ''),
+                    bill_data.get('vendor_address', ''),
+                    bill_data.get('vendor_state', ''),
+                    bill_data.get('vendor_pan', ''),
+                    bill_data.get('vendor_phone', ''),
+                    bill_data.get('vendor_bank_name', ''),
+                    bill_data.get('vendor_bank_account', ''),
+                    bill_data.get('vendor_bank_ifsc', ''),
+                    bill_data.get('buyer_name', ''),
+                    bill_data.get('buyer_gstin', ''),
+                    bill_data.get('buyer_address', ''),
+                    bill_data.get('buyer_state', ''),
+                    bill_data.get('ship_to_name', ''),
+                    bill_data.get('ship_to_address', ''),
+                    float(bill_data.get('subtotal', 0) or 0),
+                    float(bill_data.get('total_cgst', 0) or 0),
+                    float(bill_data.get('total_sgst', 0) or 0),
+                    float(bill_data.get('total_igst', 0) or 0),
+                    float(bill_data.get('other_charges', 0) or 0),
+                    float(bill_data.get('round_off', 0) or 0),
+                    float(bill_data.get('total_amount', 0) or 0),
+                    bill_data.get('amount_in_words', ''),
+                    bill_data.get('vehicle_number', ''),
+                    bill_data.get('transporter_name', ''),
+                    bill_data.get('project', '') or None,
+                    invoice_id
+                ))
+
+                # Delete existing line items
+                cursor.execute("DELETE FROM bill_line_items WHERE invoice_id = %s", (invoice_id,))
+
+                # Insert updated line items
+                line_items = bill_data.get('line_items', [])
+                if line_items:
+                    line_item_query = """
+                    INSERT INTO bill_line_items (
+                        invoice_id, sl_no, description, hsn_sac_code, quantity, uom,
+                        rate_per_unit, discount_percent, discount_amount, taxable_value,
+                        cgst_rate, cgst_amount, sgst_rate, sgst_amount, igst_rate, igst_amount, amount
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+
+                    for idx, item in enumerate(line_items):
+                        if item.get('description'):  # Only insert if has description
+                            cursor.execute(line_item_query, (
+                                invoice_id,
+                                item.get('sl_no', idx + 1),
+                                item.get('description', ''),
+                                item.get('hsn_sac_code', ''),
+                                float(item.get('quantity', 0) or 0),
+                                item.get('uom', ''),
+                                float(item.get('rate_per_unit', 0) or 0),
+                                float(item.get('discount_percent', 0) or 0),
+                                float(item.get('discount_amount', 0) or 0),
+                                float(item.get('taxable_value', 0) or 0),
+                                float(item.get('cgst_rate', 0) or 0),
+                                float(item.get('cgst_amount', 0) or 0),
+                                float(item.get('sgst_rate', 0) or 0),
+                                float(item.get('sgst_amount', 0) or 0),
+                                float(item.get('igst_rate', 0) or 0),
+                                float(item.get('igst_amount', 0) or 0),
+                                float(item.get('amount', 0) or 0)
+                            ))
+
+                conn.commit()
+                cursor.close()
+
+                print(f"[+] Updated bill ID: {invoice_id}")
+                return True, None
+
+        except Exception as e:
+            print(f"[!] Error updating bill: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
+
 
 # ============================================================================
 # Helper Functions

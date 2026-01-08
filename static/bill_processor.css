@@ -1173,3 +1173,478 @@ body {
         padding: 32px 16px;
     }
 }
+
+/* ============================================================================
+   EDIT MODAL STYLES
+   ============================================================================ */
+
+/* Edit Modal Container */
+.modal-edit {
+    width: 95vw;
+    max-width: 1600px;
+    height: 90vh;
+    max-height: 90vh;
+}
+
+.edit-split-view {
+    display: flex;
+    gap: 20px;
+    height: calc(90vh - 140px);
+    overflow: hidden;
+}
+
+/* Left Panel - Edit Form */
+.edit-form-panel {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.edit-form-panel::-webkit-scrollbar {
+    width: 6px;
+}
+
+.edit-form-panel::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+.edit-form-panel::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+.edit-form-panel::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Edit Sections */
+.edit-section {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.edit-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin: 0 0 16px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.edit-section-title svg {
+    color: #60a5fa;
+    flex-shrink: 0;
+}
+
+.btn-add-item {
+    margin-left: auto;
+    background: rgba(34, 197, 94, 0.15);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #4ade80;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-add-item:hover {
+    background: rgba(34, 197, 94, 0.25);
+    border-color: rgba(34, 197, 94, 0.5);
+}
+
+/* Form Grid */
+.edit-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.edit-form-grid .form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.totals-grid {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-group label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.form-input {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.875rem;
+    color: #e2e8f0;
+    transition: all 0.2s;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+}
+
+.form-input::placeholder {
+    color: #64748b;
+}
+
+textarea.form-input {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.form-input.total-highlight {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3);
+    font-weight: 600;
+    color: #4ade80;
+}
+
+/* Line Items Table */
+.line-items-container {
+    overflow-x: auto;
+    margin: 0 -16px;
+    padding: 0 16px;
+}
+
+.line-items-edit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    min-width: 900px;
+}
+
+.line-items-edit-table th {
+    background: rgba(15, 23, 42, 0.8);
+    padding: 8px 6px;
+    text-align: left;
+    font-weight: 600;
+    color: #94a3b8;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    white-space: nowrap;
+}
+
+.line-items-edit-table td {
+    padding: 6px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    vertical-align: middle;
+}
+
+.line-items-edit-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.line-items-edit-table .empty-row td {
+    padding: 24px;
+    text-align: center;
+    color: #64748b;
+}
+
+/* Line Item Inputs */
+.line-input {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.8125rem;
+    color: #e2e8f0;
+    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.line-input:focus {
+    outline: none;
+    border-color: #60a5fa;
+}
+
+.line-input-sm {
+    width: 60px;
+}
+
+.line-input-num {
+    width: 80px;
+    text-align: right;
+}
+
+.line-input-desc {
+    min-width: 150px;
+}
+
+/* Right Panel - Document Viewer */
+.document-viewer-panel {
+    width: 45%;
+    min-width: 400px;
+    display: flex;
+    flex-direction: column;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.document-viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.viewer-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.viewer-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.viewer-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 6px;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.viewer-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #e2e8f0;
+}
+
+.viewer-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.zoom-level {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #94a3b8;
+    min-width: 40px;
+    text-align: center;
+}
+
+/* PDF Page Controls */
+.pdf-page-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: rgba(15, 23, 42, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.page-indicator {
+    font-size: 0.8125rem;
+    color: #94a3b8;
+}
+
+.page-indicator span {
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+/* Document Container */
+.document-container {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.document-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.document-container::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.document-container::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.document-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 48px;
+    color: #64748b;
+    text-align: center;
+}
+
+.document-placeholder svg {
+    opacity: 0.5;
+}
+
+.document-placeholder.error svg {
+    color: #ef4444;
+}
+
+.document-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 48px;
+    color: #94a3b8;
+}
+
+/* Image Viewer */
+.image-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100%;
+}
+
+#documentImage {
+    max-width: 100%;
+    height: auto;
+    transform-origin: top center;
+    transition: transform 0.2s ease;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* PDF Canvas */
+#pdfCanvas {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Edit Button in Table */
+.btn-icon.btn-edit {
+    color: #60a5fa;
+}
+
+.btn-icon.btn-edit:hover {
+    background: rgba(96, 165, 250, 0.15);
+    color: #93c5fd;
+}
+
+/* Button Spinner */
+.btn-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Text utilities */
+.text-center {
+    text-align: center;
+}
+
+.text-muted {
+    color: #64748b;
+}
+
+/* Responsive Edit Modal */
+@media (max-width: 1200px) {
+    .edit-split-view {
+        flex-direction: column;
+        height: auto;
+        max-height: calc(90vh - 140px);
+    }
+
+    .document-viewer-panel {
+        width: 100%;
+        min-width: 0;
+        height: 400px;
+        min-height: 300px;
+    }
+
+    .edit-form-panel {
+        max-height: none;
+    }
+
+    .totals-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .modal-edit {
+        width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    .edit-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .totals-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .line-input-sm,
+    .line-input-num {
+        width: 100%;
+    }
+
+    .document-viewer-panel {
+        height: 300px;
+    }
+}

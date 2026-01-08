@@ -2212,6 +2212,71 @@ def get_bills_stats():
         }), 500
 
 
+@app.route('/api/bills/file/<filename>')
+@login_required
+def serve_bill_file(filename):
+    """Serve uploaded bill file (PDF or image) for preview"""
+    import glob as glob_module
+
+    try:
+        # Security: Prevent path traversal attacks
+        if '..' in filename or '/' in filename or '\\' in filename:
+            return jsonify({'success': False, 'error': 'Invalid filename'}), 400
+
+        # Build the file path
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        # Check if file exists directly
+        if not os.path.exists(file_path):
+            # Files are saved with bill_{timestamp}_ prefix, so search for matching file
+            pattern = os.path.join(app.config['UPLOAD_FOLDER'], f"bill_*_{filename}")
+            matches = glob_module.glob(pattern)
+
+            if matches:
+                # Use the most recent match (last in sorted order)
+                file_path = sorted(matches)[-1]
+            else:
+                return jsonify({'success': False, 'error': 'File not found'}), 404
+
+        # Determine MIME type based on extension
+        ext = filename.lower().rsplit('.', 1)[-1] if '.' in filename else ''
+        mime_types = {
+            'pdf': 'application/pdf',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'webp': 'image/webp',
+            'gif': 'image/gif',
+            'bmp': 'image/bmp'
+        }
+        mime_type = mime_types.get(ext, 'application/octet-stream')
+
+        return send_file(file_path, mimetype=mime_type)
+    except Exception as e:
+        print(f"[!] Error serving bill file: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bills/stored/<int:invoice_id>', methods=['PUT'])
+@login_required
+def update_stored_bill(invoice_id):
+    """Update a stored bill with all fields and line items"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        success, error = db_manager.update_bill(invoice_id, data)
+
+        if success:
+            return jsonify({'success': True, 'message': 'Invoice updated successfully'})
+        else:
+            return jsonify({'success': False, 'error': error or 'Failed to update invoice'}), 500
+    except Exception as e:
+        print(f"[!] Error updating bill: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ============================================================================
 # LEGACY API ENDPOINTS (for backwards compatibility)
 # ============================================================================

@@ -1,12 +1,12 @@
 # ============================================================================
-# BILL PROCESSOR MODULE - Gemini Vision Integration
+# BILL PROCESSOR MODULE - Gemini Vision AI Integration
 # ============================================================================
-# Extracts structured data from invoice images/PDFs using Google Gemini Vision
+# Extracts structured data from invoice images/PDFs using Google Gemini API
+# with intelligent fallback chain for reliability.
 # ============================================================================
 
 import os
 import json
-import base64
 import re
 from io import BytesIO
 from datetime import datetime
@@ -16,7 +16,22 @@ from google.genai import types
 from PIL import Image
 from PyPDF2 import PdfReader
 
-# Extraction prompt for Gemini Vision
+# Model configuration - Gemini models via direct API (in priority order)
+GEMINI_MODELS = [
+    # 1. Primary: Current flagship fast model
+    "gemini-3-flash",
+
+    # 2. Deep reasoning for complex tables
+    "gemini-3-pro",
+
+    # 3. Stable production model
+    "gemini-2.5-flash",
+
+    # 4. Fast/cheap fallback
+    "gemini-2.5-flash-lite",
+]
+
+# Extraction prompt
 EXTRACTION_PROMPT = """
 You are an expert invoice data extractor. Analyze this GST invoice image and extract ALL information.
 
@@ -135,12 +150,21 @@ Return ONLY valid JSON in this exact structure (no markdown, no explanation):
 """
 
 
-def get_client():
+def get_gemini_client():
     """Get configured Gemini client"""
     api_key = os.environ.get('GEMINI_API_KEY', '')
     if not api_key:
         raise ValueError("GEMINI_API_KEY not found in environment variables")
     return genai.Client(api_key=api_key)
+
+
+def clean_json_response(response_text):
+    """Clean up response - remove markdown code blocks if present"""
+    text = response_text.strip()
+    if text.startswith('```'):
+        text = re.sub(r'^```(?:json)?\s*', '', text)
+        text = re.sub(r'\s*```$', '', text)
+    return text
 
 
 def get_pdf_page_count(pdf_path):
@@ -153,103 +177,139 @@ def get_pdf_page_count(pdf_path):
         return 0
 
 
-def extract_from_image(image_path, client):
-    """Extract invoice data from an image using Gemini Vision"""
+def get_model_display_name(model):
+    """Get a friendly display name for the model"""
+    names = {
+        "gemini-3-flash": "Gemini 3 Flash",
+        "gemini-3-pro": "Gemini 3 Pro",
+        "gemini-2.5-flash": "Gemini 2.5 Flash",
+        "gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
+    }
+    return names.get(model, model)
+
+
+# ============================================================================
+# EXTRACTION FUNCTIONS
+# ============================================================================
+
+def extract_from_image(image_path):
+    """
+    Extract invoice data from an image using Gemini models with fallback.
+    Tries each model in priority order until one succeeds.
+    """
+    print(f"\n[*] Processing image: {os.path.basename(image_path)}")
+
     try:
-        # Load image
-        img = Image.open(image_path)
-
-        # Convert to RGB if necessary (for PNG with transparency)
-        if img.mode in ('RGBA', 'LA', 'P'):
-            img = img.convert('RGB')
-
-        # Generate content with image using Gemini 3 Flash Preview
-        response = client.models.generate_content(
-            model='gemini-3-flash-preview',
-            contents=[
-                img,
-                EXTRACTION_PROMPT
-            ],
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(
-                    thinking_level=types.ThinkingLevel.HIGH
-                )
-            )
-        )
-
-        # Parse JSON response
-        response_text = response.text.strip()
-
-        # Clean up response - remove markdown code blocks if present
-        if response_text.startswith('```'):
-            # Remove ```json and ``` markers
-            response_text = re.sub(r'^```(?:json)?\s*', '', response_text)
-            response_text = re.sub(r'\s*```$', '', response_text)
-
-        # Parse JSON
-        data = json.loads(response_text)
-
-        # Debug: Log extracted line items
-        line_items = data.get('line_items', [])
-        print(f"[+] Extracted {len(line_items)} line items:")
-        for i, item in enumerate(line_items[:5]):  # Show first 5
-            print(f"    {i+1}. {item.get('description', 'NO DESCRIPTION')} | Qty: {item.get('quantity', 0)} | Amt: {item.get('amount', 0)}")
-        if len(line_items) > 5:
-            print(f"    ... and {len(line_items) - 5} more items")
-
-        return {'success': True, 'data': data}
-
-    except json.JSONDecodeError as e:
-        print(f"[!] JSON parse error: {e}")
-        print(f"[!] Response was: {response_text[:1000] if 'response_text' in dir() else 'N/A'}...")
-        return {'success': False, 'error': f'Failed to parse response: {str(e)}'}
-    except Exception as e:
-        print(f"[!] Extraction error: {e}")
-        import traceback
-        traceback.print_exc()
+        client = get_gemini_client()
+    except ValueError as e:
         return {'success': False, 'error': str(e)}
 
+    # Load and prepare image
+    img = Image.open(image_path)
+    if img.mode in ('RGBA', 'LA', 'P'):
+        img = img.convert('RGB')
 
-def extract_from_pdf_page(pdf_path, page_num, client):
-    """Extract invoice data from a specific PDF page"""
-    try:
-        # Read the PDF file
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
+    last_error = None
 
-        # Upload PDF and generate content using Gemini 3 Flash Preview
-        response = client.models.generate_content(
-            model='gemini-3-flash-preview',
-            contents=[
-                types.Part.from_bytes(
-                    data=pdf_bytes,
-                    mime_type='application/pdf'
-                ),
-                EXTRACTION_PROMPT + f"\n\nExtract data from page {page_num + 1} of this PDF."
-            ],
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(
-                    thinking_level=types.ThinkingLevel.HIGH
-                )
+    for model in GEMINI_MODELS:
+        model_name = get_model_display_name(model)
+        try:
+            print(f"[*] Trying {model_name}...")
+
+            response = client.models.generate_content(
+                model=model,
+                contents=[
+                    img,
+                    EXTRACTION_PROMPT
+                ]
             )
-        )
 
-        response_text = response.text.strip()
+            response_text = clean_json_response(response.text)
+            data = json.loads(response_text)
 
-        # Clean up response
-        if response_text.startswith('```'):
-            response_text = re.sub(r'^```(?:json)?\s*', '', response_text)
-            response_text = re.sub(r'\s*```$', '', response_text)
+            line_items = data.get('line_items', [])
+            print(f"[+] {model_name} extracted {len(line_items)} line items successfully")
 
-        data = json.loads(response_text)
-        return {'success': True, 'data': data}
+            return {'success': True, 'data': data, 'model': model_name}
 
-    except json.JSONDecodeError as e:
-        print(f"[!] JSON parse error: {e}")
-        return {'success': False, 'error': f'Failed to parse response: {str(e)}'}
-    except Exception as e:
-        print(f"[!] PDF extraction error: {e}")
+        except json.JSONDecodeError as e:
+            print(f"[!] {model_name} JSON parse error: {e}")
+            last_error = f'Failed to parse response: {str(e)}'
+            continue
+        except Exception as e:
+            error_str = str(e)
+            if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'rate' in error_str.lower():
+                print(f"[!] {model_name} rate limited, trying next...")
+            elif '404' in error_str or 'not found' in error_str.lower():
+                print(f"[!] {model_name} not available, trying next...")
+            else:
+                print(f"[!] {model_name} error: {e}")
+            last_error = error_str
+            continue
+
+    print("[!] All Gemini models failed")
+    return {'success': False, 'error': last_error or 'All models failed'}
+
+
+def extract_from_pdf_page(pdf_path, page_num):
+    """
+    Extract invoice data from a specific PDF page using Gemini models.
+    Tries each model in priority order until one succeeds.
+    """
+    print(f"\n[*] Processing PDF page {page_num + 1}")
+
+    try:
+        client = get_gemini_client()
+    except ValueError as e:
         return {'success': False, 'error': str(e)}
+
+    # Read PDF bytes
+    with open(pdf_path, 'rb') as f:
+        pdf_bytes = f.read()
+
+    last_error = None
+
+    for model in GEMINI_MODELS:
+        model_name = get_model_display_name(model)
+        try:
+            print(f"[*] Trying {model_name} for PDF...")
+
+            response = client.models.generate_content(
+                model=model,
+                contents=[
+                    types.Part.from_bytes(
+                        data=pdf_bytes,
+                        mime_type='application/pdf'
+                    ),
+                    EXTRACTION_PROMPT + f"\n\nExtract data from page {page_num + 1} of this PDF."
+                ]
+            )
+
+            response_text = clean_json_response(response.text)
+            data = json.loads(response_text)
+
+            line_items = data.get('line_items', [])
+            print(f"[+] {model_name} extracted {len(line_items)} line items from PDF page {page_num + 1}")
+
+            return {'success': True, 'data': data, 'model': model_name}
+
+        except json.JSONDecodeError as e:
+            print(f"[!] {model_name} PDF JSON parse error: {e}")
+            last_error = f'Failed to parse response: {str(e)}'
+            continue
+        except Exception as e:
+            error_str = str(e)
+            if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'rate' in error_str.lower():
+                print(f"[!] {model_name} rate limited, trying next...")
+            elif '404' in error_str or 'not found' in error_str.lower():
+                print(f"[!] {model_name} not available, trying next...")
+            else:
+                print(f"[!] {model_name} PDF error: {e}")
+            last_error = error_str
+            continue
+
+    print("[!] All Gemini models failed for PDF")
+    return {'success': False, 'error': last_error or 'All models failed'}
 
 
 def process_bill_file(file_path, filename):
@@ -260,14 +320,11 @@ def process_bill_file(file_path, filename):
     results = []
 
     try:
-        client = get_client()
-
-        # Determine file type
         ext = os.path.splitext(filename)[1].lower()
 
         if ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']:
             # Process image
-            result = extract_from_image(file_path, client)
+            result = extract_from_image(file_path)
             result['filename'] = filename
             result['page'] = 1
             results.append(result)
@@ -280,7 +337,7 @@ def process_bill_file(file_path, filename):
                 return [{'success': False, 'error': 'Could not read PDF file', 'filename': filename}]
 
             for page_num in range(page_count):
-                result = extract_from_pdf_page(file_path, page_num, client)
+                result = extract_from_pdf_page(file_path, page_num)
                 result['filename'] = filename
                 result['page'] = page_num + 1
                 results.append(result)
@@ -289,6 +346,8 @@ def process_bill_file(file_path, filename):
 
     except Exception as e:
         print(f"[!] Error processing {filename}: {e}")
+        import traceback
+        traceback.print_exc()
         return [{'success': False, 'error': str(e), 'filename': filename}]
 
     return results

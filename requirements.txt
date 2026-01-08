@@ -36,3 +36,4 @@ python-dotenv
 google-genai
 Pillow
 PyPDF2
+openai

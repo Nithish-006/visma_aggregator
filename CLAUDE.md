@@ -93,6 +93,10 @@ DB_DATABASE=visma_financial
 DB_USER=<mysql-user>
 DB_PASSWORD=<mysql-password>
 DB_PORT=3306
+
+# Bill Processor AI Keys (at least one required)
+OPENROUTER_API_KEY=<openrouter-key>  # Primary: Nemotron (free, OCR-optimized)
+GEMINI_API_KEY=<gemini-key>          # Fallback: Gemini 2.0 Flash
 ```
 
 ## Adding a New Bank
