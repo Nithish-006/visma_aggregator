@@ -241,7 +241,7 @@ def filter_by_date_range(df, start_date=None, end_date=None):
 
 
 def filter_by_project(df, project=None):
-    """Filter dataframe by project"""
+    """Filter dataframe by project (supports comma-separated multi-select)"""
     if not project or project == 'All':
         return df
 
@@ -250,7 +250,45 @@ def filter_by_project(df, project=None):
     if project_col not in df.columns:
         return df
 
+    # Handle comma-separated multi-select
+    if ',' in project:
+        projects = [p.strip() for p in project.split(',')]
+        return df[df[project_col].astype(str).str.strip().isin(projects)]
+
     return df[df[project_col].astype(str).str.strip() == project.strip()]
+
+
+def filter_by_category(df, category=None):
+    """Filter dataframe by category (supports comma-separated multi-select)"""
+    if not category or category == 'All':
+        return df
+
+    if 'Category' not in df.columns:
+        return df
+
+    # Handle comma-separated multi-select
+    if ',' in category:
+        categories = [c.strip() for c in category.split(',')]
+        return df[df['Category'].isin(categories)]
+
+    return df[df['Category'] == category]
+
+
+def filter_by_vendor(df, vendor=None):
+    """Filter dataframe by vendor (supports comma-separated multi-select)"""
+    if not vendor or vendor == 'All':
+        return df
+
+    vendor_col = 'Client/Vendor' if 'Client/Vendor' in df.columns else 'vendor'
+    if vendor_col not in df.columns:
+        return df
+
+    # Handle comma-separated multi-select
+    if ',' in vendor:
+        vendors = [v.strip() for v in vendor.split(',')]
+        return df[df[vendor_col].isin(vendors)]
+
+    return df[df[vendor_col] == vendor]
 
 
 def format_indian_number(amount):
@@ -566,7 +604,8 @@ def get_bank_summary(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
-    project = request.args.get('project', 'All')
+    project = request.args.get('project', None)
+    vendor = request.args.get('vendor', None)
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
@@ -586,10 +625,11 @@ def get_bank_summary(bank_code):
             'total_transactions': 0
         })
 
-    if category != 'All':
-        df = df[df['Category'] == category]
+    # Apply multi-select filters
+    df = filter_by_category(df, category)
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
+    df = filter_by_vendor(df, vendor)
 
     current_balance = float(df['running_balance'].iloc[-1]) if len(df) > 0 else 0
     total_income = float(df['CR Amount'].sum())
@@ -883,7 +923,8 @@ def get_bank_transactions(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
-    project = request.args.get('project', 'All')
+    project = request.args.get('project', None)
+    vendor = request.args.get('vendor', None)
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
     limit = int(request.args.get('limit', 10000))
@@ -895,10 +936,11 @@ def get_bank_transactions(bank_code):
     if df.empty:
         return jsonify({'transactions': []})
 
-    if category != 'All':
-        df = df[df['Category'] == category]
+    # Apply multi-select filters
+    df = filter_by_category(df, category)
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
+    df = filter_by_vendor(df, vendor)
 
     if search_query:
         df = df[
@@ -1129,13 +1171,27 @@ def update_bank_transaction(bank_code):
 
         transaction_date = data.get('date')
         description = data.get('description')
-        dr_amount = data.get('debit') if data.get('debit') is not None else data.get('dr_amount')
-        cr_amount = data.get('credit') if data.get('credit') is not None else data.get('cr_amount')
+        # Support both field names - use proper fallback for zero values
+        dr_amount = data.get('debit') if data.get('debit') is not None else data.get('dr_amount', 0)
+        cr_amount = data.get('credit') if data.get('credit') is not None else data.get('cr_amount', 0)
+        # Ensure amounts are never None (would cause WHERE clause to fail)
+        dr_amount = float(dr_amount) if dr_amount is not None else 0.0
+        cr_amount = float(cr_amount) if cr_amount is not None else 0.0
 
-        category = data.get('category')
+        category = data.get('category') or 'Uncategorized'
         code = data.get('code')
-        vendor = data.get('vendor')
+        vendor = data.get('vendor') or 'Unknown'
         project = data.get('project')
+
+        # Derive code from category if not provided
+        category_codes = {
+            'OFFICE EXP': 'OE', 'FACTORY EXP': 'FE', 'SITE EXP': 'SE',
+            'TRANSPORT EXP': 'TE', 'MATERIAL PURCHASE': 'MP',
+            'DUTIES & TAX': 'DT', 'SALARY AC': 'SA', 'BANK CHARGES': 'BC',
+            'AMOUNT RECEIVED': 'AR', 'Uncategorized': 'UC'
+        }
+        if not code:
+            code = category_codes.get(category, 'UC')
 
         if not all([transaction_date, description is not None]):
             return jsonify({
@@ -1348,15 +1404,18 @@ def download_bank_transactions(bank_code):
         return jsonify({'error': 'Invalid bank code'}), 400
 
     category = request.args.get('category', 'All')
-    project = request.args.get('project', 'All')
+    project = request.args.get('project', None)
+    vendor = request.args.get('vendor', None)
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
     df = get_bank_df(bank_code).copy()
-    if category != 'All':
-        df = df[df['Category'] == category]
+
+    # Apply multi-select filters
+    df = filter_by_category(df, category)
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
+    df = filter_by_vendor(df, vendor)
 
     df_export = df.sort_values('date', ascending=False).copy()
     df_export['Date'] = df_export['date'].dt.strftime('%d-%m-%Y')
@@ -2421,14 +2480,27 @@ def update_transaction():
         description = data.get('description')
 
         # Support both field names - use proper fallback for zero values
-        dr_amount = data.get('debit') if data.get('debit') is not None else data.get('dr_amount')
-        cr_amount = data.get('credit') if data.get('credit') is not None else data.get('cr_amount')
+        dr_amount = data.get('debit') if data.get('debit') is not None else data.get('dr_amount', 0)
+        cr_amount = data.get('credit') if data.get('credit') is not None else data.get('cr_amount', 0)
+        # Ensure amounts are never None (would cause WHERE clause to fail)
+        dr_amount = float(dr_amount) if dr_amount is not None else 0.0
+        cr_amount = float(cr_amount) if cr_amount is not None else 0.0
 
         # Editable fields
-        category = data.get('category')
+        category = data.get('category') or 'Uncategorized'
         code = data.get('code')
-        vendor = data.get('vendor')
+        vendor = data.get('vendor') or 'Unknown'
         project = data.get('project')
+
+        # Derive code from category if not provided
+        category_codes = {
+            'OFFICE EXP': 'OE', 'FACTORY EXP': 'FE', 'SITE EXP': 'SE',
+            'TRANSPORT EXP': 'TE', 'MATERIAL PURCHASE': 'MP',
+            'DUTIES & TAX': 'DT', 'SALARY AC': 'SA', 'BANK CHARGES': 'BC',
+            'AMOUNT RECEIVED': 'AR', 'Uncategorized': 'UC'
+        }
+        if not code:
+            code = category_codes.get(category, 'UC')
 
         print(f"[DEBUG] Parsed fields - date: {transaction_date}, desc: {description[:50]}..., dr: {dr_amount}, cr: {cr_amount}")
 

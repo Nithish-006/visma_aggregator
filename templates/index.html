@@ -16,7 +16,7 @@
     <script>
         window.BANK_CODE = "{{ bank_code | default('axis') }}";
         window.BANK_NAME = "{{ bank_name | default('Axis Bank') }}";
-        window.BANK_CONFIG = {{ bank_config | default({}) | tojson }};
+        window.BANK_CONFIG = {{ bank_config | default ({}) | tojson }};
     </script>
 
     <!-- Styles -->
@@ -50,7 +50,8 @@
         <div class="header-content">
             <div class="header-left">
                 <a href="/" class="back-to-hub" title="Back to Hub">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </a>
@@ -61,7 +62,8 @@
             </div>
             <div class="header-right">
                 <span id="data-updated-badge" class="data-updated-badge">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <polyline points="12 6 12 12 16 14"></polyline>
                     </svg>
@@ -69,14 +71,16 @@
                 </span>
                 <span id="total-transactions" class="transaction-badge">0 Transactions</span>
                 <span class="user-badge">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                         <circle cx="12" cy="7" r="4"></circle>
                     </svg>
                     {{ session.get('username', 'User') }}
                 </span>
                 <a href="/logout" class="logout-btn" title="Logout">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                         <polyline points="16 17 21 12 16 7"></polyline>
                         <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -96,7 +100,9 @@
             </div>
             <div class="modal-body">
                 <div class="upload-area" id="upload-area">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                        class="upload-icon">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="17 8 12 3 7 8"></polyline>
                         <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -109,7 +115,9 @@
                 <!-- File preview and options (shown after file selection for KVB) -->
                 <div id="upload-preview" class="upload-preview" style="display: none;">
                     <div class="file-preview">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="file-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            class="file-icon">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                             <polyline points="14 2 14 8 20 8"></polyline>
                             <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -126,7 +134,8 @@
                         <input type="password" id="file-password" class="filter-input" placeholder="Enter password">
                     </div>
                     <button class="btn btn-primary upload-submit-btn" id="upload-submit-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -160,11 +169,14 @@
         <div class="container">
             <!-- Mobile Filter Toggle -->
             <button id="filter-toggle" class="filter-toggle">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                 </svg>
                 <span>Filters</span>
-                <svg class="filter-toggle-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="filter-toggle-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
                     <polyline points="6 9 12 15 18 9"></polyline>
                 </svg>
             </button>
@@ -172,15 +184,18 @@
             <!-- Collapsible Filter Content -->
             <div id="filter-content" class="filter-content">
                 <div class="filter-group">
-                    <label for="category-filter">Category</label>
-                    <select id="category-filter" class="filter-select"></select>
+                    <label>Category</label>
+                    <div id="category-filter" class="custom-dropdown"></div>
                 </div>
 
                 <div class="filter-group">
-                    <label for="project-filter">Project</label>
-                    <select id="project-filter" class="filter-select">
-                        <option value="All">All Projects</option>
-                    </select>
+                    <label>Project</label>
+                    <div id="project-filter" class="custom-dropdown"></div>
+                </div>
+
+                <div class="filter-group">
+                    <label>Vendor</label>
+                    <div id="vendor-filter" class="custom-dropdown"></div>
                 </div>
 
                 <div class="filter-group">
@@ -193,19 +208,8 @@
                     <input type="date" id="end-date" class="filter-input date-input">
                 </div>
 
-                <div class="filter-group scenario-group">
-                    <label>Quick Select</label>
-                    <div class="scenario-chips">
-                        <button class="chip chip-active" data-scenario="all">All Time</button>
-                        <button class="chip" data-scenario="last7">Last 7 days</button>
-                        <button class="chip" data-scenario="last14">Last 2 weeks</button>
-                        <button class="chip" data-scenario="last30">Last 30 days</button>
-                        <button class="chip" data-scenario="thisMonth">This Month</button>
-                    </div>
-                </div>
-
                 <div class="filter-actions">
-                    <button id="apply-filters" class="btn btn-primary">Apply</button>
+
                     <button id="clear-filters" class="btn btn-secondary">Reset</button>
                 </div>
             </div>
@@ -224,7 +228,8 @@
                         <p class="section-subtitle">Detailed ledger with latest transactions on top</p>
                     </div>
                     <button id="download-transactions" class="download-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -236,11 +241,13 @@
                 <!-- Search Toolbar -->
                 <div class="transactions-toolbar">
                     <div class="search-wrapper">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <circle cx="11" cy="11" r="8"></circle>
                             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                         </svg>
-                        <input type="text" id="transaction-search" placeholder="Search description, vendor..." class="search-input">
+                        <input type="text" id="transaction-search" placeholder="Search description, vendor..."
+                            class="search-input">
                     </div>
                 </div>
 
@@ -248,13 +255,16 @@
                     <table class="transactions-table">
                         <thead>
                             <tr>
-                                <th class="sortable header-sort-active" data-sort="date">Date <span class="sort-icon">↓</span></th>
+                                <th class="sortable header-sort-active" data-sort="date">Date <span
+                                        class="sort-icon">↓</span></th>
                                 <th>Vendor</th>
                                 <th>Category</th>
                                 <th>Description</th>
                                 <th>Project</th>
-                                <th class="text-right sortable" data-sort="dr_amount">Debit <span class="sort-icon"></span></th>
-                                <th class="text-right sortable" data-sort="cr_amount">Credit <span class="sort-icon"></span></th>
+                                <th class="text-right sortable" data-sort="dr_amount">Debit <span
+                                        class="sort-icon"></span></th>
+                                <th class="text-right sortable" data-sort="cr_amount">Credit <span
+                                        class="sort-icon"></span></th>
                             </tr>
                         </thead>
                         <tbody id="transactions-body"></tbody>
@@ -264,7 +274,8 @@
                 <!-- Pagination Controls -->
                 <div class="pagination-controls" id="pagination-controls">
                     <button id="prev-page" class="pagination-btn" disabled>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="15 18 9 12 15 6"></polyline>
                         </svg>
                         Prev
@@ -274,7 +285,8 @@
                     </span>
                     <button id="next-page" class="pagination-btn">
                         Next
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="9 18 15 12 9 6"></polyline>
                         </svg>
                     </button>
@@ -283,7 +295,8 @@
                 <!-- Action Buttons (below table for mobile friendliness) -->
                 <div class="table-actions" style="justify-content: flex-end;">
                     <a href="/charts/{{ bank_code | default('axis') }}" class="action-btn charts-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="18" y1="20" x2="18" y2="10"></line>
                             <line x1="12" y1="20" x2="12" y2="4"></line>
                             <line x1="6" y1="20" x2="6" y2="14"></line>
@@ -291,14 +304,16 @@
                         <span>View Charts</span>
                     </a>
                     <a href="/edit-transactions/{{ bank_code | default('axis') }}" class="action-btn edit-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                         </svg>
                         <span>Edit Transactions</span>
                     </a>
                     <button id="upload-btn" class="action-btn upload-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="17 8 12 3 7 8"></polyline>
                             <line x1="12" y1="3" x2="12" y2="15"></line>

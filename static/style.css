@@ -97,8 +97,15 @@ body {
 }
 
 @keyframes bgPulse {
-    0%, 100% { transform: scale(1) rotate(0deg); }
-    50% { transform: scale(1.1) rotate(5deg); }
+
+    0%,
+    100% {
+        transform: scale(1) rotate(0deg);
+    }
+
+    50% {
+        transform: scale(1.1) rotate(5deg);
+    }
 }
 
 /* Floating particles */
@@ -122,20 +129,74 @@ body {
     animation: float 20s infinite;
 }
 
-.particle:nth-child(1) { left: 10%; animation-delay: 0s; animation-duration: 25s; }
-.particle:nth-child(2) { left: 20%; animation-delay: 2s; animation-duration: 20s; }
-.particle:nth-child(3) { left: 30%; animation-delay: 4s; animation-duration: 28s; }
-.particle:nth-child(4) { left: 40%; animation-delay: 1s; animation-duration: 22s; }
-.particle:nth-child(5) { left: 50%; animation-delay: 3s; animation-duration: 24s; }
-.particle:nth-child(6) { left: 60%; animation-delay: 5s; animation-duration: 26s; }
-.particle:nth-child(7) { left: 70%; animation-delay: 2s; animation-duration: 21s; }
-.particle:nth-child(8) { left: 80%; animation-delay: 4s; animation-duration: 23s; }
+.particle:nth-child(1) {
+    left: 10%;
+    animation-delay: 0s;
+    animation-duration: 25s;
+}
+
+.particle:nth-child(2) {
+    left: 20%;
+    animation-delay: 2s;
+    animation-duration: 20s;
+}
+
+.particle:nth-child(3) {
+    left: 30%;
+    animation-delay: 4s;
+    animation-duration: 28s;
+}
+
+.particle:nth-child(4) {
+    left: 40%;
+    animation-delay: 1s;
+    animation-duration: 22s;
+}
+
+.particle:nth-child(5) {
+    left: 50%;
+    animation-delay: 3s;
+    animation-duration: 24s;
+}
+
+.particle:nth-child(6) {
+    left: 60%;
+    animation-delay: 5s;
+    animation-duration: 26s;
+}
+
+.particle:nth-child(7) {
+    left: 70%;
+    animation-delay: 2s;
+    animation-duration: 21s;
+}
+
+.particle:nth-child(8) {
+    left: 80%;
+    animation-delay: 4s;
+    animation-duration: 23s;
+}
 
 @keyframes float {
-    0%, 100% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
-    10% { opacity: 0.2; }
-    90% { opacity: 0.2; }
-    100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+
+    0%,
+    100% {
+        transform: translateY(100vh) rotate(0deg);
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 0.2;
+    }
+
+    90% {
+        opacity: 0.2;
+    }
+
+    100% {
+        transform: translateY(-100vh) rotate(720deg);
+        opacity: 0;
+    }
 }
 
 /* ============================================================================
@@ -308,10 +369,12 @@ body {
     max-width: 1800px;
     margin: 0 auto;
     display: flex;
-    gap: 1.25rem;
+    gap: 1.5rem;
     align-items: flex-end;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     padding: 0 1rem;
+    justify-content: space-between;
+    /* Ensure content spreads */
 }
 
 .filter-group {
@@ -336,8 +399,15 @@ body {
     background: var(--bg-input);
     color: var(--text-main);
     font-size: 0.85rem;
-    min-width: 160px;
+    min-width: 140px;
     transition: all var(--transition-fast);
+}
+
+/* Custom Dropdown Filter Groups - Stretch uniformly */
+.filter-group:has(.custom-dropdown) {
+    flex: 1;
+    min-width: 200px;
+    /* max-width removed to allow full expansion */
 }
 
 .filter-select:focus,
@@ -361,9 +431,19 @@ body {
     color: var(--text-main);
 }
 
-.scenario-group {
-    min-width: 200px;
-    margin-left: 1rem;
+/* Date input styling */
+#start-date,
+#end-date {
+    width: 150px;
+    min-width: 150px;
+}
+
+/* Filter actions spacing */
+.filter-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.75rem;
+    flex-shrink: 0;
 }
 
 .scenario-chips {
@@ -392,12 +472,6 @@ body {
     background: rgba(74, 108, 247, 0.2);
     border-color: var(--primary-color);
     color: var(--primary-light);
-}
-
-.filter-actions {
-    margin-left: auto;
-    display: flex;
-    gap: 0.5rem;
 }
 
 /* ============================================================================
@@ -1293,7 +1367,9 @@ body {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .loading-text {
@@ -1327,8 +1403,13 @@ body {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .modal-content {
@@ -1343,8 +1424,15 @@ body {
 }
 
 @keyframes slideUp {
-    from { transform: translateY(30px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .modal-header {
@@ -1636,55 +1724,229 @@ body {
 }
 
 /* ============================================================================
-   SELECT2 OVERRIDES (Dark Theme)
+   SELECT2 OVERRIDES (Dark Theme - Multi-select with Checkboxes)
    ============================================================================ */
 
-.select2-container--default .select2-selection--multiple,
-.select2-container--default .select2-selection--single {
+.select2-container {
+    width: 100% !important;
+}
+
+.select2-container--default .select2-selection--multiple {
     border: 1px solid var(--border-color) !important;
     border-radius: var(--radius-sm) !important;
     min-height: 38px;
-    padding: 4px 34px 4px 8px;
+    padding: 4px 30px 4px 10px;
     font-size: 0.85rem;
     background-color: var(--bg-input) !important;
     color: var(--text-main);
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
 }
 
+/* Hide the tags/chips - show count instead */
+.select2-container--default .select2-selection--multiple .select2-selection__rendered {
+    display: flex;
+    align-items: center;
+    padding: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* Hide individual choice tags */
 .select2-container--default .select2-selection--multiple .select2-selection__choice {
-    background-color: var(--bg-card-hover);
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    padding: 4px 8px !important;
-    font-size: 0.8rem;
-    color: var(--text-main);
+    display: none;
 }
 
-.select2-container--default.select2-container--focus .select2-selection--multiple,
-.select2-container--default.select2-container--focus .select2-selection--single {
+/* Hide the inline search in the selection box */
+.select2-container--default .select2-selection--multiple .select2-search--inline {
+    float: none;
+}
+
+.select2-container--default .select2-selection--multiple .select2-search--inline .select2-search__field {
+    background: transparent;
+    color: var(--text-muted);
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+    font-size: 0.85rem;
+}
+
+.select2-container--default.select2-container--focus .select2-selection--multiple {
     border-color: var(--primary-color) !important;
     box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
 }
 
-.select2-dropdown {
-    border-color: var(--border-color) !important;
-    border-radius: var(--radius-md) !important;
-    background: var(--bg-card) !important;
-    box-shadow: var(--shadow-lg) !important;
+/* Dropdown styling */
+/* ============================================================================
+   CUSTOM DROPDOWN (Replaces Select2)
+   ============================================================================ */
+
+.custom-dropdown {
+    position: relative;
+    width: 100%;
 }
 
-.select2-container--default .select2-results__option {
+.dropdown-trigger {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0.6rem 0.9rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all var(--transition-fast);
+    min-height: 38px;
+    user-select: none;
+}
+
+.dropdown-trigger.has-selection {
     color: var(--text-main);
-    padding: 0.6rem 1rem;
 }
 
-.select2-container--default .select2-results__option--highlighted[aria-selected] {
-    background-color: var(--primary-color) !important;
+.dropdown-trigger:hover,
+.custom-dropdown.active .dropdown-trigger {
+    border-color: var(--primary-color);
 }
 
-.select2-container--default .select2-search--dropdown .select2-search__field {
+.dropdown-trigger::after {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid var(--text-muted);
+    transition: transform 0.2s ease;
+}
+
+.custom-dropdown.active .dropdown-trigger::after {
+    transform: rotate(180deg);
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 100%;
+    width: max-content;
+    max-width: 90vw;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    margin-top: 4px;
+    display: none;
+    overflow: hidden;
+    animation: fadeIn 0.1s ease-out;
+}
+
+.custom-dropdown.active .dropdown-menu {
+    display: block;
+}
+
+.dropdown-search {
+    padding: 8px;
     background: var(--bg-dark);
-    border-color: var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.dropdown-search input {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
     color: var(--text-main);
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.dropdown-search input:focus {
+    border-color: var(--primary-color);
+}
+
+.dropdown-options {
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.dropdown-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-main);
+    font-size: 0.85rem;
+    background: transparent;
+    transition: background 0.1s ease;
+    white-space: nowrap;
+}
+
+.dropdown-option:hover {
+    background: var(--bg-card-hover);
+}
+
+.dropdown-option.selected {
+    background: rgba(74, 108, 247, 0.08);
+}
+
+/* Custom Checkbox */
+.option-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.dropdown-option:hover .option-checkbox {
+    border-color: var(--primary-light);
+}
+
+.dropdown-option.selected .option-checkbox {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.option-checkbox::after {
+    content: '';
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    opacity: 0;
+    margin-top: -2px;
+}
+
+.dropdown-option.selected .option-checkbox::after {
+    opacity: 1;
+}
+
+/* Scrollbar styling for options */
+.dropdown-options::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dropdown-options::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+.dropdown-options::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
 }
 
 /* ============================================================================
@@ -1716,6 +1978,7 @@ body {
 }
 
 @media (max-width: 768px) {
+
     /* Header */
     .header {
         padding: 0.75rem 1rem;
@@ -1770,7 +2033,8 @@ body {
 
     /* Filter bar - Collapsible on Mobile */
     .filter-bar {
-        margin-top: 88px; /* Account for header (60px) + updated badge (28px) */
+        margin-top: 88px;
+        /* Account for header (60px) + updated badge (28px) */
         padding: 0.75rem 1rem;
     }
 
@@ -1807,6 +2071,7 @@ body {
             opacity: 0;
             transform: translateY(-10px);
         }
+
         to {
             opacity: 1;
             transform: translateY(0);
@@ -2202,6 +2467,7 @@ body {
 
 /* Touch device optimizations */
 @media (hover: none) and (pointer: coarse) {
+
     .btn,
     .chip,
     .action-btn,

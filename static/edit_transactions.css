@@ -61,14 +61,14 @@
     color: #fbbf24;
 }
 
-/* Filter Bar - Dark Theme */
+/* Filter Bar - Dark Theme (Single Line Layout) */
 .edit-filter-bar {
     display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
+    gap: 1rem;
+    flex-wrap: nowrap;
     align-items: flex-end;
     background: var(--bg-card);
-    padding: 20px;
+    padding: 1.25rem 1.5rem;
     border-radius: var(--radius-md);
     margin-bottom: 20px;
     border: 1px solid var(--border-color);
@@ -87,7 +87,15 @@
 .filter-section {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 0.35rem;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+/* Expand filters with custom dropdowns */
+.filter-section:has(.custom-dropdown) {
+    flex: 1;
+    min-width: 200px;
 }
 
 .filter-section label {
@@ -99,11 +107,11 @@
 }
 
 .filter-input {
-    padding: 10px 14px;
+    padding: 0.5rem 0.75rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    font-size: 0.9rem;
-    min-width: 200px;
+    font-size: 0.8rem;
+    min-width: 130px;
     background: var(--bg-dark);
     color: var(--text-main);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
@@ -120,11 +128,11 @@
 }
 
 .filter-select {
-    padding: 10px 14px;
+    padding: 0.5rem 0.75rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    font-size: 0.9rem;
-    min-width: 180px;
+    font-size: 0.8rem;
+    min-width: 130px;
     background: var(--bg-dark);
     color: var(--text-main);
     cursor: pointer;
@@ -138,8 +146,10 @@
 
 .filter-actions {
     margin-left: auto;
+    display: flex;
     flex-direction: row;
-    gap: 10px;
+    gap: 0.5rem;
+    flex-shrink: 0;
 }
 
 /* Bulk Edit Bar - Dark Theme */
@@ -167,7 +177,8 @@
     align-items: center;
 }
 
-.bulk-select, .bulk-input {
+.bulk-select,
+.bulk-input {
     padding: 10px 14px;
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: var(--radius-sm);
@@ -177,7 +188,8 @@
     min-width: 150px;
 }
 
-.bulk-select:focus, .bulk-input:focus {
+.bulk-select:focus,
+.bulk-input:focus {
     outline: none;
     border-color: white;
     box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
@@ -416,6 +428,7 @@ input[type="checkbox"] {
         transform: translateX(400px);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -950,6 +963,7 @@ input[type="checkbox"] {
         opacity: 0;
         transform: scale(0.95) translateY(-20px);
     }
+
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
@@ -1274,6 +1288,7 @@ input[type="checkbox"] {
         from {
             transform: translateY(100%);
         }
+
         to {
             transform: translateY(0);
         }

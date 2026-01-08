@@ -2,7 +2,7 @@
  * Edit Transactions Page - Comprehensive Edit & Bulk Operations
  */
 
-(function() {
+(function () {
     'use strict';
 
     // Bank code from page context
@@ -22,11 +22,178 @@
 
     // Filter state
     let currentFilters = {
-        category: 'All',
-        project: 'All',
-        vendor: '',
+        category: [], // Empty means All
+        project: [],
+        vendor: [],
         search: ''
     };
+
+    // Dropdown instances
+    const dropdowns = {};
+
+    // Custom Dropdown Class
+    class CustomDropdown {
+        constructor(containerId, placeholder, type) {
+            this.container = document.getElementById(containerId);
+            this.placeholder = placeholder;
+            this.type = type;
+            this.options = [];
+            this.selectedValues = new Set();
+            this.isOpen = false;
+
+            if (this.container) {
+                this.render();
+                this.attachEvents();
+            }
+
+            dropdowns[containerId] = this;
+        }
+
+        render() {
+            this.container.innerHTML = `
+                <div class="dropdown-trigger" id="${this.container.id}-trigger">
+                    <span class="trigger-text">${this.placeholder}</span>
+                </div>
+                <div class="dropdown-menu">
+                    <div class="dropdown-search">
+                        <input type="text" placeholder="Search..." id="${this.container.id}-search">
+                    </div>
+                    <div class="dropdown-options" id="${this.container.id}-options"></div>
+                </div>
+            `;
+
+            this.triggerBtn = this.container.querySelector('.dropdown-trigger');
+            this.triggerText = this.container.querySelector('.trigger-text');
+            this.menu = this.container.querySelector('.dropdown-menu');
+            this.searchInput = this.container.querySelector('input');
+            this.optionsContainer = this.container.querySelector('.dropdown-options');
+        }
+
+        setOptions(items) {
+            this.options = items;
+            this.renderOptions(items);
+        }
+
+        renderOptions(items) {
+            this.optionsContainer.innerHTML = '';
+
+            if (items.length === 0) {
+                this.optionsContainer.innerHTML = '<div style="padding: 10px; color: var(--text-muted); font-size: 0.8rem;">No results found</div>';
+                return;
+            }
+
+            items.forEach(item => {
+                const optionEl = document.createElement('div');
+                optionEl.className = `dropdown-option ${this.selectedValues.has(item) ? 'selected' : ''}`;
+                optionEl.dataset.value = item;
+                optionEl.innerHTML = `
+                    <div class="option-checkbox"></div>
+                    <span>${item}</span>
+                `;
+
+                optionEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleOption(item);
+                });
+                this.optionsContainer.appendChild(optionEl);
+            });
+        }
+
+        toggleOption(value) {
+            if (this.selectedValues.has(value)) {
+                this.selectedValues.delete(value);
+            } else {
+                this.selectedValues.add(value);
+            }
+
+            this.updateUI();
+            this.updateTriggerText();
+            this.syncFilters();
+
+            // Debounce apply filters
+            if (window.filterTimeout) clearTimeout(window.filterTimeout);
+            window.filterTimeout = setTimeout(() => {
+                applyFilters();
+                renderTable(); // Using existing render logic
+                updateCounts();
+            }, 300);
+        }
+
+        updateUI() {
+            const optionsDocs = this.optionsContainer.querySelectorAll('.dropdown-option');
+            optionsDocs.forEach(opt => {
+                if (this.selectedValues.has(opt.dataset.value)) {
+                    opt.classList.add('selected');
+                } else {
+                    opt.classList.remove('selected');
+                }
+            });
+        }
+
+        updateTriggerText() {
+            if (this.selectedValues.size === 0) {
+                this.triggerText.textContent = this.placeholder;
+                this.triggerBtn.classList.remove('has-selection');
+            } else if (this.selectedValues.size === 1) {
+                this.triggerText.textContent = Array.from(this.selectedValues)[0];
+                this.triggerBtn.classList.add('has-selection');
+            } else {
+                this.triggerText.textContent = `${this.selectedValues.size} Selected`;
+                this.triggerBtn.classList.add('has-selection');
+            }
+        }
+
+        syncFilters() {
+            // Update global filter state
+            const vals = Array.from(this.selectedValues);
+            if (this.type === 'category') currentFilters.category = vals;
+            if (this.type === 'project') currentFilters.project = vals;
+            if (this.type === 'vendor') currentFilters.vendor = vals;
+        }
+
+        toggleMenu() {
+            this.isOpen = !this.isOpen;
+            if (this.isOpen) {
+                Object.values(dropdowns).forEach(d => { if (d !== this) d.closeMenu(); });
+                this.container.classList.add('active');
+                this.searchInput.focus();
+            } else {
+                this.closeMenu();
+            }
+        }
+
+        closeMenu() {
+            this.isOpen = false;
+            this.container.classList.remove('active');
+        }
+
+        filterOptions(query) {
+            const lowerQuery = query.toLowerCase();
+            const filtered = this.options.filter(item => item.toLowerCase().includes(lowerQuery));
+            this.renderOptions(filtered);
+        }
+
+        clear() {
+            this.selectedValues.clear();
+            this.updateUI();
+            this.updateTriggerText();
+            this.syncFilters();
+        }
+
+        attachEvents() {
+            this.triggerBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleMenu();
+            });
+            this.searchInput.addEventListener('input', (e) => this.filterOptions(e.target.value));
+            this.searchInput.addEventListener('click', (e) => e.stopPropagation());
+        }
+    }
+
+    // Close dropdowns on click outside
+    document.addEventListener('click', () => {
+        Object.values(dropdowns).forEach(d => d.closeMenu());
+    });
 
     // DOM Elements
     const loadingOverlay = document.getElementById('loading-overlay');
@@ -68,17 +235,11 @@
             const data = await response.json();
             categories = data.categories;
 
-            // Populate category filter
-            const categoryFilter = document.getElementById('edit-category-filter');
-            categoryFilter.innerHTML = '<option value="All">All Categories</option>';
-            categories.forEach(cat => {
-                const option = document.createElement('option');
-                option.value = cat;
-                option.textContent = cat;
-                categoryFilter.appendChild(option);
-            });
+            // Init Category Dropdown
+            const dd = new CustomDropdown('edit-category-filter', 'All Categories', 'category');
+            dd.setOptions(categories.filter(c => c !== 'All'));
 
-            // Populate bulk category select
+            // Populate bulk category select (keep as select for now)
             const bulkCategory = document.getElementById('bulk-category');
             bulkCategory.innerHTML = '<option value="">Change Category...</option>';
             categories.forEach(cat => {
@@ -102,8 +263,9 @@
             const data = await response.json();
             allTransactions = data.transactions;
 
-            // Populate project filter with unique projects
+            // Populate project and vendor filters
             populateProjectFilter();
+            populateVendorFilter();
 
             applyFilters();
             renderTable();
@@ -117,33 +279,36 @@
      * Populate project filter with unique projects from transactions
      */
     function populateProjectFilter() {
-        const projectFilter = document.getElementById('edit-project-filter');
         const uniqueProjects = new Set();
-
         allTransactions.forEach(txn => {
             const project = txn.project || txn.Project;
-            if (project && project.trim()) {
-                uniqueProjects.add(project.trim());
+            if (project && project.trim()) uniqueProjects.add(project.trim());
+        });
+
+        const sortedProjects = Array.from(uniqueProjects).sort();
+
+        // Init Project Dropdown
+        const dd = new CustomDropdown('edit-project-filter', 'All Projects', 'project');
+        dd.setOptions(sortedProjects);
+    }
+
+    /**
+     * Populate vendor filter with unique vendors from transactions
+     */
+    function populateVendorFilter() {
+        const uniqueVendors = new Set();
+        allTransactions.forEach(txn => {
+            const vendor = txn.vendor || txn['Client/Vendor'];
+            if (vendor && vendor.trim() && vendor.trim() !== 'Unknown') {
+                uniqueVendors.add(vendor.trim());
             }
         });
 
-        // Sort projects alphabetically
-        const sortedProjects = Array.from(uniqueProjects).sort();
+        const sortedVendors = Array.from(uniqueVendors).sort();
 
-        // Populate dropdown
-        projectFilter.innerHTML = '<option value="All">All Projects</option>';
-        sortedProjects.forEach(proj => {
-            const option = document.createElement('option');
-            option.value = proj;
-            option.textContent = proj;
-            projectFilter.appendChild(option);
-        });
-
-        // Add "No Project" option for filtering empty projects
-        const noProjectOption = document.createElement('option');
-        noProjectOption.value = '__EMPTY__';
-        noProjectOption.textContent = '(No Project)';
-        projectFilter.appendChild(noProjectOption);
+        // Init Vendor Dropdown
+        const dd = new CustomDropdown('edit-vendor-filter', 'All Vendors', 'vendor');
+        dd.setOptions(sortedVendors);
     }
 
     /**
@@ -152,26 +317,21 @@
     function applyFilters() {
         filteredTransactions = allTransactions.filter(txn => {
             // Category filter
-            if (currentFilters.category !== 'All' && txn.category !== currentFilters.category) {
+            if (currentFilters.category.length > 0 && !currentFilters.category.includes(txn.category)) {
                 return false;
             }
 
             // Project filter
-            if (currentFilters.project !== 'All') {
+            if (currentFilters.project.length > 0) {
                 const txnProject = (txn.project || txn.Project || '').trim();
-                if (currentFilters.project === '__EMPTY__') {
-                    // Filter for transactions without project
-                    if (txnProject !== '') {
-                        return false;
-                    }
-                } else if (txnProject !== currentFilters.project) {
-                    return false;
-                }
+                // Handle special "No Project" if needed, but for now exact match
+                if (!currentFilters.project.includes(txnProject)) return false;
             }
 
             // Vendor filter
-            if (currentFilters.vendor && !txn.vendor.toLowerCase().includes(currentFilters.vendor.toLowerCase())) {
-                return false;
+            if (currentFilters.vendor.length > 0) {
+                const txnVendor = (txn.vendor || txn['Client/Vendor'] || '').trim();
+                if (!currentFilters.vendor.includes(txnVendor)) return false;
             }
 
             // Search filter (description)
@@ -628,11 +788,11 @@
      * Show uncategorized transactions
      */
     function showUncategorized() {
-        currentFilters.category = 'Uncategorized';
-        document.getElementById('edit-category-filter').value = 'Uncategorized';
-        applyFilters();
-        renderTable();
-        updateCounts();
+        const dd = dropdowns['edit-category-filter'];
+        if (dd) {
+            dd.clear();
+            dd.toggleOption('Uncategorized'); // This triggers sync and apply
+        }
     }
 
     /**
@@ -640,15 +800,17 @@
      */
     function clearAllFilters() {
         currentFilters = {
-            category: 'All',
-            project: 'All',
-            vendor: '',
+            category: [],
+            project: [],
+            vendor: [],
             search: ''
         };
 
-        document.getElementById('edit-category-filter').value = 'All';
-        document.getElementById('edit-project-filter').value = 'All';
-        document.getElementById('edit-vendor-filter').value = '';
+        // Clear dropdowns
+        if (dropdowns['edit-category-filter']) dropdowns['edit-category-filter'].clear();
+        if (dropdowns['edit-project-filter']) dropdowns['edit-project-filter'].clear();
+        if (dropdowns['edit-vendor-filter']) dropdowns['edit-vendor-filter'].clear();
+
         document.getElementById('edit-search').value = '';
 
         applyFilters();
@@ -668,26 +830,7 @@
      */
     function setupEventListeners() {
         // Filters
-        document.getElementById('edit-category-filter').addEventListener('change', (e) => {
-            currentFilters.category = e.target.value;
-            applyFilters();
-            renderTable();
-            updateCounts();
-        });
-
-        document.getElementById('edit-project-filter').addEventListener('change', (e) => {
-            currentFilters.project = e.target.value;
-            applyFilters();
-            renderTable();
-            updateCounts();
-        });
-
-        document.getElementById('edit-vendor-filter').addEventListener('input', (e) => {
-            currentFilters.vendor = e.target.value;
-            applyFilters();
-            renderTable();
-            updateCounts();
-        });
+        // Note: Category, Project, Vendor filters are now handled by CustomDropdown class events
 
         document.getElementById('edit-search').addEventListener('input', (e) => {
             currentFilters.search = e.target.value;
@@ -958,8 +1101,8 @@
     function handleSplitFieldChange(e) {
         const index = parseInt(e.target.dataset.index);
         const field = e.target.className.includes('category') ? 'category' :
-                      e.target.className.includes('vendor') ? 'vendor' :
-                      e.target.className.includes('project') ? 'project' : 'notes';
+            e.target.className.includes('vendor') ? 'vendor' :
+                e.target.className.includes('project') ? 'project' : 'notes';
         splitRows[index][field] = e.target.value;
     }
 
@@ -1194,7 +1337,7 @@
 
     // Override updateSelectionUI to include split button visibility
     const originalUpdateSelectionUI = updateSelectionUI;
-    updateSelectionUI = function() {
+    updateSelectionUI = function () {
         originalUpdateSelectionUI();
         updateSplitButtonVisibility();
     };
