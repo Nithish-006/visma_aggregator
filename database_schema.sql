@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS axis_transactions (
     INDEX idx_code (code),
     INDEX idx_project (project),
 
+    -- Composite index for common filter combinations (category + date + project)
+    INDEX idx_filter_combo (category, transaction_date, project),
+
     -- Unique constraint to prevent duplicate transactions
     UNIQUE KEY unique_transaction (transaction_date, transaction_description(500), dr_amount, cr_amount)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -57,6 +60,9 @@ CREATE TABLE IF NOT EXISTS kvb_transactions (
     INDEX idx_client_vendor (client_vendor),
     INDEX idx_code (code),
     INDEX idx_project (project),
+
+    -- Composite index for common filter combinations (category + date + project)
+    INDEX idx_filter_combo (category, transaction_date, project),
 
     -- Unique constraint to prevent duplicate transactions
     UNIQUE KEY unique_transaction (transaction_date, transaction_description(500), dr_amount, cr_amount)

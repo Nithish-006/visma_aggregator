@@ -10,15 +10,17 @@
     const BANK_NAME = window.BANK_NAME || 'Axis Bank';
 
     // Global state
-    let allTransactions = [];
-    let filteredTransactions = [];
-    let selectedTransactionIndices = new Set();
-    let modifiedTransactionIndices = new Set();  // Track unsaved changes
+    let allTransactions = [];           // Currently displayed transactions (current page only)
+    let allTransactionsMap = new Map(); // Map of id -> transaction for tracking modifications
+    let selectedTransactionIds = new Set();  // Track by ID instead of index
+    let modifiedTransactions = new Map();    // Map of id -> modified transaction data
     let categories = [];
 
-    // Pagination state
+    // Pagination state (server-side)
     let currentPage = 1;
-    const ITEMS_PER_PAGE = 10;
+    const ITEMS_PER_PAGE = 100;  // 100 transactions per page
+    let totalTransactions = 0;
+    let totalPages = 0;
 
     // Filter state
     let currentFilters = {
@@ -27,6 +29,9 @@
         vendor: [],
         search: ''
     };
+
+    // Loading state to prevent duplicate requests
+    let isLoading = false;
 
     // Dropdown instances
     const dropdowns = {};
@@ -214,14 +219,17 @@
     async function init() {
         showLoading();
 
-        // Load categories
-        await loadCategories();
+        // Load categories and filter options in parallel for faster loading
+        await Promise.all([
+            loadCategories(),
+            loadFilterOptions()
+        ]);
 
-        // Load transactions
-        await loadTransactions();
-
-        // Setup event listeners
+        // Setup event listeners first
         setupEventListeners();
+
+        // Load transactions (first page only - fast!)
+        await loadTransactions();
 
         hideLoading();
     }
@@ -255,95 +263,91 @@
     }
 
     /**
-     * Load all transactions from API
+     * Load transactions from paginated API
      */
     async function loadTransactions() {
+        if (isLoading) return;
+        isLoading = true;
+
         try {
-            const response = await fetch(`/api/${BANK_CODE}/transactions?limit=10000`);
+            // Build query params
+            const params = new URLSearchParams({
+                page: currentPage,
+                per_page: ITEMS_PER_PAGE,
+                sort_by: 'date',
+                sort_order: 'desc'
+            });
+
+            // Add filters
+            if (currentFilters.category.length > 0) {
+                params.set('category', currentFilters.category.join(','));
+            }
+            if (currentFilters.project.length > 0) {
+                params.set('project', currentFilters.project.join(','));
+            }
+            if (currentFilters.vendor.length > 0) {
+                params.set('vendor', currentFilters.vendor.join(','));
+            }
+            if (currentFilters.search) {
+                params.set('search', currentFilters.search);
+            }
+
+            const response = await fetch(`/api/${BANK_CODE}/transactions/paginated?${params}`);
             const data = await response.json();
+
             allTransactions = data.transactions;
+            totalTransactions = data.total;
+            totalPages = data.total_pages;
 
-            // Populate project and vendor filters
-            populateProjectFilter();
-            populateVendorFilter();
+            // Update the map for tracking
+            allTransactionsMap.clear();
+            allTransactions.forEach(txn => {
+                // Restore any pending modifications
+                if (modifiedTransactions.has(txn.id)) {
+                    const modified = modifiedTransactions.get(txn.id);
+                    Object.assign(txn, modified);
+                }
+                allTransactionsMap.set(txn.id, txn);
+            });
 
-            applyFilters();
             renderTable();
             updateCounts();
+            updatePaginationControls();
         } catch (error) {
             console.error('Error loading transactions:', error);
+        } finally {
+            isLoading = false;
         }
     }
 
     /**
-     * Populate project filter with unique projects from transactions
+     * Load filter options (projects, vendors) from API
      */
-    function populateProjectFilter() {
-        const uniqueProjects = new Set();
-        allTransactions.forEach(txn => {
-            const project = txn.project || txn.Project;
-            if (project && project.trim()) uniqueProjects.add(project.trim());
-        });
+    async function loadFilterOptions() {
+        try {
+            const response = await fetch(`/api/${BANK_CODE}/filter-options`);
+            const data = await response.json();
 
-        const sortedProjects = Array.from(uniqueProjects).sort();
+            // Init Project Dropdown
+            const projectDd = new CustomDropdown('edit-project-filter', 'All Projects', 'project');
+            projectDd.setOptions(data.projects || []);
 
-        // Init Project Dropdown
-        const dd = new CustomDropdown('edit-project-filter', 'All Projects', 'project');
-        dd.setOptions(sortedProjects);
+            // Init Vendor Dropdown
+            const vendorDd = new CustomDropdown('edit-vendor-filter', 'All Vendors', 'vendor');
+            vendorDd.setOptions(data.vendors || []);
+        } catch (error) {
+            console.error('Error loading filter options:', error);
+        }
     }
 
     /**
-     * Populate vendor filter with unique vendors from transactions
-     */
-    function populateVendorFilter() {
-        const uniqueVendors = new Set();
-        allTransactions.forEach(txn => {
-            const vendor = txn.vendor || txn['Client/Vendor'];
-            if (vendor && vendor.trim() && vendor.trim() !== 'Unknown') {
-                uniqueVendors.add(vendor.trim());
-            }
-        });
-
-        const sortedVendors = Array.from(uniqueVendors).sort();
-
-        // Init Vendor Dropdown
-        const dd = new CustomDropdown('edit-vendor-filter', 'All Vendors', 'vendor');
-        dd.setOptions(sortedVendors);
-    }
-
-    /**
-     * Apply current filters to transactions
+     * Apply current filters - triggers server-side filtering
      */
     function applyFilters() {
-        filteredTransactions = allTransactions.filter(txn => {
-            // Category filter
-            if (currentFilters.category.length > 0 && !currentFilters.category.includes(txn.category)) {
-                return false;
-            }
-
-            // Project filter
-            if (currentFilters.project.length > 0) {
-                const txnProject = (txn.project || txn.Project || '').trim();
-                // Handle special "No Project" if needed, but for now exact match
-                if (!currentFilters.project.includes(txnProject)) return false;
-            }
-
-            // Vendor filter
-            if (currentFilters.vendor.length > 0) {
-                const txnVendor = (txn.vendor || txn['Client/Vendor'] || '').trim();
-                if (!currentFilters.vendor.includes(txnVendor)) return false;
-            }
-
-            // Search filter (description)
-            if (currentFilters.search && !txn.description.toLowerCase().includes(currentFilters.search.toLowerCase())) {
-                return false;
-            }
-
-            return true;
-        });
-
         // Reset to page 1 when filters change
         currentPage = 1;
+        // Reload from server with new filters
+        loadTransactions();
     }
 
     /**
@@ -359,14 +363,12 @@
     function renderTable() {
         tableBody.innerHTML = '';
 
-        // Render all transactions as a scrollable list (both desktop and mobile)
-        let pageTransactions = filteredTransactions;
-
-        pageTransactions.forEach((txn, index) => {
+        // Render current page transactions (already paginated from server)
+        allTransactions.forEach((txn, index) => {
             const row = document.createElement('tr');
-            const globalIndex = allTransactions.indexOf(txn);
-            const isSelected = selectedTransactionIndices.has(globalIndex);
-            const isModified = modifiedTransactionIndices.has(globalIndex);
+            const txnId = txn.id;
+            const isSelected = selectedTransactionIds.has(txnId);
+            const isModified = modifiedTransactions.has(txnId);
 
             if (isSelected) {
                 row.classList.add('selected');
@@ -377,19 +379,24 @@
 
             const isCategoryUncategorized = txn.category === 'Uncategorized';
 
+            const projectValue = txn.project || txn.Project || '';
+            const isProjectEmpty = !projectValue;
+
             row.innerHTML = `
                 <td data-label="">
-                    <input type="checkbox" class="row-checkbox" data-index="${globalIndex}" ${isSelected ? 'checked' : ''}>
+                    <input type="checkbox" class="row-checkbox" data-id="${txnId}" ${isSelected ? 'checked' : ''}>
                 </td>
                 <td data-label="Date">${txn.date}</td>
-                <td class="editable-cell" data-field="vendor" data-index="${globalIndex}" data-label="Vendor">${txn.vendor || ''}</td>
-                <td class="editable-cell" data-field="category" data-index="${globalIndex}" data-label="Category">
+                <td class="editable-cell" data-field="vendor" data-id="${txnId}" data-label="Vendor">${txn.vendor || ''}</td>
+                <td class="editable-cell" data-field="category" data-id="${txnId}" data-label="Category">
                     <span class="category-badge ${isCategoryUncategorized ? 'uncategorized' : ''}">${txn.category || ''}</span>
                 </td>
                 <td class="description-full" data-label="Description">${escapeHtml(txn.description || txn['Transaction Description'] || '')}</td>
                 <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
                 <td class="text-right" data-label="Credit">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
-                <td class="editable-cell" data-field="project" data-index="${globalIndex}" data-label="Project">${txn.project || txn.Project || ''}</td>
+                <td class="editable-cell" data-field="project" data-id="${txnId}" data-label="Project">
+                    <span class="project-badge ${isProjectEmpty ? 'empty' : ''}">${projectValue || '-'}</span>
+                </td>
                 <td style="text-align: center;" data-label="">
                     ${isModified ? '<span style="color: #f59e0b; font-size: 18px;" title="Unsaved changes">●</span>' : ''}
                 </td>
@@ -416,26 +423,31 @@
      * Update pagination controls
      */
     function updatePaginationControls() {
-        const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE) || 1;
+        // Calculate the range being shown
+        const startRecord = totalTransactions === 0 ? 0 : ((currentPage - 1) * ITEMS_PER_PAGE) + 1;
+        const endRecord = Math.min(currentPage * ITEMS_PER_PAGE, totalTransactions);
 
+        // Update display
+        document.getElementById('showing-range').textContent = `${startRecord}-${endRecord}`;
+        document.getElementById('total-filtered').textContent = totalTransactions;
         document.getElementById('current-page').textContent = currentPage;
-        document.getElementById('total-pages').textContent = totalPages;
+        document.getElementById('total-pages').textContent = totalPages || 1;
 
         document.getElementById('prev-page').disabled = currentPage <= 1;
         document.getElementById('next-page').disabled = currentPage >= totalPages;
     }
 
     /**
-     * Go to specific page
+     * Go to specific page - fetches new page from server
      */
     function goToPage(page) {
-        const totalPages = Math.ceil(filteredTransactions.length / ITEMS_PER_PAGE) || 1;
-
         if (page < 1) page = 1;
         if (page > totalPages) page = totalPages;
 
+        if (page === currentPage) return;
+
         currentPage = page;
-        renderTable();
+        loadTransactions();  // Fetch new page from server
 
         // Scroll to top of table on mobile
         document.querySelector('.edit-table-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -449,8 +461,10 @@
         if (cell.classList.contains('editing')) return;
 
         const field = cell.dataset.field;
-        const index = parseInt(cell.dataset.index);
-        const txn = allTransactions[index];
+        const txnId = parseInt(cell.dataset.id);
+        const txn = allTransactionsMap.get(txnId);
+
+        if (!txn) return;
 
         // Get current value - support both field name formats
         let currentValue = '';
@@ -491,10 +505,10 @@
         input.focus();
 
         // Save on blur or Enter
-        input.addEventListener('blur', () => finishCellEdit(cell, input, field, index));
+        input.addEventListener('blur', () => finishCellEdit(cell, input, field, txnId));
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                finishCellEdit(cell, input, field, index);
+                finishCellEdit(cell, input, field, txnId);
             }
         });
     }
@@ -502,23 +516,31 @@
     /**
      * Finish editing a cell
      */
-    function finishCellEdit(cell, input, field, index) {
+    function finishCellEdit(cell, input, field, txnId) {
         const newValue = input.value.trim();
+        const txn = allTransactionsMap.get(txnId);
+
+        if (!txn) return;
 
         // Update local transaction data - support both field name formats
         if (field === 'vendor') {
-            allTransactions[index]['Client/Vendor'] = newValue;
-            allTransactions[index]['vendor'] = newValue;
+            txn['Client/Vendor'] = newValue;
+            txn['vendor'] = newValue;
         } else if (field === 'category') {
-            allTransactions[index]['Category'] = newValue;
-            allTransactions[index]['category'] = newValue;
+            txn['Category'] = newValue;
+            txn['category'] = newValue;
         } else if (field === 'project') {
-            allTransactions[index]['Project'] = newValue;
-            allTransactions[index]['project'] = newValue;
+            txn['Project'] = newValue;
+            txn['project'] = newValue;
         }
 
-        // Mark as modified
-        modifiedTransactionIndices.add(index);
+        // Track modification by ID
+        if (!modifiedTransactions.has(txnId)) {
+            modifiedTransactions.set(txnId, {});
+        }
+        modifiedTransactions.get(txnId)[field] = newValue;
+        modifiedTransactions.get(txnId).id = txnId;
+
         updateModifiedUI();
 
         // Re-render cell
@@ -526,6 +548,9 @@
         if (field === 'category') {
             const isUncategorized = newValue === 'Uncategorized';
             cell.innerHTML = `<span class="category-badge ${isUncategorized ? 'uncategorized' : ''}">${newValue}</span>`;
+        } else if (field === 'project') {
+            const isEmpty = !newValue;
+            cell.innerHTML = `<span class="project-badge ${isEmpty ? 'empty' : ''}">${newValue || '-'}</span>`;
         } else {
             cell.textContent = newValue;
         }
@@ -538,7 +563,7 @@
      * Update modified transactions UI
      */
     function updateModifiedUI() {
-        const count = modifiedTransactionIndices.size;
+        const count = modifiedTransactions.size;
         modifiedCountEl.textContent = count;
 
         if (count > 0) {
@@ -556,12 +581,20 @@
      * Save all modified transactions
      */
     async function saveAllChanges() {
-        if (modifiedTransactionIndices.size === 0) {
+        if (modifiedTransactions.size === 0) {
             return;
         }
 
-        const modifiedTransactions = Array.from(modifiedTransactionIndices).map(i => allTransactions[i]);
-        const totalCount = modifiedTransactions.length;
+        // Get modified transactions from the map
+        const transactionsToSave = [];
+        for (const [txnId, modifications] of modifiedTransactions) {
+            const txn = allTransactionsMap.get(txnId);
+            if (txn) {
+                transactionsToSave.push(txn);
+            }
+        }
+
+        const totalCount = transactionsToSave.length;
 
         saveAllBtn.disabled = true;
         saveAllBtn.textContent = `Saving 0/${totalCount}...`;
@@ -572,8 +605,8 @@
 
         // Save in parallel batches of 5 for better performance
         const batchSize = 5;
-        for (let i = 0; i < modifiedTransactions.length; i += batchSize) {
-            const batch = modifiedTransactions.slice(i, i + batchSize);
+        for (let i = 0; i < transactionsToSave.length; i += batchSize) {
+            const batch = transactionsToSave.slice(i, i + batchSize);
             const promises = batch.map(txn => saveTransaction(txn));
             const results = await Promise.all(promises);
 
@@ -589,7 +622,7 @@
         hideLoading();
 
         // Clear modified state
-        modifiedTransactionIndices.clear();
+        modifiedTransactions.clear();
         updateModifiedUI();
         renderTable();
 
@@ -597,9 +630,9 @@
         saveAllBtn.textContent = 'Save All Changes';
 
         if (failedCount === 0) {
-            showNotification(`✓ All ${successCount} changes saved successfully!`);
+            showNotification(`All ${successCount} changes saved successfully!`);
         } else {
-            showNotification(`⚠ Saved ${successCount}, Failed ${failedCount}`, 'error');
+            showNotification(`Saved ${successCount}, Failed ${failedCount}`, 'error');
         }
 
         // Reload data to ensure consistency
@@ -610,16 +643,16 @@
      * Discard all unsaved changes
      */
     async function discardAllChanges() {
-        if (!confirm(`Discard ${modifiedTransactionIndices.size} unsaved changes?`)) {
+        if (!confirm(`Discard ${modifiedTransactions.size} unsaved changes?`)) {
             return;
         }
 
         // Reload data from server
         showLoading();
+        modifiedTransactions.clear();
         await loadTransactions();
         hideLoading();
 
-        modifiedTransactionIndices.clear();
         updateModifiedUI();
 
         showNotification('Changes discarded');
@@ -670,13 +703,13 @@
      * Handle row checkbox change
      */
     function handleRowCheckboxChange(e) {
-        const index = parseInt(e.target.dataset.index);
+        const txnId = parseInt(e.target.dataset.id);
 
         if (e.target.checked) {
-            selectedTransactionIndices.add(index);
+            selectedTransactionIds.add(txnId);
             e.target.closest('tr').classList.add('selected');
         } else {
-            selectedTransactionIndices.delete(index);
+            selectedTransactionIds.delete(txnId);
             e.target.closest('tr').classList.remove('selected');
         }
 
@@ -689,12 +722,11 @@
     function handleSelectAllChange(e) {
         const isChecked = e.target.checked;
 
-        filteredTransactions.forEach(txn => {
-            const globalIndex = allTransactions.indexOf(txn);
+        allTransactions.forEach(txn => {
             if (isChecked) {
-                selectedTransactionIndices.add(globalIndex);
+                selectedTransactionIds.add(txn.id);
             } else {
-                selectedTransactionIndices.delete(globalIndex);
+                selectedTransactionIds.delete(txn.id);
             }
         });
 
@@ -706,20 +738,20 @@
      * Update selection UI
      */
     function updateSelectionUI() {
-        selectedCountEl.textContent = selectedTransactionIndices.size;
-        bulkCountEl.textContent = selectedTransactionIndices.size;
+        selectedCountEl.textContent = selectedTransactionIds.size;
+        bulkCountEl.textContent = selectedTransactionIds.size;
 
-        if (selectedTransactionIndices.size > 0) {
+        if (selectedTransactionIds.size > 0) {
             bulkEditBar.style.display = 'flex';
         } else {
             bulkEditBar.style.display = 'none';
         }
 
         // Update select all checkbox state
-        const allFilteredSelected = filteredTransactions.every(txn =>
-            selectedTransactionIndices.has(allTransactions.indexOf(txn))
+        const allCurrentSelected = allTransactions.every(txn =>
+            selectedTransactionIds.has(txn.id)
         );
-        selectAllCheckbox.checked = allFilteredSelected && filteredTransactions.length > 0;
+        selectAllCheckbox.checked = allCurrentSelected && allTransactions.length > 0;
     }
 
     /**
@@ -736,12 +768,10 @@
 
         showLoading();
 
-        let successCount = 0;
-        const selectedTransactions = Array.from(selectedTransactionIndices).map(i => allTransactions[i]);
+        // Get selected transactions from IDs
+        const selectedTxns = allTransactions.filter(txn => selectedTransactionIds.has(txn.id));
 
-        for (const txn of selectedTransactions) {
-            const txnIndex = allTransactions.indexOf(txn);
-
+        for (const txn of selectedTxns) {
             // Update local data - support both field name formats
             if (bulkCategory) {
                 txn.Category = bulkCategory;
@@ -752,14 +782,23 @@
                 txn.project = bulkProject;
             }
 
-            // Mark as modified (don't save immediately)
-            modifiedTransactionIndices.add(txnIndex);
+            // Mark as modified by ID
+            if (!modifiedTransactions.has(txn.id)) {
+                modifiedTransactions.set(txn.id, {});
+            }
+            if (bulkCategory) {
+                modifiedTransactions.get(txn.id).category = bulkCategory;
+            }
+            if (bulkProject) {
+                modifiedTransactions.get(txn.id).project = bulkProject;
+            }
+            modifiedTransactions.get(txn.id).id = txn.id;
         }
 
         hideLoading();
 
         // Clear selection
-        selectedTransactionIndices.clear();
+        selectedTransactionIds.clear();
         updateSelectionUI();
 
         // Update modified UI
@@ -772,14 +811,14 @@
         document.getElementById('bulk-category').value = '';
         document.getElementById('bulk-project').value = '';
 
-        showNotification(`Bulk update complete! ${selectedTransactions.length} transactions marked for saving.`);
+        showNotification(`Bulk update complete! ${selectedTxns.length} transactions marked for saving.`);
     }
 
     /**
      * Cancel bulk edit
      */
     function cancelBulkEdit() {
-        selectedTransactionIndices.clear();
+        selectedTransactionIds.clear();
         updateSelectionUI();
         renderTable();
     }
@@ -814,16 +853,17 @@
         document.getElementById('edit-search').value = '';
 
         applyFilters();
-        renderTable();
-        updateCounts();
     }
 
     /**
      * Update counts
      */
     function updateCounts() {
-        totalCountEl.textContent = filteredTransactions.length;
+        totalCountEl.textContent = totalTransactions;
     }
+
+    // Debounce timer for search
+    let searchDebounceTimer = null;
 
     /**
      * Setup event listeners
@@ -832,11 +872,15 @@
         // Filters
         // Note: Category, Project, Vendor filters are now handled by CustomDropdown class events
 
+        // Debounced search for server-side filtering
         document.getElementById('edit-search').addEventListener('input', (e) => {
             currentFilters.search = e.target.value;
-            applyFilters();
-            renderTable();
-            updateCounts();
+
+            // Debounce search requests to avoid too many API calls
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                applyFilters();
+            }, 300);  // 300ms debounce
         });
 
         document.getElementById('filter-uncategorized').addEventListener('click', showUncategorized);
@@ -951,7 +995,7 @@
     function updateSplitButtonVisibility() {
         if (splitTransactionBtn) {
             // Show split button only when exactly 1 transaction is selected
-            if (selectedTransactionIndices.size === 1) {
+            if (selectedTransactionIds.size === 1) {
                 splitTransactionBtn.style.display = 'inline-block';
             } else {
                 splitTransactionBtn.style.display = 'none';
@@ -963,14 +1007,14 @@
      * Show the split modal
      */
     function showSplitModal() {
-        if (selectedTransactionIndices.size !== 1) {
+        if (selectedTransactionIds.size !== 1) {
             alert('Please select exactly one transaction to split.');
             return;
         }
 
-        // Get the selected transaction
-        const selectedIndex = Array.from(selectedTransactionIndices)[0];
-        splitOriginalTransaction = allTransactions[selectedIndex];
+        // Get the selected transaction by ID
+        const selectedId = Array.from(selectedTransactionIds)[0];
+        splitOriginalTransaction = allTransactionsMap.get(selectedId);
 
         // Determine if we're splitting debit or credit
         const drAmount = parseFloat(splitOriginalTransaction.dr_amount || splitOriginalTransaction['DR Amount'] || 0);
@@ -1281,7 +1325,7 @@
                 closeSplitModal();
 
                 // Clear selection and reload
-                selectedTransactionIndices.clear();
+                selectedTransactionIds.clear();
                 updateSelectionUI();
                 await loadTransactions();
             } else {

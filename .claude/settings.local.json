@@ -15,7 +15,11 @@
       "Bash(copy \"C:\\\\VISMA - AGGREGATOR\\\\1767887439045.jpg\" \"C:\\\\VISMA - AGGREGATOR\\\\static\\\\favicon.jpg\")",
       "Bash(cmd /c copy \"C:\\\\VISMA - AGGREGATOR\\\\1767887439045.jpg\" \"C:\\\\VISMA - AGGREGATOR\\\\static\\\\favicon.jpg\")",
       "Bash(cmd /c dir \"C:\\\\VISMA - AGGREGATOR\\\\static\\\\favicon.jpg\")",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(.venvScriptspython.exe -c \"import app; print\\(''Import successful''\\)\")",
+      "Bash(\"venv/Scripts/python.exe\" -c \"import app; print\\(''Import successful''\\)\")",
+      "Bash(\"venv/Scripts/python.exe\":*)",
+      "Bash(\"venv/Scripts/python.exe\" -m py_compile:*)"
     ]
   }
 }

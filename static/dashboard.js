@@ -15,10 +15,13 @@ let searchTimeout = null;
 let dataMinDate = null;
 let dataMaxDate = null;
 
-// Pagination state
+// Pagination state (server-side)
 let allTransactions = [];
 let currentPage = 1;
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 100;  // 100 transactions per page
+let totalTransactions = 0;
+let totalPages = 0;
+let isLoadingTransactions = false;
 
 // Global Dropdown Instances
 const dropdowns = {};
@@ -104,11 +107,11 @@ class CustomDropdown {
         this.updateTriggerText();
         this.syncGlobals();
 
-        // Auto-refresh with debounce
+        // Auto-refresh with debounce (smooth, no loading overlay)
         if (window.refreshTimeout) clearTimeout(window.refreshTimeout);
         window.refreshTimeout = setTimeout(() => {
-            runFullRefresh();
-        }, 500); // Wait 500ms after last click
+            refreshTransactions();
+        }, 300); // Wait 300ms after last click
     }
 
     updateUI() {
@@ -332,34 +335,16 @@ async function loadCategories() {
 
 async function loadProjectsAndVendors() {
     try {
-        const res = await fetch(`/api/${BANK_CODE}/transactions?limit=10000`);
+        // Use new fast filter-options endpoint instead of loading all transactions
+        const res = await fetch(`/api/${BANK_CODE}/filter-options`);
         const data = await res.json();
 
-        // Extract unique projects and vendors in a single pass
-        const uniqueProjects = new Set();
-        const uniqueVendors = new Set();
-
-        data.transactions.forEach((txn) => {
-            const project = txn.project || txn.Project;
-            if (project && project.trim()) {
-                uniqueProjects.add(project.trim());
-            }
-
-            const vendor = txn.vendor || txn['Client/Vendor'];
-            if (vendor && vendor.trim() && vendor.trim() !== 'Unknown') {
-                uniqueVendors.add(vendor.trim());
-            }
-        });
-
-        const sortedProjects = Array.from(uniqueProjects).sort();
-        const sortedVendors = Array.from(uniqueVendors).sort();
-
-        // Init Custom Dropdowns
+        // Init Custom Dropdowns with data from server
         const projDD = new CustomDropdown('project-filter', 'All Projects', 'project');
-        projDD.setOptions(sortedProjects);
+        projDD.setOptions(data.projects || []);
 
         const vendDD = new CustomDropdown('vendor-filter', 'All Vendors', 'vendor');
-        vendDD.setOptions(sortedVendors);
+        vendDD.setOptions(data.vendors || []);
     } catch (e) {
         console.error('Error loading projects and vendors:', e);
     }
@@ -391,25 +376,63 @@ async function loadSummary(categories = [], startDate = null, endDate = null, pr
 
 /** Transactions **/
 
-async function loadTransactions(categories = [], startDate = null, endDate = null, projects = [], vendors = []) {
+async function loadTransactions(categories = [], startDate = null, endDate = null, projects = [], vendors = [], resetPage = true) {
+    if (isLoadingTransactions) return;
+    isLoadingTransactions = true;
+
     try {
-        const url = buildApiUrl('/transactions', categories, startDate, endDate, projects, vendors, {
-            limit: '10000',
+        // Build query params for paginated endpoint
+        const params = new URLSearchParams({
+            page: resetPage ? 1 : currentPage,
+            per_page: ITEMS_PER_PAGE,
             sort_by: currentSortBy,
-            sort_order: currentSortOrder,
-            search: currentSearch
+            sort_order: currentSortOrder
         });
-        const res = await fetch(url);
+
+        // Add filters
+        if (categories.length > 0) {
+            params.set('category', categories.join(','));
+        }
+        if (projects.length > 0) {
+            params.set('project', projects.join(','));
+        }
+        if (vendors.length > 0) {
+            params.set('vendor', vendors.join(','));
+        }
+        if (startDate) {
+            params.set('start_date', startDate);
+        }
+        if (endDate) {
+            params.set('end_date', endDate);
+        }
+        if (currentSearch) {
+            params.set('search', currentSearch);
+        }
+
+        const res = await fetch(`/api/${BANK_CODE}/transactions/paginated?${params}`);
         const data = await res.json();
 
-        // Store all transactions and reset to page 1
+        // Store current page transactions and pagination info
         allTransactions = data.transactions;
-        currentPage = 1;
+        totalTransactions = data.total;
+        totalPages = data.total_pages;
+
+        if (resetPage) {
+            currentPage = 1;
+        }
+
+        // Update header count to show filtered total
+        const headerCount = document.getElementById('total-transactions');
+        if (headerCount) {
+            headerCount.textContent = `${totalTransactions} Transactions`;
+        }
 
         renderTransactionsPage();
         updatePaginationControls();
     } catch (e) {
         console.error('Error loading transactions:', e);
+    } finally {
+        isLoadingTransactions = false;
     }
 }
 
@@ -436,15 +459,22 @@ function renderTransactionsPage() {
         if (category && category !== 'All') metaParts.push(category);
         const metaText = metaParts.join(' • ');
 
+        // Category pill classes
+        const categoryClass = category === 'Uncategorized' ? 'category-pill uncategorized' : 'category-pill';
+
+        // Project pill classes
+        const projectClass = project ? 'project-pill' : 'project-pill empty';
+        const projectDisplay = project || '-';
+
         row.innerHTML = `
             <td data-label="Date">${txn.date}</td>
             <td data-label="Vendor">
                 <span class="vendor-name">${txn.vendor}</span>
                 ${metaText ? `<span class="vendor-meta">${metaText}</span>` : ''}
             </td>
-            <td data-label="Category">${txn.category}</td>
+            <td data-label="Category"><span class="${categoryClass}">${category}</span></td>
             <td data-label="Description">${txn.description || ''}</td>
-            <td data-label="Project">${txn.project || ''}</td>
+            <td data-label="Project"><span class="${projectClass}">${projectDisplay}</span></td>
             <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
             <td class="text-right" data-label="Credit">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
         `;
@@ -454,25 +484,31 @@ function renderTransactionsPage() {
 
 /** Update pagination controls **/
 function updatePaginationControls() {
-    const totalPages = Math.ceil(allTransactions.length / ITEMS_PER_PAGE) || 1;
+    // Calculate the range being shown
+    const startRecord = totalTransactions === 0 ? 0 : ((currentPage - 1) * ITEMS_PER_PAGE) + 1;
+    const endRecord = Math.min(currentPage * ITEMS_PER_PAGE, totalTransactions);
 
+    // Update display
+    document.getElementById('showing-range').textContent = `${startRecord}-${endRecord}`;
+    document.getElementById('total-filtered').textContent = totalTransactions;
     document.getElementById('current-page').textContent = currentPage;
-    document.getElementById('total-pages').textContent = totalPages;
+    document.getElementById('total-pages').textContent = totalPages || 1;
 
     document.getElementById('prev-page').disabled = currentPage <= 1;
     document.getElementById('next-page').disabled = currentPage >= totalPages;
 }
 
-/** Go to specific page **/
+/** Go to specific page - fetches from server **/
 function goToPage(page) {
-    const totalPages = Math.ceil(allTransactions.length / ITEMS_PER_PAGE) || 1;
-
     if (page < 1) page = 1;
     if (page > totalPages) page = totalPages;
 
+    if (page === currentPage) return;
+
     currentPage = page;
-    renderTransactionsPage();
-    updatePaginationControls();
+
+    // Fetch new page from server
+    loadTransactions(currentCategories, currentStartDate, currentEndDate, currentProjects, currentVendors, false);
 
     // Scroll to top of table on mobile
     document.querySelector('.transactions-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -480,6 +516,12 @@ function goToPage(page) {
 
 /** Refresh **/
 
+// Smooth refresh - no loading overlay (for filter changes)
+async function refreshTransactions() {
+    await loadTransactions(currentCategories, currentStartDate, currentEndDate, currentProjects, currentVendors);
+}
+
+// Full refresh with loading overlay (for initial load)
 async function runFullRefresh() {
     showLoading();
     await Promise.all([
@@ -513,7 +555,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             input.addEventListener('change', () => {
                 currentStartDate = startInput.value || null;
                 currentEndDate = endInput.value || null;
-                runFullRefresh();
+                refreshTransactions();  // Smooth refresh
             });
         }
     });
@@ -534,7 +576,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         startInput.value = '';
         endInput.value = '';
 
-        runFullRefresh();
+        refreshTransactions();  // Smooth refresh
     });
 
     // Download Transactions

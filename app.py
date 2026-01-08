@@ -982,6 +982,92 @@ def get_bank_transactions(bank_code):
     return jsonify({'transactions': transactions})
 
 
+@app.route('/api/<bank_code>/transactions/paginated')
+@login_required
+def get_bank_transactions_paginated(bank_code):
+    """Get paginated transactions with server-side filtering - fast endpoint for large datasets"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    # Pagination params
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 50))
+
+    # Filter params
+    category = request.args.get('category', 'All')
+    project = request.args.get('project', None)
+    vendor = request.args.get('vendor', None)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    search = request.args.get('search', None)
+    sort_by = request.args.get('sort_by', 'date')
+    sort_order = request.args.get('sort_order', 'desc')
+
+    # Get paginated data directly from database
+    result = db_manager.get_paginated_transactions(
+        bank_code=bank_code,
+        page=page,
+        per_page=per_page,
+        category=category,
+        project=project,
+        vendor=vendor,
+        start_date=start_date,
+        end_date=end_date,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+
+    # Format transactions for frontend
+    transactions = []
+    for row in result['transactions']:
+        date_val = row['Date']
+        if isinstance(date_val, str):
+            date_obj = datetime.strptime(date_val, '%Y-%m-%d')
+        else:
+            date_obj = date_val
+
+        dr_amount = float(row['DR Amount'] or 0)
+        cr_amount = float(row['CR Amount'] or 0)
+        net = cr_amount - dr_amount
+
+        transactions.append({
+            'id': row['id'],
+            'date': date_obj.strftime('%d %b %Y'),
+            'date_raw': date_obj.strftime('%Y-%m-%d'),
+            'description': row['Transaction Description'] or '',
+            'vendor': row['Client/Vendor'] or '',
+            'category': row['Category'] or '',
+            'code': row['Code'] or '',
+            'dr_amount': dr_amount,
+            'dr_amount_formatted': format_indian_number(dr_amount) if dr_amount > 0 else '',
+            'cr_amount': cr_amount,
+            'cr_amount_formatted': format_indian_number(cr_amount) if cr_amount > 0 else '',
+            'net': net,
+            'net_formatted': format_indian_number(net),
+            'project': row['Project'] or ''
+        })
+
+    return jsonify({
+        'transactions': transactions,
+        'total': result['total'],
+        'page': result['page'],
+        'per_page': result['per_page'],
+        'total_pages': result['total_pages']
+    })
+
+
+@app.route('/api/<bank_code>/filter-options')
+@login_required
+def get_bank_filter_options(bank_code):
+    """Get filter options (categories, projects, vendors) for dropdowns - fast endpoint"""
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+
+    options = db_manager.get_filter_options(bank_code)
+    return jsonify(options)
+
+
 @app.route('/api/<bank_code>/insights')
 @login_required
 def get_bank_insights(bank_code):

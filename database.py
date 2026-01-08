@@ -347,6 +347,147 @@ class DatabaseManager:
         result = self.fetch_all(f"SELECT COUNT(*) FROM {table}")
         return result[0][0] if result else 0
 
+    def get_paginated_transactions(self, bank_code: str = 'axis', page: int = 1, per_page: int = 50,
+                                    category: str = None, project: str = None, vendor: str = None,
+                                    start_date: str = None, end_date: str = None, search: str = None,
+                                    sort_by: str = 'date', sort_order: str = 'desc') -> Dict:
+        """
+        Get paginated transactions with filters applied at database level.
+        Returns dict with 'transactions' list and 'total' count.
+        """
+        table = self.get_table_name(bank_code)
+
+        # Build WHERE clause
+        conditions = []
+        params = []
+
+        # Category filter (supports multiple comma-separated values)
+        if category and category != 'All':
+            categories = [c.strip() for c in category.split(',') if c.strip()]
+            if categories:
+                placeholders = ','.join(['%s'] * len(categories))
+                conditions.append(f"category IN ({placeholders})")
+                params.extend(categories)
+
+        # Project filter (supports multiple comma-separated values)
+        if project:
+            projects = [p.strip() for p in project.split(',') if p.strip()]
+            if projects:
+                placeholders = ','.join(['%s'] * len(projects))
+                conditions.append(f"project IN ({placeholders})")
+                params.extend(projects)
+
+        # Vendor filter (supports multiple comma-separated values)
+        if vendor:
+            vendors = [v.strip() for v in vendor.split(',') if v.strip()]
+            if vendors:
+                placeholders = ','.join(['%s'] * len(vendors))
+                conditions.append(f"client_vendor IN ({placeholders})")
+                params.extend(vendors)
+
+        # Date range filter
+        if start_date:
+            conditions.append("transaction_date >= %s")
+            params.append(start_date)
+        if end_date:
+            conditions.append("transaction_date <= %s")
+            params.append(end_date)
+
+        # Search filter
+        if search:
+            conditions.append("(transaction_description LIKE %s OR client_vendor LIKE %s OR category LIKE %s)")
+            search_pattern = f"%{search}%"
+            params.extend([search_pattern, search_pattern, search_pattern])
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        # Sort clause
+        sort_column = 'transaction_date'
+        if sort_by == 'dr_amount':
+            sort_column = 'dr_amount'
+        elif sort_by == 'cr_amount':
+            sort_column = 'cr_amount'
+
+        sort_direction = 'DESC' if sort_order == 'desc' else 'ASC'
+
+        # Get total count for pagination
+        count_query = f"SELECT COUNT(*) FROM {table} WHERE {where_clause}"
+        count_result = self.fetch_all(count_query, tuple(params) if params else None)
+        total = count_result[0][0] if count_result else 0
+
+        # Calculate offset
+        offset = (page - 1) * per_page
+
+        # Get paginated data
+        data_query = f"""
+        SELECT
+            id,
+            transaction_date as Date,
+            transaction_description as `Transaction Description`,
+            client_vendor as `Client/Vendor`,
+            category as Category,
+            code as Code,
+            dr_amount as `DR Amount`,
+            cr_amount as `CR Amount`,
+            project as Project
+        FROM {table}
+        WHERE {where_clause}
+        ORDER BY {sort_column} {sort_direction}, transaction_date DESC
+        LIMIT %s OFFSET %s
+        """
+
+        # Add pagination params
+        data_params = params + [per_page, offset]
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(data_query, tuple(data_params))
+                rows = cursor.fetchall()
+                cursor.close()
+
+                return {
+                    'transactions': rows,
+                    'total': total,
+                    'page': page,
+                    'per_page': per_page,
+                    'total_pages': (total + per_page - 1) // per_page if per_page > 0 else 0
+                }
+        except Error as e:
+            print(f"[!] Paginated fetch error: {e}")
+            return {'transactions': [], 'total': 0, 'page': page, 'per_page': per_page, 'total_pages': 0}
+
+    def get_filter_options(self, bank_code: str = 'axis') -> Dict:
+        """Get unique categories, projects, and vendors for filter dropdowns"""
+        table = self.get_table_name(bank_code)
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Get unique categories
+                cursor.execute(f"SELECT DISTINCT category FROM {table} WHERE category IS NOT NULL AND category != '' ORDER BY category")
+                categories = [row[0] for row in cursor.fetchall()]
+
+                # Get unique projects
+                cursor.execute(f"SELECT DISTINCT project FROM {table} WHERE project IS NOT NULL AND project != '' ORDER BY project")
+                projects = [row[0] for row in cursor.fetchall()]
+
+                # Get unique vendors
+                cursor.execute(f"SELECT DISTINCT client_vendor FROM {table} WHERE client_vendor IS NOT NULL AND client_vendor != '' AND client_vendor != 'Unknown' ORDER BY client_vendor")
+                vendors = [row[0] for row in cursor.fetchall()]
+
+                cursor.close()
+
+                return {
+                    'categories': categories,
+                    'projects': projects,
+                    'vendors': vendors
+                }
+        except Error as e:
+            print(f"[!] Filter options fetch error: {e}")
+            return {'categories': [], 'projects': [], 'vendors': []}
+
     def get_all_bank_stats(self) -> Dict:
         """Get transaction counts for all banks"""
         stats = {}

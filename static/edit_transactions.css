@@ -378,6 +378,23 @@
     color: #fbbf24;
 }
 
+/* Project badges - Dark Theme */
+.project-badge {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+}
+
+.project-badge.empty {
+    background: rgba(100, 116, 139, 0.12);
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
 /* Checkbox styling - Dark Theme */
 input[type="checkbox"] {
     width: 18px;
@@ -446,9 +463,16 @@ input[type="checkbox"] {
     text-align: right;
 }
 
-/* Pagination Controls - Hidden (using scrollable list instead) */
+/* Pagination Controls */
 .pagination-controls {
-    display: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    margin-top: 1rem;
 }
 
 .pagination-btn {
@@ -480,13 +504,21 @@ input[type="checkbox"] {
 .pagination-info {
     font-size: 0.9rem;
     color: var(--text-secondary);
-    min-width: 120px;
+    min-width: 320px;
     text-align: center;
 }
 
 .pagination-info span {
     font-weight: 600;
     color: var(--primary-light);
+}
+
+.pagination-page-info {
+    font-weight: 400 !important;
+    color: var(--text-main) !important;
+    opacity: 1;
+    font-size: 0.85rem;
+    margin-left: 0.5rem;
 }
 
 /* ============================================================================
@@ -852,6 +884,33 @@ input[type="checkbox"] {
         top: auto;
         bottom: 24px;
         text-align: center;
+    }
+
+    /* Pagination Controls - Mobile friendly */
+    .pagination-controls {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.75rem;
+    }
+
+    .pagination-info {
+        order: -1;
+        width: 100%;
+        min-width: auto;
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .pagination-page-info {
+        display: block;
+        margin-left: 0;
+        margin-top: 0.25rem;
+    }
+
+    .pagination-btn {
+        flex: 1;
+        justify-content: center;
+        min-height: 44px;
     }
 }
 
