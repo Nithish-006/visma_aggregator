@@ -2257,6 +2257,80 @@ def serve_bill_file(filename):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/bills/upload-files', methods=['POST'])
+@login_required
+def bulk_upload_bill_files():
+    """
+    Bulk upload bill files (PDFs/images) without processing.
+    Used to restore original documents for bills already in the database.
+    Files are saved with their original names to match database records.
+    """
+    try:
+        if 'files' not in request.files:
+            return jsonify({'success': False, 'error': 'No files provided'}), 400
+
+        files = request.files.getlist('files')
+        if not files or len(files) == 0:
+            return jsonify({'success': False, 'error': 'No files selected'}), 400
+
+        allowed_extensions = {'.jpg', '.jpeg', '.png', '.pdf', '.webp', '.gif', '.bmp'}
+        results = []
+        uploaded_count = 0
+        skipped_count = 0
+
+        for file in files:
+            if not file.filename:
+                continue
+
+            # Check file extension
+            ext = os.path.splitext(file.filename)[1].lower()
+            if ext not in allowed_extensions:
+                results.append({
+                    'filename': file.filename,
+                    'status': 'skipped',
+                    'reason': f'Unsupported file type: {ext}'
+                })
+                skipped_count += 1
+                continue
+
+            # Secure the filename and save
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+            # Check if file already exists
+            if os.path.exists(file_path):
+                results.append({
+                    'filename': filename,
+                    'status': 'skipped',
+                    'reason': 'File already exists'
+                })
+                skipped_count += 1
+                continue
+
+            # Save the file
+            file.save(file_path)
+            results.append({
+                'filename': filename,
+                'status': 'uploaded'
+            })
+            uploaded_count += 1
+            print(f"[+] Bulk upload: Saved {filename}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Uploaded {uploaded_count} files, skipped {skipped_count}',
+            'uploaded': uploaded_count,
+            'skipped': skipped_count,
+            'details': results
+        })
+
+    except Exception as e:
+        print(f"[!] Error in bulk upload: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/bills/stored/<int:invoice_id>', methods=['PUT'])
 @login_required
 def update_stored_bill(invoice_id):

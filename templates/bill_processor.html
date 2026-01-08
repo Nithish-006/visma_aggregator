@@ -31,6 +31,15 @@
             <h1 class="page-title">Bill Processor</h1>
         </div>
         <div class="header-right">
+            <button class="btn btn-secondary" id="bulkUploadBtn" title="Upload original bill files">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                Upload Files
+            </button>
             <button class="btn btn-primary" id="newBillBtn">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -601,6 +610,64 @@
                         <polyline points="7 3 7 8 15 8"></polyline>
                     </svg>
                     Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Upload Modal -->
+    <div class="modal" id="bulkUploadModal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h3>Upload Bill Files</h3>
+                <button class="modal-close" id="closeBulkUploadModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="upload-info">
+                    Upload original bill files (PDFs/images) to restore document previews for existing bills.
+                    Files should have the same names as stored in the database.
+                </p>
+                <div class="upload-area" id="bulkUploadArea">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <p>Drag & drop files here or click to browse</p>
+                    <span class="upload-hint">Supports: PDF, JPG, PNG, WebP</span>
+                </div>
+                <input type="file" id="bulkFileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.bmp" hidden>
+
+                <!-- Selected Files List -->
+                <div class="bulk-file-list" id="bulkFileList" style="display: none;">
+                    <h4>Selected Files (<span id="bulkFileCount">0</span>)</h4>
+                    <div class="file-list-container" id="bulkFileListContainer"></div>
+                </div>
+
+                <!-- Upload Progress -->
+                <div class="upload-progress-section" id="bulkUploadProgress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="bulkProgressFill"></div>
+                    </div>
+                    <p class="progress-text" id="bulkProgressText">Uploading...</p>
+                </div>
+
+                <!-- Upload Results -->
+                <div class="upload-results" id="bulkUploadResults" style="display: none;">
+                    <div class="result-summary" id="bulkResultSummary"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelBulkUpload">Cancel</button>
+                <button type="button" class="btn btn-primary" id="startBulkUpload" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    Upload Files
                 </button>
             </div>
         </div>

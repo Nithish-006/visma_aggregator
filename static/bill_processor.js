@@ -1498,6 +1498,241 @@ async function saveEditChanges() {
 }
 
 // ============================================================================
+// BULK UPLOAD FUNCTIONS
+// ============================================================================
+
+let bulkUploadFiles = [];
+
+function initBulkUpload() {
+    const bulkUploadModal = document.getElementById('bulkUploadModal');
+    const bulkUploadArea = document.getElementById('bulkUploadArea');
+    const bulkFileInput = document.getElementById('bulkFileInput');
+
+    // Button to open modal
+    document.getElementById('bulkUploadBtn').addEventListener('click', openBulkUploadModal);
+
+    // Close modal events
+    document.getElementById('closeBulkUploadModal').addEventListener('click', closeBulkUploadModal);
+    document.getElementById('cancelBulkUpload').addEventListener('click', closeBulkUploadModal);
+    bulkUploadModal.addEventListener('click', (e) => {
+        if (e.target === bulkUploadModal) closeBulkUploadModal();
+    });
+
+    // Upload area events
+    bulkUploadArea.addEventListener('click', () => bulkFileInput.click());
+    bulkUploadArea.addEventListener('dragover', handleBulkDragOver);
+    bulkUploadArea.addEventListener('dragleave', handleBulkDragLeave);
+    bulkUploadArea.addEventListener('drop', handleBulkDrop);
+    bulkFileInput.addEventListener('change', handleBulkFileSelect);
+
+    // Start upload button
+    document.getElementById('startBulkUpload').addEventListener('click', startBulkUpload);
+}
+
+function openBulkUploadModal() {
+    bulkUploadFiles = [];
+    document.getElementById('bulkUploadModal').classList.add('show');
+    document.getElementById('bulkFileList').style.display = 'none';
+    document.getElementById('bulkUploadProgress').style.display = 'none';
+    document.getElementById('bulkUploadResults').style.display = 'none';
+    document.getElementById('startBulkUpload').disabled = true;
+    document.getElementById('bulkFileInput').value = '';
+}
+
+function closeBulkUploadModal() {
+    document.getElementById('bulkUploadModal').classList.remove('show');
+    bulkUploadFiles = [];
+}
+
+function handleBulkDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function handleBulkDragLeave(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleBulkDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files);
+    addBulkFiles(files);
+}
+
+function handleBulkFileSelect(e) {
+    const files = Array.from(e.target.files);
+    addBulkFiles(files);
+}
+
+function addBulkFiles(files) {
+    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
+
+    files.forEach(file => {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (allowedExtensions.includes(ext)) {
+            // Avoid duplicates
+            if (!bulkUploadFiles.find(f => f.name === file.name)) {
+                bulkUploadFiles.push(file);
+            }
+        }
+    });
+
+    renderBulkFileList();
+}
+
+function renderBulkFileList() {
+    const container = document.getElementById('bulkFileListContainer');
+    const fileList = document.getElementById('bulkFileList');
+    const fileCount = document.getElementById('bulkFileCount');
+    const uploadBtn = document.getElementById('startBulkUpload');
+
+    if (bulkUploadFiles.length === 0) {
+        fileList.style.display = 'none';
+        uploadBtn.disabled = true;
+        return;
+    }
+
+    fileList.style.display = 'block';
+    fileCount.textContent = bulkUploadFiles.length;
+    uploadBtn.disabled = false;
+
+    container.innerHTML = bulkUploadFiles.map((file, index) => `
+        <div class="bulk-file-item">
+            <span class="file-name">${file.name}</span>
+            <span class="file-size">${formatFileSize(file.size)}</span>
+            <button type="button" class="btn-remove-file" onclick="removeBulkFile(${index})" title="Remove">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removeBulkFile(index) {
+    bulkUploadFiles.splice(index, 1);
+    renderBulkFileList();
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function startBulkUpload() {
+    if (bulkUploadFiles.length === 0) return;
+
+    const uploadBtn = document.getElementById('startBulkUpload');
+    const progressSection = document.getElementById('bulkUploadProgress');
+    const progressFill = document.getElementById('bulkProgressFill');
+    const progressText = document.getElementById('bulkProgressText');
+    const resultsSection = document.getElementById('bulkUploadResults');
+    const resultSummary = document.getElementById('bulkResultSummary');
+
+    // Show progress
+    uploadBtn.disabled = true;
+    progressSection.style.display = 'block';
+    resultsSection.style.display = 'none';
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Preparing upload...';
+
+    try {
+        const formData = new FormData();
+        bulkUploadFiles.forEach(file => {
+            formData.append('files', file);
+        });
+
+        progressText.textContent = `Uploading ${bulkUploadFiles.length} files...`;
+        progressFill.style.width = '50%';
+
+        const response = await fetch('/api/bills/upload-files', {
+            method: 'POST',
+            body: formData
+        });
+
+        progressFill.style.width = '100%';
+        const data = await response.json();
+
+        // Show results
+        progressSection.style.display = 'none';
+        resultsSection.style.display = 'block';
+
+        if (data.success) {
+            resultSummary.innerHTML = `
+                <div class="result-success">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <div>
+                        <strong>${data.uploaded} files uploaded successfully</strong>
+                        ${data.skipped > 0 ? `<br><span class="text-muted">${data.skipped} files skipped</span>` : ''}
+                    </div>
+                </div>
+                ${data.details && data.details.length > 0 ? `
+                    <div class="result-details">
+                        ${data.details.map(d => `
+                            <div class="result-item ${d.status}">
+                                <span class="filename">${d.filename}</span>
+                                <span class="status-badge ${d.status}">${d.status}${d.reason ? ': ' + d.reason : ''}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            `;
+            showToast(`${data.uploaded} files uploaded successfully`, 'success');
+        } else {
+            resultSummary.innerHTML = `
+                <div class="result-error">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                    <div>
+                        <strong>Upload failed</strong>
+                        <br><span class="text-muted">${data.error || 'Unknown error'}</span>
+                    </div>
+                </div>
+            `;
+            showToast('Upload failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+
+        // Clear the file list
+        bulkUploadFiles = [];
+        document.getElementById('bulkFileList').style.display = 'none';
+
+    } catch (error) {
+        console.error('Bulk upload error:', error);
+        progressSection.style.display = 'none';
+        resultsSection.style.display = 'block';
+        resultSummary.innerHTML = `
+            <div class="result-error">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+                <div>
+                    <strong>Upload failed</strong>
+                    <br><span class="text-muted">${error.message}</span>
+                </div>
+            </div>
+        `;
+        showToast('Upload failed: ' + error.message, 'error');
+    }
+
+    uploadBtn.disabled = false;
+}
+
+// Initialize bulk upload on page load
+document.addEventListener('DOMContentLoaded', initBulkUpload);
+
+// ============================================================================
 // EXPOSE FUNCTIONS TO GLOBAL SCOPE (for remaining inline onclick handlers)
 // ============================================================================
 window.viewInvoiceDetail = viewInvoiceDetail;
@@ -1507,3 +1742,4 @@ window.updateLineItem = updateLineItem;
 window.removeLineItem = removeLineItem;
 window.handleImageError = handleImageError;
 window.updateZoomDisplay = updateZoomDisplay;
+window.removeBulkFile = removeBulkFile;
