@@ -11,7 +11,11 @@
       "Bash(git -C \"C:\\\\VISMA - AGGREGATOR\" log --oneline)",
       "Bash(pip install:*)",
       "Bash(node --check:*)",
-      "Bash(dir \"C:\\\\VISMA - AGGREGATOR\\\\Bills\")"
+      "Bash(dir \"C:\\\\VISMA - AGGREGATOR\\\\Bills\")",
+      "Bash(copy \"C:\\\\VISMA - AGGREGATOR\\\\1767887439045.jpg\" \"C:\\\\VISMA - AGGREGATOR\\\\static\\\\favicon.jpg\")",
+      "Bash(cmd /c copy \"C:\\\\VISMA - AGGREGATOR\\\\1767887439045.jpg\" \"C:\\\\VISMA - AGGREGATOR\\\\static\\\\favicon.jpg\")",
+      "Bash(cmd /c dir \"C:\\\\VISMA - AGGREGATOR\\\\static\\\\favicon.jpg\")",
+      "Bash(powershell -Command:*)"
     ]
   }
 }
