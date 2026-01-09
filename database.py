@@ -95,7 +95,7 @@ class DatabaseManager:
         pass
 
     def ensure_connected(self) -> bool:
-        
+
         """Test connection - for compatibility"""
         return self.connect()
 
