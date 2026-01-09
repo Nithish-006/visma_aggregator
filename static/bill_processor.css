@@ -865,6 +865,54 @@ body {
     animation: spin 1s linear infinite;
 }
 
+/* Processing Logs */
+.processing-logs {
+    margin-top: 16px;
+    max-height: 150px;
+    overflow-y: auto;
+    background: var(--bg-card);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: left;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+    font-size: 0.75rem;
+}
+
+.log-entry {
+    padding: 4px 0;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.log-time {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.log-icon {
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+}
+
+.log-entry.log-success {
+    color: var(--success-color);
+}
+
+.log-entry.log-error {
+    color: var(--error-color);
+}
+
+.log-entry.log-duplicate {
+    color: #f59e0b;
+}
+
+.log-entry.log-info {
+    color: var(--text-secondary);
+}
+
 /* ============================================================================
    RESULTS PREVIEW
    ============================================================================ */
@@ -903,6 +951,13 @@ body {
     color: var(--error-color);
 }
 
+.results-stats .stat.time {
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .results-list {
     max-height: 300px;
     overflow-y: auto;
@@ -924,6 +979,26 @@ body {
 
 .result-item.error .result-icon {
     color: var(--error-color);
+}
+
+.result-item.duplicate .result-icon {
+    color: #f59e0b;
+}
+
+.result-item.duplicate {
+    background: rgba(245, 158, 11, 0.1);
+    border-left: 3px solid #f59e0b;
+}
+
+.duplicate-warning {
+    background: #f59e0b;
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .result-info {
@@ -1839,4 +1914,700 @@ textarea.form-input {
 .status-badge.skipped {
     background: rgba(234, 179, 8, 0.2);
     color: #eab308;
+}
+
+/* ============================================================================
+   ADDED DATE COLUMN STYLES
+   ============================================================================ */
+
+.cell-added {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* ============================================================================
+   MOBILE TIME FILTER CHIPS
+   ============================================================================ */
+
+.mobile-time-filters {
+    display: none;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 0;
+}
+
+.time-chips-scroll {
+    display: flex;
+    gap: 8px;
+    padding: 0 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.time-chips-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.time-chip {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.time-chip:active {
+    transform: scale(0.95);
+}
+
+.time-chip.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: white;
+}
+
+/* Invoice Added Badge on Mobile Cards */
+.invoice-added {
+    color: var(--info-color);
+}
+
+/* ============================================================================
+   MOBILE VIEW - BILL PROCESSOR (VIEW-ONLY OPTIMIZED)
+   ============================================================================ */
+
+/* Mobile CSS Variables & Safe Area Support */
+@supports (padding: env(safe-area-inset-top)) {
+    :root {
+        --safe-area-top: env(safe-area-inset-top, 0px);
+        --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-area-left: env(safe-area-inset-left, 0px);
+        --safe-area-right: env(safe-area-inset-right, 0px);
+    }
+}
+
+/* ============================================================================
+   MOBILE INVOICE CARDS (Replaces Table)
+   ============================================================================ */
+
+.mobile-invoice-list {
+    display: none;
+    padding: 12px;
+    gap: 12px;
+}
+
+.invoice-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.invoice-card:active {
+    background: var(--bg-hover);
+    transform: scale(0.98);
+}
+
+.invoice-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.invoice-card-number {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent-color);
+}
+
+.invoice-card-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--bg-card);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.invoice-card-vendor {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.invoice-card-buyer {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+
+.invoice-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.invoice-card-project {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.invoice-card-project svg {
+    width: 12px;
+    height: 12px;
+    color: var(--text-muted);
+}
+
+.invoice-card-project.empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.invoice-card-amount {
+    text-align: right;
+}
+
+.invoice-card-total {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--success-color);
+}
+
+.invoice-card-gst {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+/* Invoice Meta Row */
+.invoice-card-meta {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.invoice-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.invoice-meta-item svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* ============================================================================
+   MOBILE HEADER STYLES
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Hide desktop elements */
+    .header-right .btn {
+        display: none;
+    }
+
+    .user-badge {
+        display: none;
+    }
+
+    /* Show mobile time filters */
+    .mobile-time-filters {
+        display: block;
+    }
+
+    /* Compact header */
+    .header {
+        padding: 12px 16px;
+        padding-top: calc(12px + var(--safe-area-top, 0px));
+    }
+
+    .page-title {
+        font-size: 1.125rem;
+    }
+
+    .back-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Main content adjustments */
+    .main-content {
+        padding: 12px;
+        padding-bottom: calc(20px + var(--safe-area-bottom, 0px));
+    }
+
+    /* Summary Stats - 2x2 Grid */
+    .summary-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 16px;
+    }
+
+    .stat-card {
+        padding: 12px;
+        gap: 10px;
+        border-radius: 10px;
+    }
+
+    .stat-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+    }
+
+    .stat-icon svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .stat-info .stat-value {
+        font-size: 1.125rem;
+    }
+
+    .stat-info .stat-label {
+        font-size: 0.6875rem;
+    }
+
+    /* Hide desktop table, show mobile cards */
+    .table-container {
+        display: none !important;
+    }
+
+    .mobile-invoice-list {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Tabs section header */
+    .main-tabs-section {
+        border-radius: 10px;
+    }
+
+    .tabs-header {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .tabs-title {
+        font-size: 0.9375rem;
+    }
+
+    /* Hide desktop time filter on mobile (using chips instead) */
+    .filter-section:first-of-type {
+        display: none;
+    }
+
+    .filter-section {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .filter-section label {
+        font-size: 0.8125rem;
+    }
+
+    .filter-select {
+        flex: 1;
+        min-width: 0;
+        width: 100%;
+        padding: 10px 32px 10px 12px;
+        font-size: 0.9375rem;
+        border-radius: 8px;
+    }
+
+    .tabs-actions {
+        display: none;
+    }
+
+    /* Empty state */
+    .empty-state {
+        padding: 40px 20px;
+    }
+
+    .empty-state svg {
+        width: 48px;
+        height: 48px;
+    }
+
+    .empty-state h3 {
+        font-size: 1rem;
+    }
+
+    .empty-state p {
+        font-size: 0.8125rem;
+    }
+}
+
+/* ============================================================================
+   MOBILE DETAIL MODAL (VIEW-ONLY)
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .modal {
+        padding: 0;
+        align-items: flex-end;
+    }
+
+    .modal-content {
+        width: 100%;
+        max-width: 100%;
+        max-height: calc(95vh - var(--safe-area-top, 0px));
+        border-radius: 20px 20px 0 0;
+        animation: mobileSlideUp 0.3s ease;
+    }
+
+    @keyframes mobileSlideUp {
+        from {
+            transform: translateY(100%);
+        }
+        to {
+            transform: translateY(0);
+        }
+    }
+
+    .modal-header {
+        padding: 20px 16px 16px;
+        position: sticky;
+        top: 0;
+        background: var(--bg-card);
+        z-index: 10;
+    }
+
+    /* Drag handle indicator */
+    .modal-header::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 4px;
+        background: var(--border-color);
+        border-radius: 2px;
+    }
+
+    .modal-header h3 {
+        font-size: 1.0625rem;
+        padding-top: 8px;
+    }
+
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        font-size: 1.25rem;
+        border-radius: 50%;
+    }
+
+    .modal-body {
+        padding: 16px;
+        padding-bottom: calc(24px + var(--safe-area-bottom, 0px));
+    }
+
+    .modal-footer {
+        display: none;
+    }
+
+    /* Detail sections */
+    .detail-section {
+        margin-bottom: 20px;
+    }
+
+    .detail-section-title {
+        font-size: 0.8125rem;
+        margin-bottom: 10px;
+        padding-bottom: 6px;
+    }
+
+    .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 8px 12px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+    }
+
+    .detail-label {
+        font-size: 0.6875rem;
+    }
+
+    .detail-value {
+        font-size: 0.875rem;
+        text-align: right;
+        max-width: 60%;
+        word-break: break-word;
+    }
+
+    /* Line items table in modal */
+    .line-items-table {
+        font-size: 0.75rem;
+    }
+
+    .line-items-table th,
+    .line-items-table td {
+        padding: 8px 6px;
+    }
+
+    .line-items-table th {
+        font-size: 0.625rem;
+    }
+}
+
+/* ============================================================================
+   MOBILE UPLOAD/EDIT MODALS (HIDDEN FOR VIEW-ONLY)
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Hide upload modal on mobile - view only */
+    #uploadModal,
+    #editModal,
+    #bulkUploadModal {
+        display: none !important;
+    }
+
+    /* Hide action buttons in any remaining places */
+    .action-buttons {
+        display: none;
+    }
+}
+
+/* ============================================================================
+   TOUCH-FRIENDLY INTERACTIONS
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    /* Larger touch targets */
+    .btn, button {
+        min-height: 44px;
+    }
+
+    /* Smooth scrolling */
+    .modal-body,
+    .mobile-invoice-list {
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+
+    /* Disable text selection on interactive elements */
+    .invoice-card,
+    .stat-card {
+        -webkit-user-select: none;
+        user-select: none;
+    }
+}
+
+/* ============================================================================
+   SMALL MOBILE (480px and below)
+   ============================================================================ */
+
+@media (max-width: 480px) {
+    .header {
+        padding: 10px 12px;
+        padding-top: calc(10px + var(--safe-area-top, 0px));
+    }
+
+    .header-left {
+        gap: 8px;
+    }
+
+    .page-title {
+        font-size: 1rem;
+    }
+
+    .back-btn {
+        width: 32px;
+        height: 32px;
+    }
+
+    .main-content {
+        padding: 10px;
+    }
+
+    .summary-stats {
+        gap: 8px;
+    }
+
+    .stat-card {
+        padding: 10px;
+        gap: 8px;
+    }
+
+    .stat-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .stat-icon svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .stat-info .stat-value {
+        font-size: 1rem;
+    }
+
+    .stat-info .stat-label {
+        font-size: 0.625rem;
+    }
+
+    .tabs-header {
+        padding: 10px;
+    }
+
+    .tabs-title {
+        font-size: 0.875rem;
+    }
+
+    .tabs-title svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .mobile-invoice-list {
+        padding: 10px;
+        gap: 10px;
+    }
+
+    .invoice-card {
+        padding: 14px;
+        border-radius: 10px;
+    }
+
+    .invoice-card-number {
+        font-size: 0.9375rem;
+    }
+
+    .invoice-card-vendor {
+        font-size: 0.875rem;
+    }
+
+    .invoice-card-buyer {
+        font-size: 0.75rem;
+    }
+
+    .invoice-card-total {
+        font-size: 1rem;
+    }
+
+    .invoice-card-project {
+        font-size: 0.6875rem;
+        padding: 3px 8px;
+    }
+
+    /* Modal adjustments */
+    .modal-header h3 {
+        font-size: 1rem;
+    }
+
+    .modal-body {
+        padding: 12px;
+    }
+
+    .detail-item {
+        padding: 6px 10px;
+    }
+
+    .detail-label {
+        font-size: 0.625rem;
+    }
+
+    .detail-value {
+        font-size: 0.8125rem;
+    }
+}
+
+/* ============================================================================
+   LOADING STATE FOR MOBILE
+   ============================================================================ */
+
+.mobile-loading {
+    display: none;
+    padding: 40px 20px;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    .mobile-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        color: var(--text-muted);
+    }
+
+    .mobile-loading .loading-spinner {
+        width: 32px;
+        height: 32px;
+    }
+}
+
+/* ============================================================================
+   PULL TO REFRESH INDICATOR (Visual Only)
+   ============================================================================ */
+
+.pull-indicator {
+    display: none;
+    justify-content: center;
+    padding: 16px;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+}
+
+@media (max-width: 768px) {
+    .pull-indicator.show {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+}
+
+/* ============================================================================
+   TOAST MOBILE POSITIONING
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .toast {
+        bottom: calc(20px + var(--safe-area-bottom, 0px));
+        left: 16px;
+        right: 16px;
+        transform: translateY(100px);
+        max-width: none;
+        font-size: 0.875rem;
+        padding: 12px 16px;
+    }
+
+    .toast.show {
+        transform: translateY(0);
+    }
 }

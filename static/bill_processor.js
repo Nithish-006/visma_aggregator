@@ -6,6 +6,7 @@
 let storedBills = [];
 let allProjects = [];
 let currentProjectFilter = '';
+let currentTimeFilter = '';
 let fileQueue = [];
 let processedResults = [];
 let rawResults = [];
@@ -42,6 +43,12 @@ function init() {
 
     // Project filter
     document.getElementById('projectFilter').addEventListener('change', handleProjectFilterChange);
+
+    // Time filter (desktop)
+    document.getElementById('timeFilter').addEventListener('change', handleTimeFilterChange);
+
+    // Mobile time filter chips
+    initMobileTimeFilters();
 
     // Header buttons
     document.getElementById('newBillBtn').addEventListener('click', openUploadModal);
@@ -142,6 +149,97 @@ function handleProjectFilterChange(e) {
     loadStoredBills();
 }
 
+function handleTimeFilterChange(e) {
+    currentTimeFilter = e.target.value;
+    // Sync mobile chips with desktop dropdown
+    syncMobileTimeChips(currentTimeFilter);
+    loadSummary();
+    loadStoredBills();
+}
+
+function initMobileTimeFilters() {
+    const chips = document.querySelectorAll('.time-chip');
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            // Update active state
+            chips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+
+            // Update filter and sync desktop dropdown
+            currentTimeFilter = chip.dataset.value;
+            document.getElementById('timeFilter').value = currentTimeFilter;
+
+            loadSummary();
+            loadStoredBills();
+        });
+    });
+}
+
+function syncMobileTimeChips(value) {
+    const chips = document.querySelectorAll('.time-chip');
+    chips.forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.value === value);
+    });
+}
+
+function getDateRange(filterValue) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let dateFrom = null;
+    let dateTo = null;
+
+    switch (filterValue) {
+        case 'today':
+            dateFrom = formatDateForAPI(today);
+            dateTo = formatDateForAPI(today);
+            break;
+        case 'yesterday':
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            dateFrom = formatDateForAPI(yesterday);
+            dateTo = formatDateForAPI(yesterday);
+            break;
+        case 'week':
+            const weekStart = new Date(today);
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week (Sunday)
+            dateFrom = formatDateForAPI(weekStart);
+            dateTo = formatDateForAPI(today);
+            break;
+        case 'month':
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            dateFrom = formatDateForAPI(monthStart);
+            dateTo = formatDateForAPI(today);
+            break;
+        case '30days':
+            const thirtyDaysAgo = new Date(today);
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            dateFrom = formatDateForAPI(thirtyDaysAgo);
+            dateTo = formatDateForAPI(today);
+            break;
+        case '90days':
+            const ninetyDaysAgo = new Date(today);
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+            dateFrom = formatDateForAPI(ninetyDaysAgo);
+            dateTo = formatDateForAPI(today);
+            break;
+        case 'year':
+            const yearStart = new Date(today.getFullYear(), 0, 1);
+            dateFrom = formatDateForAPI(yearStart);
+            dateTo = formatDateForAPI(today);
+            break;
+        default:
+            // All time - no filter
+            break;
+    }
+
+    return { dateFrom, dateTo };
+}
+
+function formatDateForAPI(date) {
+    return date.toISOString().split('T')[0];
+}
+
 function handleOutsideClick(e) {
     if (activeProjectEdit && !e.target.closest('.project-cell')) {
         closeProjectEdit();
@@ -199,6 +297,15 @@ async function loadStoredBills() {
             url += `&project=${encodeURIComponent(currentProjectFilter)}`;
         }
 
+        // Add date range filter
+        const { dateFrom, dateTo } = getDateRange(currentTimeFilter);
+        if (dateFrom) {
+            url += `&date_from=${dateFrom}`;
+        }
+        if (dateTo) {
+            url += `&date_to=${dateTo}`;
+        }
+
         const response = await fetch(url);
         const data = await response.json();
 
@@ -229,9 +336,11 @@ function renderInvoicesTable() {
     const tbody = document.getElementById('invoicesBody');
     const emptyState = document.getElementById('invoicesEmpty');
     const tableContainer = document.querySelector('#invoicesTab .table-container');
+    const mobileList = document.getElementById('mobileInvoiceList');
 
     if (storedBills.length === 0) {
         tableContainer.style.display = 'none';
+        if (mobileList) mobileList.innerHTML = '';
         emptyState.style.display = 'flex';
         return;
     }
@@ -239,11 +348,13 @@ function renderInvoicesTable() {
     tableContainer.style.display = 'block';
     emptyState.style.display = 'none';
 
+    // Render desktop table
     tbody.innerHTML = storedBills.map(bill => {
         const gst = (parseFloat(bill.total_cgst) || 0) + (parseFloat(bill.total_sgst) || 0) + (parseFloat(bill.total_igst) || 0);
         const projectDisplay = bill.project || '';
         const projectClass = projectDisplay ? '' : 'empty';
         const projectText = projectDisplay || 'Click to add';
+        const addedDisplay = formatAddedDate(bill.created_at);
 
         return `
             <tr>
@@ -265,6 +376,7 @@ function renderInvoicesTable() {
                         </svg>
                     </div>
                 </td>
+                <td class="cell-added">${addedDisplay}</td>
                 <td>
                     <div class="action-buttons">
                         <button class="btn-icon" onclick="viewInvoiceDetail(${bill.id})" title="View Details">
@@ -290,6 +402,184 @@ function renderInvoicesTable() {
             </tr>
         `;
     }).join('');
+
+    // Render mobile cards
+    renderMobileInvoiceCards();
+}
+
+// ============================================================================
+// MOBILE INVOICE CARDS RENDERING
+// ============================================================================
+
+function renderMobileInvoiceCards() {
+    const mobileList = document.getElementById('mobileInvoiceList');
+    if (!mobileList) return;
+
+    mobileList.innerHTML = storedBills.map(bill => {
+        const gst = (parseFloat(bill.total_cgst) || 0) + (parseFloat(bill.total_sgst) || 0) + (parseFloat(bill.total_igst) || 0);
+        const projectDisplay = bill.project || '';
+        const projectClass = projectDisplay ? '' : 'empty';
+        const projectText = projectDisplay || 'No project';
+
+        // Format date nicely
+        const dateDisplay = formatMobileDate(bill.invoice_date);
+        const addedAgo = formatRelativeTime(bill.created_at);
+
+        return `
+            <div class="invoice-card" onclick="viewInvoiceDetail(${bill.id})">
+                <div class="invoice-card-header">
+                    <span class="invoice-card-number">#${escapeHtml(bill.invoice_number || 'N/A')}</span>
+                    <span class="invoice-card-date">${dateDisplay}</span>
+                </div>
+                <div class="invoice-card-vendor">${escapeHtml(bill.vendor_name || 'Unknown Vendor')}</div>
+                <div class="invoice-card-buyer">To: ${escapeHtml(bill.buyer_name || '-')}</div>
+                <div class="invoice-card-meta">
+                    <span class="invoice-meta-item">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="8" y1="6" x2="21" y2="6"></line>
+                            <line x1="8" y1="12" x2="21" y2="12"></line>
+                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                        </svg>
+                        ${bill.line_item_count || 0} items
+                    </span>
+                    <span class="invoice-meta-item invoice-added">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        ${addedAgo}
+                    </span>
+                </div>
+                <div class="invoice-card-footer">
+                    <span class="invoice-card-project ${projectClass}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        ${escapeHtml(projectText)}
+                    </span>
+                    <div class="invoice-card-amount">
+                        <div class="invoice-card-total">${formatIndianCurrency(bill.total_amount)}</div>
+                        ${gst > 0 ? `<div class="invoice-card-gst">GST: ${formatIndianCurrency(gst)}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function formatMobileDate(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: '2-digit'
+        });
+    } catch {
+        return dateStr;
+    }
+}
+
+function formatAddedDate(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+
+        const now = new Date();
+        const diffTime = Math.abs(now - date);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        // If today, show time
+        if (diffDays === 0) {
+            return 'Today ' + date.toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        // If yesterday
+        if (diffDays === 1) {
+            return 'Yesterday';
+        }
+
+        // If within this week (less than 7 days)
+        if (diffDays < 7) {
+            return `${diffDays} days ago`;
+        }
+
+        // Otherwise show date
+        return date.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+        });
+    } catch {
+        return dateStr;
+    }
+}
+
+function formatRelativeTime(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+
+        const now = new Date();
+        const diffTime = Math.abs(now - date);
+        const diffMinutes = Math.floor(diffTime / (1000 * 60));
+        const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        // Just now (less than 1 minute)
+        if (diffMinutes < 1) {
+            return 'Just now';
+        }
+
+        // Minutes ago
+        if (diffMinutes < 60) {
+            return `${diffMinutes}m ago`;
+        }
+
+        // Hours ago (same day)
+        if (diffHours < 24 && diffDays === 0) {
+            return `${diffHours}h ago`;
+        }
+
+        // Yesterday
+        if (diffDays === 1) {
+            return 'Yesterday';
+        }
+
+        // Days ago (up to 7 days)
+        if (diffDays < 7) {
+            return `${diffDays}d ago`;
+        }
+
+        // Weeks ago (up to 4 weeks)
+        if (diffDays < 30) {
+            const weeks = Math.floor(diffDays / 7);
+            return `${weeks}w ago`;
+        }
+
+        // Months ago
+        const months = Math.floor(diffDays / 30);
+        if (months < 12) {
+            return `${months}mo ago`;
+        }
+
+        // Years ago
+        const years = Math.floor(diffDays / 365);
+        return `${years}y ago`;
+    } catch {
+        return dateStr;
+    }
 }
 
 function showEmptyState() {
@@ -757,6 +1047,43 @@ function formatFileSize(bytes) {
 // PROCESSING
 // ============================================================================
 
+let processingStartTime = null;
+let totalProcessingTime = 0;
+
+function addProcessingLog(message, status = 'info') {
+    const logsContainer = document.getElementById('processingLogs');
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+    const statusIcon = {
+        'info': '○',
+        'success': '✓',
+        'error': '✗',
+        'duplicate': '⚠'
+    }[status] || '○';
+
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry log-${status}`;
+    logEntry.innerHTML = `<span class="log-time">${timestamp}</span> <span class="log-icon">${statusIcon}</span> ${message}`;
+
+    logsContainer.appendChild(logEntry);
+    logsContainer.scrollTop = logsContainer.scrollHeight;
+}
+
+function clearProcessingLogs() {
+    document.getElementById('processingLogs').innerHTML = '';
+}
+
+function formatDuration(ms) {
+    if (ms < 1000) return `${ms}ms`;
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    if (minutes > 0) {
+        return `${minutes}m ${remainingSeconds}s`;
+    }
+    return `${seconds}.${Math.floor((ms % 1000) / 100)}s`;
+}
+
 async function processFiles() {
     if (fileQueue.length === 0) return;
 
@@ -771,17 +1098,36 @@ async function processFiles() {
     processedResults = [];
     rawResults = [];
 
+    // Clear logs and start timer
+    clearProcessingLogs();
+    processingStartTime = Date.now();
+    addProcessingLog(`Starting batch processing of ${total} file${total > 1 ? 's' : ''}...`, 'info');
+
     updateProgress(0, total);
 
     for (const file of fileQueue) {
+        const fileStartTime = Date.now();
         document.getElementById('processingText').textContent = `Processing ${file.name}...`;
+        addProcessingLog(`Processing: ${file.name}`, 'info');
 
         try {
             const result = await uploadAndProcessFile(file);
+            const fileTime = Date.now() - fileStartTime;
+
             if (result.success) {
                 rawResults.push(...result.results);
+
+                // Log each result from display_data
+                for (const item of result.display_data) {
+                    if (item.is_duplicate) {
+                        addProcessingLog(`Duplicate: Invoice #${item.invoice_number || 'N/A'} already exists`, 'duplicate');
+                    } else if (item.success) {
+                        addProcessingLog(`Extracted: Invoice #${item.invoice_number || 'N/A'} - ${item.vendor_name || 'Unknown'} (${formatDuration(fileTime)})`, 'success');
+                    }
+                }
                 processedResults.push(...result.display_data);
             } else {
+                addProcessingLog(`Failed: ${result.error || 'Unknown error'}`, 'error');
                 processedResults.push({
                     success: false,
                     error: result.error || 'Unknown error',
@@ -789,6 +1135,7 @@ async function processFiles() {
                 });
             }
         } catch (error) {
+            addProcessingLog(`Error: ${error.message || 'Processing failed'}`, 'error');
             processedResults.push({
                 success: false,
                 error: error.message || 'Processing failed',
@@ -799,6 +1146,10 @@ async function processFiles() {
         processed++;
         updateProgress(processed, total);
     }
+
+    // Calculate total time
+    totalProcessingTime = Date.now() - processingStartTime;
+    addProcessingLog(`Completed in ${formatDuration(totalProcessingTime)}`, 'info');
 
     // Show results
     showProcessingResults();
@@ -831,31 +1182,53 @@ function showProcessingResults() {
     document.getElementById('processingStatus').style.display = 'none';
     document.getElementById('resultsPreview').style.display = 'block';
 
-    const successCount = processedResults.filter(r => r.success).length;
-    const errorCount = processedResults.filter(r => !r.success).length;
+    const successCount = processedResults.filter(r => r.success && !r.is_duplicate).length;
+    const duplicateCount = processedResults.filter(r => r.is_duplicate).length;
+    const errorCount = processedResults.filter(r => !r.success && !r.is_duplicate).length;
 
     document.getElementById('successCount').textContent = successCount;
-    document.getElementById('errorCount').textContent = errorCount;
 
-    document.getElementById('resultsList').innerHTML = processedResults.map(result => `
-        <div class="result-item ${result.success ? 'success' : 'error'}">
-            <div class="result-icon">
-                ${result.success ?
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>' :
-                    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>'
-                }
-            </div>
-            <div class="result-info">
-                <div class="result-filename">${result.filename || 'Unknown'}</div>
-                <div class="result-detail">
-                    ${result.success ?
-                        `Invoice: ${result.invoice_number || 'N/A'} | ${result.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(result.total_amount)}` :
-                        `Error: ${result.error}`
-                    }
+    // Show total processing time
+    const timeDisplay = document.getElementById('totalTimeDisplay');
+    if (totalProcessingTime > 0) {
+        timeDisplay.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${formatDuration(totalProcessingTime)}`;
+    }
+    document.getElementById('errorCount').textContent = errorCount + duplicateCount;
+
+    document.getElementById('resultsList').innerHTML = processedResults.map(result => {
+        // Determine the status class and icon
+        let statusClass = 'error';
+        let icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+
+        if (result.is_duplicate) {
+            statusClass = 'duplicate';
+            icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+        } else if (result.success) {
+            statusClass = 'success';
+            icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+        }
+
+        // Build the detail message
+        let detailMessage = '';
+        if (result.is_duplicate && result.existing_bill) {
+            const existing = result.existing_bill;
+            detailMessage = `<span class="duplicate-warning">DUPLICATE BILL</span> - Already processed on ${existing.created_at || 'N/A'}<br>Existing: Invoice #${existing.invoice_number} | ${existing.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(existing.total_amount)}`;
+        } else if (result.success) {
+            detailMessage = `Invoice: ${result.invoice_number || 'N/A'} | ${result.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(result.total_amount)}`;
+        } else {
+            detailMessage = `Error: ${result.error}`;
+        }
+
+        return `
+            <div class="result-item ${statusClass}">
+                <div class="result-icon">${icon}</div>
+                <div class="result-info">
+                    <div class="result-filename">${result.filename || 'Unknown'}</div>
+                    <div class="result-detail">${detailMessage}</div>
                 </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 
     // Update button to close
     processBtn.disabled = false;

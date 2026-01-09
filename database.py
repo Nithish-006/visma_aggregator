@@ -95,6 +95,7 @@ class DatabaseManager:
         pass
 
     def ensure_connected(self) -> bool:
+        
         """Test connection - for compatibility"""
         return self.connect()
 
@@ -686,8 +687,9 @@ class DatabaseManager:
             traceback.print_exc()
             return False, None, str(e)
 
-    def get_all_bills(self, limit: int = 100, offset: int = 0, project: str = None) -> List[Dict]:
-        """Get all bills from database with pagination and optional project filter"""
+    def get_all_bills(self, limit: int = 100, offset: int = 0, project: str = None,
+                       date_from: str = None, date_to: str = None) -> List[Dict]:
+        """Get all bills from database with pagination and optional project/date filters"""
         query = """
         SELECT
             bi.id, bi.filename, bi.page_number, bi.invoice_number, bi.invoice_date,
@@ -698,12 +700,21 @@ class DatabaseManager:
             COUNT(bli.id) as line_item_count
         FROM bill_invoices bi
         LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
+        WHERE 1=1
         """
         params = []
 
         if project:
-            query += " WHERE bi.project = %s"
+            query += " AND bi.project = %s"
             params.append(project)
+
+        if date_from:
+            query += " AND DATE(bi.created_at) >= %s"
+            params.append(date_from)
+
+        if date_to:
+            query += " AND DATE(bi.created_at) <= %s"
+            params.append(date_to)
 
         query += """
         GROUP BY bi.id
@@ -799,16 +810,63 @@ class DatabaseManager:
             print(f"[!] Error fetching unique projects: {e}")
             return []
 
-    def get_bill_count(self, project: str = None) -> int:
-        """Get total number of stored bills, optionally filtered by project"""
+    def get_bill_count(self, project: str = None, date_from: str = None, date_to: str = None) -> int:
+        """Get total number of stored bills, optionally filtered by project and date range"""
+        query = "SELECT COUNT(*) FROM bill_invoices WHERE 1=1"
+        params = []
+
         if project:
-            result = self.fetch_all(
-                "SELECT COUNT(*) FROM bill_invoices WHERE project = %s",
-                (project,)
-            )
-        else:
-            result = self.fetch_all("SELECT COUNT(*) FROM bill_invoices")
+            query += " AND project = %s"
+            params.append(project)
+
+        if date_from:
+            query += " AND DATE(created_at) >= %s"
+            params.append(date_from)
+
+        if date_to:
+            query += " AND DATE(created_at) <= %s"
+            params.append(date_to)
+
+        result = self.fetch_all(query, tuple(params) if params else None)
         return result[0][0] if result else 0
+
+    def check_duplicate_invoice(self, invoice_number: str) -> Optional[Dict]:
+        """
+        Check if a bill with the given invoice number already exists.
+
+        Args:
+            invoice_number: The invoice number to check
+
+        Returns:
+            Dict with existing bill details if duplicate found, None otherwise
+        """
+        if not invoice_number or invoice_number.strip() == '':
+            return None
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("""
+                    SELECT id, invoice_number, invoice_date, vendor_name, vendor_gstin,
+                           total_amount, filename, created_at
+                    FROM bill_invoices
+                    WHERE invoice_number = %s
+                    LIMIT 1
+                """, (invoice_number.strip(),))
+                result = cursor.fetchone()
+                cursor.close()
+
+                if result:
+                    # Format dates for display
+                    if result.get('invoice_date'):
+                        result['invoice_date'] = result['invoice_date'].strftime('%d-%b-%Y')
+                    if result.get('created_at'):
+                        result['created_at'] = result['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                    return result
+                return None
+        except Exception as e:
+            print(f"[!] Error checking duplicate invoice: {e}")
+            return None
 
     def update_bill(self, invoice_id: int, bill_data: Dict) -> Tuple[bool, Optional[str]]:
         """

@@ -1977,18 +1977,36 @@ def process_bill():
         print(f"[*] Processing bill with Gemini Vision: {filename}")
         results = process_bill_file(temp_path, filename)
 
-        # Save to database
+        # Save to database (with duplicate check)
         db_results = []
         for bill in results:
             if bill.get('success'):
+                # Extract invoice number from the bill data
+                invoice_number = bill.get('data', {}).get('invoice_header', {}).get('invoice_number', '')
+
+                # Check for duplicate invoice before saving
+                existing_bill = db_manager.check_duplicate_invoice(invoice_number)
+                if existing_bill:
+                    print(f"[!] Duplicate bill detected: Invoice #{invoice_number} already exists (ID: {existing_bill['id']})")
+                    db_results.append({
+                        'saved': False,
+                        'invoice_id': None,
+                        'db_error': 'Duplicate invoice',
+                        'is_duplicate': True,
+                        'existing_bill': existing_bill
+                    })
+                    continue
+
+                # No duplicate found, proceed with insert
                 success, invoice_id, error = db_manager.insert_bill(bill)
                 db_results.append({
                     'saved': success,
                     'invoice_id': invoice_id,
-                    'db_error': error
+                    'db_error': error,
+                    'is_duplicate': False
                 })
             else:
-                db_results.append({'saved': False, 'invoice_id': None, 'db_error': 'Extraction failed'})
+                db_results.append({'saved': False, 'invoice_id': None, 'db_error': 'Extraction failed', 'is_duplicate': False})
 
         # Format for display
         display_data = format_extracted_data_for_display(results)
@@ -1998,6 +2016,9 @@ def process_bill():
             if i < len(db_results):
                 display_item['db_saved'] = db_results[i]['saved']
                 display_item['invoice_id'] = db_results[i]['invoice_id']
+                display_item['is_duplicate'] = db_results[i].get('is_duplicate', False)
+                if db_results[i].get('existing_bill'):
+                    display_item['existing_bill'] = db_results[i]['existing_bill']
 
         return jsonify({
             'success': True,
@@ -2048,14 +2069,17 @@ def download_bills_excel():
 @app.route('/api/bills/stored')
 @login_required
 def get_stored_bills():
-    """Get all stored bills from database"""
+    """Get all stored bills from database with optional filters"""
     try:
         limit = request.args.get('limit', 100, type=int)
         offset = request.args.get('offset', 0, type=int)
         project = request.args.get('project', None)
+        date_from = request.args.get('date_from', None)
+        date_to = request.args.get('date_to', None)
 
-        bills = db_manager.get_all_bills(limit=limit, offset=offset, project=project)
-        total = db_manager.get_bill_count(project=project)
+        bills = db_manager.get_all_bills(limit=limit, offset=offset, project=project,
+                                         date_from=date_from, date_to=date_to)
+        total = db_manager.get_bill_count(project=project, date_from=date_from, date_to=date_to)
 
         return jsonify({
             'success': True,

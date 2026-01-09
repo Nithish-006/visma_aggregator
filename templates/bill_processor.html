@@ -119,6 +119,19 @@
             </div>
         </section>
 
+        <!-- Mobile Time Filter Chips -->
+        <section class="mobile-time-filters" id="mobileTimeFilters">
+            <div class="time-chips-scroll">
+                <button class="time-chip active" data-value="">All</button>
+                <button class="time-chip" data-value="today">Today</button>
+                <button class="time-chip" data-value="yesterday">Yesterday</button>
+                <button class="time-chip" data-value="week">This Week</button>
+                <button class="time-chip" data-value="month">This Month</button>
+                <button class="time-chip" data-value="30days">30 Days</button>
+                <button class="time-chip" data-value="year">This Year</button>
+            </div>
+        </section>
+
         <!-- Main Tabs -->
         <section class="main-tabs-section">
             <div class="tabs-header">
@@ -129,6 +142,21 @@
                         <polyline points="14 2 14 8 20 8"></polyline>
                     </svg>
                     Invoice Summary
+                </div>
+                <div class="filter-section">
+                    <label for="timeFilter">Added:</label>
+                    <div class="select-wrapper">
+                        <select id="timeFilter" class="filter-select">
+                            <option value="">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="30days">Last 30 Days</option>
+                            <option value="90days">Last 90 Days</option>
+                            <option value="year">This Year</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="filter-section">
                     <label for="projectFilter">Project:</label>
@@ -162,6 +190,7 @@
 
             <!-- Invoice Summary Tab -->
             <div class="tab-content active" id="invoicesTab">
+                <!-- Desktop Table View -->
                 <div class="table-container">
                     <table class="data-table" id="invoicesTable">
                         <thead>
@@ -176,12 +205,13 @@
                                 <th>GST</th>
                                 <th>Total</th>
                                 <th>Project</th>
+                                <th>Added</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="invoicesBody">
                             <tr class="loading-row">
-                                <td colspan="11">
+                                <td colspan="12">
                                     <div class="loading-spinner"></div>
                                     Loading invoices...
                                 </td>
@@ -189,6 +219,12 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Mobile Cards View -->
+                <div class="mobile-invoice-list" id="mobileInvoiceList">
+                    <!-- Invoice cards will be rendered here by JavaScript -->
+                </div>
+
                 <div class="empty-state" id="invoicesEmpty" style="display: none;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
@@ -196,7 +232,7 @@
                         <polyline points="14 2 14 8 20 8"></polyline>
                     </svg>
                     <h3>No invoices yet</h3>
-                    <p>Click "Process New Bills" to upload and extract invoice data</p>
+                    <p>Upload bills from desktop to view them here</p>
                 </div>
             </div>
         </section>
@@ -242,6 +278,7 @@
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
                     <p class="progress-text" id="progressText">0 / 0</p>
+                    <div class="processing-logs" id="processingLogs"></div>
                 </div>
 
                 <!-- Results Preview -->
@@ -251,6 +288,7 @@
                         <div class="results-stats">
                             <span class="stat success"><span id="successCount">0</span> Success</span>
                             <span class="stat error"><span id="errorCount">0</span> Errors</span>
+                            <span class="stat time" id="totalTimeDisplay"></span>
                         </div>
                     </div>
                     <div class="results-list" id="resultsList"></div>
