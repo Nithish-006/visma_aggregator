@@ -2208,14 +2208,17 @@ textarea.form-input {
     }
 
     .tabs-header {
-        flex-direction: column;
-        align-items: stretch;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
         padding: 12px;
         gap: 10px;
     }
 
     .tabs-title {
         font-size: 0.9375rem;
+        flex-shrink: 0;
     }
 
     /* Hide desktop time filter on mobile (using chips instead) */
@@ -2223,22 +2226,53 @@ textarea.form-input {
         display: none;
     }
 
+    /* Project filter - compact inline style */
     .filter-section {
-        margin-left: 0;
-        width: 100%;
+        display: none;
     }
 
-    .filter-section label {
-        font-size: 0.8125rem;
+    /* Show only the project filter (second filter section) */
+    .filter-section:last-of-type {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        width: auto;
+        background: var(--bg-card);
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
     }
 
-    .filter-select {
+    .filter-section:last-of-type label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    .filter-section:last-of-type .select-wrapper {
         flex: 1;
+    }
+
+    .filter-section:last-of-type .filter-select {
+        background: transparent;
+        border: none;
+        padding: 4px 24px 4px 0;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-primary);
         min-width: 0;
         width: 100%;
-        padding: 10px 32px 10px 12px;
-        font-size: 0.9375rem;
-        border-radius: 8px;
+    }
+
+    .filter-section:last-of-type .filter-select:focus {
+        outline: none;
+        box-shadow: none;
+    }
+
+    .filter-section:last-of-type .select-wrapper::after {
+        right: 4px;
+        border-top-color: var(--text-muted);
     }
 
     .tabs-actions {
@@ -2492,6 +2526,17 @@ textarea.form-input {
     .tabs-title svg {
         width: 14px;
         height: 14px;
+    }
+
+    /* Project filter on small screens - full width below title */
+    .tabs-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .filter-section:last-of-type {
+        width: 100%;
+        justify-content: space-between;
     }
 
     .mobile-invoice-list {
