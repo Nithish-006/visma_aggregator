@@ -209,18 +209,19 @@ body {
     left: 0;
     right: 0;
     z-index: 100;
-    background: rgba(15, 23, 42, 0.9);
+    background: rgba(15, 23, 42, 0.95);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-color);
-    padding: 1rem 2rem;
+    padding: 0.75rem 2rem;
 }
 
 .header-content {
-    max-width: 1800px;
+    max-width: 100%;
     margin: 0 auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 1.5rem;
     padding: 0 1rem;
 }
 
@@ -361,53 +362,49 @@ body {
     background: rgba(30, 41, 59, 0.95);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-color);
-    padding: 1.25rem 2rem;
+    padding: 1rem 2rem;
     margin-top: 80px;
 }
 
 .filter-bar .container {
-    max-width: 1800px;
+    max-width: 100%;
     margin: 0 auto;
     display: flex;
-    gap: 1.5rem;
+    gap: 1rem;
     align-items: flex-end;
     flex-wrap: nowrap;
     padding: 0 1rem;
-    justify-content: space-between;
-    /* Ensure content spreads */
+    justify-content: flex-start;
 }
 
 .filter-group {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
+    flex: 1;
+    min-width: 140px;
+    max-width: 200px;
 }
 
 .filter-group label {
     font-size: 0.7rem;
     font-weight: 600;
-    color: var(--text-main);
+    color: var(--text-muted);
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
 .filter-select,
 .filter-input.date-input {
-    padding: 0.6rem 0.9rem;
+    padding: 0.6rem 0.75rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     background: var(--bg-input);
     color: var(--text-main);
     font-size: 0.85rem;
-    min-width: 140px;
+    width: 100%;
+    height: 38px;
     transition: all var(--transition-fast);
-}
-
-/* Custom Dropdown Filter Groups - Stretch uniformly */
-.filter-group:has(.custom-dropdown) {
-    flex: 1;
-    min-width: 200px;
-    /* max-width removed to allow full expansion */
 }
 
 .filter-select:focus,
@@ -431,19 +428,15 @@ body {
     color: var(--text-main);
 }
 
-/* Date input styling */
-#start-date,
-#end-date {
-    width: 150px;
-    min-width: 150px;
-}
+/* Date input styling - inherits from filter-group */
 
 /* Filter actions spacing */
 .filter-actions {
-    margin-left: auto;
     display: flex;
+    align-items: flex-end;
     gap: 0.75rem;
     flex-shrink: 0;
+    align-self: flex-end;
 }
 
 .scenario-chips {
@@ -490,6 +483,7 @@ body {
     cursor: pointer;
     border: 1px solid transparent;
     transition: all var(--transition-fast);
+    height: 38px;
 }
 
 .btn-primary {
@@ -520,11 +514,12 @@ body {
 .main-content {
     position: relative;
     z-index: 10;
-    padding: 2rem;
+    padding: 1rem 2rem;
+    margin-top: 70px;
 }
 
 .container {
-    max-width: 1800px;
+    max-width: 100%;
     margin: 0 auto;
     padding: 0 1rem;
 }
@@ -536,7 +531,7 @@ body {
 .transactions-section {
     background: var(--bg-card);
     border-radius: var(--radius-lg);
-    padding: 1.5rem;
+    padding: 1rem 1.25rem;
     margin-bottom: 2rem;
     border: 1px solid var(--border-color);
 }
@@ -545,7 +540,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.25rem;
+    margin-bottom: 0.75rem;
 }
 
 .section-title {
@@ -589,14 +584,72 @@ body {
     color: white;
 }
 
-/* Search Toolbar */
-.transactions-toolbar {
-    margin-bottom: 1rem;
+/* Combined Filter Toolbar */
+.filter-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: nowrap;
+}
+
+.filter-toolbar .filter-toggle {
+    display: none;
+}
+
+.filter-toolbar .filter-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+}
+
+.filter-toolbar .filter-group {
+    flex: 1;
+    min-width: 100px;
+    max-width: 150px;
+}
+
+.filter-toolbar .filter-group-date {
+    flex: 0 0 auto;
+    min-width: 120px;
+    max-width: 130px;
+}
+
+.filter-toolbar .filter-input.date-input,
+.filter-toolbar .dropdown-trigger {
+    height: 36px;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
+}
+
+.filter-toolbar .btn-reset {
+    height: 36px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.filter-toolbar .search-wrapper {
+    flex: 0 0 180px;
+    max-width: 180px;
+}
+
+.filter-toolbar .search-input {
+    height: 36px;
+    font-size: 0.85rem;
+}
+
+.filter-toolbar .download-btn {
+    flex-shrink: 0;
+    height: 36px;
+    padding: 0 0.75rem;
 }
 
 .search-wrapper {
     position: relative;
-    max-width: 350px;
+    flex: 1;
+    max-width: 400px;
 }
 
 .search-wrapper svg {
@@ -633,7 +686,7 @@ body {
     border-radius: var(--radius-md);
     border: 1px solid var(--border-color);
     overflow: auto;
-    max-height: calc(100vh - 350px);
+    max-height: calc(100vh - 180px);
 }
 
 .table-container::-webkit-scrollbar {
@@ -873,19 +926,19 @@ body {
 /* Action Buttons (Below Table) */
 .table-actions {
     display: flex;
-    gap: 1rem;
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
     border-top: 1px solid var(--border-color);
 }
 
 .action-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.75rem 1.5rem;
+    gap: 0.5rem;
+    padding: 0.6rem 1.25rem;
     border-radius: var(--radius-sm);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 500;
     cursor: pointer;
     border: none;
@@ -935,23 +988,22 @@ body {
     justify-content: center;
     align-items: center;
     gap: 1rem;
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: var(--bg-card);
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: transparent;
     border-radius: var(--radius-md);
-    border: 1px solid var(--border-color);
 }
 
 .pagination-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.25rem;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
     background: var(--bg-dark);
     color: var(--text-main);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
     transition: all var(--transition-fast);
@@ -969,9 +1021,9 @@ body {
 }
 
 .pagination-info {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
-    min-width: 280px;
+    min-width: auto;
     text-align: center;
 }
 
@@ -1832,7 +1884,7 @@ body {
     background: var(--bg-input);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 0.6rem 0.9rem;
+    padding: 0.6rem 0.75rem;
     font-size: 0.85rem;
     color: var(--text-muted);
     cursor: pointer;
@@ -1840,7 +1892,7 @@ body {
     justify-content: space-between;
     align-items: center;
     transition: all var(--transition-fast);
-    min-height: 38px;
+    height: 38px;
     user-select: none;
 }
 
@@ -2019,22 +2071,18 @@ body {
 
 @media (max-width: 768px) {
 
-    /* Header */
+    /* Header - mobile layout */
     .header {
         padding: 0.75rem 1rem;
     }
 
     .header-content {
-        gap: 0.75rem;
+        gap: 0.5rem;
         padding: 0;
     }
 
-    .header-title .logo {
-        font-size: 1.15rem;
-    }
-
-    .header-title .tagline {
-        display: none;
+    .header-left .logo {
+        font-size: 1.1rem;
     }
 
     .user-badge span:not(svg) {
@@ -2045,66 +2093,42 @@ body {
         display: none;
     }
 
-    .transaction-badge {
+    .transaction-badge,
+    .data-updated-badge {
         display: none;
     }
 
-    /* Show updated badge prominently on mobile below the header */
-    .data-updated-badge {
-        position: fixed;
-        top: 60px;
-        left: 0;
-        right: 0;
-        z-index: 98;
-        justify-content: center;
-        border-radius: 0;
-        border-left: none;
-        border-right: none;
-        padding: 0.4rem 1rem;
-        font-size: 0.75rem;
-        background: rgba(15, 23, 42, 0.98);
-        backdrop-filter: blur(10px);
-        border-top: none;
-        border-bottom: 1px solid var(--border-color);
+    /* Main content adjustment for mobile */
+    .main-content {
+        margin-top: 55px;
     }
 
-    .data-updated-badge svg {
-        width: 12px;
-        height: 12px;
+    /* Filter toolbar mobile */
+    .filter-toolbar {
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
 
-    /* Filter bar - Collapsible on Mobile */
-    .filter-bar {
-        margin-top: 88px;
-        /* Account for header (60px) + updated badge (28px) */
-        padding: 0.75rem 1rem;
-    }
-
-    .filter-bar .container {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0;
-        padding: 0;
-    }
-
-    /* Show filter toggle on mobile */
-    .filter-toggle {
+    .filter-toolbar .filter-toggle {
         display: flex;
-        margin-bottom: 0;
+        width: 100%;
+        justify-content: center;
+        padding: 0.6rem 1rem;
+        order: 1;
     }
 
-    /* Collapsible filter content */
-    .filter-content {
+    .filter-toolbar .filter-content {
         display: none;
         flex-direction: column;
         gap: 0.75rem;
+        width: 100%;
+        order: 4;
         padding-top: 0.75rem;
-        margin-top: 0.75rem;
         border-top: 1px solid var(--border-color);
         animation: slideDown 0.3s ease;
     }
 
-    .filter-content.expanded {
+    .filter-toolbar .filter-content.expanded {
         display: flex;
     }
 
@@ -2120,38 +2144,36 @@ body {
         }
     }
 
-    .filter-group {
+    .filter-toolbar .filter-group,
+    .filter-toolbar .filter-group-date {
         width: 100%;
+        max-width: 100%;
+        min-width: auto;
+        flex: none;
     }
 
-    .filter-select,
-    .filter-input.date-input {
+    .filter-toolbar .filter-input.date-input,
+    .filter-toolbar .dropdown-trigger {
         width: 100%;
+        height: 44px;
         font-size: 16px;
     }
 
-    .scenario-group {
-        margin-left: 0;
+    .filter-toolbar .btn-reset {
+        width: 100%;
+        height: 44px;
     }
 
-    .scenario-chips {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-
-    .chip {
+    .filter-toolbar .search-wrapper {
         flex: 1;
-        min-width: calc(50% - 0.25rem);
-        text-align: center;
-        justify-content: center;
+        max-width: none;
+        order: 2;
     }
 
-    .filter-actions {
-        margin-left: 0;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.5rem;
+    .filter-toolbar .download-btn {
+        order: 3;
+        height: 44px;
+        padding: 0 0.75rem;
     }
 
     /* Pagination on mobile */
@@ -2185,32 +2207,7 @@ body {
         min-height: 44px;
     }
 
-    /* Main content */
-    .main-content {
-        padding: 1.5rem 1rem;
-    }
-
-    /* Transactions section */
-    .transactions-section {
-        padding: 1rem;
-    }
-
-    .section-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-
-    .download-btn {
-        width: 100%;
-        justify-content: center;
-    }
-
-    .search-wrapper {
-        max-width: 100%;
-    }
-
-    /* ========== CLEAN SCROLLABLE LIST FOR MOBILE (Personal Tracker Style) ========== */
+    /* ========== CLEAN SCROLLABLE LIST FOR MOBILE ========== */
 
     /* Remove padding from transactions section on mobile */
     .transactions-section {
@@ -2223,17 +2220,12 @@ body {
         width: calc(100% + 2rem);
     }
 
-    .section-header {
-        padding: 1rem;
-        margin-bottom: 0;
-    }
-
-    .transactions-toolbar {
-        padding: 0 1rem 1rem;
+    .filter-toolbar {
+        padding: 0.75rem 1rem;
     }
 
     .table-container {
-        max-height: 65vh;
+        max-height: 70vh;
         overflow-y: auto;
         overflow-x: hidden;
         background: var(--bg-dark);

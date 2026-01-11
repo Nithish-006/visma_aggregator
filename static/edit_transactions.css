@@ -3,40 +3,103 @@
    ============================================================================ */
 
 /* Main content adjustment for edit page */
-.main-content {
-    padding-top: 100px;
+.edit-main-content {
+    margin-top: 70px;
+    padding: 0.75rem 2rem;
 }
 
-/* Edit Page Header */
-.edit-page-header {
+/* ============================================================================
+   COMPACT FILTER TOOLBAR FOR EDIT PAGE
+   ============================================================================ */
+
+.edit-filter-toolbar {
+    background: var(--bg-card);
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-color);
+}
+
+.edit-filter-toolbar .filter-toggle {
+    display: none;
+}
+
+.edit-filter-toolbar .filter-content {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid var(--border-color);
+    gap: 0.5rem;
+    flex: 1;
 }
 
-.page-title {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--text-main);
-    margin: 0 0 6px 0;
+.edit-filter-toolbar .filter-group {
+    flex: 1;
+    min-width: 100px;
+    max-width: 150px;
 }
 
-.page-subtitle {
-    font-size: 0.9rem;
-    color: var(--text-main);
-    opacity: 0.85;
-    margin: 0;
+.edit-filter-toolbar .dropdown-trigger {
+    height: 36px;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
 }
 
-.header-stats {
+.edit-filter-toolbar .search-wrapper {
+    flex: 0 0 160px;
+    max-width: 160px;
+}
+
+.edit-filter-toolbar .search-input {
+    height: 36px;
+    font-size: 0.85rem;
+}
+
+.btn-compact {
+    height: 36px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.btn-success {
+    background: var(--success-color);
+    color: white;
+    border-color: var(--success-color);
+}
+
+.btn-success:hover {
+    background: #16a34a;
+}
+
+/* Stats badges - compact */
+.edit-stats {
     display: flex;
-    gap: 12px;
+    gap: 0.5rem;
     align-items: center;
-    flex-wrap: wrap;
 }
+
+.edit-stats .stat-badge {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.75rem;
+    background: transparent;
+    border: 1px solid var(--border-color);
+}
+
+.edit-stats .stat-badge strong {
+    font-size: 0.85rem;
+}
+
+.edit-stats .stat-badge-warning {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.edit-stats .stat-badge-warning strong {
+    color: #fbbf24;
+}
+
+/* ============================================================================
+   LEGACY STYLES (kept for compatibility)
+   ============================================================================ */
 
 .stat-badge {
     padding: 8px 16px;
@@ -61,51 +124,6 @@
     color: #fbbf24;
 }
 
-/* Filter Bar - Dark Theme (Single Line Layout) */
-.edit-filter-bar {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: nowrap;
-    align-items: flex-end;
-    background: var(--bg-card);
-    padding: 1.25rem 1.5rem;
-    border-radius: var(--radius-md);
-    margin-bottom: 20px;
-    border: 1px solid var(--border-color);
-}
-
-/* Filter toggle hidden on desktop */
-.edit-filter-bar .filter-toggle {
-    display: none;
-}
-
-/* Filter content always visible on desktop */
-.edit-filter-content {
-    display: contents;
-}
-
-.filter-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    flex-shrink: 1;
-    min-width: 0;
-}
-
-/* Expand filters with custom dropdowns */
-.filter-section:has(.custom-dropdown) {
-    flex: 1;
-    min-width: 200px;
-}
-
-.filter-section label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--text-main);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-}
-
 .filter-input {
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border-color);
@@ -127,23 +145,6 @@
     box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
 }
 
-.filter-select {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
-    font-size: 0.8rem;
-    min-width: 130px;
-    background: var(--bg-dark);
-    color: var(--text-main);
-    cursor: pointer;
-}
-
-.filter-select:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
-}
-
 .filter-actions {
     margin-left: auto;
     display: flex;
@@ -156,13 +157,13 @@
 .bulk-edit-bar {
     background: linear-gradient(135deg, var(--primary-color) 0%, #7c3aed 100%);
     color: white;
-    padding: 16px 24px;
+    padding: 12px 20px;
     border-radius: var(--radius-md);
-    margin-bottom: 20px;
+    margin-bottom: 0.75rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     box-shadow: 0 4px 15px rgba(74, 108, 247, 0.3);
 }
 
@@ -202,7 +203,7 @@
     padding: 0;
     border: 1px solid var(--border-color);
     overflow-x: auto;
-    max-height: calc(100vh - 380px);
+    max-height: calc(100vh - 180px);
     overflow-y: auto;
 }
 
@@ -601,56 +602,80 @@ input[type="checkbox"] {
         grid-column: span 2;
     }
 
-    /* Filter bar - collapsible style */
-    .edit-filter-bar {
-        padding: 12px;
-        gap: 0;
-        border-radius: var(--radius-sm);
-        flex-direction: column;
+    /* Edit main content mobile */
+    .edit-main-content {
+        margin-top: 55px;
+        padding: 0.5rem 1rem;
     }
 
-    /* Show filter toggle on mobile */
-    .edit-filter-bar .filter-toggle {
+    /* Edit filter toolbar - mobile */
+    .edit-filter-toolbar {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.75rem;
+    }
+
+    .edit-filter-toolbar .filter-toggle {
         display: flex;
-        margin-bottom: 0;
+        width: 100%;
+        justify-content: center;
+        padding: 0.6rem 1rem;
+        order: 1;
     }
 
-    /* Collapsible filter content */
-    .edit-filter-content {
+    .edit-filter-toolbar .filter-content {
         display: none;
         flex-direction: column;
-        gap: 12px;
-        padding-top: 12px;
-        margin-top: 12px;
+        gap: 0.75rem;
+        width: 100%;
+        order: 5;
+        padding-top: 0.75rem;
         border-top: 1px solid var(--border-color);
     }
 
-    .edit-filter-content.expanded {
+    .edit-filter-toolbar .filter-content.expanded {
         display: flex;
     }
 
-    .filter-section {
+    .edit-filter-toolbar .filter-group {
         width: 100%;
+        max-width: 100%;
+        min-width: auto;
     }
 
-    .filter-input,
-    .filter-select {
+    .edit-filter-toolbar .dropdown-trigger {
         width: 100%;
+        height: 44px;
         font-size: 16px;
-        min-height: 48px;
-        padding: 12px 14px;
     }
 
-    .filter-actions {
-        flex-direction: row;
-        gap: 8px;
-        margin-top: 4px;
+    .edit-filter-toolbar .btn-compact {
+        width: 100%;
+        height: 44px;
     }
 
-    .filter-actions button {
+    .edit-filter-toolbar .search-wrapper {
         flex: 1;
-        min-height: 48px;
-        font-size: 0.85rem;
+        max-width: none;
+        order: 2;
+    }
+
+    .edit-filter-toolbar .search-input {
+        height: 44px;
+        font-size: 16px;
+    }
+
+    .edit-stats {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .edit-filter-toolbar .btn-success,
+    .edit-filter-toolbar .btn-secondary:last-of-type {
+        order: 4;
+        height: 44px;
     }
 
     /* Bulk edit bar */

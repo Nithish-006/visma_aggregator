@@ -79,32 +79,11 @@
     </header>
 
     <!-- Main Content -->
-    <main class="main-content">
+    <main class="main-content edit-main-content">
         <div class="container">
 
-            <!-- Page Header -->
-            <div class="edit-page-header">
-                <div>
-                    <h1 class="page-title">Edit Transactions</h1>
-                    <p class="page-subtitle">Manage and categorize your financial data</p>
-                </div>
-                <div class="header-stats">
-                    <span class="stat-badge">Total: <strong id="total-count">0</strong></span>
-                    <span class="stat-badge">Selected: <strong id="selected-count">0</strong></span>
-                    <span class="stat-badge stat-badge-warning" id="modified-badge" style="display: none;">
-                        Unsaved: <strong id="modified-count">0</strong>
-                    </span>
-                    <button id="save-all-btn" class="btn btn-primary" style="display: none;">
-                        Save All Changes
-                    </button>
-                    <button id="discard-all-btn" class="btn btn-secondary" style="display: none;">
-                        Discard Changes
-                    </button>
-                </div>
-            </div>
-
-            <!-- Filter Bar -->
-            <div class="edit-filter-bar">
+            <!-- Combined Filter Toolbar -->
+            <div class="filter-toolbar edit-filter-toolbar">
                 <!-- Mobile Filter Toggle -->
                 <button id="edit-filter-toggle" class="filter-toggle">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -112,40 +91,43 @@
                         <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                     </svg>
                     <span>Filters</span>
-                    <svg class="filter-toggle-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
-                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
                 </button>
 
-                <!-- Collapsible Filter Content -->
-                <div id="edit-filter-content" class="edit-filter-content">
-                    <div class="filter-section">
-                        <label for="edit-category-filter">Category</label>
+                <!-- Filter Controls -->
+                <div id="edit-filter-content" class="filter-content">
+                    <div class="filter-group">
                         <div id="edit-category-filter" class="custom-dropdown"></div>
                     </div>
-
-                    <div class="filter-section">
-                        <label for="edit-project-filter">Project</label>
+                    <div class="filter-group">
                         <div id="edit-project-filter" class="custom-dropdown"></div>
                     </div>
-
-                    <div class="filter-section">
-                        <label for="edit-vendor-filter">Vendor</label>
+                    <div class="filter-group">
                         <div id="edit-vendor-filter" class="custom-dropdown"></div>
                     </div>
-
-                    <div class="filter-section">
-                        <label for="edit-search">Search</label>
-                        <input type="text" id="edit-search" class="filter-input" placeholder="Search description...">
-                    </div>
-
-                    <div class="filter-section filter-actions">
-                        <button id="filter-uncategorized" class="btn btn-primary">Show Uncategorized</button>
-                        <button id="clear-all-filters" class="btn btn-secondary">Clear Filters</button>
-                    </div>
+                    <button id="filter-uncategorized" class="btn btn-primary btn-compact">Uncategorized</button>
+                    <button id="clear-all-filters" class="btn btn-secondary btn-compact">Reset</button>
                 </div>
+
+                <!-- Search -->
+                <div class="search-wrapper">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="edit-search" class="search-input" placeholder="Search...">
+                </div>
+
+                <!-- Stats and Actions -->
+                <div class="edit-stats">
+                    <span class="stat-badge">Total: <strong id="total-count">0</strong></span>
+                    <span class="stat-badge">Selected: <strong id="selected-count">0</strong></span>
+                    <span class="stat-badge stat-badge-warning" id="modified-badge" style="display: none;">
+                        Unsaved: <strong id="modified-count">0</strong>
+                    </span>
+                </div>
+                <button id="save-all-btn" class="btn btn-success btn-compact" style="display: none;">Save All</button>
+                <button id="discard-all-btn" class="btn btn-secondary btn-compact" style="display: none;">Discard</button>
             </div>
 
             <!-- Bulk Edit Bar -->
