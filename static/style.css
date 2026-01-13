@@ -2098,9 +2098,11 @@ body {
         display: none;
     }
 
-    /* Main content adjustment for mobile */
+    /* Main content adjustment for mobile - reduced side padding */
     .main-content {
         margin-top: 55px;
+        padding-left: 8px;
+        padding-right: 8px;
     }
 
     /* Filter toolbar mobile */
@@ -2117,13 +2119,29 @@ body {
         order: 1;
     }
 
+    /* Search and Download - always visible, fixed position */
+    .filter-toolbar .search-wrapper {
+        flex: 1;
+        max-width: none;
+        order: 2;
+    }
+
+    .filter-toolbar .download-btn {
+        order: 3;
+        height: 44px;
+        padding: 0 0.75rem;
+        flex-shrink: 0;
+    }
+
+    /* Filter content - appears at the very end when expanded */
     .filter-toolbar .filter-content {
         display: none;
         flex-direction: column;
         gap: 0.75rem;
         width: 100%;
-        order: 4;
+        order: 10;
         padding-top: 0.75rem;
+        margin-top: 0.5rem;
         border-top: 1px solid var(--border-color);
         animation: slideDown 0.3s ease;
     }
@@ -2152,6 +2170,42 @@ body {
         flex: none;
     }
 
+    /* Date filter labels - visible on mobile */
+    .filter-toolbar .filter-group-date {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .filter-toolbar .filter-group-date::before {
+        display: block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 0.35rem;
+        order: -1;
+    }
+
+    /* Use :has() for modern browsers */
+    .filter-toolbar .filter-group-date:has(#start-date)::before {
+        content: 'From Date';
+    }
+
+    .filter-toolbar .filter-group-date:has(#end-date)::before {
+        content: 'To Date';
+    }
+
+    /* Fallback using nth-child for older browsers */
+    .filter-content > .filter-group-date:nth-child(4)::before {
+        content: 'From Date';
+    }
+
+    .filter-content > .filter-group-date:nth-child(5)::before {
+        content: 'To Date';
+    }
+
     .filter-toolbar .filter-input.date-input,
     .filter-toolbar .dropdown-trigger {
         width: 100%;
@@ -2162,18 +2216,6 @@ body {
     .filter-toolbar .btn-reset {
         width: 100%;
         height: 44px;
-    }
-
-    .filter-toolbar .search-wrapper {
-        flex: 1;
-        max-width: none;
-        order: 2;
-    }
-
-    .filter-toolbar .download-btn {
-        order: 3;
-        height: 44px;
-        padding: 0 0.75rem;
     }
 
     /* Pagination on mobile */
@@ -2215,9 +2257,9 @@ body {
         border-radius: 0;
         border-left: none;
         border-right: none;
-        margin-left: -1rem;
-        margin-right: -1rem;
-        width: calc(100% + 2rem);
+        margin-left: -8px;
+        margin-right: -8px;
+        width: calc(100% + 16px);
     }
 
     .filter-toolbar {
@@ -2472,6 +2514,18 @@ body {
 
     .header-title .logo {
         font-size: 1rem;
+    }
+
+    /* Tighter side padding on small screens */
+    .main-content {
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    .transactions-section {
+        margin-left: -4px;
+        margin-right: -4px;
+        width: calc(100% + 8px);
     }
 
     .kpi-grid {
