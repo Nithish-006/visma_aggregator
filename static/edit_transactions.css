@@ -12,12 +12,32 @@
    COMPACT FILTER TOOLBAR FOR EDIT PAGE
    ============================================================================ */
 
-.edit-filter-toolbar {
+.edit-toolbar-wrapper {
     background: var(--bg-card);
     padding: 0.75rem 1rem;
     border-radius: var(--radius-md);
     margin-bottom: 0.75rem;
     border: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: nowrap;
+}
+
+.edit-filter-toolbar {
+    /* Reset styles as they are now on the wrapper or handled by generic class */
+    background: transparent;
+    padding: 0;
+    margin-bottom: 0;
+    border: none;
+    flex: 1;
+}
+
+.edit-actions-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
 }
 
 .edit-filter-toolbar .filter-toggle {
@@ -43,12 +63,12 @@
     padding: 0.4rem 0.6rem;
 }
 
-.edit-filter-toolbar .search-wrapper {
+.edit-actions-toolbar .search-wrapper {
     flex: 0 0 160px;
     max-width: 160px;
 }
 
-.edit-filter-toolbar .search-input {
+.edit-actions-toolbar .search-input {
     height: 36px;
     font-size: 0.85rem;
 }
@@ -609,10 +629,17 @@ input[type="checkbox"] {
     }
 
     /* Edit filter toolbar - mobile */
+    .edit-toolbar-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        padding: 0.75rem;
+    }
+
     .edit-filter-toolbar {
         flex-wrap: wrap;
         gap: 0.5rem;
-        padding: 0.75rem;
+        padding: 0;
     }
 
     .edit-filter-toolbar .filter-toggle {
@@ -620,33 +647,40 @@ input[type="checkbox"] {
         width: 100%;
         justify-content: center;
         padding: 0.6rem 1rem;
+    }
+
+    .edit-actions-toolbar {
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 0.5rem;
+    }
+
+    /* Search - always visible */
+    .edit-actions-toolbar .search-wrapper {
+        flex: 1;
+        max-width: none;
+        width: 100%;
         order: 1;
     }
 
-    /* Search - always visible, fixed position after toggle */
-    .edit-filter-toolbar .search-wrapper {
-        flex: 1;
-        max-width: none;
-        order: 2;
-    }
-
-    .edit-filter-toolbar .search-input {
+    .edit-actions-toolbar .search-input {
         height: 44px;
         font-size: 16px;
     }
 
-    /* Stats and action buttons - always visible */
+    /* Stats and action buttons */
     .edit-stats {
-        order: 3;
         width: 100%;
         justify-content: center;
         flex-wrap: wrap;
+        order: 2;
     }
 
-    .edit-filter-toolbar .btn-success,
-    .edit-filter-toolbar .btn-secondary:last-of-type {
-        order: 4;
+    .edit-actions-toolbar .btn-success,
+    .edit-actions-toolbar .btn-secondary:last-of-type {
+        width: 100%;
         height: 44px;
+        order: 3;
     }
 
     /* Filter content - appears at the very end when expanded */

@@ -168,55 +168,60 @@
             <!-- Transactions Section -->
             <section class="transactions-section">
                 <!-- Combined Filter & Search Bar -->
-                <div class="filter-toolbar">
-                    <!-- Mobile Filter Toggle -->
-                    <button id="filter-toggle" class="filter-toggle">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                        </svg>
-                        <span>Filters</span>
-                    </button>
+                <!-- Toolbar Wrapper -->
+                <div class="toolbar-wrapper">
+                    <!-- Filter Toolbar -->
+                    <div class="filter-toolbar">
+                        <!-- Mobile Filter Toggle -->
+                        <button id="filter-toggle" class="filter-toggle">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                            </svg>
+                            <span>Filters</span>
+                        </button>
 
-                    <!-- Filter Controls -->
-                    <div id="filter-content" class="filter-content">
-                        <div class="filter-group">
-                            <div id="category-filter" class="custom-dropdown"></div>
+                        <!-- Filter Controls -->
+                        <div id="filter-content" class="filter-content">
+                            <div class="filter-group">
+                                <div id="category-filter" class="custom-dropdown"></div>
+                            </div>
+                            <div class="filter-group">
+                                <div id="project-filter" class="custom-dropdown"></div>
+                            </div>
+                            <div class="filter-group">
+                                <div id="vendor-filter" class="custom-dropdown"></div>
+                            </div>
+                            <div class="filter-group filter-group-date">
+                                <input type="date" id="start-date" class="filter-input date-input" title="From Date">
+                            </div>
+                            <div class="filter-group filter-group-date">
+                                <input type="date" id="end-date" class="filter-input date-input" title="To Date">
+                            </div>
+                            <button id="clear-filters" class="btn btn-secondary btn-reset">Reset</button>
                         </div>
-                        <div class="filter-group">
-                            <div id="project-filter" class="custom-dropdown"></div>
-                        </div>
-                        <div class="filter-group">
-                            <div id="vendor-filter" class="custom-dropdown"></div>
-                        </div>
-                        <div class="filter-group filter-group-date">
-                            <input type="date" id="start-date" class="filter-input date-input" title="From Date">
-                        </div>
-                        <div class="filter-group filter-group-date">
-                            <input type="date" id="end-date" class="filter-input date-input" title="To Date">
-                        </div>
-                        <button id="clear-filters" class="btn btn-secondary btn-reset">Reset</button>
                     </div>
 
-                    <!-- Search and Download -->
-                    <div class="search-wrapper">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                        <input type="text" id="transaction-search" placeholder="Search..."
-                            class="search-input">
+                    <!-- Actions Toolbar (Search & Download) -->
+                    <div class="actions-toolbar">
+                        <div class="search-wrapper">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input type="text" id="transaction-search" placeholder="Search..." class="search-input">
+                        </div>
+                        <button id="download-transactions" class="download-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <span>Download Excel</span>
+                        </button>
                     </div>
-                    <button id="download-transactions" class="download-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        <span>Download Excel</span>
-                    </button>
                 </div>
 
                 <div class="table-container">

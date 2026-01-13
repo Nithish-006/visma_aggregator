@@ -83,51 +83,58 @@
         <div class="container">
 
             <!-- Combined Filter Toolbar -->
-            <div class="filter-toolbar edit-filter-toolbar">
-                <!-- Mobile Filter Toggle -->
-                <button id="edit-filter-toggle" class="filter-toggle">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                    </svg>
-                    <span>Filters</span>
-                </button>
+            <div class="toolbar-wrapper edit-toolbar-wrapper">
+                <div class="filter-toolbar edit-filter-toolbar">
+                    <!-- Mobile Filter Toggle -->
+                    <button id="edit-filter-toggle" class="filter-toggle">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                        <span>Filters</span>
+                    </button>
 
-                <!-- Filter Controls -->
-                <div id="edit-filter-content" class="filter-content">
-                    <div class="filter-group">
-                        <div id="edit-category-filter" class="custom-dropdown"></div>
+                    <!-- Filter Controls -->
+                    <div id="edit-filter-content" class="filter-content">
+                        <div class="filter-group">
+                            <div id="edit-category-filter" class="custom-dropdown"></div>
+                        </div>
+                        <div class="filter-group">
+                            <div id="edit-project-filter" class="custom-dropdown"></div>
+                        </div>
+                        <div class="filter-group">
+                            <div id="edit-vendor-filter" class="custom-dropdown"></div>
+                        </div>
+                        <button id="filter-uncategorized" class="btn btn-primary btn-compact">Uncategorized</button>
+                        <button id="clear-all-filters" class="btn btn-secondary btn-compact">Reset</button>
                     </div>
-                    <div class="filter-group">
-                        <div id="edit-project-filter" class="custom-dropdown"></div>
-                    </div>
-                    <div class="filter-group">
-                        <div id="edit-vendor-filter" class="custom-dropdown"></div>
-                    </div>
-                    <button id="filter-uncategorized" class="btn btn-primary btn-compact">Uncategorized</button>
-                    <button id="clear-all-filters" class="btn btn-secondary btn-compact">Reset</button>
                 </div>
 
-                <!-- Search -->
-                <div class="search-wrapper">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                    <input type="text" id="edit-search" class="search-input" placeholder="Search...">
-                </div>
+                <!-- Actions Toolbar -->
+                <div class="actions-toolbar edit-actions-toolbar">
+                    <!-- Search -->
+                    <div class="search-wrapper">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="edit-search" class="search-input" placeholder="Search...">
+                    </div>
 
-                <!-- Stats and Actions -->
-                <div class="edit-stats">
-                    <span class="stat-badge">Total: <strong id="total-count">0</strong></span>
-                    <span class="stat-badge">Selected: <strong id="selected-count">0</strong></span>
-                    <span class="stat-badge stat-badge-warning" id="modified-badge" style="display: none;">
-                        Unsaved: <strong id="modified-count">0</strong>
-                    </span>
+                    <!-- Stats and Actions -->
+                    <div class="edit-stats">
+                        <span class="stat-badge">Total: <strong id="total-count">0</strong></span>
+                        <span class="stat-badge">Selected: <strong id="selected-count">0</strong></span>
+                        <span class="stat-badge stat-badge-warning" id="modified-badge" style="display: none;">
+                            Unsaved: <strong id="modified-count">0</strong>
+                        </span>
+                    </div>
+                    <button id="save-all-btn" class="btn btn-success btn-compact" style="display: none;">Save
+                        All</button>
+                    <button id="discard-all-btn" class="btn btn-secondary btn-compact"
+                        style="display: none;">Discard</button>
                 </div>
-                <button id="save-all-btn" class="btn btn-success btn-compact" style="display: none;">Save All</button>
-                <button id="discard-all-btn" class="btn btn-secondary btn-compact" style="display: none;">Discard</button>
             </div>
 
             <!-- Bulk Edit Bar -->
@@ -182,7 +189,8 @@
                 </button>
                 <span class="pagination-info">
                     Showing <span id="showing-range">1-100</span> of <span id="total-filtered">0</span> transactions
-                    <span class="pagination-page-info">(Page <span id="current-page">1</span> of <span id="total-pages">1</span>)</span>
+                    <span class="pagination-page-info">(Page <span id="current-page">1</span> of <span
+                            id="total-pages">1</span>)</span>
                 </span>
                 <button id="next-page" class="pagination-btn">
                     Next

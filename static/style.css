@@ -584,13 +584,29 @@ body {
     color: white;
 }
 
-/* Combined Filter Toolbar */
-.filter-toolbar {
+/* Toolbar Wrapper */
+.toolbar-wrapper {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     margin-bottom: 0.75rem;
     flex-wrap: nowrap;
+}
+
+.filter-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.actions-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
 }
 
 .filter-toolbar .filter-toggle {
@@ -630,17 +646,17 @@ body {
     flex-shrink: 0;
 }
 
-.filter-toolbar .search-wrapper {
+.actions-toolbar .search-wrapper {
     flex: 0 0 180px;
     max-width: 180px;
 }
 
-.filter-toolbar .search-input {
+.actions-toolbar .search-input {
     height: 36px;
     font-size: 0.85rem;
 }
 
-.filter-toolbar .download-btn {
+.actions-toolbar .download-btn {
     flex-shrink: 0;
     height: 36px;
     padding: 0 0.75rem;
@@ -2106,9 +2122,19 @@ body {
     }
 
     /* Filter toolbar mobile */
+    /* Filter toolbar mobile */
+    .toolbar-wrapper {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+    }
+
     .filter-toolbar {
-        flex-wrap: wrap;
+        flex-direction: column;
         gap: 0.5rem;
+        width: 100%;
+        padding: 0;
     }
 
     .filter-toolbar .filter-toggle {
@@ -2116,18 +2142,20 @@ body {
         width: 100%;
         justify-content: center;
         padding: 0.6rem 1rem;
-        order: 1;
     }
 
-    /* Search and Download - always visible, fixed position */
-    .filter-toolbar .search-wrapper {
+    .actions-toolbar {
+        width: 100%;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .actions-toolbar .search-wrapper {
         flex: 1;
         max-width: none;
-        order: 2;
     }
 
-    .filter-toolbar .download-btn {
-        order: 3;
+    .actions-toolbar .download-btn {
         height: 44px;
         padding: 0 0.75rem;
         flex-shrink: 0;
@@ -2262,7 +2290,7 @@ body {
         width: calc(100% + 16px);
     }
 
-    .filter-toolbar {
+    .toolbar-wrapper {
         padding: 0.75rem 1rem;
     }
 
