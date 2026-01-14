@@ -10,6 +10,7 @@
     let allTransactions = [];
     let projects = [];
     let vendors = [];
+    let descriptions = [];
     let deleteTargetId = null;
     let currentMonth = new Date();
     let currentTab = 'daily';
@@ -87,6 +88,8 @@
         // Custom Dropdowns
         vendorDropdown: document.getElementById('vendor-dropdown'),
         vendorMenu: document.getElementById('vendor-menu'),
+        descriptionDropdown: document.getElementById('description-dropdown'),
+        descriptionMenu: document.getElementById('description-menu'),
         projectDropdown: document.getElementById('project-dropdown'),
         projectMenu: document.getElementById('project-menu'),
 
@@ -165,12 +168,16 @@
 
         // Custom dropdowns
         setupCustomDropdown('vendor', elements.transactionVendor, elements.vendorMenu, () => vendors);
+        setupCustomDropdown('description', elements.transactionDescription, elements.descriptionMenu, () => descriptions);
         setupCustomDropdown('project', elements.transactionProject, elements.projectMenu, () => projects);
 
         // Close dropdowns when clicking outside
         document.addEventListener('click', (e) => {
             if (!elements.vendorDropdown.contains(e.target)) {
                 elements.vendorMenu.classList.remove('show');
+            }
+            if (!elements.descriptionDropdown.contains(e.target)) {
+                elements.descriptionMenu.classList.remove('show');
             }
             if (!elements.projectDropdown.contains(e.target)) {
                 elements.projectMenu.classList.remove('show');
@@ -373,6 +380,7 @@
         await Promise.all([
             loadProjects(),
             loadVendors(),
+            loadDescriptions(),
             loadTransactions()
         ]);
     }
@@ -396,6 +404,17 @@
         } catch (error) {
             console.error('Error loading vendors:', error);
             vendors = [];
+        }
+    }
+
+    async function loadDescriptions() {
+        try {
+            const response = await fetch('/api/personal/descriptions');
+            const data = await response.json();
+            descriptions = data.descriptions || [];
+        } catch (error) {
+            console.error('Error loading descriptions:', error);
+            descriptions = [];
         }
     }
 

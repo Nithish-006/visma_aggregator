@@ -1935,6 +1935,28 @@ def get_personal_vendors():
         return jsonify({'vendors': []})
 
 
+@app.route('/api/personal/descriptions')
+@login_required
+def get_personal_descriptions():
+    """Get list of unique descriptions from personal transactions"""
+    if not app.config['USE_DATABASE']:
+        return jsonify({'descriptions': []})
+
+    try:
+        with db_manager.get_connection() as conn:
+            query = "SELECT DISTINCT description FROM personal_transactions WHERE description IS NOT NULL AND description != '' ORDER BY description"
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            cursor.close()
+
+        descriptions = [row[0] for row in rows if row[0]]
+        return jsonify({'descriptions': descriptions})
+    except Exception as e:
+        print(f"[!] Error fetching descriptions: {e}")
+        return jsonify({'descriptions': []})
+
+
 # ============================================================================
 # BILL PROCESSOR API ENDPOINTS
 # ============================================================================

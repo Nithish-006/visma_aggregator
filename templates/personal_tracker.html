@@ -178,9 +178,12 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group dropdown-group">
                         <label for="transaction-description">Description</label>
-                        <input type="text" id="transaction-description" placeholder="Optional description">
+                        <div class="custom-dropdown" id="description-dropdown">
+                            <input type="text" id="transaction-description" placeholder="Optional description" autocomplete="off">
+                            <div class="dropdown-menu" id="description-menu"></div>
+                        </div>
                     </div>
 
                     <div class="form-group dropdown-group">
