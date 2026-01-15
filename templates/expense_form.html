@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='favicon.jpg') }}">
+    <title>{{ 'Edit' if transaction else 'Add' }} Expense | VISMA Financial</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='expense_form.css') }}">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <a href="/personal-tracker" class="back-btn" title="Back to Tracker">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+        </a>
+        <h1 class="page-title">{{ 'Edit' if transaction else 'Add' }} Transaction</h1>
+        <div class="header-spacer"></div>
+    </header>
+
+    <!-- Main Form Content -->
+    <main class="main-content">
+        <form id="expense-form" class="expense-form">
+            <input type="hidden" id="transaction-id" value="{{ transaction.id if transaction else '' }}">
+
+            <!-- Transaction Type Section -->
+            <section class="form-section">
+                <label class="section-label">Transaction Type</label>
+                <div class="type-toggle">
+                    <button type="button" class="type-btn expense {{ 'active' if not transaction or transaction.transaction_type == 'expense' else '' }}" data-type="expense">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <polyline points="19 12 12 19 5 12"></polyline>
+                        </svg>
+                        Expense
+                    </button>
+                    <button type="button" class="type-btn income {{ 'active' if transaction and transaction.transaction_type == 'income' else '' }}" data-type="income">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="19" x2="12" y2="5"></line>
+                            <polyline points="5 12 12 5 19 12"></polyline>
+                        </svg>
+                        Income
+                    </button>
+                </div>
+                <input type="hidden" id="transaction-type" value="{{ transaction.transaction_type if transaction else 'expense' }}">
+            </section>
+
+            <!-- Bank Selection Section -->
+            <section class="form-section">
+                <label class="section-label">Bank Account <span class="optional">(Optional)</span></label>
+                <div class="bank-toggle">
+                    <button type="button" class="bank-btn axis {{ 'active' if transaction and transaction.bank == 'axis' else '' }}" data-bank="axis">
+                        AXIS
+                    </button>
+                    <button type="button" class="bank-btn kvb {{ 'active' if transaction and transaction.bank == 'kvb' else '' }}" data-bank="kvb">
+                        KVB
+                    </button>
+                </div>
+                <input type="hidden" id="transaction-bank" value="{{ transaction.bank if transaction else '' }}">
+            </section>
+
+            <!-- Date & Amount Row -->
+            <section class="form-section form-row">
+                <div class="form-field">
+                    <label for="transaction-date" class="field-label">Date</label>
+                    <input type="date" id="transaction-date" class="field-input"
+                           value="{{ transaction.date if transaction else '' }}" required>
+                </div>
+                <div class="form-field">
+                    <label for="transaction-amount" class="field-label">Amount</label>
+                    <div class="amount-input-wrapper">
+                        <span class="currency-symbol">&#8377;</span>
+                        <input type="number" id="transaction-amount" class="field-input amount-input"
+                               step="0.01" min="0.01" placeholder="0.00"
+                               value="{{ transaction.amount if transaction else '' }}" required>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Vendor Field -->
+            <section class="form-section">
+                <label for="transaction-vendor" class="field-label">Vendor / Payee</label>
+                <div class="dropdown-container" id="vendor-container">
+                    <input type="text" id="transaction-vendor" class="field-input"
+                           placeholder="Enter vendor name" autocomplete="off"
+                           value="{{ transaction.vendor if transaction else '' }}" required>
+                    <div class="dropdown-pills" id="vendor-pills"></div>
+                </div>
+            </section>
+
+            <!-- Description Field -->
+            <section class="form-section">
+                <label for="transaction-description" class="field-label">Description <span class="optional">(Optional)</span></label>
+                <div class="dropdown-container" id="description-container">
+                    <input type="text" id="transaction-description" class="field-input"
+                           placeholder="Add a note or description" autocomplete="off"
+                           value="{{ transaction.description if transaction else '' }}">
+                    <div class="dropdown-pills" id="description-pills"></div>
+                </div>
+            </section>
+
+            <!-- Project Field -->
+            <section class="form-section">
+                <label for="transaction-project" class="field-label">Project <span class="optional">(Optional)</span></label>
+                <div class="dropdown-container" id="project-container">
+                    <input type="text" id="transaction-project" class="field-input"
+                           placeholder="General" autocomplete="off"
+                           value="{{ transaction.project if transaction else 'General' }}">
+                    <div class="dropdown-pills" id="project-pills"></div>
+                </div>
+            </section>
+        </form>
+    </main>
+
+    <!-- Fixed Bottom Actions -->
+    <footer class="form-footer">
+        {% if transaction %}
+        <button type="button" class="btn btn-delete" id="delete-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            Delete
+        </button>
+        {% endif %}
+        <button type="submit" form="expense-form" class="btn btn-save" id="save-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Save Transaction
+        </button>
+    </footer>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="delete-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Delete Transaction?</h3>
+            </div>
+            <div class="modal-body">
+                <p class="delete-info">Are you sure you want to delete this transaction?</p>
+                <p class="delete-details" id="delete-details"></p>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-cancel" id="delete-cancel-btn">Cancel</button>
+                    <button type="button" class="btn btn-confirm-delete" id="delete-confirm-btn">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <span class="toast-message" id="toast-message"></span>
+    </div>
+
+    <script src="{{ url_for('static', filename='expense_form.js') }}"></script>
+</body>
+
+</html>

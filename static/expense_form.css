@@ -1,0 +1,584 @@
+/* ============================================================================
+   EXPENSE FORM - DEDICATED FULL PAGE LAYOUT
+   ============================================================================ */
+
+:root {
+    --bg-primary: #0f1c2e;
+    --bg-secondary: #162234;
+    --bg-card: #1a2942;
+    --bg-hover: #243552;
+    --bg-input: #0d1829;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --border-color: #2d3f59;
+    --income-color: #22c55e;
+    --expense-color: #ef4444;
+    --accent-color: #ff6b4a;
+    --axis-color: #dc2626;
+    --kvb-color: #16a34a;
+
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    background: var(--bg-primary);
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    color: var(--text-primary);
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ============================================================================
+   HEADER
+   ============================================================================ */
+
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-primary);
+    padding: calc(12px + var(--safe-area-top)) 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+.back-btn:active {
+    background: var(--bg-hover);
+}
+
+.page-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.header-spacer {
+    width: 40px;
+}
+
+/* ============================================================================
+   MAIN CONTENT
+   ============================================================================ */
+
+.main-content {
+    flex: 1;
+    padding: 20px 16px;
+    padding-bottom: 120px;
+    overflow-y: auto;
+}
+
+.expense-form {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* ============================================================================
+   FORM SECTIONS
+   ============================================================================ */
+
+.form-section {
+    margin-bottom: 24px;
+}
+
+.section-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+}
+
+.field-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.optional {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* ============================================================================
+   TYPE TOGGLE
+   ============================================================================ */
+
+.type-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.type-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 20px;
+    border-radius: 12px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.type-btn:active {
+    transform: scale(0.98);
+}
+
+.type-btn.expense.active {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: var(--expense-color);
+    color: var(--expense-color);
+}
+
+.type-btn.income.active {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: var(--income-color);
+    color: var(--income-color);
+}
+
+/* ============================================================================
+   BANK TOGGLE
+   ============================================================================ */
+
+.bank-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.bank-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 20px;
+    border-radius: 12px;
+    background: var(--bg-card);
+    border: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.bank-btn:active {
+    transform: scale(0.98);
+}
+
+.bank-btn.axis.active {
+    background: rgba(220, 38, 38, 0.1);
+    border-color: var(--axis-color);
+    color: var(--axis-color);
+}
+
+.bank-btn.kvb.active {
+    background: rgba(22, 163, 74, 0.1);
+    border-color: var(--kvb-color);
+    color: var(--kvb-color);
+}
+
+/* ============================================================================
+   FORM ROW (Date & Amount)
+   ============================================================================ */
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+}
+
+/* ============================================================================
+   INPUT FIELDS
+   ============================================================================ */
+
+.field-input {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: var(--bg-input);
+    border: 2px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: inherit;
+    transition: border-color 0.2s ease;
+}
+
+.field-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.field-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Date input styling */
+input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.7);
+    cursor: pointer;
+}
+
+/* Amount input with currency symbol */
+.amount-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.currency-symbol {
+    position: absolute;
+    left: 16px;
+    color: var(--text-muted);
+    font-size: 1rem;
+    pointer-events: none;
+}
+
+.amount-input {
+    padding-left: 36px;
+}
+
+/* Number input - hide spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* ============================================================================
+   DROPDOWN PILLS
+   ============================================================================ */
+
+.dropdown-container {
+    position: relative;
+}
+
+.dropdown-pills {
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.dropdown-pills.show {
+    display: flex;
+}
+
+.dropdown-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-radius: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.dropdown-pill:hover,
+.dropdown-pill:active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: white;
+}
+
+/* ============================================================================
+   FORM FOOTER (Fixed Bottom Actions)
+   ============================================================================ */
+
+.form-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    padding: 16px;
+    padding-bottom: calc(16px + var(--safe-area-bottom));
+    display: flex;
+    gap: 12px;
+    z-index: 100;
+}
+
+.btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.btn:active {
+    transform: scale(0.98);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-save {
+    flex: 1;
+    background: var(--accent-color);
+    color: white;
+}
+
+.btn-save:hover:not(:disabled) {
+    background: #ff8266;
+}
+
+.btn-delete {
+    background: transparent;
+    border: 2px solid var(--expense-color);
+    color: var(--expense-color);
+    padding: 14px 20px;
+}
+
+.btn-delete:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* ============================================================================
+   DELETE MODAL
+   ============================================================================ */
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal.show {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--bg-card);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 400px;
+    overflow: hidden;
+    animation: modalIn 0.2s ease;
+}
+
+@keyframes modalIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.modal-header {
+    padding: 20px 24px 0;
+}
+
+.modal-header h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 16px 24px 24px;
+}
+
+.delete-info {
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+    margin-bottom: 8px;
+}
+
+.delete-details {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 20px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.btn-cancel {
+    flex: 1;
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-confirm-delete {
+    flex: 1;
+    background: var(--expense-color);
+    color: white;
+}
+
+/* ============================================================================
+   TOAST NOTIFICATION
+   ============================================================================ */
+
+.toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 14px 24px;
+    z-index: 2000;
+    opacity: 0;
+    transition: all 0.3s ease;
+    max-width: 90%;
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+.toast.success {
+    border-color: var(--income-color);
+}
+
+.toast.error {
+    border-color: var(--expense-color);
+}
+
+.toast-message {
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+/* ============================================================================
+   DESKTOP RESPONSIVE
+   ============================================================================ */
+
+@media (min-width: 768px) {
+    .main-content {
+        padding: 32px;
+        padding-bottom: 120px;
+    }
+
+    .expense-form {
+        background: var(--bg-card);
+        border-radius: 16px;
+        padding: 32px;
+        border: 1px solid var(--border-color);
+    }
+
+    .form-footer {
+        position: sticky;
+        background: transparent;
+        border-top: none;
+        padding: 24px 32px;
+        max-width: 664px;
+        margin: 0 auto;
+    }
+
+    .type-btn,
+    .bank-btn {
+        padding: 18px 24px;
+    }
+
+    .field-input {
+        padding: 16px 18px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .header {
+        max-width: 800px;
+        margin: 0 auto;
+        width: 100%;
+    }
+
+    .main-content {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+}

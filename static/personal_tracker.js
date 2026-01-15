@@ -134,8 +134,10 @@
             tab.addEventListener('click', () => switchTab(tab.dataset.tab));
         });
 
-        // FAB
-        elements.fabAdd.addEventListener('click', openAddModal);
+        // FAB - Navigate to add page
+        elements.fabAdd.addEventListener('click', () => {
+            window.location.href = '/personal-tracker/add';
+        });
 
         // Modal
         elements.modalClose.addEventListener('click', closeModal);
@@ -967,10 +969,8 @@
     // ============================================================================
 
     window.handleTransactionClick = function(id) {
-        const transaction = allTransactions.find(t => t.id === id);
-        if (transaction) {
-            openEditModal(transaction);
-        }
+        // Navigate to edit page
+        window.location.href = `/personal-tracker/edit/${id}`;
     };
 
     window.navigateToMonth = function(year, month) {

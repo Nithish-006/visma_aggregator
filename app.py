@@ -1553,6 +1553,53 @@ def personal_tracker():
     return render_template('personal_tracker.html')
 
 
+@app.route('/personal-tracker/add')
+@login_required
+def add_expense_page():
+    """Render add expense page"""
+    return render_template('expense_form.html', transaction=None)
+
+
+@app.route('/personal-tracker/edit/<int:transaction_id>')
+@login_required
+def edit_expense_page(transaction_id):
+    """Render edit expense page"""
+    if not app.config['USE_DATABASE']:
+        return render_template('expense_form.html', transaction=None)
+
+    try:
+        with db_manager.get_connection() as conn:
+            query = """
+            SELECT id, transaction_date, vendor, description, project, amount,
+                   COALESCE(transaction_type, 'expense') as transaction_type, bank
+            FROM personal_transactions
+            WHERE id = %s
+            """
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(query, (transaction_id,))
+            row = cursor.fetchone()
+            cursor.close()
+
+        if row:
+            transaction = {
+                'id': row['id'],
+                'date': row['transaction_date'].strftime('%Y-%m-%d'),
+                'vendor': row['vendor'],
+                'description': row['description'] or '',
+                'project': row['project'] or 'General',
+                'amount': float(row['amount']),
+                'transaction_type': row['transaction_type'] or 'expense',
+                'bank': row.get('bank')
+            }
+            return render_template('expense_form.html', transaction=transaction)
+        else:
+            # Transaction not found, redirect to add page
+            return redirect(url_for('add_expense_page'))
+    except Exception as e:
+        print(f"[!] Error fetching transaction for edit: {e}")
+        return redirect(url_for('add_expense_page'))
+
+
 @app.route('/api/personal/transactions', methods=['GET'])
 @login_required
 def get_personal_transactions():
