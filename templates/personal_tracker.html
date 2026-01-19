@@ -226,6 +226,135 @@
         <span class="toast-message" id="toast-message"></span>
     </div>
 
+    <!-- Slide-in Panel for Add/Edit -->
+    <div class="slide-panel-overlay" id="slide-panel-overlay"></div>
+    <div class="slide-panel" id="slide-panel">
+        <div class="slide-panel-header">
+            <button class="slide-panel-back" id="slide-panel-back">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+            <h2 class="slide-panel-title" id="slide-panel-title">Add Transaction</h2>
+            <div class="slide-panel-spacer"></div>
+        </div>
+        <div class="slide-panel-content">
+            <form id="panel-form" class="panel-form">
+                <input type="hidden" id="panel-transaction-id">
+
+                <!-- Transaction Type Toggle -->
+                <div class="panel-section">
+                    <label class="panel-label">Transaction Type</label>
+                    <div class="panel-type-toggle">
+                        <button type="button" class="panel-type-btn expense active" data-type="expense">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <polyline points="19 12 12 19 5 12"></polyline>
+                            </svg>
+                            Expense
+                        </button>
+                        <button type="button" class="panel-type-btn income" data-type="income">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="19" x2="12" y2="5"></line>
+                                <polyline points="5 12 12 5 19 12"></polyline>
+                            </svg>
+                            Income
+                        </button>
+                    </div>
+                    <input type="hidden" id="panel-transaction-type" value="expense">
+                </div>
+
+                <!-- Bank Selection -->
+                <div class="panel-section">
+                    <label class="panel-label">Bank Account <span class="panel-optional">(Optional)</span></label>
+                    <div class="panel-bank-toggle">
+                        <button type="button" class="panel-bank-btn axis" data-bank="axis">AXIS</button>
+                        <button type="button" class="panel-bank-btn kvb" data-bank="kvb">KVB</button>
+                    </div>
+                    <input type="hidden" id="panel-transaction-bank" value="">
+                </div>
+
+                <!-- Date & Amount Row -->
+                <div class="panel-section panel-row">
+                    <div class="panel-field">
+                        <label for="panel-transaction-date" class="panel-label">Date</label>
+                        <input type="date" id="panel-transaction-date" class="panel-input" required>
+                    </div>
+                    <div class="panel-field">
+                        <label for="panel-transaction-amount" class="panel-label">Amount</label>
+                        <div class="panel-amount-wrapper">
+                            <span class="panel-currency">&#8377;</span>
+                            <input type="number" id="panel-transaction-amount" class="panel-input panel-amount-input"
+                                   step="0.01" min="0.01" placeholder="0.00" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vendor Field -->
+                <div class="panel-section">
+                    <label for="panel-transaction-vendor" class="panel-label">Vendor / Payee</label>
+                    <div class="panel-dropdown" id="panel-vendor-dropdown">
+                        <input type="text" id="panel-transaction-vendor" class="panel-input"
+                               placeholder="Enter vendor name" autocomplete="off" required>
+                        <div class="panel-pills" id="panel-vendor-pills"></div>
+                    </div>
+                </div>
+
+                <!-- Description Field -->
+                <div class="panel-section">
+                    <label for="panel-transaction-description" class="panel-label">Description <span class="panel-optional">(Optional)</span></label>
+                    <div class="panel-dropdown" id="panel-description-dropdown">
+                        <input type="text" id="panel-transaction-description" class="panel-input"
+                               placeholder="Add a note" autocomplete="off">
+                        <div class="panel-pills" id="panel-description-pills"></div>
+                    </div>
+                </div>
+
+                <!-- Project Field -->
+                <div class="panel-section">
+                    <label for="panel-transaction-project" class="panel-label">Project <span class="panel-optional">(Optional)</span></label>
+                    <div class="panel-dropdown" id="panel-project-dropdown">
+                        <input type="text" id="panel-transaction-project" class="panel-input"
+                               placeholder="General" autocomplete="off">
+                        <div class="panel-pills" id="panel-project-pills"></div>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <!-- Normal Footer (Form Actions) -->
+        <div class="slide-panel-footer" id="panel-footer-normal">
+            <button type="button" class="panel-btn panel-btn-delete" id="panel-delete-btn" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                Delete
+            </button>
+            <button type="submit" form="panel-form" class="panel-btn panel-btn-save" id="panel-save-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Save
+            </button>
+        </div>
+
+        <!-- Delete Confirmation Footer (shown when confirming delete) -->
+        <div class="slide-panel-footer panel-delete-confirm" id="panel-footer-delete" style="display: none;">
+            <div class="panel-delete-message">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>Delete this transaction?</span>
+            </div>
+            <div class="panel-delete-actions">
+                <button type="button" class="panel-btn panel-btn-cancel" id="panel-delete-cancel">Cancel</button>
+                <button type="button" class="panel-btn panel-btn-confirm-delete" id="panel-delete-confirm">Delete</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="{{ url_for('static', filename='personal_tracker.js') }}"></script>
 </body>

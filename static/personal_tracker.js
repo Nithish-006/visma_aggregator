@@ -134,9 +134,9 @@
             tab.addEventListener('click', () => switchTab(tab.dataset.tab));
         });
 
-        // FAB - Navigate to add page
+        // FAB - Open slide panel for adding
         elements.fabAdd.addEventListener('click', () => {
-            window.location.href = '/personal-tracker/add';
+            openSlidePanel();
         });
 
         // Modal
@@ -969,8 +969,11 @@
     // ============================================================================
 
     window.handleTransactionClick = function(id) {
-        // Navigate to edit page
-        window.location.href = `/personal-tracker/edit/${id}`;
+        // Open slide panel for editing
+        const transaction = allTransactions.find(t => t.id == id);
+        if (transaction) {
+            openSlidePanel(transaction);
+        }
     };
 
     window.navigateToMonth = function(year, month) {
@@ -979,6 +982,363 @@
         switchTab('daily');
         applyFilters();
     };
+
+    // ============================================================================
+    // SLIDE PANEL
+    // ============================================================================
+
+    // Panel Elements
+    const panelElements = {
+        overlay: document.getElementById('slide-panel-overlay'),
+        panel: document.getElementById('slide-panel'),
+        title: document.getElementById('slide-panel-title'),
+        backBtn: document.getElementById('slide-panel-back'),
+        form: document.getElementById('panel-form'),
+        transactionId: document.getElementById('panel-transaction-id'),
+        transactionType: document.getElementById('panel-transaction-type'),
+        transactionBank: document.getElementById('panel-transaction-bank'),
+        transactionDate: document.getElementById('panel-transaction-date'),
+        transactionAmount: document.getElementById('panel-transaction-amount'),
+        transactionVendor: document.getElementById('panel-transaction-vendor'),
+        transactionDescription: document.getElementById('panel-transaction-description'),
+        transactionProject: document.getElementById('panel-transaction-project'),
+        saveBtn: document.getElementById('panel-save-btn'),
+        deleteBtn: document.getElementById('panel-delete-btn'),
+        typeBtns: document.querySelectorAll('.panel-type-btn'),
+        bankBtns: document.querySelectorAll('.panel-bank-btn'),
+        vendorPills: document.getElementById('panel-vendor-pills'),
+        descriptionPills: document.getElementById('panel-description-pills'),
+        projectPills: document.getElementById('panel-project-pills'),
+        // Delete confirmation elements
+        footerNormal: document.getElementById('panel-footer-normal'),
+        footerDelete: document.getElementById('panel-footer-delete'),
+        deleteCancelBtn: document.getElementById('panel-delete-cancel'),
+        deleteConfirmBtn: document.getElementById('panel-delete-confirm')
+    };
+
+    let panelEditingId = null;
+
+    function setupPanelEventListeners() {
+        // Back button / overlay click
+        panelElements.backBtn.addEventListener('click', closeSlidePanel);
+        panelElements.overlay.addEventListener('click', closeSlidePanel);
+
+        // Type toggle
+        panelElements.typeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                panelElements.typeBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                panelElements.transactionType.value = btn.dataset.type;
+            });
+        });
+
+        // Bank toggle
+        panelElements.bankBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const wasActive = btn.classList.contains('active');
+                panelElements.bankBtns.forEach(b => b.classList.remove('active'));
+                if (!wasActive) {
+                    btn.classList.add('active');
+                    panelElements.transactionBank.value = btn.dataset.bank;
+                } else {
+                    panelElements.transactionBank.value = '';
+                }
+            });
+        });
+
+        // Form submission
+        panelElements.form.addEventListener('submit', handlePanelSubmit);
+
+        // Delete button - show confirmation
+        panelElements.deleteBtn.addEventListener('click', showPanelDeleteConfirm);
+
+        // Delete confirmation buttons
+        panelElements.deleteCancelBtn.addEventListener('click', hidePanelDeleteConfirm);
+        panelElements.deleteConfirmBtn.addEventListener('click', handlePanelDelete);
+
+        // Setup dropdown inputs
+        setupPanelDropdown('vendor', panelElements.transactionVendor, panelElements.vendorPills, () => vendors);
+        setupPanelDropdown('description', panelElements.transactionDescription, panelElements.descriptionPills, () => descriptions);
+        setupPanelDropdown('project', panelElements.transactionProject, panelElements.projectPills, () => projects);
+
+        // Close dropdowns when clicking outside
+        panelElements.panel.addEventListener('click', (e) => {
+            if (!e.target.closest('#panel-vendor-dropdown')) {
+                panelElements.vendorPills.classList.remove('show');
+            }
+            if (!e.target.closest('#panel-description-dropdown')) {
+                panelElements.descriptionPills.classList.remove('show');
+            }
+            if (!e.target.closest('#panel-project-dropdown')) {
+                panelElements.projectPills.classList.remove('show');
+            }
+        });
+
+        // Escape key to close
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && panelElements.panel.classList.contains('show')) {
+                closeSlidePanel();
+            }
+        });
+    }
+
+    function setupPanelDropdown(name, input, pillsContainer, getItems) {
+        let justSelected = false;
+
+        input.addEventListener('focus', () => {
+            if (!justSelected) {
+                renderPanelPills(pillsContainer, getItems(), input, () => { justSelected = true; });
+            }
+            justSelected = false;
+        });
+
+        input.addEventListener('input', () => {
+            const filtered = filterItems(getItems(), input.value);
+            if (filtered.length > 0) {
+                renderPanelPills(pillsContainer, filtered, input, () => { justSelected = true; });
+            } else {
+                pillsContainer.classList.remove('show');
+            }
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                pillsContainer.classList.remove('show');
+            }, 200);
+        });
+    }
+
+    function renderPanelPills(container, items, input, onSelect) {
+        if (!items || items.length === 0) {
+            container.innerHTML = '';
+            container.classList.remove('show');
+            return;
+        }
+
+        const slicedItems = items.slice(0, 10);
+        container.innerHTML = slicedItems.map(item =>
+            `<div class="dropdown-pill" data-value="${escapeHtml(item)}">${escapeHtml(item)}</div>`
+        ).join('');
+
+        container.querySelectorAll('.dropdown-pill').forEach(pill => {
+            pill.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                input.value = pill.dataset.value;
+                container.classList.remove('show');
+                if (onSelect) onSelect();
+            });
+        });
+
+        container.classList.add('show');
+    }
+
+    function openSlidePanel(transaction = null) {
+        // Reset form
+        panelElements.form.reset();
+        panelElements.transactionId.value = '';
+        panelEditingId = null;
+
+        // Reset type buttons
+        panelElements.typeBtns.forEach(btn => btn.classList.remove('active'));
+        document.querySelector('.panel-type-btn.expense').classList.add('active');
+        panelElements.transactionType.value = 'expense';
+
+        // Reset bank buttons
+        panelElements.bankBtns.forEach(btn => btn.classList.remove('active'));
+        panelElements.transactionBank.value = '';
+
+        // Set default date
+        panelElements.transactionDate.value = new Date().toISOString().split('T')[0];
+
+        if (transaction) {
+            // Edit mode
+            panelElements.title.textContent = 'Edit Transaction';
+            panelElements.transactionId.value = transaction.id;
+            panelEditingId = transaction.id;
+            panelElements.transactionDate.value = transaction.date;
+            panelElements.transactionAmount.value = transaction.amount;
+            panelElements.transactionVendor.value = transaction.vendor;
+            panelElements.transactionDescription.value = transaction.description || '';
+            panelElements.transactionProject.value = transaction.project || 'General';
+
+            // Set type
+            panelElements.typeBtns.forEach(btn => btn.classList.remove('active'));
+            const typeBtn = document.querySelector(`.panel-type-btn.${transaction.transaction_type || 'expense'}`);
+            if (typeBtn) typeBtn.classList.add('active');
+            panelElements.transactionType.value = transaction.transaction_type || 'expense';
+
+            // Set bank
+            if (transaction.bank) {
+                const bankBtn = document.querySelector(`.panel-bank-btn.${transaction.bank}`);
+                if (bankBtn) bankBtn.classList.add('active');
+                panelElements.transactionBank.value = transaction.bank;
+            }
+
+            panelElements.deleteBtn.style.display = 'flex';
+            panelElements.saveBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Update
+            `;
+        } else {
+            // Add mode
+            panelElements.title.textContent = 'Add Transaction';
+            panelElements.deleteBtn.style.display = 'none';
+            panelElements.saveBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Save
+            `;
+        }
+
+        // Show panel with animation
+        panelElements.overlay.classList.add('show');
+        panelElements.panel.classList.add('show');
+        document.body.style.overflow = 'hidden';
+
+        // Focus on amount field after animation
+        setTimeout(() => {
+            if (!transaction) {
+                panelElements.transactionAmount.focus();
+            }
+        }, 350);
+    }
+
+    function closeSlidePanel() {
+        panelElements.overlay.classList.remove('show');
+        panelElements.panel.classList.remove('show');
+        document.body.style.overflow = '';
+        panelEditingId = null;
+
+        // Hide all pill dropdowns
+        panelElements.vendorPills.classList.remove('show');
+        panelElements.descriptionPills.classList.remove('show');
+        panelElements.projectPills.classList.remove('show');
+
+        // Reset footer to normal state
+        panelElements.footerDelete.style.display = 'none';
+        panelElements.footerNormal.style.display = 'flex';
+    }
+
+    async function handlePanelSubmit(e) {
+        e.preventDefault();
+
+        const id = panelElements.transactionId.value;
+        const data = {
+            date: panelElements.transactionDate.value,
+            amount: parseFloat(panelElements.transactionAmount.value),
+            vendor: panelElements.transactionVendor.value.trim(),
+            description: panelElements.transactionDescription.value.trim(),
+            project: panelElements.transactionProject.value.trim() || 'General',
+            transaction_type: panelElements.transactionType.value,
+            bank: panelElements.transactionBank.value || null
+        };
+
+        if (!data.date || !data.vendor || !data.amount) {
+            showToast('Please fill required fields', 'error');
+            return;
+        }
+
+        panelElements.saveBtn.disabled = true;
+        panelElements.saveBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin">
+                <line x1="12" y1="2" x2="12" y2="6"></line>
+                <line x1="12" y1="18" x2="12" y2="22"></line>
+                <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                <line x1="2" y1="12" x2="6" y2="12"></line>
+                <line x1="18" y1="12" x2="22" y2="12"></line>
+                <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+            </svg>
+            Saving...
+        `;
+
+        try {
+            let response;
+            if (id) {
+                response = await fetch(`/api/personal/transactions/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+            } else {
+                response = await fetch('/api/personal/transactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast(id ? 'Updated!' : 'Added!', 'success');
+                closeSlidePanel();
+                loadData();
+            } else {
+                showToast(result.error || 'Failed to save', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving transaction:', error);
+            showToast('Failed to save', 'error');
+        } finally {
+            panelElements.saveBtn.disabled = false;
+            panelElements.saveBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                ${id ? 'Update' : 'Save'}
+            `;
+        }
+    }
+
+    function showPanelDeleteConfirm() {
+        panelElements.footerNormal.style.display = 'none';
+        panelElements.footerDelete.style.display = 'flex';
+    }
+
+    function hidePanelDeleteConfirm() {
+        panelElements.footerDelete.style.display = 'none';
+        panelElements.footerNormal.style.display = 'flex';
+    }
+
+    async function handlePanelDelete() {
+        const id = panelElements.transactionId.value;
+        if (!id) return;
+
+        panelElements.deleteConfirmBtn.disabled = true;
+        panelElements.deleteConfirmBtn.textContent = 'Deleting...';
+
+        try {
+            const response = await fetch(`/api/personal/transactions/${id}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showToast('Deleted!', 'success');
+                closeSlidePanel();
+                loadData();
+            } else {
+                showToast(result.error || 'Failed to delete', 'error');
+                hidePanelDeleteConfirm();
+            }
+        } catch (error) {
+            console.error('Error deleting transaction:', error);
+            showToast('Failed to delete', 'error');
+            hidePanelDeleteConfirm();
+        } finally {
+            panelElements.deleteConfirmBtn.disabled = false;
+            panelElements.deleteConfirmBtn.textContent = 'Delete';
+        }
+    }
+
+    // Initialize panel event listeners
+    setupPanelEventListeners();
 
     // ============================================================================
     // START
