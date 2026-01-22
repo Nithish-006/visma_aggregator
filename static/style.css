@@ -312,6 +312,17 @@ body {
     font-weight: 600;
 }
 
+/* "Data From" badge - blue tint to distinguish from "To" badge */
+.data-from-badge {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.25);
+}
+
+.data-from-badge svg,
+.data-from-badge strong {
+    color: #3b82f6;
+}
+
 .user-badge {
     display: flex;
     align-items: center;

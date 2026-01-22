@@ -247,14 +247,13 @@
             const dd = new CustomDropdown('edit-category-filter', 'All Categories', 'category');
             dd.setOptions(categories.filter(c => c !== 'All'));
 
-            // Populate bulk category select (keep as select for now)
-            const bulkCategory = document.getElementById('bulk-category');
-            bulkCategory.innerHTML = '<option value="">Change Category...</option>';
+            // Populate bulk category datalist (allows typing new categories)
+            const bulkCategoryDatalist = document.getElementById('bulk-category-datalist');
+            bulkCategoryDatalist.innerHTML = '';
             categories.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat;
-                option.textContent = cat;
-                bulkCategory.appendChild(option);
+                bulkCategoryDatalist.appendChild(option);
             });
 
         } catch (error) {
@@ -481,17 +480,23 @@
         cell.classList.add('editing');
 
         let input;
+        let datalist = null;
+
         if (field === 'category') {
-            // Use select for category
-            input = document.createElement('select');
+            // Use input with datalist for category (allows typing new values + selection)
+            input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentValue;
+            input.setAttribute('list', `category-datalist-${txnId}`);
+            input.placeholder = 'Type or select category';
+
+            // Create datalist for suggestions
+            datalist = document.createElement('datalist');
+            datalist.id = `category-datalist-${txnId}`;
             categories.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat;
-                option.textContent = cat;
-                if (cat === currentValue) {
-                    option.selected = true;
-                }
-                input.appendChild(option);
+                datalist.appendChild(option);
             });
         } else {
             // Use input for other fields
@@ -502,6 +507,9 @@
 
         cell.innerHTML = '';
         cell.appendChild(input);
+        if (datalist) {
+            cell.appendChild(datalist);
+        }
         input.focus();
 
         // Save on blur or Enter
@@ -1073,9 +1081,9 @@
             rowCard.className = 'split-row-card';
             rowCard.dataset.index = index;
 
-            // Build category options
-            let categoryOptions = categories.map(cat =>
-                `<option value="${cat}" ${row.category === cat ? 'selected' : ''}>${cat}</option>`
+            // Build category datalist options
+            let categoryDatalistOptions = categories.map(cat =>
+                `<option value="${cat}">`
             ).join('');
 
             rowCard.innerHTML = `
@@ -1090,9 +1098,8 @@
                     </div>
                     <div class="split-field">
                         <label>Category</label>
-                        <select class="split-category-select" data-index="${index}">
-                            ${categoryOptions}
-                        </select>
+                        <input type="text" class="split-category-input" data-index="${index}" value="${escapeHtml(row.category)}" list="split-category-datalist-${index}" placeholder="Type or select">
+                        <datalist id="split-category-datalist-${index}">${categoryDatalistOptions}</datalist>
                     </div>
                     <div class="split-field">
                         <label>Vendor</label>
@@ -1117,8 +1124,8 @@
             input.addEventListener('input', handleSplitAmountChange);
         });
 
-        document.querySelectorAll('.split-category-select').forEach(select => {
-            select.addEventListener('change', handleSplitFieldChange);
+        document.querySelectorAll('.split-category-input').forEach(input => {
+            input.addEventListener('input', handleSplitFieldChange);
         });
 
         document.querySelectorAll('.split-vendor-input, .split-project-input, .split-notes-input').forEach(input => {

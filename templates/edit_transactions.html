@@ -143,9 +143,8 @@
                     <strong id="bulk-count">0</strong> transactions selected
                 </div>
                 <div class="bulk-actions">
-                    <select id="bulk-category" class="bulk-select">
-                        <option value="">Change Category...</option>
-                    </select>
+                    <input type="text" id="bulk-category" class="bulk-input" list="bulk-category-datalist" placeholder="Change Category...">
+                    <datalist id="bulk-category-datalist"></datalist>
                     <input type="text" id="bulk-project" class="bulk-input" placeholder="Set Project...">
                     <button id="apply-bulk-edit" class="btn btn-primary">Apply to Selected</button>
                     <button id="split-transaction-btn" class="btn btn-secondary" style="display: none;">Split

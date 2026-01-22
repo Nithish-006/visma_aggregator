@@ -298,7 +298,13 @@ async function loadDateRange() {
                 endInput.value = '';
             }
 
-            // Update the "Updated as of" badge with formatted date
+            // Update the "From" badge with formatted min date
+            const fromDateEl = document.getElementById('data-from-date');
+            if (fromDateEl && data.min_date) {
+                fromDateEl.textContent = formatDisplayDate(data.min_date);
+            }
+
+            // Update the "To" badge with formatted max date
             const updatedDateEl = document.getElementById('data-updated-date');
             if (updatedDateEl && data.max_date) {
                 updatedDateEl.textContent = formatDisplayDate(data.max_date);
