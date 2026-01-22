@@ -29,21 +29,31 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Database connection settings
+# Local MySQL instance (commented out)
+# DB_CONFIG = {
+#     'host': 'localhost',
+#     'port': 3306,
+#     'user': 'root',
+#     'password': '12345',
+#     'database': 'visma_financial'
+# }
+
+# Remote MySQL instance (Railway)
 DB_CONFIG = {
-    'host': 'localhost',
-    'port': 3306,
+    'host': 'yamanote.proxy.rlwy.net',
+    'port': 57844,
     'user': 'root',
-    'password': '12345',
+    'password': 'uxozNadQzagwhWazsWnfDZMSNvKHRwvi',
     'database': 'visma_financial'
 }
 
 # File paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-AXIS_EXCEL = os.path.join(BASE_DIR, 'AXIS (APR-OCT).xlsx')
-KVB_EXCEL = os.path.join(BASE_DIR, 'KVB (APR - NOV).xlsx')
+AXIS_EXCEL = os.path.join(BASE_DIR, 'AXIS (NOV - DEC).xlsx')
+KVB_EXCEL = os.path.join(BASE_DIR, 'KVB (SEP - NOV).xlsx')
 
 # Sheet names
-AXIS_SHEET = 'AXIS APRIL -25 '
+AXIS_SHEET = 'oct-25-26'
 
 # Configuration
 BATCH_SIZE = 100  # Number of updates per batch commit

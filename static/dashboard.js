@@ -298,16 +298,27 @@ async function loadDateRange() {
                 endInput.value = '';
             }
 
-            // Update the "From" badge with formatted min date
+            // Update the "From" badge with formatted min date (desktop)
             const fromDateEl = document.getElementById('data-from-date');
             if (fromDateEl && data.min_date) {
                 fromDateEl.textContent = formatDisplayDate(data.min_date);
             }
 
-            // Update the "To" badge with formatted max date
+            // Update the "To" badge with formatted max date (desktop)
             const updatedDateEl = document.getElementById('data-updated-date');
             if (updatedDateEl && data.max_date) {
                 updatedDateEl.textContent = formatDisplayDate(data.max_date);
+            }
+
+            // Update mobile date elements
+            const mobileFromEl = document.getElementById('mobile-from-date');
+            if (mobileFromEl && data.min_date) {
+                mobileFromEl.textContent = formatDisplayDate(data.min_date);
+            }
+
+            const mobileToEl = document.getElementById('mobile-to-date');
+            if (mobileToEl && data.max_date) {
+                mobileToEl.textContent = formatDisplayDate(data.max_date);
             }
         }
     } catch (e) {
