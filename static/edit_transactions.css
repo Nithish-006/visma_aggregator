@@ -1,27 +1,29 @@
 /* ============================================================================
-   EDIT TRANSACTIONS PAGE - DARK THEME STYLES
+   EDIT TRANSACTIONS PAGE - LIGHT THEME STYLES
    ============================================================================ */
 
 /* Main content adjustment for edit page */
 .edit-main-content {
-    margin-top: 70px;
+    margin-top: 60px;
     padding: 0.75rem 2rem;
+    background: transparent;
 }
 
 /* ============================================================================
-   COMPACT FILTER TOOLBAR FOR EDIT PAGE
+   COMPACT FILTER TOOLBAR - Gradient Card
    ============================================================================ */
 
 .edit-toolbar-wrapper {
-    background: var(--bg-card);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
     padding: 0.75rem 1rem;
-    border-radius: var(--radius-md);
-    margin-bottom: 0.75rem;
-    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 0.875rem;
+    border: 1px solid rgba(0, 0, 0, 0.06);
     display: flex;
     align-items: center;
     gap: 0.75rem;
     flex-wrap: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .edit-filter-toolbar {
@@ -59,8 +61,46 @@
 
 .edit-filter-toolbar .dropdown-trigger {
     height: 36px;
-    font-size: 0.8rem;
+    font-size: 0.875rem;
     padding: 0.4rem 0.6rem;
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Date filter group styling */
+.edit-filter-toolbar .filter-group-date {
+    flex: 0 0 auto;
+    min-width: 120px;
+    max-width: 130px;
+}
+
+.edit-filter-toolbar .filter-input.date-input {
+    height: 36px;
+    font-size: 0.875rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    color: var(--text-main);
+    width: 100%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.edit-filter-toolbar .filter-input.date-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+}
+
+/* Calendar icon styling for light theme */
+.edit-filter-toolbar .filter-input.date-input::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.edit-filter-toolbar .filter-input.date-input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
 }
 
 .edit-actions-toolbar .search-wrapper {
@@ -70,13 +110,15 @@
 
 .edit-actions-toolbar .search-input {
     height: 36px;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .btn-compact {
     height: 36px;
     padding: 0.4rem 0.75rem;
-    font-size: 0.8rem;
+    font-size: 0.875rem;
     flex-shrink: 0;
 }
 
@@ -148,11 +190,12 @@
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    font-size: 0.8rem;
+    font-size: 0.875rem;
     min-width: 130px;
-    background: var(--bg-dark);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
     color: var(--text-main);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .filter-input::placeholder {
@@ -280,7 +323,7 @@
 }
 
 .edit-table tbody tr:nth-child(even) {
-    background: rgba(30, 41, 59, 0.5);
+    background: linear-gradient(90deg, #f9fafb 0%, #f5f7fa 100%);
 }
 
 .edit-table tbody tr:hover {
@@ -301,7 +344,7 @@
     background: rgba(245, 158, 11, 0.15);
 }
 
-/* Editable cells - Dark Theme */
+/* Editable cells - Light Theme */
 .editable-cell {
     cursor: pointer;
     position: relative;
@@ -477,6 +520,8 @@ input[type="checkbox"] {
 .edit-table .monetary-pill {
     font-size: 0.8rem;
     padding: 4px 10px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Text alignment */
@@ -705,7 +750,42 @@ input[type="checkbox"] {
         min-width: auto;
     }
 
+    .edit-filter-toolbar .filter-group-date {
+        width: 100%;
+        max-width: 100%;
+        min-width: auto;
+        flex: none;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Date filter labels - visible on mobile */
+    .edit-filter-toolbar .filter-group-date::before {
+        display: block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 0.35rem;
+        order: -1;
+    }
+
+    .edit-filter-toolbar .filter-group-date:has(#edit-start-date)::before {
+        content: 'From Date';
+    }
+
+    .edit-filter-toolbar .filter-group-date:has(#edit-end-date)::before {
+        content: 'To Date';
+    }
+
     .edit-filter-toolbar .dropdown-trigger {
+        width: 100%;
+        height: 44px;
+        font-size: 16px;
+    }
+
+    .edit-filter-toolbar .filter-input.date-input {
         width: 100%;
         height: 44px;
         font-size: 16px;

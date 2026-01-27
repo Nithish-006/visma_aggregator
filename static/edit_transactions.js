@@ -27,7 +27,9 @@
         category: [], // Empty means All
         project: [],
         vendor: [],
-        search: ''
+        search: '',
+        startDate: null,
+        endDate: null
     };
 
     // Loading state to prevent duplicate requests
@@ -219,10 +221,11 @@
     async function init() {
         showLoading();
 
-        // Load categories and filter options in parallel for faster loading
+        // Load categories, filter options, and date range in parallel for faster loading
         await Promise.all([
             loadCategories(),
-            loadFilterOptions()
+            loadFilterOptions(),
+            loadDateRange()
         ]);
 
         // Setup event listeners first
@@ -232,6 +235,33 @@
         await loadTransactions();
 
         hideLoading();
+    }
+
+    /**
+     * Load date range from API
+     */
+    async function loadDateRange() {
+        try {
+            const response = await fetch(`/api/${BANK_CODE}/date_range`);
+            const data = await response.json();
+
+            const startInput = document.getElementById('edit-start-date');
+            const endInput = document.getElementById('edit-end-date');
+
+            if (startInput && endInput && data.min_date && data.max_date) {
+                // Set the min/max constraints on the date inputs
+                startInput.min = data.min_date;
+                startInput.max = data.max_date;
+                endInput.min = data.min_date;
+                endInput.max = data.max_date;
+
+                // Default: show all data (leave inputs empty)
+                startInput.value = '';
+                endInput.value = '';
+            }
+        } catch (error) {
+            console.error('Error loading date range:', error);
+        }
     }
 
     /**
@@ -289,6 +319,12 @@
             }
             if (currentFilters.search) {
                 params.set('search', currentFilters.search);
+            }
+            if (currentFilters.startDate) {
+                params.set('start_date', currentFilters.startDate);
+            }
+            if (currentFilters.endDate) {
+                params.set('end_date', currentFilters.endDate);
             }
 
             const response = await fetch(`/api/${BANK_CODE}/transactions/paginated?${params}`);
@@ -850,7 +886,9 @@
             category: [],
             project: [],
             vendor: [],
-            search: ''
+            search: '',
+            startDate: null,
+            endDate: null
         };
 
         // Clear dropdowns
@@ -859,6 +897,12 @@
         if (dropdowns['edit-vendor-filter']) dropdowns['edit-vendor-filter'].clear();
 
         document.getElementById('edit-search').value = '';
+
+        // Clear date inputs
+        const startInput = document.getElementById('edit-start-date');
+        const endInput = document.getElementById('edit-end-date');
+        if (startInput) startInput.value = '';
+        if (endInput) endInput.value = '';
 
         applyFilters();
     }
@@ -893,6 +937,24 @@
 
         document.getElementById('filter-uncategorized').addEventListener('click', showUncategorized);
         document.getElementById('clear-all-filters').addEventListener('click', clearAllFilters);
+
+        // Date filter listeners
+        const startDateInput = document.getElementById('edit-start-date');
+        const endDateInput = document.getElementById('edit-end-date');
+
+        if (startDateInput) {
+            startDateInput.addEventListener('change', () => {
+                currentFilters.startDate = startDateInput.value || null;
+                applyFilters();
+            });
+        }
+
+        if (endDateInput) {
+            endDateInput.addEventListener('change', () => {
+                currentFilters.endDate = endDateInput.value || null;
+                applyFilters();
+            });
+        }
 
         // Select all
         selectAllCheckbox.addEventListener('change', handleSelectAllChange);

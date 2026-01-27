@@ -3,18 +3,23 @@
    ============================================================================ */
 
 :root {
-    --bg-primary: #0f1c2e;
-    --bg-secondary: #162234;
-    --bg-card: #1a2942;
-    --bg-hover: #243552;
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
-    --text-muted: #64748b;
-    --border-color: #2d3f59;
-    --income-color: #22c55e;
-    --expense-color: #ef4444;
-    --accent-color: #ff6b4a;
-    --tab-active: #3b82f6;
+    /* Light Theme - Elegant Gradients */
+    --bg-primary: linear-gradient(160deg, #f0f4f8 0%, #d9e2ec 100%);
+    --bg-secondary: #ffffff;
+    --bg-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    --bg-hover: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+    --text-primary: #1a1a2e;
+    --text-secondary: #4a4a68;
+    --text-muted: #6b7280;
+    --border-color: #e5e7eb;
+    --border-strong: #d1d5db;
+    --income-color: #059669;
+    --income-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    --expense-color: #dc2626;
+    --expense-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    --accent-color: #ea580c;
+    --accent-gradient: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    --tab-active: #2563eb;
 
     --safe-area-top: env(safe-area-inset-top, 0px);
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);
@@ -34,26 +39,32 @@ html {
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
-    background: var(--bg-primary);
+    background: linear-gradient(160deg, #f0f4f8 0%, #d9e2ec 100%);
+    background-attachment: fixed;
     min-height: 100vh;
     min-height: -webkit-fill-available;
     color: var(--text-primary);
     overflow-x: hidden;
+    letter-spacing: -0.01em;
 }
 
 /* ============================================================================
-   HEADER
+   HEADER - Frosted Glass Gradient
    ============================================================================ */
 
 .header {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: var(--bg-primary);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
     padding: calc(12px + var(--safe-area-top)) 16px 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .header-left {
@@ -285,6 +296,8 @@ body {
 .summary-value {
     font-size: 1.125rem;
     font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
 }
 
 .summary-value.income {
@@ -370,6 +383,8 @@ body {
     gap: 16px;
     font-size: 0.8125rem;
     font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
 }
 
 .date-income {
@@ -461,6 +476,8 @@ body {
     font-weight: 600;
     text-align: right;
     white-space: nowrap;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
 }
 
 .transaction-amount.income {
@@ -503,6 +520,8 @@ body {
     gap: 20px;
     font-size: 0.875rem;
     font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================================
@@ -532,6 +551,8 @@ body {
 .total-card-value {
     font-size: 2rem;
     font-weight: 700;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
 }
 
 .total-card-value.income {
@@ -604,6 +625,8 @@ body {
     font-size: 0.9375rem;
     font-weight: 600;
     color: var(--accent-color);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
 }
 
 .project-meta {

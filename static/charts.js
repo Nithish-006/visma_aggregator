@@ -339,7 +339,7 @@ async function loadCategoryChart(category = 'All', startDate = null, endDate = n
                             boxWidth: isMobile() ? 10 : 12,
                             padding: isMobile() ? 6 : 8,
                             font: { size: getMobileChartDefaults().legendFont.size },
-                            color: '#ffffff'
+                            color: '#374151'
                         }
                     },
                     tooltip: {
@@ -447,14 +447,14 @@ async function loadVendorChart(category = 'All', startDate = null, endDate = nul
                             callback: (v) => formatIndianNumber(v),
                             font: { size: getMobileChartDefaults().tickFont.size },
                             maxTicksLimit: isMobile() ? 4 : 6,
-                            color: '#ffffff'
+                            color: '#374151'
                         },
-                        grid: { color: 'rgba(148,163,184,0.18)' }
+                        grid: { color: 'rgba(148,163,184,0.25)' }
                     },
                     y: {
                         ticks: {
                             font: { size: getMobileChartDefaults().tickFont.size },
-                            color: '#ffffff',
+                            color: '#374151',
                             callback: function(value, index) {
                                 const label = this.getLabelForValue(value);
                                 if (isMobile() && label.length > 15) {
@@ -463,7 +463,7 @@ async function loadVendorChart(category = 'All', startDate = null, endDate = nul
                                 return label;
                             }
                         },
-                        grid: { color: 'rgba(148,163,184,0.18)' }
+                        grid: { color: 'rgba(148,163,184,0.25)' }
                     }
                 }
             }
@@ -605,64 +605,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentStartDate = null;
     currentEndDate = null;
 
-    // Helper functions
-    function getDateNDaysAgo(n) {
-        const date = new Date();
-        date.setDate(date.getDate() - n);
-        return date.toISOString().split('T')[0];
-    }
-
-    function getFirstDayOfMonth() {
-        const date = new Date();
-        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
-    }
-
-    function getToday() {
-        return new Date().toISOString().split('T')[0];
-    }
-
-    // Scenario chips for date ranges
-    document.querySelectorAll('.chip').forEach((chip) => {
-        chip.addEventListener('click', () => {
-            document
-                .querySelectorAll('.chip')
-                .forEach((c) => c.classList.remove('chip-active'));
-            chip.classList.add('chip-active');
-            const scenario = chip.dataset.scenario;
-
-            const startInput = document.getElementById('start-date');
-            const endInput = document.getElementById('end-date');
-
-            if (scenario === 'all') {
-                currentStartDate = null;
-                currentEndDate = null;
-                startInput.value = '';
-                endInput.value = '';
-            } else if (scenario === 'last7') {
-                currentStartDate = getDateNDaysAgo(7);
-                currentEndDate = getToday();
-                startInput.value = currentStartDate;
-                endInput.value = currentEndDate;
-            } else if (scenario === 'last14') {
-                currentStartDate = getDateNDaysAgo(14);
-                currentEndDate = getToday();
-                startInput.value = currentStartDate;
-                endInput.value = currentEndDate;
-            } else if (scenario === 'last30') {
-                currentStartDate = getDateNDaysAgo(30);
-                currentEndDate = getToday();
-                startInput.value = currentStartDate;
-                endInput.value = currentEndDate;
-            } else if (scenario === 'thisMonth') {
-                currentStartDate = getFirstDayOfMonth();
-                currentEndDate = getToday();
-                startInput.value = currentStartDate;
-                endInput.value = currentEndDate;
-            }
-            runFullRefresh();
-        });
-    });
-
     // Apply / Clear
     document.getElementById('apply-filters').addEventListener('click', () => {
         const catSelect = document.getElementById('category-filter');
@@ -674,10 +616,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentProject = projSelect.value || 'All';
         currentStartDate = startInput.value || null;
         currentEndDate = endInput.value || null;
-
-        document
-            .querySelectorAll('.chip')
-            .forEach((c) => c.classList.remove('chip-active'));
 
         runFullRefresh();
     });
@@ -697,13 +635,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         projSelect.value = 'All';
         startInput.value = '';
         endInput.value = '';
-
-        document
-            .querySelectorAll('.chip')
-            .forEach((c) => c.classList.remove('chip-active'));
-        document
-            .querySelector('.chip[data-scenario="all"]')
-            ?.classList.add('chip-active');
 
         runFullRefresh();
     });
