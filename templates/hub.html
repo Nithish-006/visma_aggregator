@@ -34,8 +34,11 @@
     <header class="hub-header">
         <div class="header-content">
             <div class="header-left">
-                <h1 class="logo">Visma Financials</h1>
-                <span class="tagline">Multi-Bank Dashboard</span>
+                <img src="{{ url_for('static', filename='logo.jpeg') }}" alt="Visma Logo" class="header-logo">
+                <div class="header-brand">
+                    <h1 class="logo">Visma Financials</h1>
+                    <span class="tagline">Multi-Bank Dashboard</span>
+                </div>
             </div>
             <div class="header-right">
                 <span class="user-badge">
