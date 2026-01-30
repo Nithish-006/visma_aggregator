@@ -15,6 +15,7 @@
     let selectedTransactionIds = new Set();  // Track by ID instead of index
     let modifiedTransactions = new Map();    // Map of id -> modified transaction data
     let categories = [];
+    let projects = [];
 
     // Pagination state (server-side)
     let currentPage = 1;
@@ -34,6 +35,10 @@
 
     // Loading state to prevent duplicate requests
     let isLoading = false;
+
+    // Excel-like navigation state
+    let focusedCell = null; // Currently focused (highlighted) editable cell
+    const EDITABLE_FIELDS = ['vendor', 'category', 'project']; // Column order for left/right nav
 
     // Dropdown instances
     const dropdowns = {};
@@ -363,9 +368,23 @@
             const response = await fetch(`/api/${BANK_CODE}/filter-options`);
             const data = await response.json();
 
+            // Store projects for autocomplete
+            projects = data.projects || [];
+
             // Init Project Dropdown
             const projectDd = new CustomDropdown('edit-project-filter', 'All Projects', 'project');
-            projectDd.setOptions(data.projects || []);
+            projectDd.setOptions(projects);
+
+            // Populate bulk project datalist
+            const bulkProjectDatalist = document.getElementById('bulk-project-datalist');
+            if (bulkProjectDatalist) {
+                bulkProjectDatalist.innerHTML = '';
+                projects.forEach(proj => {
+                    const option = document.createElement('option');
+                    option.value = proj;
+                    bulkProjectDatalist.appendChild(option);
+                });
+            }
 
             // Init Vendor Dropdown
             const vendorDd = new CustomDropdown('edit-vendor-filter', 'All Vendors', 'vendor');
@@ -495,6 +514,9 @@
         const cell = e.currentTarget;
         if (cell.classList.contains('editing')) return;
 
+        // Set this cell as focused for keyboard navigation
+        setFocusedCell(cell);
+
         const field = cell.dataset.field;
         const txnId = parseInt(cell.dataset.id);
         const txn = allTransactionsMap.get(txnId);
@@ -534,6 +556,22 @@
                 option.value = cat;
                 datalist.appendChild(option);
             });
+        } else if (field === 'project') {
+            // Use input with datalist for project (allows typing new values + selection)
+            input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentValue;
+            input.setAttribute('list', `project-datalist-${txnId}`);
+            input.placeholder = 'Type or select project';
+
+            // Create datalist for suggestions
+            datalist = document.createElement('datalist');
+            datalist.id = `project-datalist-${txnId}`;
+            projects.forEach(proj => {
+                const option = document.createElement('option');
+                option.value = proj;
+                datalist.appendChild(option);
+            });
         } else {
             // Use input for other fields
             input = document.createElement('input');
@@ -548,23 +586,65 @@
         }
         input.focus();
 
-        // Save on blur or Enter
-        input.addEventListener('blur', () => finishCellEdit(cell, input, field, txnId));
-        input.addEventListener('keypress', (e) => {
+        // Save on blur (only if not navigating via keyboard)
+        input.addEventListener('blur', () => {
+            // Delay to allow keyboard navigation to cancel the blur-save
+            setTimeout(() => {
+                if (cell.classList.contains('editing')) {
+                    finishCellEdit(cell, input, field, txnId);
+                }
+            }, 50);
+        });
+
+        // Keyboard handling for Excel-like navigation while editing
+        input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
-                finishCellEdit(cell, input, field, txnId);
+                e.preventDefault();
+                finishCellEdit(cell, input, field, txnId, 'down');
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                // Cancel edit without saving - restore original value
+                cell.classList.remove('editing');
+                if (field === 'category') {
+                    const val = allTransactionsMap.get(txnId)?.category || allTransactionsMap.get(txnId)?.Category || '';
+                    const isUncat = val === 'Uncategorized';
+                    cell.innerHTML = `<span class="category-badge ${isUncat ? 'uncategorized' : ''}">${val}</span>`;
+                } else if (field === 'project') {
+                    const val = allTransactionsMap.get(txnId)?.project || allTransactionsMap.get(txnId)?.Project || '';
+                    const isEmpty = !val;
+                    cell.innerHTML = `<span class="project-badge ${isEmpty ? 'empty' : ''}">${val || '-'}</span>`;
+                } else {
+                    const val = field === 'vendor' ? (allTransactionsMap.get(txnId)?.vendor || allTransactionsMap.get(txnId)?.['Client/Vendor'] || '') : '';
+                    cell.textContent = val;
+                }
+                setFocusedCell(cell);
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                finishCellEdit(cell, input, field, txnId, e.shiftKey ? 'left' : 'right');
+            } else if (e.key === 'ArrowDown' && field !== 'category' && field !== 'project') {
+                // For non-datalist fields, allow arrow nav while editing
+                e.preventDefault();
+                finishCellEdit(cell, input, field, txnId, 'down');
+            } else if (e.key === 'ArrowUp' && field !== 'category' && field !== 'project') {
+                e.preventDefault();
+                finishCellEdit(cell, input, field, txnId, 'up');
             }
         });
     }
 
     /**
-     * Finish editing a cell
+     * Finish editing a cell, optionally navigate in a direction afterward
+     * @param {string} direction - 'up', 'down', 'left', 'right', or null
      */
-    function finishCellEdit(cell, input, field, txnId) {
+    function finishCellEdit(cell, input, field, txnId, direction = null) {
         const newValue = input.value.trim();
         const txn = allTransactionsMap.get(txnId);
 
         if (!txn) return;
+
+        // Prevent double-processing
+        if (!cell.classList.contains('editing')) return;
+        cell.classList.remove('editing');
 
         // Update local transaction data - support both field name formats
         if (field === 'vendor') {
@@ -576,6 +656,11 @@
         } else if (field === 'project') {
             txn['Project'] = newValue;
             txn['project'] = newValue;
+            // Add new project to suggestions list if not already present
+            if (newValue && !projects.includes(newValue)) {
+                projects.push(newValue);
+                projects.sort();
+            }
         }
 
         // Track modification by ID
@@ -587,20 +672,194 @@
 
         updateModifiedUI();
 
-        // Re-render cell
-        cell.classList.remove('editing');
-        if (field === 'category') {
-            const isUncategorized = newValue === 'Uncategorized';
-            cell.innerHTML = `<span class="category-badge ${isUncategorized ? 'uncategorized' : ''}">${newValue}</span>`;
-        } else if (field === 'project') {
-            const isEmpty = !newValue;
-            cell.innerHTML = `<span class="project-badge ${isEmpty ? 'empty' : ''}">${newValue || '-'}</span>`;
-        } else {
-            cell.textContent = newValue;
-        }
-
         // Re-render table to show modified indicator
         renderTable();
+
+        // After render, navigate to the next cell if direction specified
+        if (direction) {
+            const targetCell = getAdjacentCell(txnId, field, direction);
+            if (targetCell) {
+                if (direction === 'up' || direction === 'down') {
+                    // Enter on edit commits and moves focus down (like Excel)
+                    setFocusedCell(targetCell);
+                } else {
+                    // Tab moves to next cell and starts editing (like Excel)
+                    setFocusedCell(targetCell);
+                    targetCell.click();
+                }
+            }
+        } else {
+            // No direction - just re-focus the same cell after re-render
+            const sameCell = findCellByIdAndField(txnId, field);
+            if (sameCell) {
+                setFocusedCell(sameCell);
+            }
+        }
+    }
+
+    // ========== Excel-like Navigation Functions ==========
+
+    /**
+     * Find a cell element by transaction ID and field name
+     */
+    function findCellByIdAndField(txnId, field) {
+        return document.querySelector(`.editable-cell[data-id="${txnId}"][data-field="${field}"]`);
+    }
+
+    /**
+     * Set a cell as the focused (highlighted) cell for keyboard navigation
+     */
+    function setFocusedCell(cell) {
+        // Remove focus from previous cell
+        if (focusedCell) {
+            focusedCell.classList.remove('cell-focused');
+        }
+        focusedCell = cell;
+        if (cell) {
+            cell.classList.add('cell-focused');
+            // Scroll into view if needed
+            cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+    }
+
+    /**
+     * Clear the focused cell
+     */
+    function clearFocusedCell() {
+        if (focusedCell) {
+            focusedCell.classList.remove('cell-focused');
+            focusedCell = null;
+        }
+    }
+
+    /**
+     * Get the adjacent editable cell given current position and direction
+     */
+    function getAdjacentCell(txnId, field, direction) {
+        const allEditableCells = Array.from(document.querySelectorAll('.editable-cell'));
+        if (allEditableCells.length === 0) return null;
+
+        const currentFieldIdx = EDITABLE_FIELDS.indexOf(field);
+        const currentRow = document.querySelector(`.editable-cell[data-id="${txnId}"]`)?.closest('tr');
+        if (!currentRow) return null;
+
+        const allRows = Array.from(tableBody.querySelectorAll('tr'));
+        const currentRowIdx = allRows.indexOf(currentRow);
+
+        let targetRowIdx = currentRowIdx;
+        let targetFieldIdx = currentFieldIdx;
+
+        if (direction === 'up') {
+            targetRowIdx = currentRowIdx - 1;
+        } else if (direction === 'down') {
+            targetRowIdx = currentRowIdx + 1;
+        } else if (direction === 'left') {
+            targetFieldIdx = currentFieldIdx - 1;
+            if (targetFieldIdx < 0) {
+                // Wrap to last editable field of previous row
+                targetFieldIdx = EDITABLE_FIELDS.length - 1;
+                targetRowIdx = currentRowIdx - 1;
+            }
+        } else if (direction === 'right') {
+            targetFieldIdx = currentFieldIdx + 1;
+            if (targetFieldIdx >= EDITABLE_FIELDS.length) {
+                // Wrap to first editable field of next row
+                targetFieldIdx = 0;
+                targetRowIdx = currentRowIdx + 1;
+            }
+        }
+
+        // Bounds check
+        if (targetRowIdx < 0 || targetRowIdx >= allRows.length) return null;
+
+        const targetRow = allRows[targetRowIdx];
+        const targetField = EDITABLE_FIELDS[targetFieldIdx];
+        const targetCell = targetRow.querySelector(`.editable-cell[data-field="${targetField}"]`);
+
+        return targetCell || null;
+    }
+
+    /**
+     * Global keyboard handler for Excel-like cell navigation
+     */
+    function handleTableKeydown(e) {
+        // Don't interfere if user is typing in a search box, bulk input, or other non-table input
+        const activeEl = document.activeElement;
+        const isInTableInput = activeEl && activeEl.tagName === 'INPUT' && activeEl.closest('.editable-cell');
+        const isOtherInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT') && !activeEl.closest('.editable-cell');
+
+        if (isOtherInput) return; // Don't capture keys when in search/filter inputs
+
+        // If currently editing a cell, the input's own keydown handler manages navigation
+        if (isInTableInput) return;
+
+        // Navigation mode - a cell is focused but not being edited
+        if (!focusedCell) return;
+
+        const field = focusedCell.dataset.field;
+        const txnId = parseInt(focusedCell.dataset.id);
+
+        switch (e.key) {
+            case 'ArrowUp':
+                e.preventDefault();
+                const upCell = getAdjacentCell(txnId, field, 'up');
+                if (upCell) setFocusedCell(upCell);
+                break;
+            case 'ArrowDown':
+                e.preventDefault();
+                const downCell = getAdjacentCell(txnId, field, 'down');
+                if (downCell) setFocusedCell(downCell);
+                break;
+            case 'ArrowLeft':
+                e.preventDefault();
+                const leftCell = getAdjacentCell(txnId, field, 'left');
+                if (leftCell) setFocusedCell(leftCell);
+                break;
+            case 'ArrowRight':
+                e.preventDefault();
+                const rightCell = getAdjacentCell(txnId, field, 'right');
+                if (rightCell) setFocusedCell(rightCell);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                // Start editing the focused cell
+                focusedCell.click();
+                break;
+            case 'Tab':
+                e.preventDefault();
+                const tabDir = e.shiftKey ? 'left' : 'right';
+                const tabCell = getAdjacentCell(txnId, field, tabDir);
+                if (tabCell) {
+                    setFocusedCell(tabCell);
+                    tabCell.click(); // Start editing immediately on Tab
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                clearFocusedCell();
+                break;
+            case 'F2':
+                // F2 to edit (like Excel)
+                e.preventDefault();
+                focusedCell.click();
+                break;
+            default:
+                // If user starts typing a printable character, start editing
+                if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                    e.preventDefault();
+                    focusedCell.click();
+                    // After click opens the input, type the character
+                    setTimeout(() => {
+                        const inp = focusedCell.querySelector('input');
+                        if (inp) {
+                            inp.value = e.key;
+                            // Move cursor to end
+                            inp.setSelectionRange(inp.value.length, inp.value.length);
+                        }
+                    }, 10);
+                }
+                break;
+        }
     }
 
     /**
@@ -921,6 +1180,16 @@
      * Setup event listeners
      */
     function setupEventListeners() {
+        // Excel-like keyboard navigation for editable cells
+        document.addEventListener('keydown', handleTableKeydown);
+
+        // Clear cell focus when clicking outside the table
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.editable-cell') && !e.target.closest('.edit-table-container')) {
+                clearFocusedCell();
+            }
+        });
+
         // Filters
         // Note: Category, Project, Vendor filters are now handled by CustomDropdown class events
 
