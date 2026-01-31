@@ -123,8 +123,8 @@ body {
 
 .summary-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 14px;
     margin-bottom: 24px;
 }
 
@@ -132,10 +132,10 @@ body {
     background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
     border: 1px solid rgba(0, 0, 0, 0.06);
     border-radius: 14px;
-    padding: 20px;
+    padding: 16px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
     transition: all 0.25s ease;
 }
@@ -146,9 +146,9 @@ body {
 }
 
 .stat-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
     display: flex;
     align-items: center;
@@ -177,7 +177,7 @@ body {
 }
 
 .stat-info .stat-value {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--text-primary);
 }
@@ -185,6 +185,22 @@ body {
 .stat-info .stat-label {
     font-size: 0.8125rem;
     color: var(--text-muted);
+}
+
+/* GST Icon Colors */
+.stat-icon.gst-cgst {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
+    color: #3b82f6;
+}
+
+.stat-icon.gst-sgst {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(139, 92, 246, 0.1) 100%);
+    color: #a855f7;
+}
+
+.stat-icon.gst-igst {
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(219, 39, 119, 0.1) 100%);
+    color: #ec4899;
 }
 
 /* ============================================================================
@@ -1164,9 +1180,15 @@ body {
    RESPONSIVE
    ============================================================================ */
 
+@media (max-width: 1400px) {
+    .summary-stats {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
 @media (max-width: 1024px) {
     .summary-stats {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(4, 1fr);
     }
 }
 
@@ -1249,7 +1271,7 @@ body {
 
 @media (max-width: 480px) {
     .summary-stats {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .tabs-header {
@@ -1418,6 +1440,49 @@ textarea.form-input {
     border-color: rgba(22, 163, 74, 0.3);
     font-weight: 600;
     color: #15803d;
+}
+
+/* Edit Modal Project Autocomplete */
+.edit-project-group {
+    position: relative;
+}
+
+.edit-project-suggestions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-top: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.edit-project-suggestions .project-suggestion {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    transition: background 0.15s;
+}
+
+.edit-project-suggestions .project-suggestion:hover,
+.edit-project-suggestions .project-suggestion.highlighted {
+    background: var(--accent-color);
+    color: white;
+}
+
+.edit-project-suggestions .project-suggestion:first-child {
+    border-radius: 6px 6px 0 0;
+}
+
+.edit-project-suggestions .project-suggestion:last-child {
+    border-radius: 0 0 6px 6px;
 }
 
 /* Line Items Table */
@@ -2177,9 +2242,9 @@ textarea.form-input {
         padding-bottom: calc(20px + var(--safe-area-bottom, 0px));
     }
 
-    /* Summary Stats - 2x2 Grid */
+    /* Summary Stats - Responsive Grid */
     .summary-stats {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(4, 1fr);
         gap: 10px;
         margin-bottom: 16px;
     }

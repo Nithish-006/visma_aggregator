@@ -10,6 +10,7 @@ import mysql.connector
 from mysql.connector import Error
 import pandas as pd
 from datetime import datetime
+from decimal import Decimal as DecimalType
 from typing import Dict, List, Tuple, Optional
 from contextlib import contextmanager
 from config import Config, BANK_CONFIG, get_bank_config, get_bank_table, VALID_BANK_CODES
@@ -730,12 +731,16 @@ class DatabaseManager:
                 results = cursor.fetchall()
                 cursor.close()
 
-                # Convert date objects to strings for JSON serialization
+                # Convert date objects and Decimals for JSON serialization
                 for row in results:
                     if row.get('invoice_date'):
                         row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
                     if row.get('created_at'):
                         row['created_at'] = row['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                    # Convert Decimal fields to float
+                    for key, val in row.items():
+                        if isinstance(val, DecimalType):
+                            row[key] = float(val)
 
                 return results
         except Exception as e:
@@ -755,13 +760,16 @@ class DatabaseManager:
                     cursor.close()
                     return None
 
-                # Convert dates
+                # Convert dates and Decimals
                 if invoice.get('invoice_date'):
                     invoice['invoice_date'] = invoice['invoice_date'].strftime('%d-%b-%Y')
                 if invoice.get('created_at'):
                     invoice['created_at'] = invoice['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                 if invoice.get('updated_at'):
                     invoice['updated_at'] = invoice['updated_at'].strftime('%Y-%m-%d %H:%M:%S')
+                for key, val in invoice.items():
+                    if isinstance(val, DecimalType):
+                        invoice[key] = float(val)
 
                 # Get line items
                 cursor.execute("""

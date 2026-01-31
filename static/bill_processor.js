@@ -33,7 +33,7 @@ const toast = document.getElementById('toast');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', init);
-console.log('[Bill Processor] JavaScript loaded successfully');
+
 
 function init() {
     // Load data on page load
@@ -254,7 +254,6 @@ function handleTableClick(e) {
         if (cell) {
             const billId = parseInt(cell.dataset.billId);
             const project = cell.dataset.project || '';
-            console.log('[Bill Processor] Project cell clicked:', billId, project);
             openProjectEdit(billId, project);
             e.stopPropagation();
             return;
@@ -280,10 +279,14 @@ async function loadSummary() {
         const data = await response.json();
 
         if (data.success) {
-            document.getElementById('statTotalInvoices').textContent = data.summary.total_invoices;
-            document.getElementById('statTotalValue').textContent = formatIndianCurrency(data.summary.total_value);
-            document.getElementById('statTotalGST').textContent = formatIndianCurrency(data.summary.total_gst);
-            document.getElementById('statUniqueVendors').textContent = data.summary.unique_vendors;
+            const s = data.summary;
+            document.getElementById('statTotalInvoices').textContent = s.total_invoices || 0;
+            document.getElementById('statTotalValue').textContent = formatIndianCurrency(s.total_value || 0);
+            document.getElementById('statTotalGST').textContent = formatIndianCurrency(s.total_gst || 0);
+            document.getElementById('statUniqueVendors').textContent = s.unique_vendors || 0;
+            document.getElementById('statTotalCGST').textContent = formatIndianCurrency(s.total_cgst || 0);
+            document.getElementById('statTotalSGST').textContent = formatIndianCurrency(s.total_sgst || 0);
+            document.getElementById('statTotalIGST').textContent = formatIndianCurrency(s.total_igst || 0);
         }
     } catch (error) {
         console.error('Error loading summary:', error);
@@ -350,7 +353,6 @@ function renderInvoicesTable() {
 
     // Render desktop table
     tbody.innerHTML = storedBills.map(bill => {
-        const gst = (parseFloat(bill.total_cgst) || 0) + (parseFloat(bill.total_sgst) || 0) + (parseFloat(bill.total_igst) || 0);
         const projectDisplay = bill.project || '';
         const projectClass = projectDisplay ? '' : 'empty';
         const projectText = projectDisplay || 'Click to add';
@@ -365,7 +367,9 @@ function renderInvoicesTable() {
                 <td class="cell-wrap">${bill.buyer_name || '-'}</td>
                 <td>${bill.line_item_count || 0}</td>
                 <td class="text-right">${formatIndianCurrency(bill.subtotal)}</td>
-                <td class="text-right">${formatIndianCurrency(gst)}</td>
+                <td class="text-right">${formatIndianCurrency(bill.total_cgst)}</td>
+                <td class="text-right">${formatIndianCurrency(bill.total_sgst)}</td>
+                <td class="text-right">${formatIndianCurrency(bill.total_igst)}</td>
                 <td class="text-right cell-amount">${formatIndianCurrency(bill.total_amount)}</td>
                 <td class="project-cell" data-bill-id="${bill.id}" data-project="${escapeForAttr(projectDisplay)}">
                     <div class="project-display">
@@ -416,7 +420,10 @@ function renderMobileInvoiceCards() {
     if (!mobileList) return;
 
     mobileList.innerHTML = storedBills.map(bill => {
-        const gst = (parseFloat(bill.total_cgst) || 0) + (parseFloat(bill.total_sgst) || 0) + (parseFloat(bill.total_igst) || 0);
+        const cgst = parseFloat(bill.total_cgst) || 0;
+        const sgst = parseFloat(bill.total_sgst) || 0;
+        const igst = parseFloat(bill.total_igst) || 0;
+        const gst = cgst + sgst + igst;
         const projectDisplay = bill.project || '';
         const projectClass = projectDisplay ? '' : 'empty';
         const projectText = projectDisplay || 'No project';
@@ -424,6 +431,13 @@ function renderMobileInvoiceCards() {
         // Format date nicely
         const dateDisplay = formatMobileDate(bill.invoice_date);
         const addedAgo = formatRelativeTime(bill.created_at);
+
+        // Build GST detail line
+        const gstParts = [];
+        if (cgst > 0) gstParts.push(`C: ${formatIndianCurrency(cgst)}`);
+        if (sgst > 0) gstParts.push(`S: ${formatIndianCurrency(sgst)}`);
+        if (igst > 0) gstParts.push(`I: ${formatIndianCurrency(igst)}`);
+        const gstDetail = gstParts.length > 0 ? gstParts.join(' | ') : '';
 
         return `
             <div class="invoice-card" onclick="viewInvoiceDetail(${bill.id})">
@@ -462,7 +476,7 @@ function renderMobileInvoiceCards() {
                     </span>
                     <div class="invoice-card-amount">
                         <div class="invoice-card-total">${formatIndianCurrency(bill.total_amount)}</div>
-                        ${gst > 0 ? `<div class="invoice-card-gst">GST: ${formatIndianCurrency(gst)}</div>` : ''}
+                        ${gstDetail ? `<div class="invoice-card-gst">${gstDetail}</div>` : ''}
                     </div>
                 </div>
             </div>
@@ -608,13 +622,11 @@ function escapeForAttr(text) {
 }
 
 function openProjectEdit(billId, currentProject) {
-    console.log('[Bill Processor] openProjectEdit called:', billId, currentProject);
     // Close any existing edit
     closeProjectEdit();
 
     const cell = document.querySelector(`.project-cell[data-bill-id="${billId}"]`);
     if (!cell) {
-        console.log('[Bill Processor] Cell not found for billId:', billId);
         return;
     }
 
@@ -667,6 +679,8 @@ function closeProjectEdit() {
     activeProjectEdit = null;
 }
 
+let highlightedSuggestionIndex = -1;
+
 function filterProjectSuggestions(billId) {
     const input = document.getElementById(`projectInput-${billId}`);
     const suggestionsEl = document.getElementById(`projectSuggestions-${billId}`);
@@ -685,8 +699,12 @@ function filterProjectSuggestions(billId) {
 
     if (filtered.length === 0) {
         suggestionsEl.style.display = 'none';
+        highlightedSuggestionIndex = -1;
         return;
     }
+
+    // Reset highlight index
+    highlightedSuggestionIndex = -1;
 
     suggestionsEl.innerHTML = filtered.map(project => {
         const isNew = project.endsWith(' (new)');
@@ -707,12 +725,61 @@ function filterProjectSuggestions(billId) {
     suggestionsEl.style.display = 'block';
 }
 
+function updateSuggestionHighlight(billId) {
+    const suggestionsEl = document.getElementById(`projectSuggestions-${billId}`);
+    if (!suggestionsEl) return;
+
+    const items = suggestionsEl.querySelectorAll('.project-suggestion');
+    items.forEach((item, idx) => {
+        item.classList.toggle('highlighted', idx === highlightedSuggestionIndex);
+    });
+
+    // Scroll highlighted item into view
+    if (highlightedSuggestionIndex >= 0 && items[highlightedSuggestionIndex]) {
+        items[highlightedSuggestionIndex].scrollIntoView({ block: 'nearest' });
+    }
+}
+
 function handleProjectKeydown(event, billId) {
-    if (event.key === 'Enter') {
+    const suggestionsEl = document.getElementById(`projectSuggestions-${billId}`);
+    const items = suggestionsEl ? suggestionsEl.querySelectorAll('.project-suggestion') : [];
+    const totalItems = items.length;
+
+    if (event.key === 'ArrowDown') {
         event.preventDefault();
-        const input = document.getElementById(`projectInput-${billId}`);
-        if (input) {
-            saveProject(billId, input.value);
+        if (totalItems > 0) {
+            highlightedSuggestionIndex = (highlightedSuggestionIndex + 1) % totalItems;
+            updateSuggestionHighlight(billId);
+        }
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (totalItems > 0) {
+            highlightedSuggestionIndex = highlightedSuggestionIndex <= 0 ? totalItems - 1 : highlightedSuggestionIndex - 1;
+            updateSuggestionHighlight(billId);
+        }
+    } else if (event.key === 'Tab') {
+        // Tab selects highlighted suggestion if any, otherwise moves to next
+        if (highlightedSuggestionIndex >= 0 && items[highlightedSuggestionIndex]) {
+            event.preventDefault();
+            const value = items[highlightedSuggestionIndex].dataset.value;
+            selectProject(billId, value);
+        } else if (totalItems > 0) {
+            event.preventDefault();
+            // Select first suggestion on Tab
+            const value = items[0].dataset.value;
+            selectProject(billId, value);
+        }
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        // If a suggestion is highlighted, select it; otherwise save current input value
+        if (highlightedSuggestionIndex >= 0 && items[highlightedSuggestionIndex]) {
+            const value = items[highlightedSuggestionIndex].dataset.value;
+            selectProject(billId, value);
+        } else {
+            const input = document.getElementById(`projectInput-${billId}`);
+            if (input) {
+                saveProject(billId, input.value, true);
+            }
         }
     } else if (event.key === 'Escape') {
         closeProjectEdit();
@@ -720,10 +787,20 @@ function handleProjectKeydown(event, billId) {
 }
 
 function selectProject(billId, project) {
-    saveProject(billId, project);
+    saveProject(billId, project, true);
 }
 
-async function saveProject(billId, project) {
+function getNextProjectBillId(currentBillId) {
+    const cells = Array.from(document.querySelectorAll('.project-cell[data-bill-id]'));
+    const currentIndex = cells.findIndex(c => String(c.dataset.billId) === String(currentBillId));
+    if (currentIndex >= 0 && currentIndex < cells.length - 1) {
+        return cells[currentIndex + 1].dataset.billId;
+    }
+    return null;
+}
+
+
+async function saveProject(billId, project, moveToNext = false) {
     const trimmedProject = project.trim();
 
     try {
@@ -748,6 +825,9 @@ async function saveProject(billId, project) {
                 cell.dataset.project = trimmedProject;
             }
 
+            // Find next bill id before closing edit
+            const nextBillId = moveToNext ? getNextProjectBillId(billId) : null;
+
             // Close edit and refresh display
             closeProjectEdit();
 
@@ -759,6 +839,13 @@ async function saveProject(billId, project) {
             }
 
             showToast('Project updated', 'success');
+
+            // Move to next row's project cell
+            if (nextBillId) {
+                const nextCell = document.querySelector(`.project-cell[data-bill-id="${nextBillId}"]`);
+                const nextProject = nextCell ? (nextCell.dataset.project || '') : '';
+                openProjectEdit(Number(nextBillId) || nextBillId, nextProject);
+            }
         } else {
             showToast(data.error || 'Failed to update project', 'error');
         }
@@ -1378,7 +1465,6 @@ function showToast(message, type = 'info') {
 // ============================================================================
 
 async function openEditModal(invoiceId) {
-    console.log('[Bill Processor] Opening edit modal for invoice:', invoiceId);
 
     try {
         // Fetch full bill details
@@ -1492,9 +1578,128 @@ function formatDateForInput(dateStr) {
     }
 }
 
+let editProjectHighlightIndex = -1;
+
 function populateProjectSuggestions() {
-    const datalist = document.getElementById('projectSuggestions');
-    datalist.innerHTML = allProjects.map(p => `<option value="${escapeHtml(p)}">`).join('');
+    const input = document.getElementById('edit_project');
+    const suggestionsEl = document.getElementById('editProjectSuggestions');
+    if (!input || !suggestionsEl) return;
+
+    // Remove old listeners to avoid duplicates
+    input.removeEventListener('input', handleEditProjectInput);
+    input.removeEventListener('keydown', handleEditProjectKeydown);
+    input.removeEventListener('focus', handleEditProjectFocus);
+
+    input.addEventListener('input', handleEditProjectInput);
+    input.addEventListener('keydown', handleEditProjectKeydown);
+    input.addEventListener('focus', handleEditProjectFocus);
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.edit-project-group')) {
+            suggestionsEl.style.display = 'none';
+        }
+    });
+}
+
+function handleEditProjectFocus() {
+    renderEditProjectSuggestions();
+}
+
+function handleEditProjectInput() {
+    editProjectHighlightIndex = -1;
+    renderEditProjectSuggestions();
+}
+
+function renderEditProjectSuggestions() {
+    const input = document.getElementById('edit_project');
+    const suggestionsEl = document.getElementById('editProjectSuggestions');
+    if (!input || !suggestionsEl) return;
+
+    const value = input.value.toLowerCase().trim();
+    let filtered = allProjects.filter(p => p.toLowerCase().includes(value));
+
+    if (value && !allProjects.some(p => p.toLowerCase() === value)) {
+        filtered = [`${input.value} (new)`, ...filtered];
+    }
+
+    if (filtered.length === 0 && !value) {
+        filtered = [...allProjects];
+    }
+
+    if (filtered.length === 0) {
+        suggestionsEl.style.display = 'none';
+        return;
+    }
+
+    suggestionsEl.innerHTML = filtered.map((project, idx) => {
+        const isNew = project.endsWith(' (new)');
+        const selectValue = isNew ? input.value : project;
+        const highlightClass = idx === editProjectHighlightIndex ? 'highlighted' : '';
+        return `<div class="project-suggestion ${highlightClass}" data-value="${escapeForAttr(selectValue)}">${escapeHtml(project)}</div>`;
+    }).join('');
+
+    suggestionsEl.querySelectorAll('.project-suggestion').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.value = el.dataset.value;
+            suggestionsEl.style.display = 'none';
+            editProjectHighlightIndex = -1;
+        });
+    });
+
+    suggestionsEl.style.display = 'block';
+}
+
+function handleEditProjectKeydown(event) {
+    const suggestionsEl = document.getElementById('editProjectSuggestions');
+    const input = document.getElementById('edit_project');
+    if (!suggestionsEl || suggestionsEl.style.display === 'none') return;
+
+    const items = suggestionsEl.querySelectorAll('.project-suggestion');
+    const totalItems = items.length;
+
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (totalItems > 0) {
+            editProjectHighlightIndex = (editProjectHighlightIndex + 1) % totalItems;
+            updateEditProjectHighlight(items);
+        }
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (totalItems > 0) {
+            editProjectHighlightIndex = editProjectHighlightIndex <= 0 ? totalItems - 1 : editProjectHighlightIndex - 1;
+            updateEditProjectHighlight(items);
+        }
+    } else if (event.key === 'Tab') {
+        if (editProjectHighlightIndex >= 0 && items[editProjectHighlightIndex]) {
+            event.preventDefault();
+            input.value = items[editProjectHighlightIndex].dataset.value;
+            suggestionsEl.style.display = 'none';
+            editProjectHighlightIndex = -1;
+        } else if (totalItems > 0 && suggestionsEl.style.display === 'block') {
+            // Let Tab move to next field naturally if nothing highlighted
+        }
+    } else if (event.key === 'Enter') {
+        if (editProjectHighlightIndex >= 0 && items[editProjectHighlightIndex]) {
+            event.preventDefault();
+            input.value = items[editProjectHighlightIndex].dataset.value;
+            suggestionsEl.style.display = 'none';
+            editProjectHighlightIndex = -1;
+        }
+    } else if (event.key === 'Escape') {
+        suggestionsEl.style.display = 'none';
+        editProjectHighlightIndex = -1;
+    }
+}
+
+function updateEditProjectHighlight(items) {
+    items.forEach((item, idx) => {
+        item.classList.toggle('highlighted', idx === editProjectHighlightIndex);
+    });
+    if (editProjectHighlightIndex >= 0 && items[editProjectHighlightIndex]) {
+        items[editProjectHighlightIndex].scrollIntoView({ block: 'nearest' });
+    }
 }
 
 function renderEditLineItems() {

@@ -2155,6 +2155,11 @@ def get_stored_bills():
                                          date_from=date_from, date_to=date_to)
         total = db_manager.get_bill_count(project=project, date_from=date_from, date_to=date_to)
 
+        if bills:
+            b = bills[0]
+            print(f"[DEBUG] First bill keys: {list(b.keys())}")
+            print(f"[DEBUG] First bill: subtotal={b.get('subtotal')}, total_cgst={b.get('total_cgst')}, total_sgst={b.get('total_sgst')}, total_igst={b.get('total_igst')}, total_amount={b.get('total_amount')}")
+
         return jsonify({
             'success': True,
             'bills': bills,
@@ -2247,10 +2252,13 @@ def get_bills_summary():
         if project:
             query = """
             SELECT
-                COUNT(*) as total_invoices,
-                COALESCE(SUM(total_amount), 0) as total_value,
-                COALESCE(SUM(total_cgst + total_sgst + total_igst), 0) as total_gst,
-                COUNT(DISTINCT vendor_name) as unique_vendors
+                COUNT(*) as cnt,
+                COALESCE(SUM(total_amount), 0) as sum_value,
+                COALESCE(SUM(COALESCE(total_cgst, 0) + COALESCE(total_sgst, 0) + COALESCE(total_igst, 0)), 0) as sum_gst,
+                COALESCE(SUM(COALESCE(total_cgst, 0)), 0) as sum_cgst,
+                COALESCE(SUM(COALESCE(total_sgst, 0)), 0) as sum_sgst,
+                COALESCE(SUM(COALESCE(total_igst, 0)), 0) as sum_igst,
+                COUNT(DISTINCT vendor_name) as vendor_cnt
             FROM bill_invoices
             WHERE project = %s
             """
@@ -2258,22 +2266,39 @@ def get_bills_summary():
         else:
             query = """
             SELECT
-                COUNT(*) as total_invoices,
-                COALESCE(SUM(total_amount), 0) as total_value,
-                COALESCE(SUM(total_cgst + total_sgst + total_igst), 0) as total_gst,
-                COUNT(DISTINCT vendor_name) as unique_vendors
+                COUNT(*) as cnt,
+                COALESCE(SUM(total_amount), 0) as sum_value,
+                COALESCE(SUM(COALESCE(total_cgst, 0) + COALESCE(total_sgst, 0) + COALESCE(total_igst, 0)), 0) as sum_gst,
+                COALESCE(SUM(COALESCE(total_cgst, 0)), 0) as sum_cgst,
+                COALESCE(SUM(COALESCE(total_sgst, 0)), 0) as sum_sgst,
+                COALESCE(SUM(COALESCE(total_igst, 0)), 0) as sum_igst,
+                COUNT(DISTINCT vendor_name) as vendor_cnt
             FROM bill_invoices
             """
             result = db_manager.fetch_all(query)
 
-        if result:
+        print(f"[DEBUG] Bills summary raw result: {result}")
+        if result and len(result) > 0 and result[0] is not None:
+            row = result[0]
+            # Convert each value - use float() directly, don't rely on 'or' since Decimal(0) is falsy
+            total_invoices = int(row[0]) if row[0] is not None else 0
+            total_value = float(row[1]) if row[1] is not None else 0.0
+            total_gst = float(row[2]) if row[2] is not None else 0.0
+            total_cgst = float(row[3]) if row[3] is not None else 0.0
+            total_sgst = float(row[4]) if row[4] is not None else 0.0
+            total_igst = float(row[5]) if row[5] is not None else 0.0
+            unique_vendors = int(row[6]) if row[6] is not None else 0
+            print(f"[DEBUG] Bills summary: invoices={total_invoices}, value={total_value}, gst={total_gst}, cgst={total_cgst}, sgst={total_sgst}, igst={total_igst}, vendors={unique_vendors}")
             return jsonify({
                 'success': True,
                 'summary': {
-                    'total_invoices': result[0][0] or 0,
-                    'total_value': float(result[0][1] or 0),
-                    'total_gst': float(result[0][2] or 0),
-                    'unique_vendors': result[0][3] or 0
+                    'total_invoices': total_invoices,
+                    'total_value': total_value,
+                    'total_gst': total_gst,
+                    'total_cgst': total_cgst,
+                    'total_sgst': total_sgst,
+                    'total_igst': total_igst,
+                    'unique_vendors': unique_vendors
                 }
             })
         else:
@@ -2283,6 +2308,9 @@ def get_bills_summary():
                     'total_invoices': 0,
                     'total_value': 0,
                     'total_gst': 0,
+                    'total_cgst': 0,
+                    'total_sgst': 0,
+                    'total_igst': 0,
                     'unique_vendors': 0
                 }
             })
