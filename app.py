@@ -501,6 +501,11 @@ def logout():
 # PROTECTED ROUTES
 # ============================================================================
 
+@app.route('/sw.js')
+def service_worker():
+    return send_file('static/sw.js', mimetype='application/javascript')
+
+
 @app.route('/')
 @login_required
 def index():

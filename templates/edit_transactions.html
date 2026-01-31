@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2563eb">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <title>Edit Transactions - {{ bank_name | default('Axis Bank') }} | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -283,6 +285,7 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="{{ url_for('static', filename='edit_transactions.js') }}"></script>
+    <script src="/static/pwa-register.js"></script>
 </body>
 
 </html>

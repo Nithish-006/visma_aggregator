@@ -5,6 +5,8 @@
     <meta charset="UTF-8" />
     <title>Bill Processor | Visma Financials</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2563eb">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
 
     <!-- Fonts -->
@@ -716,6 +718,7 @@
 
     <!-- Bill Processor JavaScript -->
     <script src="{{ url_for('static', filename='bill_processor.js') }}"></script>
+    <script src="/static/pwa-register.js"></script>
 </body>
 
 </html>
