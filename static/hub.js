@@ -115,6 +115,35 @@ async function loadBillProcessorCount() {
 }
 
 /**
+ * Clear server cache and reload hub stats
+ */
+async function refreshCache() {
+    const btn = document.getElementById('refresh-cache-btn');
+    const icon = btn.querySelector('svg');
+    btn.disabled = true;
+    icon.style.animation = 'spin 0.8s linear infinite';
+
+    try {
+        const response = await fetch('/api/clear-cache', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to clear cache');
+
+        await refreshBankStats();
+        await loadPersonalTrackerCount();
+        await loadBillProcessorCount();
+
+        btn.querySelector('span').textContent = 'Done!';
+        setTimeout(() => { btn.querySelector('span').textContent = 'Refresh'; }, 1500);
+    } catch (error) {
+        console.error('Error clearing cache:', error);
+        btn.querySelector('span').textContent = 'Error';
+        setTimeout(() => { btn.querySelector('span').textContent = 'Refresh'; }, 1500);
+    } finally {
+        btn.disabled = false;
+        icon.style.animation = '';
+    }
+}
+
+/**
  * Format number with commas
  */
 function formatNumber(num) {

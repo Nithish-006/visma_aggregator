@@ -575,6 +575,16 @@ def bank_charts(bank_code):
 # HUB API ENDPOINTS
 # ============================================================================
 
+@app.route('/api/clear-cache', methods=['POST'])
+@login_required
+def clear_cache():
+    """Clear in-memory dataframe cache and reload from database"""
+    global df_cache, df_global
+    df_cache = {}
+    df_global = reload_data()
+    return jsonify({'success': True, 'message': 'Cache cleared successfully'})
+
+
 @app.route('/api/hub/stats')
 @login_required
 def get_hub_stats():
