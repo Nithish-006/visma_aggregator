@@ -40,6 +40,14 @@
     let focusedCell = null; // Currently focused (highlighted) editable cell
     const EDITABLE_FIELDS = ['vendor', 'category', 'project']; // Column order for left/right nav
 
+    /**
+     * Check if a category value is "Uncategorized" (case-insensitive)
+     */
+    function isUncategorized(category) {
+        if (!category) return false;
+        return category.toLowerCase() === 'uncategorized';
+    }
+
     // Dropdown instances
     const dropdowns = {};
 
@@ -431,7 +439,7 @@
                 row.classList.add('modified');
             }
 
-            const isCategoryUncategorized = txn.category === 'Uncategorized';
+            const isCategoryUncategorized = isUncategorized(txn.category);
 
             const projectValue = txn.project || txn.Project || '';
             const isProjectEmpty = !projectValue;
@@ -607,7 +615,7 @@
                 cell.classList.remove('editing');
                 if (field === 'category') {
                     const val = allTransactionsMap.get(txnId)?.category || allTransactionsMap.get(txnId)?.Category || '';
-                    const isUncat = val === 'Uncategorized';
+                    const isUncat = isUncategorized(val);
                     cell.innerHTML = `<span class="category-badge ${isUncat ? 'uncategorized' : ''}">${val}</span>`;
                 } else if (field === 'project') {
                     const val = allTransactionsMap.get(txnId)?.project || allTransactionsMap.get(txnId)?.Project || '';

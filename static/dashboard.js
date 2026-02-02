@@ -26,6 +26,14 @@ let isLoadingTransactions = false;
 // Global Dropdown Instances
 const dropdowns = {};
 
+/**
+ * Check if a category value is "Uncategorized" (case-insensitive)
+ */
+function isUncategorized(category) {
+    if (!category) return false;
+    return category.toLowerCase() === 'uncategorized';
+}
+
 // Custom Dropdown Class (Replaces Select2)
 class CustomDropdown {
     constructor(containerId, placeholder, type) {
@@ -477,7 +485,7 @@ function renderTransactionsPage() {
         const metaText = metaParts.join(' • ');
 
         // Category pill classes
-        const categoryClass = category === 'Uncategorized' ? 'category-pill uncategorized' : 'category-pill';
+        const categoryClass = isUncategorized(category) ? 'category-pill uncategorized' : 'category-pill';
 
         // Project pill classes
         const projectClass = project ? 'project-pill' : 'project-pill empty';

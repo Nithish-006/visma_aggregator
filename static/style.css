@@ -979,8 +979,9 @@ body {
 }
 
 .category-pill.uncategorized {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
+    background: rgba(253, 224, 71, 0.4);
+    color: #854d0e;
+    font-weight: 700;
 }
 
 .project-pill {

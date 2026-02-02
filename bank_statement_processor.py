@@ -271,7 +271,7 @@ def categorize_transaction(particulars: str, dr_cr_indicator: str, vendor: Optio
 
     # For debits, analyze the description
     if not particulars or not isinstance(particulars, str):
-        return "Uncategorized", "UC"
+        return "UNCATEGORIZED", "UC"
 
     particulars_lower = particulars.lower()
 
@@ -306,7 +306,7 @@ def categorize_transaction(particulars: str, dr_cr_indicator: str, vendor: Optio
         return best_category, CATEGORIES[best_category]
 
     # Default for unmatched debits
-    return "Uncategorized", "UC"
+    return "UNCATEGORIZED", "UC"
 
 
 def extract_vendor_from_particulars(particulars: str, bank_code: str = 'axis') -> Optional[str]:
