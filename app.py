@@ -898,15 +898,13 @@ def get_bank_top_vendors(bank_code):
 @app.route('/api/<bank_code>/categories')
 @login_required
 def get_bank_categories(bank_code):
-    """Get list of all categories for a specific bank"""
+    """Get list of all categories for a specific bank (queries database directly)"""
     if bank_code not in VALID_BANK_CODES:
         return jsonify({'error': 'Invalid bank code'}), 400
 
-    df = get_bank_df(bank_code)
-    if df.empty:
-        return jsonify({'categories': ['All']})
-
-    categories = ['All'] + sorted(df['Category'].unique().tolist())
+    # Query database directly for distinct categories instead of using cached DataFrame
+    options = db_manager.get_filter_options(bank_code)
+    categories = ['All'] + options.get('categories', [])
     return jsonify({'categories': categories})
 
 

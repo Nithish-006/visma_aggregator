@@ -22,7 +22,8 @@
       "Bash(\"venv/Scripts/python.exe\" -m py_compile:*)",
       "Bash(dir \"C:\\\\VISMA - AGGREGATOR\\\\uploads\")",
       "Bash(dir \"C:\\\\VISMA - AGGREGATOR\\\\uploads\" /b)",
-      "Bash(findstr:*)"
+      "Bash(findstr:*)",
+      "Bash(mysql:*)"
     ]
   }
 }
