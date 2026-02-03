@@ -1377,10 +1377,18 @@ def split_bank_transaction(bank_code):
                 'error': 'Invalid split data. Need original transaction and at least 2 splits.'
             }), 400
 
+        original_id = original.get('id')
         original_date = original.get('date')
         original_desc = original.get('description')
         original_debit = float(original.get('debit', 0) or 0)
         original_credit = float(original.get('credit', 0) or 0)
+
+        # Validate that we have the transaction ID
+        if not original_id:
+            return jsonify({
+                'success': False,
+                'error': 'Transaction ID is required for split operation.'
+            }), 400
 
         # Validate amounts
         original_amount = original_debit if is_debit else original_credit
@@ -1400,21 +1408,9 @@ def split_bank_transaction(bank_code):
             conn.autocommit = False
 
             try:
-                # Step 1: Delete the original transaction
-                delete_query = f"""
-                DELETE FROM {table}
-                WHERE transaction_date = %s
-                  AND transaction_description = %s
-                  AND dr_amount = %s
-                  AND cr_amount = %s
-                LIMIT 1
-                """
-                cursor.execute(delete_query, (
-                    original_date,
-                    original_desc,
-                    original_debit,
-                    original_credit
-                ))
+                # Step 1: Delete the original transaction by ID
+                delete_query = f"DELETE FROM {table} WHERE id = %s"
+                cursor.execute(delete_query, (original_id,))
 
                 if cursor.rowcount == 0:
                     conn.rollback()

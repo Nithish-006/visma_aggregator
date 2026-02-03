@@ -1648,6 +1648,7 @@
                 },
                 body: JSON.stringify({
                     original: {
+                        id: splitOriginalTransaction.id,
                         date: splitOriginalTransaction.date_raw || splitOriginalTransaction.Date,
                         description: splitOriginalTransaction.description || splitOriginalTransaction['Transaction Description'],
                         debit: drAmount,
