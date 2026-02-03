@@ -296,6 +296,48 @@
     white-space: nowrap;
 }
 
+/* Sortable column headers */
+.edit-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.edit-table th.sortable:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.edit-table th.sortable .sort-icon {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 0.85rem;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.edit-table th.sortable:hover .sort-icon {
+    opacity: 1;
+}
+
+.edit-table th.sortable.header-sort-active .sort-icon {
+    opacity: 1;
+    color: #60a5fa;
+}
+
+.edit-table th.sortable.sorting {
+    background: rgba(96, 165, 250, 0.15);
+}
+
+.edit-table th.sortable.sorting .sort-icon {
+    animation: sortPulse 0.6s ease-in-out infinite;
+}
+
+@keyframes sortPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
 .edit-table td {
     padding: 12px;
     border-bottom: 1px solid rgba(51, 65, 85, 0.5);

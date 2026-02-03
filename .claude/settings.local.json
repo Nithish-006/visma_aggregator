@@ -23,7 +23,9 @@
       "Bash(dir \"C:\\\\VISMA - AGGREGATOR\\\\uploads\")",
       "Bash(dir \"C:\\\\VISMA - AGGREGATOR\\\\uploads\" /b)",
       "Bash(findstr:*)",
-      "Bash(mysql:*)"
+      "Bash(mysql:*)",
+      "Bash(Select-String -Pattern \"sort_order|sort_by|currentSort|date-sort\")",
+      "Bash(curl:*)"
     ]
   }
 }

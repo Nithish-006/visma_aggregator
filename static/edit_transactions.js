@@ -23,6 +23,9 @@
     let totalTransactions = 0;
     let totalPages = 0;
 
+    // Sort state
+    let currentSortOrder = 'desc'; // 'desc' = newest first, 'asc' = oldest first
+
     // Filter state
     let currentFilters = {
         category: [], // Empty means All
@@ -317,7 +320,7 @@
                 page: currentPage,
                 per_page: ITEMS_PER_PAGE,
                 sort_by: 'date',
-                sort_order: 'desc'
+                sort_order: currentSortOrder
             });
 
             // Add filters
@@ -1197,6 +1200,27 @@
                 clearFocusedCell();
             }
         });
+
+        // Date sort toggle
+        const dateSortHeader = document.getElementById('date-sort-header');
+        if (dateSortHeader) {
+            dateSortHeader.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (isLoading) return;
+
+                currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
+                const icon = dateSortHeader.querySelector('.sort-icon');
+                if (icon) {
+                    icon.textContent = currentSortOrder === 'desc' ? '↓' : '↑';
+                }
+                dateSortHeader.classList.add('sorting');
+                currentPage = 1;
+                showLoading();
+                await loadTransactions();
+                hideLoading();
+                dateSortHeader.classList.remove('sorting');
+            });
+        }
 
         // Filters
         // Note: Category, Project, Vendor filters are now handled by CustomDropdown class events

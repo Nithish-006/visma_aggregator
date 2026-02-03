@@ -434,7 +434,7 @@ class DatabaseManager:
             project as Project
         FROM {table}
         WHERE {where_clause}
-        ORDER BY {sort_column} {sort_direction}, transaction_date DESC
+        ORDER BY {sort_column} {sort_direction}, id {sort_direction}
         LIMIT %s OFFSET %s
         """
 
