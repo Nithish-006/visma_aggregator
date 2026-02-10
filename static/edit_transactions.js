@@ -203,6 +203,22 @@
             this.syncFilters();
         }
 
+        /**
+         * Update available options while preserving current selections.
+         * Options not in the new list are kept selected (they still match the filter).
+         */
+        updateOptions(newItems) {
+            this.options = newItems;
+            // Re-render with current search query if any
+            const searchQuery = this.searchInput ? this.searchInput.value : '';
+            if (searchQuery) {
+                const lowerQuery = searchQuery.toLowerCase();
+                this.renderOptions(newItems.filter(item => item.toLowerCase().includes(lowerQuery)));
+            } else {
+                this.renderOptions(newItems);
+            }
+        }
+
         attachEvents() {
             this.triggerBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -364,6 +380,21 @@
             renderTable();
             updateCounts();
             updatePaginationControls();
+
+            // Update dropdown options from the same response (cascading filters)
+            try {
+                if (data.filter_options) {
+                    const cats = (data.filter_options.categories || []).filter(c => c !== 'All');
+                    const projs = data.filter_options.projects || [];
+                    const vends = data.filter_options.vendors || [];
+
+                    if (dropdowns['edit-category-filter']) dropdowns['edit-category-filter'].setOptions(cats);
+                    if (dropdowns['edit-project-filter']) dropdowns['edit-project-filter'].setOptions(projs);
+                    if (dropdowns['edit-vendor-filter']) dropdowns['edit-vendor-filter'].setOptions(vends);
+                }
+            } catch (err) {
+                console.error('Error updating dropdowns:', err);
+            }
         } catch (error) {
             console.error('Error loading transactions:', error);
         } finally {
@@ -411,8 +442,64 @@
     function applyFilters() {
         // Reset to page 1 when filters change
         currentPage = 1;
-        // Reload from server with new filters
+        // Reload from server with new filters (response includes updated filter options for cascading dropdowns)
         loadTransactions();
+    }
+
+    /**
+     * Refresh dropdown options based on currently active filters.
+     * Each dropdown shows only the distinct values available given the other active filters.
+     */
+    async function refreshFilterOptions() {
+        try {
+            const params = new URLSearchParams();
+
+            if (currentFilters.category.length > 0) {
+                params.set('category', currentFilters.category.join(','));
+            }
+            if (currentFilters.project.length > 0) {
+                params.set('project', currentFilters.project.join(','));
+            }
+            if (currentFilters.vendor.length > 0) {
+                params.set('vendor', currentFilters.vendor.join(','));
+            }
+            if (currentFilters.search) {
+                params.set('search', currentFilters.search);
+            }
+            if (currentFilters.startDate) {
+                params.set('start_date', currentFilters.startDate);
+            }
+            if (currentFilters.endDate) {
+                params.set('end_date', currentFilters.endDate);
+            }
+
+            // Only fetch filtered options if at least one filter is active
+            const hasFilters = params.toString().length > 0;
+            const url = hasFilters
+                ? `/api/${BANK_CODE}/filter-options?${params}`
+                : `/api/${BANK_CODE}/filter-options`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            // Update each dropdown's available options (preserving current selections)
+            const categoryDd = dropdowns['edit-category-filter'];
+            if (categoryDd) {
+                categoryDd.updateOptions((data.categories || []).filter(c => c !== 'All'));
+            }
+
+            const projectDd = dropdowns['edit-project-filter'];
+            if (projectDd) {
+                projectDd.updateOptions(data.projects || []);
+            }
+
+            const vendorDd = dropdowns['edit-vendor-filter'];
+            if (vendorDd) {
+                vendorDd.updateOptions(data.vendors || []);
+            }
+        } catch (error) {
+            console.error('Error refreshing filter options:', error);
+        }
     }
 
     /**
@@ -990,7 +1077,7 @@
                 notes: txn.notes || txn.Notes || null
             };
 
-            console.log('[DEBUG] Saving transaction:', requestData);
+
 
             const response = await fetch(`/api/${BANK_CODE}/transaction/update`, {
                 method: 'POST',
@@ -1174,6 +1261,7 @@
         if (startInput) startInput.value = '';
         if (endInput) endInput.value = '';
 
+        // Reset to page 1 and reload (applyFilters will also refreshFilterOptions with no params, restoring all options)
         applyFilters();
     }
 

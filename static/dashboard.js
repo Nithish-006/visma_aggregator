@@ -342,34 +342,59 @@ function formatDisplayDate(dateStr) {
     return date.toLocaleDateString('en-IN', options);
 }
 
-async function loadCategories() {
+async function loadCategories(startDate = null, endDate = null, projects = [], vendors = []) {
     try {
-        const res = await fetch(`/api/${BANK_CODE}/categories`);
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        if (projects && projects.length > 0) params.append('project', projects.join(','));
+        if (vendors && vendors.length > 0) params.append('vendor', vendors.join(','));
+
+        const res = await fetch(`/api/${BANK_CODE}/categories?${params.toString()}`);
         const data = await res.json();
 
         const items = data.categories.filter(c => c !== 'All'); // Remove 'All'
 
-        // Init Custom Dropdown
-        const dd = new CustomDropdown('category-filter', 'All Categories', 'category');
-        dd.setOptions(items);
+        // Init or Update Custom Dropdown
+        if (dropdowns['category-filter']) {
+            dropdowns['category-filter'].setOptions(items);
+        } else {
+            const dd = new CustomDropdown('category-filter', 'All Categories', 'category');
+            dd.setOptions(items);
+        }
 
     } catch (e) {
         console.error('Error loading categories:', e);
     }
 }
 
-async function loadProjectsAndVendors() {
+async function loadProjectsAndVendors(startDate = null, endDate = null, categories = [], projects = [], vendors = []) {
     try {
-        // Use new fast filter-options endpoint instead of loading all transactions
-        const res = await fetch(`/api/${BANK_CODE}/filter-options`);
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        if (categories && categories.length > 0) params.append('category', categories.join(','));
+        // Pass project/vendor too so backend can use them for the *other* dropdowns (e.g. project filters vendor list)
+        if (projects && projects.length > 0) params.append('project', projects.join(','));
+        if (vendors && vendors.length > 0) params.append('vendor', vendors.join(','));
+
+        const res = await fetch(`/api/${BANK_CODE}/filter-options?${params.toString()}`);
         const data = await res.json();
 
-        // Init Custom Dropdowns with data from server
-        const projDD = new CustomDropdown('project-filter', 'All Projects', 'project');
-        projDD.setOptions(data.projects || []);
+        // Init or Update Custom Dropdowns
+        if (dropdowns['project-filter']) {
+            dropdowns['project-filter'].setOptions(data.projects || []);
+        } else {
+            const projDD = new CustomDropdown('project-filter', 'All Projects', 'project');
+            projDD.setOptions(data.projects || []);
+        }
 
-        const vendDD = new CustomDropdown('vendor-filter', 'All Vendors', 'vendor');
-        vendDD.setOptions(data.vendors || []);
+        if (dropdowns['vendor-filter']) {
+            dropdowns['vendor-filter'].setOptions(data.vendors || []);
+        } else {
+            const vendDD = new CustomDropdown('vendor-filter', 'All Vendors', 'vendor');
+            vendDD.setOptions(data.vendors || []);
+        }
     } catch (e) {
         console.error('Error loading projects and vendors:', e);
     }
@@ -543,7 +568,18 @@ function goToPage(page) {
 
 // Smooth refresh - no loading overlay (for filter changes)
 async function refreshTransactions() {
+    // 1. Load transactions based on current filters
     await loadTransactions(currentCategories, currentStartDate, currentEndDate, currentProjects, currentVendors);
+
+    // 2. Update other filter dropdowns to show only available options
+    // The backend functions (loadCategories, loadProjectsAndVendors) will pass current filters
+    // and the backend will return options constrained by *other* filters.
+
+    // Update Categories (constrained by Date, Project, Vendor)
+    loadCategories(currentStartDate, currentEndDate, currentProjects, currentVendors);
+
+    // Update Projects & Vendors (constrained by Date, Category, and each other)
+    loadProjectsAndVendors(currentStartDate, currentEndDate, currentCategories, currentProjects, currentVendors);
 }
 
 // Full refresh with loading overlay (for initial load)

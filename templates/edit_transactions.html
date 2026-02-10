@@ -151,9 +151,11 @@
                     <strong id="bulk-count">0</strong> transactions selected
                 </div>
                 <div class="bulk-actions">
-                    <input type="text" id="bulk-category" class="bulk-input" list="bulk-category-datalist" placeholder="Change Category...">
+                    <input type="text" id="bulk-category" class="bulk-input" list="bulk-category-datalist"
+                        placeholder="Change Category...">
                     <datalist id="bulk-category-datalist"></datalist>
-                    <input type="text" id="bulk-project" class="bulk-input" list="bulk-project-datalist" placeholder="Set Project...">
+                    <input type="text" id="bulk-project" class="bulk-input" list="bulk-project-datalist"
+                        placeholder="Set Project...">
                     <datalist id="bulk-project-datalist"></datalist>
                     <button id="apply-bulk-edit" class="btn btn-primary">Apply to Selected</button>
                     <button id="split-transaction-btn" class="btn btn-secondary" style="display: none;">Split
@@ -170,7 +172,8 @@
                             <th style="width: 40px;">
                                 <input type="checkbox" id="select-all-checkbox">
                             </th>
-                            <th style="width: 120px;" class="sortable header-sort-active" id="date-sort-header" title="Click to toggle sort order">
+                            <th style="width: 120px;" class="sortable header-sort-active" id="date-sort-header"
+                                title="Click to toggle sort order">
                                 Date <span class="sort-icon">↓</span>
                             </th>
                             <th style="width: 150px;">Vendor</th>
@@ -286,7 +289,10 @@
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="{{ url_for('static', filename='edit_transactions.js') }}"></script>
+    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=3"></script>
+
+
+
     <script src="/static/pwa-register.js"></script>
 </body>
 

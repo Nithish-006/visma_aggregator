@@ -490,6 +490,78 @@ class DatabaseManager:
             print(f"[!] Filter options fetch error: {e}")
             return {'categories': [], 'projects': [], 'vendors': []}
 
+    def get_filtered_options(self, bank_code: str = 'axis',
+                              category: str = None, project: str = None, vendor: str = None,
+                              start_date: str = None, end_date: str = None, search: str = None) -> Dict:
+        """Get unique categories, projects, and vendors constrained by currently active filters.
+        Each dropdown's options are filtered by ALL other active filters (but not by itself)."""
+        table = self.get_table_name(bank_code)
+
+        def build_conditions(exclude_field=None):
+            conditions = []
+            params = []
+
+            if category and category != 'All' and exclude_field != 'category':
+                cats = [c.strip() for c in category.split(',') if c.strip()]
+                if cats:
+                    placeholders = ','.join(['%s'] * len(cats))
+                    conditions.append(f"category IN ({placeholders})")
+                    params.extend(cats)
+
+            if project and exclude_field != 'project':
+                projs = [p.strip() for p in project.split(',') if p.strip()]
+                if projs:
+                    placeholders = ','.join(['%s'] * len(projs))
+                    conditions.append(f"project IN ({placeholders})")
+                    params.extend(projs)
+
+            if vendor and exclude_field != 'vendor':
+                vends = [v.strip() for v in vendor.split(',') if v.strip()]
+                if vends:
+                    placeholders = ','.join(['%s'] * len(vends))
+                    conditions.append(f"client_vendor IN ({placeholders})")
+                    params.extend(vends)
+
+            if start_date:
+                conditions.append("transaction_date >= %s")
+                params.append(start_date)
+            if end_date:
+                conditions.append("transaction_date <= %s")
+                params.append(end_date)
+
+            if search:
+                conditions.append("(transaction_description LIKE %s OR client_vendor LIKE %s OR category LIKE %s)")
+                pattern = f"%{search}%"
+                params.extend([pattern, pattern, pattern])
+
+            where = " AND ".join(conditions) if conditions else "1=1"
+            return where, params
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                # Categories: filtered by project, vendor, date, search (not by category itself)
+                w, p = build_conditions(exclude_field='category')
+                cursor.execute(f"SELECT DISTINCT category FROM {table} WHERE {w} AND category IS NOT NULL AND category != '' ORDER BY category", tuple(p))
+                categories = [row[0] for row in cursor.fetchall()]
+
+                # Projects: filtered by category, vendor, date, search (not by project itself)
+                w, p = build_conditions(exclude_field='project')
+                cursor.execute(f"SELECT DISTINCT project FROM {table} WHERE {w} AND project IS NOT NULL AND project != '' ORDER BY project", tuple(p))
+                projects = [row[0] for row in cursor.fetchall()]
+
+                # Vendors: filtered by category, project, date, search (not by vendor itself)
+                w, p = build_conditions(exclude_field='vendor')
+                cursor.execute(f"SELECT DISTINCT client_vendor FROM {table} WHERE {w} AND client_vendor IS NOT NULL AND client_vendor != '' AND client_vendor != 'Unknown' ORDER BY client_vendor", tuple(p))
+                vendors = [row[0] for row in cursor.fetchall()]
+
+                cursor.close()
+                return {'categories': categories, 'projects': projects, 'vendors': vendors}
+        except Error as e:
+            print(f"[!] Filtered options fetch error: {e}")
+            return {'categories': [], 'projects': [], 'vendors': []}
+
     def get_all_bank_stats(self) -> Dict:
         """Get transaction counts for all banks"""
         stats = {}

@@ -68,14 +68,14 @@ def load_bank_data_from_db(bank_code='axis'):
         db_connected = db_manager.connect()
 
     if not db_connected:
-        print(f"[!] Database not connected for {bank_code}")
+
         return pd.DataFrame()
 
     try:
         df = db_manager.get_all_transactions(bank_code)
 
         if df.empty:
-            print(f"[!] No transactions in database for {bank_code}")
+
             return pd.DataFrame()
 
         # Ensure date column is datetime
@@ -101,11 +101,11 @@ def load_bank_data_from_db(bank_code='axis'):
         df['Category'] = df['Category'].fillna('Uncategorized')
         df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
 
-        print(f"[+] Loaded {len(df)} transactions from database for {bank_code}")
+
         return df
 
     except Exception as e:
-        print(f"[!] Error loading from database for {bank_code}: {e}")
+
         return pd.DataFrame()
 
 
@@ -174,11 +174,11 @@ def load_financial_data_from_excel():
         df['Category'] = df['Category'].fillna('Uncategorized')
         df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
 
-        print(f"[+] Loaded {len(df)} transactions from Excel file")
+
         return df
 
     except Exception as e:
-        print(f"[!] Error loading Excel file: {e}")
+
         return pd.DataFrame()
 
 
@@ -228,14 +228,16 @@ def filter_by_date_range(df, start_date=None, end_date=None):
             start = pd.to_datetime(start_date)
             filtered_df = filtered_df[filtered_df['date'] >= start]
         except Exception as e:
-            print(f"[!] Error parsing start_date: {e}")
+            pass
+
 
     if end_date:
         try:
             end = pd.to_datetime(end_date)
             filtered_df = filtered_df[filtered_df['date'] <= end]
         except Exception as e:
-            print(f"[!] Error parsing end_date: {e}")
+            pass
+
 
     return filtered_df
 
@@ -362,15 +364,15 @@ def upload_statement():
 
         # Save the file
         file.save(filepath)
-        print(f"[+] File saved: {filepath}")
+
 
         # Process the bank statement
-        print(f"[*] Processing bank statement: {filename}")
+
         df = process_bank_statement(filepath)
 
         # Insert into database if enabled
         if app.config['USE_DATABASE']:
-            print(f"[*] Inserting into database...")
+
 
             # Ensure database is connected
             global db_connected
@@ -388,11 +390,7 @@ def upload_statement():
             results = db_manager.insert_transactions_bulk(df)
 
             # Print results
-            print(f"[+] Insertion complete!")
-            print(f"    Total: {results['total']}")
-            print(f"    Inserted: {results['inserted']}")
-            print(f"    Duplicates: {results['duplicates']}")
-            print(f"    Errors: {results['errors']}")
+
 
             # Log the upload
             db_manager.log_upload(
@@ -405,9 +403,9 @@ def upload_statement():
             )
 
             # Reload data
-            print(f"[*] Reloading dashboard data...")
+
             reload_data()
-            print(f"[+] Dashboard data reloaded!")
+
 
             return jsonify({
                 'success': True,
@@ -520,7 +518,7 @@ def index():
                 'name': BANK_CONFIG[bank_code]['name']
             }
         except Exception as e:
-            print(f"[!] Error getting stats for {bank_code}: {e}")
+
             bank_stats[bank_code] = {
                 'transaction_count': 0,
                 'name': BANK_CONFIG[bank_code]['name']
@@ -598,7 +596,7 @@ def get_hub_stats():
                 'name': BANK_CONFIG[bank_code]['name']
             }
         except Exception as e:
-            print(f"[!] Error getting stats for {bank_code}: {e}")
+
             stats[bank_code] = {
                 'transaction_count': 0,
                 'name': BANK_CONFIG[bank_code]['name']
@@ -902,8 +900,27 @@ def get_bank_categories(bank_code):
     if bank_code not in VALID_BANK_CODES:
         return jsonify({'error': 'Invalid bank code'}), 400
 
-    # Query database directly for distinct categories instead of using cached DataFrame
-    options = db_manager.get_filter_options(bank_code)
+    # Check if any filter params are present - if so, return filtered options
+    category = request.args.get('category', None)
+    project = request.args.get('project', None)
+    vendor = request.args.get('vendor', None)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    search = request.args.get('search', None)
+
+    has_filters = any([category, project, vendor, start_date, end_date, search])
+
+    if has_filters:
+        # Use get_filtered_options which returns {categories, projects, vendors}
+        # We only need categories here
+        options = db_manager.get_filtered_options(
+            bank_code, category=category, project=project, vendor=vendor,
+            start_date=start_date, end_date=end_date, search=search
+        )
+    else:
+        # Query database directly for distinct categories
+        options = db_manager.get_filter_options(bank_code)
+
     categories = ['All'] + options.get('categories', [])
     return jsonify({'categories': categories})
 
@@ -1061,23 +1078,58 @@ def get_bank_transactions_paginated(bank_code):
             'project': row['Project'] or ''
         })
 
+    # Also return filtered options so dropdowns can update in the same response
+    has_active_filters = any([
+        category and category != 'All', project, vendor, start_date, end_date, search
+    ])
+
+    if has_active_filters:
+        try:
+            filter_options = db_manager.get_filtered_options(
+                bank_code, category=category, project=project, vendor=vendor,
+                start_date=start_date, end_date=end_date, search=search
+            )
+        except Exception as e:
+            filter_options = db_manager.get_filter_options(bank_code)
+    else:
+        filter_options = db_manager.get_filter_options(bank_code)
+
     return jsonify({
         'transactions': transactions,
         'total': result['total'],
         'page': result['page'],
         'per_page': result['per_page'],
-        'total_pages': result['total_pages']
+        'total_pages': result['total_pages'],
+        'filter_options': filter_options
     })
 
 
 @app.route('/api/<bank_code>/filter-options')
 @login_required
 def get_bank_filter_options(bank_code):
-    """Get filter options (categories, projects, vendors) for dropdowns - fast endpoint"""
+    """Get filter options (categories, projects, vendors) for dropdowns.
+    When filter params are provided, returns only distinct values matching the active filters."""
     if bank_code not in VALID_BANK_CODES:
         return jsonify({'error': 'Invalid bank code'}), 400
 
-    options = db_manager.get_filter_options(bank_code)
+    # Check if any filter params are present - if so, return filtered options
+    category = request.args.get('category', None)
+    project = request.args.get('project', None)
+    vendor = request.args.get('vendor', None)
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    search = request.args.get('search', None)
+
+    has_filters = any([category, project, vendor, start_date, end_date, search])
+
+    if has_filters:
+        options = db_manager.get_filtered_options(
+            bank_code, category=category, project=project, vendor=vendor,
+            start_date=start_date, end_date=end_date, search=search
+        )
+    else:
+        options = db_manager.get_filter_options(bank_code)
+
     return jsonify(options)
 
 
@@ -1179,13 +1231,13 @@ def upload_bank_statement(bank_code):
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
         file.save(filepath)
-        print(f"[+] File saved: {filepath}")
 
-        print(f"[*] Processing {bank_code} bank statement: {filename}")
+
+
         df = process_bank_statement(filepath, bank_code, password=password)
 
         if app.config['USE_DATABASE']:
-            print(f"[*] Inserting into database for {bank_code}...")
+
 
             global db_connected
             if not db_connected:
@@ -1200,11 +1252,7 @@ def upload_bank_statement(bank_code):
 
             results = db_manager.insert_transactions_bulk(df, bank_code)
 
-            print(f"[+] Insertion complete for {bank_code}!")
-            print(f"    Total: {results['total']}")
-            print(f"    Inserted: {results['inserted']}")
-            print(f"    Duplicates: {results['duplicates']}")
-            print(f"    Errors: {results['errors']}")
+
 
             db_manager.log_upload(
                 filename=filename,
@@ -1216,9 +1264,9 @@ def upload_bank_statement(bank_code):
                 bank_code=bank_code
             )
 
-            print(f"[*] Reloading dashboard data for {bank_code}...")
+
             reload_bank_data(bank_code)
-            print(f"[+] Dashboard data reloaded for {bank_code}!")
+
 
             return jsonify({
                 'success': True,
@@ -1346,7 +1394,7 @@ def update_bank_transaction(bank_code):
             }), 503
 
     except Exception as e:
-        print(f"[!] Error updating transaction: {e}")
+
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -1482,7 +1530,7 @@ def split_bank_transaction(bank_code):
                 raise e
 
     except Exception as e:
-        print(f"[!] Error splitting transaction: {e}")
+
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -1605,7 +1653,7 @@ def edit_expense_page(transaction_id):
             # Transaction not found, redirect to add page
             return redirect(url_for('add_expense_page'))
     except Exception as e:
-        print(f"[!] Error fetching transaction for edit: {e}")
+
         return redirect(url_for('add_expense_page'))
 
 
@@ -1677,7 +1725,7 @@ def get_personal_transactions():
             })
         return jsonify({'transactions': transactions})
     except Exception as e:
-        print(f"[!] Error fetching personal transactions: {e}")
+
         return jsonify({'transactions': []})
 
 
@@ -1733,7 +1781,7 @@ def add_personal_transaction():
             'id': new_id
         })
     except Exception as e:
-        print(f"[!] Error adding personal transaction: {e}")
+
         return jsonify({'error': str(e)}), 500
 
 
@@ -1793,7 +1841,7 @@ def update_personal_transaction(transaction_id):
         else:
             return jsonify({'error': 'Transaction not found'}), 404
     except Exception as e:
-        print(f"[!] Error updating personal transaction: {e}")
+
         return jsonify({'error': str(e)}), 500
 
 
@@ -1821,7 +1869,7 @@ def delete_personal_transaction(transaction_id):
         else:
             return jsonify({'error': 'Transaction not found'}), 404
     except Exception as e:
-        print(f"[!] Error deleting personal transaction: {e}")
+
         return jsonify({'error': str(e)}), 500
 
 
@@ -1941,7 +1989,7 @@ def get_personal_summary():
             'project_breakdown': project_breakdown
         })
     except Exception as e:
-        print(f"[!] Error fetching personal summary: {e}")
+
         return jsonify(empty_response)
 
 
@@ -1965,7 +2013,7 @@ def get_personal_projects():
             projects = ['General']
         return jsonify({'projects': projects})
     except Exception as e:
-        print(f"[!] Error fetching projects: {e}")
+
         return jsonify({'projects': ['General']})
 
 
@@ -1987,7 +2035,7 @@ def get_personal_vendors():
         vendors = [row[0] for row in rows if row[0]]
         return jsonify({'vendors': vendors})
     except Exception as e:
-        print(f"[!] Error fetching vendors: {e}")
+
         return jsonify({'vendors': []})
 
 
@@ -2009,7 +2057,7 @@ def get_personal_descriptions():
         descriptions = [row[0] for row in rows if row[0]]
         return jsonify({'descriptions': descriptions})
     except Exception as e:
-        print(f"[!] Error fetching descriptions: {e}")
+
         return jsonify({'descriptions': []})
 
 
@@ -2049,10 +2097,10 @@ def process_bill():
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
 
         file.save(temp_path)
-        print(f"[+] Bill file saved: {temp_path}")
+
 
         # Process the bill
-        print(f"[*] Processing bill with Gemini Vision: {filename}")
+
         results = process_bill_file(temp_path, filename)
 
         # Save to database (with duplicate check)
@@ -2065,7 +2113,7 @@ def process_bill():
                 # Check for duplicate invoice before saving
                 existing_bill = db_manager.check_duplicate_invoice(invoice_number)
                 if existing_bill:
-                    print(f"[!] Duplicate bill detected: Invoice #{invoice_number} already exists (ID: {existing_bill['id']})")
+
                     db_results.append({
                         'saved': False,
                         'invoice_id': None,
@@ -2159,10 +2207,7 @@ def get_stored_bills():
                                          date_from=date_from, date_to=date_to)
         total = db_manager.get_bill_count(project=project, date_from=date_from, date_to=date_to)
 
-        if bills:
-            b = bills[0]
-            print(f"[DEBUG] First bill keys: {list(b.keys())}")
-            print(f"[DEBUG] First bill: subtotal={b.get('subtotal')}, total_cgst={b.get('total_cgst')}, total_sgst={b.get('total_sgst')}, total_igst={b.get('total_igst')}, total_amount={b.get('total_amount')}")
+
 
         return jsonify({
             'success': True,
@@ -2172,7 +2217,7 @@ def get_stored_bills():
             'offset': offset
         })
     except Exception as e:
-        print(f"[!] Error fetching stored bills: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2191,7 +2236,7 @@ def get_stored_bill_detail(invoice_id):
             'bill': bill
         })
     except Exception as e:
-        print(f"[!] Error fetching bill detail: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2207,7 +2252,7 @@ def delete_stored_bill(invoice_id):
         else:
             return jsonify({'success': False, 'error': 'Failed to delete bill'}), 500
     except Exception as e:
-        print(f"[!] Error deleting bill: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2226,7 +2271,7 @@ def update_bill_project(invoice_id):
         else:
             return jsonify({'success': False, 'error': 'Failed to update project'}), 500
     except Exception as e:
-        print(f"[!] Error updating bill project: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2241,7 +2286,7 @@ def get_bill_projects():
             'projects': projects
         })
     except Exception as e:
-        print(f"[!] Error fetching projects: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2281,7 +2326,7 @@ def get_bills_summary():
             """
             result = db_manager.fetch_all(query)
 
-        print(f"[DEBUG] Bills summary raw result: {result}")
+
         if result and len(result) > 0 and result[0] is not None:
             row = result[0]
             # Convert each value - use float() directly, don't rely on 'or' since Decimal(0) is falsy
@@ -2292,7 +2337,6 @@ def get_bills_summary():
             total_sgst = float(row[4]) if row[4] is not None else 0.0
             total_igst = float(row[5]) if row[5] is not None else 0.0
             unique_vendors = int(row[6]) if row[6] is not None else 0
-            print(f"[DEBUG] Bills summary: invoices={total_invoices}, value={total_value}, gst={total_gst}, cgst={total_cgst}, sgst={total_sgst}, igst={total_igst}, vendors={unique_vendors}")
             return jsonify({
                 'success': True,
                 'summary': {
@@ -2319,7 +2363,7 @@ def get_bills_summary():
                 }
             })
     except Exception as e:
-        print(f"[!] Error fetching bills summary: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2334,7 +2378,7 @@ def get_bills_stats():
             'invoice_count': invoice_count
         })
     except Exception as e:
-        print(f"[!] Error fetching bill stats: {e}")
+
         return jsonify({
             'success': False,
             'invoice_count': 0,
@@ -2383,7 +2427,7 @@ def serve_bill_file(filename):
 
         return send_file(file_path, mimetype=mime_type)
     except Exception as e:
-        print(f"[!] Error serving bill file: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2444,7 +2488,7 @@ def bulk_upload_bill_files():
                 'status': 'uploaded'
             })
             uploaded_count += 1
-            print(f"[+] Bulk upload: Saved {filename}")
+
 
         return jsonify({
             'success': True,
@@ -2455,7 +2499,7 @@ def bulk_upload_bill_files():
         })
 
     except Exception as e:
-        print(f"[!] Error in bulk upload: {e}")
+
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -2477,7 +2521,7 @@ def update_stored_bill(invoice_id):
         else:
             return jsonify({'success': False, 'error': error or 'Failed to update invoice'}), 500
     except Exception as e:
-        print(f"[!] Error updating bill: {e}")
+
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2828,7 +2872,6 @@ def update_transaction():
     """Update a transaction's editable fields"""
     try:
         data = request.json
-        print(f"[DEBUG] Received update request with data: {data}")
 
         # Required fields
         transaction_date = data.get('date')
@@ -2857,10 +2900,8 @@ def update_transaction():
         if not code:
             code = category_codes.get(category, 'UC')
 
-        print(f"[DEBUG] Parsed fields - date: {transaction_date}, desc: {description[:50]}..., dr: {dr_amount}, cr: {cr_amount}")
-
         if not all([transaction_date, description is not None]):
-            print(f"[ERROR] Missing required fields - date: {transaction_date}, description: {description}")
+
             return jsonify({
                 'success': False,
                 'error': 'Missing required fields',
@@ -2918,7 +2959,7 @@ def update_transaction():
             }), 503
 
     except Exception as e:
-        print(f"[!] Error updating transaction: {e}")
+
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -3056,13 +3097,5 @@ def get_insights():
 
 
 if __name__ == '__main__':
-    print("=" * 60)
-    print("💰 Financial Analytics Dashboard")
-    print("=" * 60)
-    print("\n🚀 Starting server...")
-    print("\n📊 Open your browser and go to:")
-    print("\n    http://localhost:5000")
-    print("\n⏹️  Press Ctrl+C to stop the server")
-    print("=" * 60)
-    print()
+
     app.run(debug=True, port=5000)
