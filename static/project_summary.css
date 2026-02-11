@@ -1137,6 +1137,152 @@ body {
     color: var(--text-muted);
 }
 
+/* ============================================================================
+   CROSS-FILTER - Clickable Rows & Active States
+   ============================================================================ */
+
+/* Clickable indicator */
+.ps-clickable {
+    cursor: pointer;
+    transition: background 0.15s, box-shadow 0.15s;
+    position: relative;
+}
+
+/* Category bar hover */
+.ps-cat-row.ps-clickable:hover {
+    background: rgba(37, 99, 235, 0.04);
+    border-radius: 6px;
+}
+
+/* Table row hover for cross-filter */
+tr.ps-clickable:hover {
+    background: rgba(37, 99, 235, 0.06) !important;
+}
+
+/* Active cross-filter state - category bar */
+.ps-cat-row.ps-cf-active {
+    background: rgba(37, 99, 235, 0.08);
+    border-radius: 6px;
+    box-shadow: inset 3px 0 0 var(--accent-color);
+}
+
+.ps-cat-row.ps-cf-active .ps-cat-label {
+    color: var(--accent-color);
+    font-weight: 700;
+}
+
+/* Active cross-filter state - table rows */
+tr.ps-cf-active {
+    background: rgba(37, 99, 235, 0.06) !important;
+}
+
+tr.ps-cf-active td:first-child {
+    box-shadow: inset 3px 0 0 var(--accent-color);
+    color: var(--accent-color);
+    font-weight: 700;
+}
+
+/* Cross-filter chip bar */
+.ps-cross-filter-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    background: rgba(37, 99, 235, 0.04);
+    border: 1px solid rgba(37, 99, 235, 0.15);
+    border-radius: 10px;
+    animation: ps-cf-slide-in 0.2s ease;
+}
+
+.ps-cross-filter-bar.hidden {
+    display: none;
+}
+
+@keyframes ps-cf-slide-in {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ps-cf-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 4px;
+}
+
+.ps-cf-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1;
+}
+
+.ps-cf-chip.project {
+    background: rgba(139, 92, 246, 0.12);
+    color: #7c3aed;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+.ps-cf-chip.category {
+    background: rgba(59, 130, 246, 0.12);
+    color: #2563eb;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.ps-cf-chip.vendor {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.ps-cf-chip:hover {
+    filter: brightness(0.92);
+}
+
+.ps-cf-remove {
+    flex-shrink: 0;
+    opacity: 0.6;
+    transition: opacity 0.1s;
+}
+
+.ps-cf-chip:hover .ps-cf-remove {
+    opacity: 1;
+}
+
+.ps-cf-clear-all {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--expense-color);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: inherit;
+    transition: background 0.15s;
+    margin-left: auto;
+}
+
+.ps-cf-clear-all:hover {
+    background: rgba(220, 38, 38, 0.08);
+}
+
 /* Empty state */
 .ps-empty {
     text-align: center;

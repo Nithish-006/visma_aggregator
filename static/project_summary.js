@@ -307,12 +307,125 @@
             this.updateTriggerText();
             this.syncFilters();
         }
+
+        /** Programmatically toggle a single value (used by cross-filter clicks) */
+        toggleValue(value) {
+            if (this.selectedValues.has(value)) {
+                this.selectedValues.delete(value);
+            } else {
+                this.selectedValues.add(value);
+            }
+            this.updateUI();
+            this.updateTriggerText();
+            this.syncFilters();
+        }
+
+        /** Check if a value is currently selected */
+        hasValue(value) {
+            return this.selectedValues.has(value);
+        }
     }
 
     // Close dropdowns on outside click
     document.addEventListener('click', () => {
         Object.values(dropdowns).forEach(d => d.closeMenu());
     });
+
+    // ── Cross-Filter Helpers ────────────────────────────────────────────
+    function applyCrossFilter(type, value) {
+        const dropdownMap = {
+            'project': 'dropdown-project',
+            'category': 'dropdown-category',
+            'vendor': 'dropdown-vendor'
+        };
+        const dd = dropdowns[dropdownMap[type]];
+        if (!dd) return;
+        dd.toggleValue(value);
+
+        // Reset pagination since filtered data changes
+        state.pagination.projectBreakdown.page = 1;
+        state.pagination.vendorBreakdown.page = 1;
+        state.pagination.axisTransactions.page = 1;
+        state.pagination.kvbTransactions.page = 1;
+
+        refreshAll();
+    }
+
+    function isCrossFilterActive(type, value) {
+        const dropdownMap = {
+            'project': 'dropdown-project',
+            'category': 'dropdown-category',
+            'vendor': 'dropdown-vendor'
+        };
+        const dd = dropdowns[dropdownMap[type]];
+        return dd ? dd.hasValue(value) : false;
+    }
+
+    /** Render active cross-filter chips above KPI cards */
+    function renderCrossFilterChips() {
+        let container = document.getElementById('cross-filter-chips');
+        const hasFilters = state.filters.project.length > 0 ||
+            state.filters.category.length > 0 ||
+            state.filters.vendor.length > 0;
+
+        if (!hasFilters) {
+            if (container) container.innerHTML = '';
+            if (container) container.classList.add('hidden');
+            return;
+        }
+
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'cross-filter-chips';
+            container.className = 'ps-cross-filter-bar';
+            const kpiGrid = document.querySelector('.ps-kpi-grid');
+            kpiGrid.parentNode.insertBefore(container, kpiGrid);
+        }
+
+        container.classList.remove('hidden');
+        let html = '<span class="ps-cf-label">Active Filters:</span>';
+
+        state.filters.project.forEach(val => {
+            html += `<span class="ps-cf-chip project" data-type="project" data-value="${escapeHtml(val)}">
+                ${escapeHtml(val)}
+                <svg class="ps-cf-remove" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </span>`;
+        });
+        state.filters.category.forEach(val => {
+            html += `<span class="ps-cf-chip category" data-type="category" data-value="${escapeHtml(val)}">
+                ${escapeHtml(val)}
+                <svg class="ps-cf-remove" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </span>`;
+        });
+        state.filters.vendor.forEach(val => {
+            html += `<span class="ps-cf-chip vendor" data-type="vendor" data-value="${escapeHtml(val)}">
+                ${escapeHtml(val)}
+                <svg class="ps-cf-remove" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </span>`;
+        });
+
+        html += `<button class="ps-cf-clear-all" id="cf-clear-all">Clear All</button>`;
+        container.innerHTML = html;
+
+        // Bind chip remove clicks
+        container.querySelectorAll('.ps-cf-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                applyCrossFilter(chip.dataset.type, chip.dataset.value);
+            });
+        });
+
+        // Bind clear all
+        const clearBtn = document.getElementById('cf-clear-all');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                Object.values(dropdowns).forEach(d => d.clear());
+                state.filters.project = [];
+                state.filters.category = [];
+                state.filters.vendor = [];
+                refreshAll();
+            });
+        }
+    }
 
     // ── Init ───────────────────────────────────────────────────────────
     async function init() {
@@ -442,6 +555,7 @@
             state.data.personalTxns = personalTxns.transactions || [];
 
             // Render all sections
+            renderCrossFilterChips();
             renderKPI(combined.summary);
             renderBankBreakdown(combined.bank_breakdown);
             renderCategoryBars(combined.category_breakdown);
@@ -507,7 +621,8 @@
         container.innerHTML = categoryBreakdown.map((c, i) => {
             const pct = maxAmount > 0 ? (c.amount / maxAmount * 100) : 0;
             const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
-            return `<div class="ps-cat-row">
+            const isActive = isCrossFilterActive('category', c.category);
+            return `<div class="ps-cat-row ps-clickable ${isActive ? 'ps-cf-active' : ''}" data-cf-type="category" data-cf-value="${escapeHtml(c.category)}">
                 <div class="ps-cat-label" title="${escapeHtml(c.category)}">${escapeHtml(c.category)}</div>
                 <div class="ps-cat-bar-wrap">
                     <div class="ps-cat-bar-track">
@@ -518,6 +633,13 @@
                 </div>
             </div>`;
         }).join('');
+
+        // Bind cross-filter clicks on category rows
+        container.querySelectorAll('[data-cf-type="category"]').forEach(row => {
+            row.addEventListener('click', () => {
+                applyCrossFilter('category', row.dataset.cfValue);
+            });
+        });
     }
 
     // ── Render: Project Table (client-side pagination) ─────────────────
@@ -534,8 +656,9 @@
         } else {
             tbody.innerHTML = pageData.map(p => {
                 const netClass = p.net >= 0 ? 'text-net-positive' : 'text-net-negative';
-                return `<tr>
-                    <td>${p.project}</td>
+                const isActive = isCrossFilterActive('project', p.project);
+                return `<tr class="ps-clickable ${isActive ? 'ps-cf-active' : ''}" data-cf-type="project" data-cf-value="${escapeHtml(p.project)}">
+                    <td>${escapeHtml(p.project)}</td>
                     <td class="text-right text-income">${p.income_formatted}</td>
                     <td class="text-right text-expense">${p.expense_formatted}</td>
                     <td class="text-right ${netClass}">${p.net_formatted}</td>
@@ -543,6 +666,13 @@
                 </tr>`;
             }).join('');
         }
+
+        // Bind cross-filter clicks on project rows
+        tbody.querySelectorAll('[data-cf-type="project"]').forEach(row => {
+            row.addEventListener('click', () => {
+                applyCrossFilter('project', row.dataset.cfValue);
+            });
+        });
 
         renderPaginationControls('project-pagination', page, totalPages, (pg) => {
             state.pagination.projectBreakdown.page = pg;
@@ -570,13 +700,23 @@
         if (pageData.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="ps-empty">No vendor data</td></tr>';
         } else {
-            tbody.innerHTML = pageData.map(v => `<tr>
-                <td>${v.vendor}</td>
-                <td class="text-right text-expense">${v.amount_formatted}</td>
-                <td class="text-right">${v.count}</td>
-                <td class="text-right">${v.percentage}%</td>
-            </tr>`).join('');
+            tbody.innerHTML = pageData.map(v => {
+                const isActive = isCrossFilterActive('vendor', v.vendor);
+                return `<tr class="ps-clickable ${isActive ? 'ps-cf-active' : ''}" data-cf-type="vendor" data-cf-value="${escapeHtml(v.vendor)}">
+                    <td>${escapeHtml(v.vendor)}</td>
+                    <td class="text-right text-expense">${v.amount_formatted}</td>
+                    <td class="text-right">${v.count}</td>
+                    <td class="text-right">${v.percentage}%</td>
+                </tr>`;
+            }).join('');
         }
+
+        // Bind cross-filter clicks on vendor rows
+        tbody.querySelectorAll('[data-cf-type="vendor"]').forEach(row => {
+            row.addEventListener('click', () => {
+                applyCrossFilter('vendor', row.dataset.cfValue);
+            });
+        });
 
         renderPaginationControls('vendor-pagination', page, totalPages, (pg) => {
             state.pagination.vendorBreakdown.page = pg;
@@ -595,13 +735,23 @@
             if (!result.vendors || result.vendors.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" class="ps-empty">No vendor data</td></tr>';
             } else {
-                tbody.innerHTML = result.vendors.map(v => `<tr>
-                    <td>${v.vendor}</td>
-                    <td class="text-right text-expense">${v.amount_formatted}</td>
-                    <td class="text-right">${v.count}</td>
-                    <td class="text-right">${v.percentage}%</td>
-                </tr>`).join('');
+                tbody.innerHTML = result.vendors.map(v => {
+                    const isActive = isCrossFilterActive('vendor', v.vendor);
+                    return `<tr class="ps-clickable ${isActive ? 'ps-cf-active' : ''}" data-cf-type="vendor" data-cf-value="${escapeHtml(v.vendor)}">
+                        <td>${escapeHtml(v.vendor)}</td>
+                        <td class="text-right text-expense">${v.amount_formatted}</td>
+                        <td class="text-right">${v.count}</td>
+                        <td class="text-right">${v.percentage}%</td>
+                    </tr>`;
+                }).join('');
             }
+
+            // Bind cross-filter clicks on vendor rows
+            tbody.querySelectorAll('[data-cf-type="vendor"]').forEach(row => {
+                row.addEventListener('click', () => {
+                    applyCrossFilter('vendor', row.dataset.cfValue);
+                });
+            });
 
             state.pagination.vendorBreakdown.page = result.page;
             renderPaginationControls('vendor-pagination', result.page, result.total_pages, (pg) => {
