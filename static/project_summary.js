@@ -19,10 +19,6 @@
             combined: null,
             personalTxns: [],
             personalSummary: null
-        },
-        charts: {
-            categoryChart: null,
-            monthlyChart: null
         }
     };
 
@@ -38,7 +34,6 @@
         const parts = abs.toFixed(2).split('.');
         let intPart = parts[0];
         const decPart = parts[1];
-        // Indian grouping: last 3, then groups of 2
         if (intPart.length > 3) {
             const last3 = intPart.slice(-3);
             let rest = intPart.slice(0, -3);
@@ -51,6 +46,20 @@
             intPart = groups.join(',') + ',' + last3;
         }
         return sign + '\u20B9' + intPart + '.' + decPart;
+    }
+
+    function formatAmount(amount) {
+        return new Intl.NumberFormat('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     function debounce(fn, ms) {
@@ -103,24 +112,54 @@
         });
     }
 
-    // ── Category Colors ────────────────────────────────────────────────
+    // ── Category Colors (for horizontal bars) ──────────────────────────
     const CATEGORY_COLORS = [
         '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
         '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
         '#e11d48', '#84cc16', '#a855f7', '#0ea5e9', '#d946ef'
     ];
 
+    // ── Category icons (same as expense tracker) ───────────────────────
+    const categoryIcons = {
+        'Salary': { icon: '\uD83D\uDCB0', name: 'Salary' },
+        'Food': { icon: '\uD83C\uDF54', name: 'Food' },
+        'Transport': { icon: '\uD83D\uDE97', name: 'Transport' },
+        'Shopping': { icon: '\uD83D\uDED2', name: 'Shopping' },
+        'Bills': { icon: '\uD83D\uDCC4', name: 'Bills' },
+        'Entertainment': { icon: '\uD83C\uDFAC', name: 'Entertain' },
+        'Health': { icon: '\uD83D\uDC8A', name: 'Health' },
+        'Social Life': { icon: '\uD83C\uDF89', name: 'Social' },
+        'Investment': { icon: '\uD83D\uDCC8', name: 'Invest' },
+        'default_income': { icon: '\uD83D\uDCB5', name: 'Income' },
+        'default_expense': { icon: '\uD83D\uDCB8', name: 'Expense' }
+    };
+
+    function getCategoryInfo(transaction) {
+        const vendor = (transaction.vendor || '').toLowerCase();
+        if (transaction.transaction_type === 'income') {
+            if (vendor.includes('salary') || vendor.includes('wage')) return categoryIcons['Salary'];
+            return categoryIcons['default_income'];
+        }
+        if (vendor.includes('food') || vendor.includes('restaurant') || vendor.includes('cafe') || vendor.includes('swiggy') || vendor.includes('zomato')) return categoryIcons['Food'];
+        if (vendor.includes('uber') || vendor.includes('ola') || vendor.includes('petrol') || vendor.includes('fuel') || vendor.includes('transport')) return categoryIcons['Transport'];
+        if (vendor.includes('amazon') || vendor.includes('flipkart') || vendor.includes('shop') || vendor.includes('mall')) return categoryIcons['Shopping'];
+        if (vendor.includes('bill') || vendor.includes('electric') || vendor.includes('water') || vendor.includes('gas') || vendor.includes('rent')) return categoryIcons['Bills'];
+        if (vendor.includes('movie') || vendor.includes('netflix') || vendor.includes('spotify') || vendor.includes('game')) return categoryIcons['Entertainment'];
+        if (vendor.includes('hospital') || vendor.includes('doctor') || vendor.includes('pharmacy') || vendor.includes('medical')) return categoryIcons['Health'];
+        if (vendor.includes('party') || vendor.includes('dinner') || vendor.includes('friend') || vendor.includes('split')) return categoryIcons['Social Life'];
+        if (vendor.includes('invest') || vendor.includes('stock') || vendor.includes('mutual') || vendor.includes('sip')) return categoryIcons['Investment'];
+        return categoryIcons['default_expense'];
+    }
+
     // ── Init ───────────────────────────────────────────────────────────
     async function init() {
         showLoading();
         try {
-            // Fetch date range and filter options in parallel
             const [dateRange, filterOptions] = await Promise.all([
                 fetchJSON('/api/project-summary/date-range'),
                 fetchJSON('/api/project-summary/projects')
             ]);
 
-            // Populate date inputs
             if (dateRange.min_date) {
                 $('#filter-start-date').value = dateRange.min_date;
                 state.filters.startDate = dateRange.min_date;
@@ -130,7 +169,6 @@
                 state.filters.endDate = dateRange.max_date;
             }
 
-            // Populate project dropdown
             const projSelect = $('#filter-project');
             (filterOptions.projects || []).forEach(p => {
                 const opt = document.createElement('option');
@@ -139,7 +177,6 @@
                 projSelect.appendChild(opt);
             });
 
-            // Populate category dropdown
             const catSelect = $('#filter-category');
             (filterOptions.categories || []).forEach(c => {
                 const opt = document.createElement('option');
@@ -148,10 +185,7 @@
                 catSelect.appendChild(opt);
             });
 
-            // Bind filter events
             bindFilterEvents();
-
-            // Initial data load
             await refreshAll();
         } catch (err) {
             console.error('Init error:', err);
@@ -180,7 +214,6 @@
             debouncedRefresh();
         });
         $('#reset-filters').addEventListener('click', async () => {
-            // Re-fetch date range for reset
             try {
                 const dateRange = await fetchJSON('/api/project-summary/date-range');
                 state.filters.startDate = dateRange.min_date || '';
@@ -224,7 +257,6 @@
 
     // ── Refresh All ────────────────────────────────────────────────────
     async function refreshAll() {
-        // Reset pagination
         state.pagination.projectBreakdown.page = 1;
         state.pagination.vendorBreakdown.page = 1;
         state.pagination.axisTransactions.page = 1;
@@ -233,25 +265,21 @@
         const params = buildQueryParams();
 
         try {
-            // Fetch combined + personal data in parallel
-            const [combined, personalTxns, personalSummary] = await Promise.all([
+            const [combined, personalTxns] = await Promise.all([
                 fetchJSON('/api/project-summary/combined?' + params.toString()),
-                fetchJSON('/api/personal/transactions?' + params.toString()),
-                fetchJSON('/api/personal/summary?' + params.toString())
+                fetchJSON('/api/personal/transactions?' + params.toString())
             ]);
 
             state.data.combined = combined;
             state.data.personalTxns = personalTxns.transactions || [];
-            state.data.personalSummary = personalSummary;
 
             // Render all sections
             renderKPI(combined.summary);
             renderBankBreakdown(combined.bank_breakdown);
-            renderCategoryChart(combined.category_breakdown);
-            renderMonthlyChart(combined.monthly_trend);
+            renderCategoryBars(combined.category_breakdown);
             renderProjectTable();
             renderVendorTable();
-            renderPersonalPanel();
+            renderExpenseTracker();
 
             // Fetch active bank tab transactions
             fetchBankTransactions(state.activeBankTab, 1);
@@ -298,152 +326,30 @@
         `).join('');
     }
 
-    // ── Render: Category Doughnut Chart ────────────────────────────────
-    function renderCategoryChart(categoryBreakdown) {
-        if (state.charts.categoryChart) {
-            state.charts.categoryChart.destroy();
-            state.charts.categoryChart = null;
+    // ── Render: Category Horizontal Bars ───────────────────────────────
+    function renderCategoryBars(categoryBreakdown) {
+        const container = document.getElementById('category-bars');
+        if (!categoryBreakdown || categoryBreakdown.length === 0) {
+            container.innerHTML = '<div class="ps-empty">No category data</div>';
+            return;
         }
 
-        const canvas = document.getElementById('category-chart');
-        if (!canvas || !categoryBreakdown || categoryBreakdown.length === 0) return;
+        const maxAmount = Math.max(...categoryBreakdown.map(c => c.amount));
 
-        const labels = categoryBreakdown.map(c => c.category);
-        const data = categoryBreakdown.map(c => c.amount);
-        const colors = categoryBreakdown.map((_, i) => CATEGORY_COLORS[i % CATEGORY_COLORS.length]);
-
-        state.charts.categoryChart = new Chart(canvas, {
-            type: 'doughnut',
-            data: {
-                labels,
-                datasets: [{
-                    data,
-                    backgroundColor: colors,
-                    borderWidth: 2,
-                    borderColor: '#ffffff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '60%',
-                plugins: {
-                    legend: {
-                        position: 'right',
-                        labels: {
-                            boxWidth: 12,
-                            padding: 8,
-                            font: { size: 11, family: 'Inter' },
-                            color: '#4a4a68'
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function (ctx) {
-                                const item = categoryBreakdown[ctx.dataIndex];
-                                return `${item.category}: ${item.amount_formatted} (${item.percentage}%)`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    // ── Render: Monthly Trend Bar Chart ────────────────────────────────
-    function renderMonthlyChart(monthlyTrend) {
-        if (state.charts.monthlyChart) {
-            state.charts.monthlyChart.destroy();
-            state.charts.monthlyChart = null;
-        }
-
-        const canvas = document.getElementById('monthly-chart');
-        if (!canvas || !monthlyTrend || !monthlyTrend.months || monthlyTrend.months.length === 0) return;
-
-        state.charts.monthlyChart = new Chart(canvas, {
-            type: 'bar',
-            data: {
-                labels: monthlyTrend.months,
-                datasets: [
-                    {
-                        label: 'Income',
-                        data: monthlyTrend.income,
-                        backgroundColor: 'rgba(16, 185, 129, 0.7)',
-                        borderColor: '#059669',
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        order: 2
-                    },
-                    {
-                        label: 'Expense',
-                        data: monthlyTrend.expense,
-                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                        borderColor: '#dc2626',
-                        borderWidth: 1,
-                        borderRadius: 4,
-                        order: 2
-                    },
-                    {
-                        label: 'Net',
-                        data: monthlyTrend.net,
-                        type: 'line',
-                        borderColor: '#2563eb',
-                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        pointBackgroundColor: '#2563eb',
-                        tension: 0.3,
-                        fill: false,
-                        order: 1
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        ticks: {
-                            font: { size: 10, family: 'Inter' },
-                            color: '#6b7280',
-                            maxRotation: 45
-                        }
-                    },
-                    y: {
-                        grid: { color: 'rgba(0,0,0,0.04)' },
-                        ticks: {
-                            font: { size: 10, family: 'Inter' },
-                            color: '#6b7280',
-                            callback: (v) => {
-                                if (Math.abs(v) >= 10000000) return '\u20B9' + (v / 10000000).toFixed(1) + 'Cr';
-                                if (Math.abs(v) >= 100000) return '\u20B9' + (v / 100000).toFixed(1) + 'L';
-                                if (Math.abs(v) >= 1000) return '\u20B9' + (v / 1000).toFixed(0) + 'K';
-                                return '\u20B9' + v;
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        labels: {
-                            boxWidth: 12,
-                            padding: 10,
-                            font: { size: 11, family: 'Inter' },
-                            color: '#4a4a68'
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function (ctx) {
-                                return ctx.dataset.label + ': ' + formatIndianNumber(ctx.raw);
-                            }
-                        }
-                    }
-                }
-            }
-        });
+        container.innerHTML = categoryBreakdown.map((c, i) => {
+            const pct = maxAmount > 0 ? (c.amount / maxAmount * 100) : 0;
+            const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+            return `<div class="ps-cat-row">
+                <div class="ps-cat-label" title="${escapeHtml(c.category)}">${escapeHtml(c.category)}</div>
+                <div class="ps-cat-bar-wrap">
+                    <div class="ps-cat-bar-track">
+                        <div class="ps-cat-bar-fill" style="width: ${pct}%; background: ${color};"></div>
+                    </div>
+                    <div class="ps-cat-amount">${c.amount_formatted}</div>
+                    <div class="ps-cat-pct">${c.percentage}%</div>
+                </div>
+            </div>`;
+        }).join('');
     }
 
     // ── Render: Project Table (client-side pagination) ─────────────────
@@ -481,7 +387,6 @@
         if (state.pagination.vendorBreakdown.showAll) {
             fetchVendorPage(state.pagination.vendorBreakdown.page);
         } else {
-            // Show top 20 from combined data
             renderVendorFromCombined();
         }
     }
@@ -576,86 +481,92 @@
         }
     }
 
-    // ── Render: Personal Panel (Right side) ────────────────────────────
-    function renderPersonalPanel() {
-        const summary = state.data.personalSummary;
+    // ── Render: Expense Tracker (Right Panel) ──────────────────────────
+    // Replicates the exact personal tracker daily view
+    function renderExpenseTracker() {
         const txns = state.data.personalTxns;
 
-        // Summary
-        if (summary) {
-            $('#personal-income').textContent = summary.total_income_formatted || '\u20B90';
-            $('#personal-expense').textContent = summary.total_expense_formatted || '\u20B90';
-            const netEl = $('#personal-net');
-            netEl.textContent = summary.net_balance_formatted || '\u20B90';
-            netEl.className = 'ps-personal-value ' + (summary.net_balance_positive !== false ? 'income' : 'expense');
-        }
+        // Update summary
+        let income = 0;
+        let expense = 0;
+        txns.forEach(t => {
+            if (t.transaction_type === 'income') {
+                income += parseFloat(t.amount);
+            } else {
+                expense += parseFloat(t.amount);
+            }
+        });
+        $('#personal-income').textContent = formatAmount(income);
+        $('#personal-expense').textContent = formatAmount(expense);
 
-        // Transaction list grouped by date
-        renderPersonalTransactions(txns);
-
-        // Project breakdown bars
-        if (summary && summary.project_breakdown) {
-            renderPersonalProjectBars(summary.project_breakdown);
-        }
-    }
-
-    function renderPersonalTransactions(txns) {
-        const container = document.getElementById('personal-txn-list');
+        // Render daily view
+        const container = document.getElementById('personal-daily-view');
         if (!txns || txns.length === 0) {
-            container.innerHTML = '<div class="ps-empty">No personal transactions</div>';
+            container.innerHTML = '<div class="ps-empty">No transactions for this period</div>';
             return;
         }
 
         // Group by date
-        const groups = {};
+        const grouped = {};
         txns.forEach(t => {
-            const d = t.date_formatted || t.date;
-            if (!groups[d]) groups[d] = [];
-            groups[d].push(t);
+            const d = t.date;
+            if (!grouped[d]) grouped[d] = [];
+            grouped[d].push(t);
         });
 
+        const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const MONTHS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+
         let html = '';
-        for (const [date, items] of Object.entries(groups)) {
-            html += `<div class="ps-ptxn-date-group">
-                <div class="ps-ptxn-date-header">${date}</div>`;
-            items.forEach(t => {
-                const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
-                const sign = t.transaction_type === 'income' ? '+' : '-';
-                html += `<div class="ps-ptxn-row">
-                    <div class="ps-ptxn-info">
-                        <div class="ps-ptxn-vendor">${t.vendor}</div>
-                        <div class="ps-ptxn-project">${t.project || ''}</div>
+        Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
+            const dayTxns = grouped[dateStr];
+            const date = new Date(dateStr);
+            const dayIncome = dayTxns.filter(t => t.transaction_type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0);
+            const dayExpense = dayTxns.filter(t => t.transaction_type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+
+            html += `<div class="ps-et-date-group">
+                <div class="ps-et-date-header">
+                    <div class="ps-et-date-info">
+                        <span class="ps-et-date-day">${String(date.getDate()).padStart(2, '0')}</span>
+                        <span class="ps-et-date-weekday">${DAYS[date.getDay()]}</span>
+                        <span class="ps-et-date-month">${MONTHS[date.getMonth()]}.${date.getFullYear()}</span>
                     </div>
-                    <div class="ps-ptxn-amount ${typeClass}">${sign}${t.amount_formatted}</div>
+                    <div class="ps-et-date-totals">
+                        ${dayIncome > 0 ? `<span class="ps-et-date-income">${formatAmount(dayIncome)}</span>` : ''}
+                        ${dayExpense > 0 ? `<span class="ps-et-date-expense">${formatAmount(dayExpense)}</span>` : ''}
+                    </div>
+                </div>`;
+
+            dayTxns.forEach(t => {
+                const cat = getCategoryInfo(t);
+                const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
+                const projectText = escapeHtml(t.project || 'General');
+                const descText = t.description ? escapeHtml(t.description) : '';
+                const metaText = descText ? `${projectText} &bull; ${descText}` : projectText;
+
+                let bankBadge = '';
+                if (t.bank) {
+                    const bankClass = t.bank === 'axis' ? 'bank-axis' : 'bank-kvb';
+                    bankBadge = `<span class="ps-et-bank-badge ${bankClass}">${t.bank.toUpperCase()}</span>`;
+                }
+
+                html += `<div class="ps-et-txn-row">
+                    <div class="ps-et-txn-category">
+                        <span class="ps-et-cat-icon">${cat.icon}</span>
+                        <span class="ps-et-cat-name">${cat.name}</span>
+                    </div>
+                    <div class="ps-et-txn-details">
+                        <div class="ps-et-txn-vendor">${escapeHtml(t.vendor)}${bankBadge}</div>
+                        <div class="ps-et-txn-meta">${metaText}</div>
+                    </div>
+                    <div class="ps-et-txn-amount ${typeClass}">${formatAmount(t.amount)}</div>
                 </div>`;
             });
+
             html += '</div>';
-        }
+        });
 
         container.innerHTML = html;
-    }
-
-    function renderPersonalProjectBars(projectBreakdown) {
-        const container = document.getElementById('personal-project-bars');
-        if (!projectBreakdown || projectBreakdown.length === 0) {
-            container.innerHTML = '<div class="ps-empty">No project data</div>';
-            return;
-        }
-
-        const maxAmount = Math.max(...projectBreakdown.map(p => p.amount));
-
-        container.innerHTML = projectBreakdown.map(p => {
-            const pct = maxAmount > 0 ? (p.amount / maxAmount * 100) : 0;
-            return `<div class="ps-pbar-row">
-                <div class="ps-pbar-header">
-                    <span class="ps-pbar-name">${p.project}</span>
-                    <span class="ps-pbar-amount">${p.amount_formatted}</span>
-                </div>
-                <div class="ps-pbar-track">
-                    <div class="ps-pbar-fill" style="width: ${pct}%"></div>
-                </div>
-            </div>`;
-        }).join('');
     }
 
     // ── Start ──────────────────────────────────────────────────────────

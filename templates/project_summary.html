@@ -9,13 +9,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <title>Project Summary | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script>
-        if (typeof Chart === 'undefined') {
-            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"><\/script>');
-        }
-    </script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=3">
 </head>
 
 <body>
@@ -108,22 +102,11 @@
                 </div>
             </div>
 
-            <!-- Charts -->
+            <!-- Expense by Category -->
             <div class="ps-section">
-                <h2 class="ps-section-title">Analytics</h2>
-                <div class="ps-chart-grid">
-                    <div class="ps-chart-card">
-                        <h3 class="ps-chart-title">Expense by Category</h3>
-                        <div class="ps-chart-wrap">
-                            <canvas id="category-chart"></canvas>
-                        </div>
-                    </div>
-                    <div class="ps-chart-card">
-                        <h3 class="ps-chart-title">Monthly Trend</h3>
-                        <div class="ps-chart-wrap">
-                            <canvas id="monthly-chart"></canvas>
-                        </div>
-                    </div>
+                <h2 class="ps-section-title">Expense by Category</h2>
+                <div id="category-bars">
+                    <!-- Rendered by JS as horizontal bars -->
                 </div>
             </div>
 
@@ -198,42 +181,26 @@
             </div>
         </div>
 
-        <!-- RIGHT PANEL -->
+        <!-- RIGHT PANEL - Expense Tracker -->
         <div class="ps-right">
             <div class="ps-right-inner">
-                <!-- Personal Summary -->
-                <div class="ps-personal-summary">
-                    <h3 class="ps-personal-title">Personal Tracker</h3>
-                    <div class="ps-personal-stats">
-                        <div class="ps-personal-stat">
-                            <span class="ps-personal-label">Income</span>
-                            <span class="ps-personal-value income" id="personal-income">₹0</span>
-                        </div>
-                        <div class="ps-personal-stat">
-                            <span class="ps-personal-label">Expense</span>
-                            <span class="ps-personal-value expense" id="personal-expense">₹0</span>
-                        </div>
-                        <div class="ps-personal-stat">
-                            <span class="ps-personal-label">Net</span>
-                            <span class="ps-personal-value" id="personal-net">₹0</span>
-                        </div>
+                <div class="ps-et-header">
+                    <h3 class="ps-et-title">Expense Tracker</h3>
+                </div>
+                <!-- Summary Bar (same as personal tracker) -->
+                <div class="ps-et-summary">
+                    <div class="ps-et-summary-item">
+                        <span class="ps-et-summary-label">Income</span>
+                        <span class="ps-et-summary-value income" id="personal-income">0.00</span>
+                    </div>
+                    <div class="ps-et-summary-item">
+                        <span class="ps-et-summary-label">Expenses</span>
+                        <span class="ps-et-summary-value expense" id="personal-expense">0.00</span>
                     </div>
                 </div>
-
-                <!-- Personal Transactions List -->
-                <div class="ps-personal-txns">
-                    <h4 class="ps-personal-section-title">Recent Transactions</h4>
-                    <div class="ps-personal-list" id="personal-txn-list">
-                        <!-- Rendered by JS -->
-                    </div>
-                </div>
-
-                <!-- Personal Project Breakdown -->
-                <div class="ps-personal-projects">
-                    <h4 class="ps-personal-section-title">Project Breakdown</h4>
-                    <div id="personal-project-bars">
-                        <!-- Rendered by JS -->
-                    </div>
+                <!-- Daily Transactions (exact tracker UI) -->
+                <div class="ps-et-transactions" id="personal-daily-view">
+                    <div class="ps-empty">Loading...</div>
                 </div>
             </div>
         </div>
@@ -245,7 +212,7 @@
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=3"></script>
 </body>
 
 </html>
