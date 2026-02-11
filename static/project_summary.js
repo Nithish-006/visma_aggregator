@@ -977,8 +977,8 @@
 
     async function viewBillDetail(id) {
         try {
-            const bill = await fetchJSON(`/api/bills/stored/${id}`);
-            renderBillDetailModal(bill);
+            const response = await fetchJSON(`/api/bills/stored/${id}`);
+            renderBillDetailModal(response.bill);
         } catch (err) {
             console.error('Bill detail error:', err);
         }
@@ -992,7 +992,7 @@
         let lineItemsHtml = '';
         if (lineItems.length > 0) {
             lineItemsHtml = `
-                <h4 style="margin-top:16px;margin-bottom:8px;">Line Items</h4>
+                <h4 style="margin-top:24px;margin-bottom:14px;font-size:0.95rem;">Line Items</h4>
                 <div class="ps-table-wrap">
                 <table class="ps-table">
                     <thead><tr>
