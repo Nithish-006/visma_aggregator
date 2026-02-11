@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
+    <title>Project Summary | VISMA Financial</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        if (typeof Chart === 'undefined') {
+            document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"><\/script>');
+        }
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=2">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="ps-header">
+        <div class="ps-header-left">
+            <a href="/" class="ps-back-btn" title="Back to Hub">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </a>
+            <h1 class="ps-title">Project Summary</h1>
+        </div>
+        <div class="ps-header-right">
+            <a href="/logout" class="ps-icon-btn" title="Logout">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </a>
+        </div>
+    </header>
+
+    <!-- Filter Bar -->
+    <div class="ps-filter-bar">
+        <div class="ps-filters">
+            <div class="ps-filter-group">
+                <label>From</label>
+                <input type="date" id="filter-start-date">
+            </div>
+            <div class="ps-filter-group">
+                <label>To</label>
+                <input type="date" id="filter-end-date">
+            </div>
+            <div class="ps-filter-group">
+                <label>Project</label>
+                <select id="filter-project">
+                    <option value="">All Projects</option>
+                </select>
+            </div>
+            <div class="ps-filter-group">
+                <label>Category</label>
+                <select id="filter-category">
+                    <option value="">All Categories</option>
+                </select>
+            </div>
+            <button class="ps-reset-btn" id="reset-filters" title="Reset Filters">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                Reset
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div class="ps-layout">
+        <!-- LEFT PANEL -->
+        <div class="ps-left">
+            <!-- KPI Cards -->
+            <div class="ps-kpi-grid">
+                <div class="ps-kpi-card kpi-income">
+                    <div class="ps-kpi-label">Total Income</div>
+                    <div class="ps-kpi-value" id="kpi-income">₹0</div>
+                </div>
+                <div class="ps-kpi-card kpi-expense">
+                    <div class="ps-kpi-label">Total Expense</div>
+                    <div class="ps-kpi-value" id="kpi-expense">₹0</div>
+                </div>
+                <div class="ps-kpi-card kpi-net">
+                    <div class="ps-kpi-label">Net Cashflow</div>
+                    <div class="ps-kpi-value" id="kpi-net">₹0</div>
+                </div>
+                <div class="ps-kpi-card kpi-count">
+                    <div class="ps-kpi-label">Transactions</div>
+                    <div class="ps-kpi-value" id="kpi-count">0</div>
+                </div>
+            </div>
+
+            <!-- Bank Breakdown -->
+            <div class="ps-section">
+                <h2 class="ps-section-title">Bank Breakdown</h2>
+                <div class="ps-bank-grid" id="bank-breakdown">
+                    <!-- Rendered by JS -->
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="ps-section">
+                <h2 class="ps-section-title">Analytics</h2>
+                <div class="ps-chart-grid">
+                    <div class="ps-chart-card">
+                        <h3 class="ps-chart-title">Expense by Category</h3>
+                        <div class="ps-chart-wrap">
+                            <canvas id="category-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="ps-chart-card">
+                        <h3 class="ps-chart-title">Monthly Trend</h3>
+                        <div class="ps-chart-wrap">
+                            <canvas id="monthly-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Breakdown Table -->
+            <div class="ps-section">
+                <h2 class="ps-section-title">Project Breakdown</h2>
+                <div class="ps-table-wrap">
+                    <table class="ps-table" id="project-table">
+                        <thead>
+                            <tr>
+                                <th>Project</th>
+                                <th class="text-right">Income</th>
+                                <th class="text-right">Expense</th>
+                                <th class="text-right">Net</th>
+                                <th class="text-right">Count</th>
+                            </tr>
+                        </thead>
+                        <tbody id="project-table-body">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ps-pagination" id="project-pagination"></div>
+            </div>
+
+            <!-- Vendor Breakdown Table -->
+            <div class="ps-section">
+                <h2 class="ps-section-title">
+                    Vendor Breakdown
+                    <button class="ps-show-all-btn" id="vendor-show-all">Show All</button>
+                </h2>
+                <div class="ps-table-wrap">
+                    <table class="ps-table" id="vendor-table">
+                        <thead>
+                            <tr>
+                                <th>Vendor</th>
+                                <th class="text-right">Expense</th>
+                                <th class="text-right">Count</th>
+                                <th class="text-right">%</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vendor-table-body">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ps-pagination" id="vendor-pagination"></div>
+            </div>
+
+            <!-- Bank Transactions (Tabbed) -->
+            <div class="ps-section">
+                <h2 class="ps-section-title">Bank Transactions</h2>
+                <div class="ps-tab-bar">
+                    <button class="ps-tab-btn active" data-bank="axis">Axis Bank</button>
+                    <button class="ps-tab-btn" data-bank="kvb">KVB</button>
+                </div>
+                <div class="ps-table-wrap">
+                    <table class="ps-table" id="bank-txn-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Vendor</th>
+                                <th>Category</th>
+                                <th>Project</th>
+                                <th class="text-right">Debit</th>
+                                <th class="text-right">Credit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bank-txn-body">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ps-pagination" id="bank-txn-pagination"></div>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="ps-right">
+            <div class="ps-right-inner">
+                <!-- Personal Summary -->
+                <div class="ps-personal-summary">
+                    <h3 class="ps-personal-title">Personal Tracker</h3>
+                    <div class="ps-personal-stats">
+                        <div class="ps-personal-stat">
+                            <span class="ps-personal-label">Income</span>
+                            <span class="ps-personal-value income" id="personal-income">₹0</span>
+                        </div>
+                        <div class="ps-personal-stat">
+                            <span class="ps-personal-label">Expense</span>
+                            <span class="ps-personal-value expense" id="personal-expense">₹0</span>
+                        </div>
+                        <div class="ps-personal-stat">
+                            <span class="ps-personal-label">Net</span>
+                            <span class="ps-personal-value" id="personal-net">₹0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Personal Transactions List -->
+                <div class="ps-personal-txns">
+                    <h4 class="ps-personal-section-title">Recent Transactions</h4>
+                    <div class="ps-personal-list" id="personal-txn-list">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Personal Project Breakdown -->
+                <div class="ps-personal-projects">
+                    <h4 class="ps-personal-section-title">Project Breakdown</h4>
+                    <div id="personal-project-bars">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="ps-loading hidden" id="loading-overlay">
+        <div class="ps-spinner"></div>
+        <p>Loading data...</p>
+    </div>
+
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=2"></script>
+</body>
+
+</html>

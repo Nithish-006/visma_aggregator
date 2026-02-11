@@ -3096,6 +3096,394 @@ def get_insights():
 
 
 
+# ============================================================================
+# PROJECT SUMMARY - Cross-Bank Consolidated View
+# ============================================================================
+
+@app.route('/project-summary')
+@login_required
+def project_summary():
+    """Project Summary page - consolidated view across all banks"""
+    return render_template('project_summary.html')
+
+
+@app.route('/api/project-summary/combined')
+@login_required
+def get_project_summary_combined():
+    """Get combined transaction data from all banks with filters"""
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    project = request.args.get('project', None)
+    category = request.args.get('category', None)
+
+    combined_rows = []
+
+    for bank_code in VALID_BANK_CODES:
+        df = get_bank_df(bank_code).copy()
+        if df.empty:
+            continue
+
+        df = filter_by_date_range(df, start_date, end_date)
+        df = filter_by_project(df, project)
+        df = filter_by_category(df, category)
+
+        if df.empty:
+            continue
+
+        df['bank'] = bank_code
+        combined_rows.append(df)
+
+    if not combined_rows:
+        return jsonify({
+            'summary': {
+                'total_income': 0, 'total_income_formatted': '₹0',
+                'total_expense': 0, 'total_expense_formatted': '₹0',
+                'net_cashflow': 0, 'net_cashflow_formatted': '₹0',
+                'total_transactions': 0
+            },
+            'bank_breakdown': [],
+            'category_breakdown': [],
+            'project_breakdown': [],
+            'vendor_breakdown': [],
+            'monthly_trend': {'months': [], 'income': [], 'expense': [], 'net': []},
+            'transactions': [],
+            'bank_transactions': {}
+        })
+
+    combined = pd.concat(combined_rows, ignore_index=True)
+
+    # Summary
+    total_income = float(combined['CR Amount'].sum())
+    total_expense = float(combined['DR Amount'].sum())
+    net_cashflow = total_income - total_expense
+
+    summary = {
+        'total_income': total_income,
+        'total_income_formatted': format_indian_number(total_income),
+        'total_expense': total_expense,
+        'total_expense_formatted': format_indian_number(total_expense),
+        'net_cashflow': net_cashflow,
+        'net_cashflow_formatted': format_indian_number(net_cashflow),
+        'total_transactions': len(combined)
+    }
+
+    # Bank-wise breakdown
+    bank_breakdown = []
+    for bank_code in VALID_BANK_CODES:
+        bank_df = combined[combined['bank'] == bank_code]
+        if bank_df.empty:
+            continue
+        bank_config = get_bank_config(bank_code)
+        b_income = float(bank_df['CR Amount'].sum())
+        b_expense = float(bank_df['DR Amount'].sum())
+        bank_breakdown.append({
+            'bank_code': bank_code,
+            'bank_name': bank_config['name'],
+            'color': bank_config['color'],
+            'income': b_income,
+            'income_formatted': format_indian_number(b_income),
+            'expense': b_expense,
+            'expense_formatted': format_indian_number(b_expense),
+            'net': b_income - b_expense,
+            'net_formatted': format_indian_number(b_income - b_expense),
+            'transaction_count': len(bank_df)
+        })
+
+    # Category breakdown (expenses only)
+    expense_df = combined[combined['DR Amount'] > 0]
+    category_breakdown = []
+    if not expense_df.empty:
+        cat_totals = expense_df.groupby('Category')['DR Amount'].agg(['sum', 'count']).sort_values('sum', ascending=False)
+        total_exp = float(cat_totals['sum'].sum())
+        for cat_name, row in cat_totals.iterrows():
+            amt = float(row['sum'])
+            pct = (amt / total_exp * 100) if total_exp > 0 else 0
+            category_breakdown.append({
+                'category': cat_name,
+                'amount': amt,
+                'amount_formatted': format_indian_number(amt),
+                'count': int(row['count']),
+                'percentage': round(pct, 1)
+            })
+
+    # Project breakdown
+    project_col = 'Project' if 'Project' in combined.columns else 'project'
+    project_breakdown = []
+    if project_col in combined.columns:
+        proj_income = combined.groupby(project_col)['CR Amount'].sum()
+        proj_expense = combined.groupby(project_col)['DR Amount'].sum()
+        proj_count = combined.groupby(project_col).size()
+        all_projects = set(proj_income.index) | set(proj_expense.index)
+        for proj in sorted(all_projects):
+            p_inc = float(proj_income.get(proj, 0))
+            p_exp = float(proj_expense.get(proj, 0))
+            project_breakdown.append({
+                'project': str(proj) if proj and str(proj) != 'nan' else 'Unassigned',
+                'income': p_inc,
+                'income_formatted': format_indian_number(p_inc),
+                'expense': p_exp,
+                'expense_formatted': format_indian_number(p_exp),
+                'net': p_inc - p_exp,
+                'net_formatted': format_indian_number(p_inc - p_exp),
+                'count': int(proj_count.get(proj, 0))
+            })
+        project_breakdown.sort(key=lambda x: x['expense'], reverse=True)
+
+    # Monthly trend
+    monthly_trend = {'months': [], 'income': [], 'expense': [], 'net': []}
+    if not combined.empty and 'month_name' in combined.columns:
+        monthly = combined.groupby('month_name').agg({
+            'CR Amount': 'sum',
+            'DR Amount': 'sum',
+            'date': 'first'
+        }).reset_index().sort_values('date')
+        monthly_trend = {
+            'months': monthly['month_name'].tolist(),
+            'income': [float(x) for x in monthly['CR Amount'].tolist()],
+            'expense': [float(x) for x in monthly['DR Amount'].tolist()],
+            'net': [float(i - e) for i, e in zip(monthly['CR Amount'], monthly['DR Amount'])]
+        }
+
+    # Vendor breakdown (top vendors by expense)
+    vendor_col = 'Client/Vendor' if 'Client/Vendor' in combined.columns else 'client_vendor'
+    vendor_breakdown = []
+    if vendor_col in combined.columns and not expense_df.empty:
+        vendor_totals = expense_df.groupby(vendor_col)['DR Amount'].agg(['sum', 'count']).sort_values('sum', ascending=False).head(20)
+        total_vendor_exp = float(vendor_totals['sum'].sum())
+        for vendor_name, row in vendor_totals.iterrows():
+            v_amt = float(row['sum'])
+            v_pct = (v_amt / total_vendor_exp * 100) if total_vendor_exp > 0 else 0
+            vendor_breakdown.append({
+                'vendor': str(vendor_name) if vendor_name and str(vendor_name) != 'nan' else 'Unknown',
+                'amount': v_amt,
+                'amount_formatted': format_indian_number(v_amt),
+                'count': int(row['count']),
+                'percentage': round(v_pct, 1)
+            })
+
+    # Per-bank transactions (separate lists for side-by-side display)
+    bank_transactions = {}
+    for bank_code in VALID_BANK_CODES:
+        bank_df = combined[combined['bank'] == bank_code]
+        if bank_df.empty:
+            bank_transactions[bank_code] = []
+            continue
+        bank_recent = bank_df.sort_values('date', ascending=False).head(50)
+        bank_txn_list = []
+        for _, row in bank_recent.iterrows():
+            bank_txn_list.append({
+                'date': row['date'].strftime('%Y-%m-%d') if pd.notna(row['date']) else '',
+                'description': str(row.get('Description', row.get('transaction_description', ''))),
+                'vendor': str(row.get('Client/Vendor', row.get('client_vendor', 'Unknown'))),
+                'category': str(row.get('Category', 'Uncategorized')),
+                'dr_amount': float(row.get('DR Amount', 0)),
+                'cr_amount': float(row.get('CR Amount', 0)),
+                'dr_formatted': format_indian_number(float(row.get('DR Amount', 0))) if float(row.get('DR Amount', 0)) > 0 else '',
+                'cr_formatted': format_indian_number(float(row.get('CR Amount', 0))) if float(row.get('CR Amount', 0)) > 0 else '',
+                'project': str(row.get('Project', row.get('project', ''))) if pd.notna(row.get('Project', row.get('project', ''))) else '',
+                'bank': bank_code
+            })
+        bank_transactions[bank_code] = bank_txn_list
+
+    # Recent transactions (last 50 for combined table display)
+    recent = combined.sort_values('date', ascending=False).head(50)
+    transactions_list = []
+    for _, row in recent.iterrows():
+        transactions_list.append({
+            'date': row['date'].strftime('%Y-%m-%d') if pd.notna(row['date']) else '',
+            'description': str(row.get('Description', row.get('transaction_description', ''))),
+            'vendor': str(row.get('Client/Vendor', row.get('client_vendor', 'Unknown'))),
+            'category': str(row.get('Category', 'Uncategorized')),
+            'dr_amount': float(row.get('DR Amount', 0)),
+            'cr_amount': float(row.get('CR Amount', 0)),
+            'dr_formatted': format_indian_number(float(row.get('DR Amount', 0))) if float(row.get('DR Amount', 0)) > 0 else '',
+            'cr_formatted': format_indian_number(float(row.get('CR Amount', 0))) if float(row.get('CR Amount', 0)) > 0 else '',
+            'project': str(row.get('Project', row.get('project', ''))) if pd.notna(row.get('Project', row.get('project', ''))) else '',
+            'bank': row.get('bank', '')
+        })
+
+    return jsonify({
+        'summary': summary,
+        'bank_breakdown': bank_breakdown,
+        'category_breakdown': category_breakdown,
+        'project_breakdown': project_breakdown,
+        'vendor_breakdown': vendor_breakdown,
+        'monthly_trend': monthly_trend,
+        'transactions': transactions_list,
+        'bank_transactions': bank_transactions
+    })
+
+
+@app.route('/api/project-summary/bank-transactions')
+@login_required
+def get_project_summary_bank_transactions():
+    """Get paginated bank transactions for a specific bank with filters"""
+    bank_code = request.args.get('bank_code', 'axis')
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 15))
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    project = request.args.get('project', None)
+    category = request.args.get('category', None)
+
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'transactions': [], 'total': 0, 'page': page, 'per_page': per_page, 'total_pages': 0})
+
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return jsonify({'transactions': [], 'total': 0, 'page': page, 'per_page': per_page, 'total_pages': 0})
+
+    df = filter_by_date_range(df, start_date, end_date)
+    df = filter_by_project(df, project)
+    df = filter_by_category(df, category)
+
+    df = df.sort_values('date', ascending=False)
+    total = len(df)
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 0
+
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_df = df.iloc[start_idx:end_idx]
+
+    transactions = []
+    for _, row in page_df.iterrows():
+        transactions.append({
+            'date': row['date'].strftime('%Y-%m-%d') if pd.notna(row['date']) else '',
+            'description': str(row.get('Description', row.get('transaction_description', ''))),
+            'vendor': str(row.get('Client/Vendor', row.get('client_vendor', 'Unknown'))),
+            'category': str(row.get('Category', 'Uncategorized')),
+            'dr_amount': float(row.get('DR Amount', 0)),
+            'cr_amount': float(row.get('CR Amount', 0)),
+            'dr_formatted': format_indian_number(float(row.get('DR Amount', 0))) if float(row.get('DR Amount', 0)) > 0 else '',
+            'cr_formatted': format_indian_number(float(row.get('CR Amount', 0))) if float(row.get('CR Amount', 0)) > 0 else '',
+            'project': str(row.get('Project', row.get('project', ''))) if pd.notna(row.get('Project', row.get('project', ''))) else ''
+        })
+
+    return jsonify({
+        'transactions': transactions,
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': total_pages
+    })
+
+
+@app.route('/api/project-summary/vendors')
+@login_required
+def get_project_summary_vendors():
+    """Get paginated vendor breakdown across all banks with filters"""
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 15))
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    project = request.args.get('project', None)
+    category = request.args.get('category', None)
+
+    combined_rows = []
+    for bank_code in VALID_BANK_CODES:
+        df = get_bank_df(bank_code).copy()
+        if df.empty:
+            continue
+        df = filter_by_date_range(df, start_date, end_date)
+        df = filter_by_project(df, project)
+        df = filter_by_category(df, category)
+        if not df.empty:
+            combined_rows.append(df)
+
+    if not combined_rows:
+        return jsonify({'vendors': [], 'total': 0, 'page': page, 'per_page': per_page, 'total_pages': 0})
+
+    combined = pd.concat(combined_rows, ignore_index=True)
+    expense_df = combined[combined['DR Amount'] > 0]
+
+    if expense_df.empty:
+        return jsonify({'vendors': [], 'total': 0, 'page': page, 'per_page': per_page, 'total_pages': 0})
+
+    vendor_col = 'Client/Vendor' if 'Client/Vendor' in expense_df.columns else 'client_vendor'
+    vendor_totals = expense_df.groupby(vendor_col)['DR Amount'].agg(['sum', 'count']).sort_values('sum', ascending=False)
+    total_exp = float(vendor_totals['sum'].sum())
+
+    total = len(vendor_totals)
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 0
+
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_vendors = vendor_totals.iloc[start_idx:end_idx]
+
+    vendors = []
+    for vendor_name, row in page_vendors.iterrows():
+        v_amt = float(row['sum'])
+        v_pct = (v_amt / total_exp * 100) if total_exp > 0 else 0
+        vendors.append({
+            'vendor': str(vendor_name) if vendor_name and str(vendor_name) != 'nan' else 'Unknown',
+            'amount': v_amt,
+            'amount_formatted': format_indian_number(v_amt),
+            'count': int(row['count']),
+            'percentage': round(v_pct, 1)
+        })
+
+    return jsonify({
+        'vendors': vendors,
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': total_pages
+    })
+
+
+@app.route('/api/project-summary/projects')
+@login_required
+def get_project_summary_projects():
+    """Get list of unique projects across all banks"""
+    all_projects = set()
+    all_categories = set()
+
+    for bank_code in VALID_BANK_CODES:
+        df = get_bank_df(bank_code)
+        if df.empty:
+            continue
+
+        project_col = 'Project' if 'Project' in df.columns else 'project'
+        if project_col in df.columns:
+            projects = df[project_col].dropna().unique()
+            all_projects.update([str(p) for p in projects if str(p) != 'nan'])
+
+        if 'Category' in df.columns:
+            cats = df['Category'].dropna().unique()
+            all_categories.update([str(c) for c in cats if str(c) != 'nan'])
+
+    return jsonify({
+        'projects': sorted(list(all_projects)),
+        'categories': sorted(list(all_categories))
+    })
+
+
+@app.route('/api/project-summary/date-range')
+@login_required
+def get_project_summary_date_range():
+    """Get min/max date range across all banks"""
+    min_date = None
+    max_date = None
+
+    for bank_code in VALID_BANK_CODES:
+        df = get_bank_df(bank_code)
+        if df.empty:
+            continue
+
+        bank_min = df['date'].min()
+        bank_max = df['date'].max()
+
+        if min_date is None or bank_min < min_date:
+            min_date = bank_min
+        if max_date is None or bank_max > max_date:
+            max_date = bank_max
+
+    return jsonify({
+        'min_date': min_date.strftime('%Y-%m-%d') if min_date else None,
+        'max_date': max_date.strftime('%Y-%m-%d') if max_date else None
+    })
+
+
 if __name__ == '__main__':
 
     app.run(debug=True, port=5000)

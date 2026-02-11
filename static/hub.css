@@ -377,6 +377,26 @@ body {
     background-clip: text;
 }
 
+/* Project Summary Card - Teal Theme */
+.summary-card::before {
+    background: linear-gradient(90deg, #06b6d4, #0891b2, #0e7490);
+}
+
+.summary-card:hover {
+    background: linear-gradient(145deg, #ecfeff 0%, #cffafe 100%);
+}
+
+.summary-card .card-icon svg {
+    stroke: #0891b2;
+}
+
+.summary-card .stat-value {
+    background: linear-gradient(135deg, #06b6d4 0%, #0e7490 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
 /* Placeholder Cards */
 .placeholder-card {
     opacity: 0.6;

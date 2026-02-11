@@ -1,0 +1,963 @@
+/* ============================================================================
+   PROJECT SUMMARY - Light Theme Desktop Layout
+   ============================================================================ */
+
+:root {
+    --bg-primary: #f0f4f8;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --text-primary: #1a1a2e;
+    --text-secondary: #4a4a68;
+    --text-muted: #6b7280;
+    --border-color: #e5e7eb;
+    --border-strong: #d1d5db;
+    --income-color: #059669;
+    --expense-color: #dc2626;
+    --accent-color: #2563eb;
+    --axis-color: #97144D;
+    --kvb-color: #1E4785;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    min-height: 100vh;
+    color: var(--text-primary);
+}
+
+/* ============================================================================
+   HEADER
+   ============================================================================ */
+
+.ps-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.92) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.ps-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ps-back-btn,
+.ps-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+}
+
+.ps-back-btn:hover,
+.ps-icon-btn:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+.ps-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.ps-header-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ============================================================================
+   FILTER BAR
+   ============================================================================ */
+
+.ps-filter-bar {
+    position: sticky;
+    top: 69px;
+    z-index: 90;
+    background: linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(248,250,252,0.95) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 24px;
+}
+
+.ps-filters {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    max-width: 1400px;
+    margin: 0 auto;
+    flex-wrap: nowrap;
+}
+
+.ps-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.ps-filter-group label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ps-filter-group input[type="date"] {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    width: 155px;
+}
+
+.ps-filter-group select {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.8125rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    width: 170px;
+}
+
+.ps-filter-group input[type="date"]:focus,
+.ps-filter-group select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+.ps-reset-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.ps-reset-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--border-strong);
+}
+
+/* ============================================================================
+   MAIN LAYOUT
+   ============================================================================ */
+
+.ps-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.ps-left {
+    min-width: 0;
+}
+
+.ps-right {
+    min-width: 0;
+}
+
+.ps-right-inner {
+    position: sticky;
+    top: 140px;
+    max-height: calc(100vh - 160px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.ps-right-inner::-webkit-scrollbar {
+    width: 4px;
+}
+
+.ps-right-inner::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
+}
+
+/* ============================================================================
+   KPI CARDS
+   ============================================================================ */
+
+.ps-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.ps-kpi-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+}
+
+.ps-kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+}
+
+.kpi-income::before {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.kpi-expense::before {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.kpi-net::before {
+    background: linear-gradient(90deg, #3b82f6, #2563eb);
+}
+
+.kpi-count::before {
+    background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.ps-kpi-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+}
+
+.ps-kpi-value {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi-income .ps-kpi-value {
+    color: var(--income-color);
+}
+
+.kpi-expense .ps-kpi-value {
+    color: var(--expense-color);
+}
+
+/* ============================================================================
+   SECTIONS
+   ============================================================================ */
+
+.ps-section {
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.ps-section-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* ============================================================================
+   BANK BREAKDOWN
+   ============================================================================ */
+
+.ps-bank-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.ps-bank-card {
+    background: var(--bg-primary);
+    border-radius: 10px;
+    padding: 16px;
+    border-left: 4px solid;
+    position: relative;
+}
+
+.ps-bank-card.bank-axis {
+    border-left-color: var(--axis-color);
+}
+
+.ps-bank-card.bank-kvb {
+    border-left-color: var(--kvb-color);
+}
+
+.ps-bank-name {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.ps-bank-card.bank-axis .ps-bank-name {
+    color: var(--axis-color);
+}
+
+.ps-bank-card.bank-kvb .ps-bank-name {
+    color: var(--kvb-color);
+}
+
+.ps-bank-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ps-bank-stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8125rem;
+}
+
+.ps-bank-stat-label {
+    color: var(--text-muted);
+}
+
+.ps-bank-stat-value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.ps-bank-stat-value.income {
+    color: var(--income-color);
+}
+
+.ps-bank-stat-value.expense {
+    color: var(--expense-color);
+}
+
+.ps-bank-stat-value.net {
+    color: var(--text-primary);
+}
+
+.ps-bank-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ============================================================================
+   CHARTS
+   ============================================================================ */
+
+.ps-chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.ps-chart-card {
+    background: var(--bg-primary);
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.ps-chart-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+}
+
+.ps-chart-wrap {
+    position: relative;
+    height: 260px;
+}
+
+.ps-chart-wrap canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* ============================================================================
+   TABLES
+   ============================================================================ */
+
+.ps-table-wrap {
+    overflow-x: auto;
+}
+
+.ps-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.ps-table thead th {
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.6875rem;
+    border-bottom: 2px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.ps-table tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.ps-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.ps-table tbody tr:hover {
+    background: rgba(0,0,0,0.02);
+}
+
+.text-right {
+    text-align: right !important;
+}
+
+.text-income {
+    color: var(--income-color);
+    font-weight: 600;
+}
+
+.text-expense {
+    color: var(--expense-color);
+    font-weight: 600;
+}
+
+.text-net-positive {
+    color: var(--income-color);
+    font-weight: 600;
+}
+
+.text-net-negative {
+    color: var(--expense-color);
+    font-weight: 600;
+}
+
+/* ============================================================================
+   PAGINATION
+   ============================================================================ */
+
+.ps-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding-top: 16px;
+}
+
+.ps-pagination:empty {
+    display: none;
+}
+
+.ps-page-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.ps-page-btn:hover:not(:disabled) {
+    background: var(--bg-primary);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+.ps-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ps-page-info {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   SHOW ALL BUTTON
+   ============================================================================ */
+
+.ps-show-all-btn {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--accent-color);
+    background: none;
+    border: 1px solid var(--accent-color);
+    border-radius: 6px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+}
+
+.ps-show-all-btn:hover {
+    background: var(--accent-color);
+    color: white;
+}
+
+.ps-show-all-btn.active {
+    background: var(--accent-color);
+    color: white;
+}
+
+/* ============================================================================
+   TAB BAR
+   ============================================================================ */
+
+.ps-tab-bar {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.ps-tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.ps-tab-btn:hover {
+    color: var(--text-secondary);
+}
+
+.ps-tab-btn.active {
+    color: var(--accent-color);
+    border-bottom-color: var(--accent-color);
+}
+
+/* ============================================================================
+   RIGHT PANEL - PERSONAL TRACKER
+   ============================================================================ */
+
+.ps-personal-summary {
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    padding: 16px;
+}
+
+.ps-personal-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+.ps-personal-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ps-personal-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ps-personal-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.ps-personal-value {
+    font-size: 0.875rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.ps-personal-value.income {
+    color: var(--income-color);
+}
+
+.ps-personal-value.expense {
+    color: var(--expense-color);
+}
+
+.ps-personal-txns,
+.ps-personal-projects {
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    padding: 16px;
+}
+
+.ps-personal-section-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+}
+
+/* Personal Transaction List */
+.ps-personal-list {
+    max-height: 400px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.ps-personal-list::-webkit-scrollbar {
+    width: 3px;
+}
+
+.ps-personal-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
+}
+
+.ps-ptxn-date-group {
+    margin-bottom: 12px;
+}
+
+.ps-ptxn-date-header {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 4px 0;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.ps-ptxn-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    gap: 8px;
+}
+
+.ps-ptxn-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.ps-ptxn-vendor {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ps-ptxn-project {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+}
+
+.ps-ptxn-amount {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.ps-ptxn-amount.income {
+    color: var(--income-color);
+}
+
+.ps-ptxn-amount.expense {
+    color: var(--expense-color);
+}
+
+/* Personal Project Bars */
+.ps-pbar-row {
+    margin-bottom: 10px;
+}
+
+.ps-pbar-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    margin-bottom: 4px;
+}
+
+.ps-pbar-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.ps-pbar-amount {
+    font-weight: 600;
+    color: var(--expense-color);
+    font-variant-numeric: tabular-nums;
+}
+
+.ps-pbar-track {
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.ps-pbar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent-color);
+    transition: width 0.4s ease;
+}
+
+/* ============================================================================
+   LOADING OVERLAY
+   ============================================================================ */
+
+.ps-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(240,244,248,0.9);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 1000;
+    transition: opacity 0.3s;
+}
+
+.ps-loading.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.ps-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border-color);
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: ps-spin 0.8s linear infinite;
+}
+
+@keyframes ps-spin {
+    to { transform: rotate(360deg); }
+}
+
+.ps-loading p {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+/* Empty state */
+.ps-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* ============================================================================
+   RESPONSIVE - 1200px
+   ============================================================================ */
+
+@media (max-width: 1200px) {
+    .ps-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .ps-chart-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .ps-layout {
+        grid-template-columns: 1fr 300px;
+        gap: 16px;
+        padding: 16px;
+    }
+}
+
+/* ============================================================================
+   RESPONSIVE - 1024px (stack panels)
+   ============================================================================ */
+
+@media (max-width: 1024px) {
+    .ps-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .ps-right-inner {
+        position: static;
+        max-height: none;
+        overflow: visible;
+    }
+
+    .ps-bank-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================================================
+   RESPONSIVE - 768px
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .ps-header {
+        padding: 12px 16px;
+    }
+
+    .ps-filter-bar {
+        padding: 10px 16px;
+        top: 61px;
+    }
+
+    .ps-filters {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .ps-filter-group input[type="date"] {
+        width: 140px;
+    }
+
+    .ps-filter-group select {
+        width: 140px;
+    }
+
+    .ps-layout {
+        padding: 12px;
+    }
+
+    .ps-section {
+        padding: 16px;
+    }
+
+    .ps-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .ps-kpi-card {
+        padding: 14px;
+    }
+
+    .ps-kpi-value {
+        font-size: 1.125rem;
+    }
+}
+
+/* ============================================================================
+   RESPONSIVE - 480px
+   ============================================================================ */
+
+@media (max-width: 480px) {
+    .ps-filters {
+        flex-wrap: wrap;
+    }
+
+    .ps-filter-group {
+        flex: 1 1 calc(50% - 6px);
+    }
+
+    .ps-filter-group input[type="date"],
+    .ps-filter-group select {
+        width: 100%;
+    }
+
+    .ps-kpi-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+
+    .ps-kpi-card {
+        padding: 12px;
+    }
+
+    .ps-kpi-value {
+        font-size: 1rem;
+    }
+
+    .ps-table {
+        font-size: 0.75rem;
+    }
+
+    .ps-table thead th,
+    .ps-table tbody td {
+        padding: 8px 6px;
+    }
+}
