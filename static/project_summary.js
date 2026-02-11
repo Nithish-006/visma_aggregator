@@ -7,7 +7,7 @@
 
     // ── State ──────────────────────────────────────────────────────────
     const state = {
-        filters: { startDate: '', endDate: '', project: '', category: '' },
+        filters: { startDate: '', endDate: '', project: [], category: [], vendor: [] },
         pagination: {
             projectBreakdown: { page: 1, perPage: 15 },
             vendorBreakdown: { page: 1, perPage: 15, showAll: false },
@@ -15,12 +15,16 @@
             kvbTransactions: { page: 1, perPage: 15 }
         },
         activeBankTab: 'axis',
+        etBankFilter: 'all',
         data: {
             combined: null,
             personalTxns: [],
             personalSummary: null
         }
     };
+
+    // ── Dropdown instances ───────────────────────────────────────────
+    const dropdowns = {};
 
     // ── DOM Refs ───────────────────────────────────────────────────────
     const $ = (sel) => document.querySelector(sel);
@@ -74,8 +78,9 @@
         const p = new URLSearchParams();
         if (state.filters.startDate) p.set('start_date', state.filters.startDate);
         if (state.filters.endDate) p.set('end_date', state.filters.endDate);
-        if (state.filters.project) p.set('project', state.filters.project);
-        if (state.filters.category) p.set('category', state.filters.category);
+        if (state.filters.project.length > 0) p.set('project', state.filters.project.join(','));
+        if (state.filters.category.length > 0) p.set('category', state.filters.category.join(','));
+        if (state.filters.vendor.length > 0) p.set('vendor', state.filters.vendor.join(','));
         return p;
     }
 
@@ -151,10 +156,173 @@
         return categoryIcons['default_expense'];
     }
 
+    // ── Custom Multi-Select Dropdown ──────────────────────────────────
+    class PSDropdown {
+        constructor(containerId, placeholder, type) {
+            this.container = document.getElementById(containerId);
+            this.placeholder = placeholder;
+            this.type = type;
+            this.options = [];
+            this.selectedValues = new Set();
+            this.isOpen = false;
+
+            if (this.container) {
+                this.render();
+                this.attachEvents();
+            }
+            dropdowns[containerId] = this;
+        }
+
+        render() {
+            this.container.innerHTML = `
+                <div class="ps-dd-trigger" id="${this.container.id}-trigger">
+                    <span class="ps-dd-text">${this.placeholder}</span>
+                    <svg class="ps-dd-arrow" width="10" height="6" viewBox="0 0 10 6" fill="none">
+                        <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="ps-dd-menu">
+                    <div class="ps-dd-search">
+                        <input type="text" placeholder="Search..." id="${this.container.id}-search">
+                    </div>
+                    <div class="ps-dd-options" id="${this.container.id}-options"></div>
+                </div>
+            `;
+
+            this.triggerBtn = this.container.querySelector('.ps-dd-trigger');
+            this.triggerText = this.container.querySelector('.ps-dd-text');
+            this.menu = this.container.querySelector('.ps-dd-menu');
+            this.searchInput = this.container.querySelector('input');
+            this.optionsContainer = this.container.querySelector('.ps-dd-options');
+        }
+
+        attachEvents() {
+            this.triggerBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleMenu();
+            });
+
+            this.searchInput.addEventListener('input', (e) => {
+                this.filterOptions(e.target.value);
+            });
+
+            this.searchInput.addEventListener('click', (e) => e.stopPropagation());
+        }
+
+        setOptions(items) {
+            this.options = items;
+            this.renderOptions(items);
+        }
+
+        renderOptions(items) {
+            this.optionsContainer.innerHTML = '';
+            if (items.length === 0) {
+                this.optionsContainer.innerHTML = '<div class="ps-dd-empty">No results</div>';
+                return;
+            }
+
+            items.forEach(item => {
+                const optionEl = document.createElement('div');
+                optionEl.className = `ps-dd-option ${this.selectedValues.has(item) ? 'selected' : ''}`;
+                optionEl.dataset.value = item;
+                optionEl.innerHTML = `
+                    <div class="ps-dd-checkbox"></div>
+                    <span>${escapeHtml(item)}</span>
+                `;
+                optionEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleOption(item);
+                });
+                this.optionsContainer.appendChild(optionEl);
+            });
+        }
+
+        toggleOption(value) {
+            if (this.selectedValues.has(value)) {
+                this.selectedValues.delete(value);
+            } else {
+                this.selectedValues.add(value);
+            }
+            this.updateUI();
+            this.updateTriggerText();
+            this.syncFilters();
+
+            if (window._psFilterTimeout) clearTimeout(window._psFilterTimeout);
+            window._psFilterTimeout = setTimeout(() => refreshAll(), 300);
+        }
+
+        updateUI() {
+            this.optionsContainer.querySelectorAll('.ps-dd-option').forEach(opt => {
+                opt.classList.toggle('selected', this.selectedValues.has(opt.dataset.value));
+            });
+        }
+
+        updateTriggerText() {
+            if (this.selectedValues.size === 0) {
+                this.triggerText.textContent = this.placeholder;
+                this.triggerBtn.classList.remove('has-selection');
+            } else if (this.selectedValues.size === 1) {
+                this.triggerText.textContent = Array.from(this.selectedValues)[0];
+                this.triggerBtn.classList.add('has-selection');
+            } else {
+                this.triggerText.textContent = `${this.selectedValues.size} Selected`;
+                this.triggerBtn.classList.add('has-selection');
+            }
+        }
+
+        syncFilters() {
+            const vals = Array.from(this.selectedValues);
+            if (this.type === 'project') state.filters.project = vals;
+            if (this.type === 'category') state.filters.category = vals;
+            if (this.type === 'vendor') state.filters.vendor = vals;
+        }
+
+        toggleMenu() {
+            this.isOpen = !this.isOpen;
+            if (this.isOpen) {
+                Object.values(dropdowns).forEach(d => { if (d !== this) d.closeMenu(); });
+                this.container.classList.add('open');
+                this.searchInput.value = '';
+                this.renderOptions(this.options);
+                this.searchInput.focus();
+            } else {
+                this.closeMenu();
+            }
+        }
+
+        closeMenu() {
+            this.isOpen = false;
+            this.container.classList.remove('open');
+        }
+
+        filterOptions(query) {
+            const q = query.toLowerCase();
+            const filtered = this.options.filter(item => item.toLowerCase().includes(q));
+            this.renderOptions(filtered);
+        }
+
+        clear() {
+            this.selectedValues.clear();
+            this.updateUI();
+            this.updateTriggerText();
+            this.syncFilters();
+        }
+    }
+
+    // Close dropdowns on outside click
+    document.addEventListener('click', () => {
+        Object.values(dropdowns).forEach(d => d.closeMenu());
+    });
+
     // ── Init ───────────────────────────────────────────────────────────
     async function init() {
         showLoading();
         try {
+            // Create dropdown instances
+            const ddProject = new PSDropdown('dropdown-project', 'All Projects', 'project');
+            const ddCategory = new PSDropdown('dropdown-category', 'All Categories', 'category');
+            const ddVendor = new PSDropdown('dropdown-vendor', 'All Vendors', 'vendor');
+
             const [dateRange, filterOptions] = await Promise.all([
                 fetchJSON('/api/project-summary/date-range'),
                 fetchJSON('/api/project-summary/projects')
@@ -169,21 +337,9 @@
                 state.filters.endDate = dateRange.max_date;
             }
 
-            const projSelect = $('#filter-project');
-            (filterOptions.projects || []).forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p;
-                opt.textContent = p;
-                projSelect.appendChild(opt);
-            });
-
-            const catSelect = $('#filter-category');
-            (filterOptions.categories || []).forEach(c => {
-                const opt = document.createElement('option');
-                opt.value = c;
-                opt.textContent = c;
-                catSelect.appendChild(opt);
-            });
+            ddProject.setOptions(filterOptions.projects || []);
+            ddCategory.setOptions(filterOptions.categories || []);
+            ddVendor.setOptions(filterOptions.vendors || []);
 
             bindFilterEvents();
             await refreshAll();
@@ -205,14 +361,8 @@
             state.filters.endDate = e.target.value;
             debouncedRefresh();
         });
-        $('#filter-project').addEventListener('change', (e) => {
-            state.filters.project = e.target.value;
-            debouncedRefresh();
-        });
-        $('#filter-category').addEventListener('change', (e) => {
-            state.filters.category = e.target.value;
-            debouncedRefresh();
-        });
+
+        // Reset button
         $('#reset-filters').addEventListener('click', async () => {
             try {
                 const dateRange = await fetchJSON('/api/project-summary/date-range');
@@ -226,10 +376,12 @@
                 $('#filter-start-date').value = '';
                 $('#filter-end-date').value = '';
             }
-            state.filters.project = '';
-            state.filters.category = '';
-            $('#filter-project').value = '';
-            $('#filter-category').value = '';
+
+            // Clear all dropdowns
+            Object.values(dropdowns).forEach(d => d.clear());
+            state.filters.project = [];
+            state.filters.category = [];
+            state.filters.vendor = [];
             refreshAll();
         });
 
@@ -252,6 +404,22 @@
             btn.classList.toggle('active', state.pagination.vendorBreakdown.showAll);
             btn.textContent = state.pagination.vendorBreakdown.showAll ? 'Top 20' : 'Show All';
             renderVendorTable();
+        });
+
+        // Expense Tracker bank toggle
+        $$('.ps-et-bank-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                $$('.ps-et-bank-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.etBankFilter = btn.dataset.bank;
+                renderExpenseTracker();
+            });
+        });
+
+        // Export button
+        $('#export-btn').addEventListener('click', () => {
+            const params = buildQueryParams();
+            window.location.href = '/api/project-summary/export?' + params.toString();
         });
     }
 
@@ -482,9 +650,13 @@
     }
 
     // ── Render: Expense Tracker (Right Panel) ──────────────────────────
-    // Replicates the exact personal tracker daily view
     function renderExpenseTracker() {
-        const txns = state.data.personalTxns;
+        let txns = state.data.personalTxns;
+
+        // Apply bank filter
+        if (state.etBankFilter !== 'all') {
+            txns = txns.filter(t => t.bank === state.etBankFilter);
+        }
 
         // Update summary
         let income = 0;

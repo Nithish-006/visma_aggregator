@@ -3115,6 +3115,7 @@ def get_project_summary_combined():
     end_date = request.args.get('end_date', None)
     project = request.args.get('project', None)
     category = request.args.get('category', None)
+    vendor = request.args.get('vendor', None)
 
     combined_rows = []
 
@@ -3126,6 +3127,7 @@ def get_project_summary_combined():
         df = filter_by_date_range(df, start_date, end_date)
         df = filter_by_project(df, project)
         df = filter_by_category(df, category)
+        df = filter_by_vendor(df, vendor)
 
         if df.empty:
             continue
@@ -3325,6 +3327,7 @@ def get_project_summary_bank_transactions():
     end_date = request.args.get('end_date', None)
     project = request.args.get('project', None)
     category = request.args.get('category', None)
+    vendor = request.args.get('vendor', None)
 
     if bank_code not in VALID_BANK_CODES:
         return jsonify({'transactions': [], 'total': 0, 'page': page, 'per_page': per_page, 'total_pages': 0})
@@ -3336,6 +3339,7 @@ def get_project_summary_bank_transactions():
     df = filter_by_date_range(df, start_date, end_date)
     df = filter_by_project(df, project)
     df = filter_by_category(df, category)
+    df = filter_by_vendor(df, vendor)
 
     df = df.sort_values('date', ascending=False)
     total = len(df)
@@ -3378,6 +3382,7 @@ def get_project_summary_vendors():
     end_date = request.args.get('end_date', None)
     project = request.args.get('project', None)
     category = request.args.get('category', None)
+    vendor = request.args.get('vendor', None)
 
     combined_rows = []
     for bank_code in VALID_BANK_CODES:
@@ -3387,6 +3392,7 @@ def get_project_summary_vendors():
         df = filter_by_date_range(df, start_date, end_date)
         df = filter_by_project(df, project)
         df = filter_by_category(df, category)
+        df = filter_by_vendor(df, vendor)
         if not df.empty:
             combined_rows.append(df)
 
@@ -3434,9 +3440,10 @@ def get_project_summary_vendors():
 @app.route('/api/project-summary/projects')
 @login_required
 def get_project_summary_projects():
-    """Get list of unique projects across all banks"""
+    """Get list of unique projects, categories, and vendors across all banks"""
     all_projects = set()
     all_categories = set()
+    all_vendors = set()
 
     for bank_code in VALID_BANK_CODES:
         df = get_bank_df(bank_code)
@@ -3452,9 +3459,15 @@ def get_project_summary_projects():
             cats = df['Category'].dropna().unique()
             all_categories.update([str(c) for c in cats if str(c) != 'nan'])
 
+        vendor_col = 'Client/Vendor' if 'Client/Vendor' in df.columns else 'client_vendor'
+        if vendor_col in df.columns:
+            vendors = df[vendor_col].dropna().unique()
+            all_vendors.update([str(v) for v in vendors if str(v) != 'nan' and str(v) != 'Unknown'])
+
     return jsonify({
         'projects': sorted(list(all_projects)),
-        'categories': sorted(list(all_categories))
+        'categories': sorted(list(all_categories)),
+        'vendors': sorted(list(all_vendors))
     })
 
 
@@ -3482,6 +3495,419 @@ def get_project_summary_date_range():
         'min_date': min_date.strftime('%Y-%m-%d') if min_date else None,
         'max_date': max_date.strftime('%Y-%m-%d') if max_date else None
     })
+
+
+@app.route('/api/project-summary/export')
+@login_required
+def export_project_summary():
+    """Export professional project summary report as multi-tab Excel"""
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    project = request.args.get('project', None)
+    category = request.args.get('category', None)
+    vendor = request.args.get('vendor', None)
+
+    # Gather combined data
+    combined_rows = []
+    for bank_code in VALID_BANK_CODES:
+        df = get_bank_df(bank_code).copy()
+        if df.empty:
+            continue
+        df = filter_by_date_range(df, start_date, end_date)
+        df = filter_by_project(df, project)
+        df = filter_by_category(df, category)
+        df = filter_by_vendor(df, vendor)
+        if df.empty:
+            continue
+        df['bank'] = bank_code
+        combined_rows.append(df)
+
+    if not combined_rows:
+        combined = pd.DataFrame()
+    else:
+        combined = pd.concat(combined_rows, ignore_index=True)
+
+    # Style constants
+    header_font = Font(name='Calibri', bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='2563EB', end_color='2563EB', fill_type='solid')
+    title_font = Font(name='Calibri', bold=True, size=14, color='1A1A2E')
+    subtitle_font = Font(name='Calibri', bold=True, size=11, color='4A4A68')
+    currency_fmt = '#,##0.00'
+    pct_fmt = '0.0%'
+    thin_border = Border(
+        bottom=Side(style='thin', color='E5E7EB')
+    )
+    income_font = Font(name='Calibri', color='059669', bold=True)
+    expense_font = Font(name='Calibri', color='DC2626', bold=True)
+    axis_fill = PatternFill(start_color='FDF2F8', end_color='FDF2F8', fill_type='solid')
+    kvb_fill = PatternFill(start_color='EFF6FF', end_color='EFF6FF', fill_type='solid')
+
+    def style_header_row(ws, row_num, col_count):
+        for col in range(1, col_count + 1):
+            cell = ws.cell(row=row_num, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+
+    def auto_width(ws):
+        for col_cells in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col_cells[0].column)
+            for cell in col_cells:
+                try:
+                    val = str(cell.value) if cell.value else ''
+                    max_len = max(max_len, len(val))
+                except:
+                    pass
+            ws.column_dimensions[col_letter].width = min(max_len + 3, 40)
+
+    output = io.BytesIO()
+    wb = None
+
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # ──────────────────────────────────────────────────────────
+        # TAB 1: Executive Summary
+        # ──────────────────────────────────────────────────────────
+        total_income = float(combined['CR Amount'].sum()) if not combined.empty else 0
+        total_expense = float(combined['DR Amount'].sum()) if not combined.empty else 0
+        net_cashflow = total_income - total_expense
+        txn_count = len(combined) if not combined.empty else 0
+
+        date_label = ''
+        if start_date and end_date:
+            date_label = f"{start_date} to {end_date}"
+        elif start_date:
+            date_label = f"From {start_date}"
+        elif end_date:
+            date_label = f"Up to {end_date}"
+        else:
+            date_label = 'All Time'
+
+        summary_data = [
+            ['VISMA Financial - Project Summary Report'],
+            [''],
+            ['Report Period', date_label],
+            ['Generated On', datetime.now().strftime('%d-%b-%Y %H:%M')],
+            [''],
+            ['KEY PERFORMANCE INDICATORS'],
+            [''],
+            ['Metric', 'Value'],
+            ['Total Income', total_income],
+            ['Total Expense', total_expense],
+            ['Net Cashflow', net_cashflow],
+            ['Total Transactions', txn_count],
+            ['Expense Ratio', total_expense / total_income if total_income > 0 else 0],
+            ['Average Transaction Size', (total_income + total_expense) / txn_count if txn_count > 0 else 0],
+        ]
+
+        # Per-bank KPIs
+        summary_data.append([''])
+        summary_data.append(['BANK-WISE SUMMARY'])
+        summary_data.append([''])
+        summary_data.append(['Bank', 'Income', 'Expense', 'Net Cashflow', 'Transactions', '% of Total Expense'])
+
+        for bc in VALID_BANK_CODES:
+            if combined.empty:
+                continue
+            bdf = combined[combined['bank'] == bc]
+            if bdf.empty:
+                continue
+            b_inc = float(bdf['CR Amount'].sum())
+            b_exp = float(bdf['DR Amount'].sum())
+            b_net = b_inc - b_exp
+            b_cnt = len(bdf)
+            b_pct = b_exp / total_expense if total_expense > 0 else 0
+            bank_name = get_bank_config(bc)['name']
+            summary_data.append([bank_name, b_inc, b_exp, b_net, b_cnt, b_pct])
+
+        # Active filters
+        summary_data.append([''])
+        summary_data.append(['APPLIED FILTERS'])
+        summary_data.append([''])
+        if project:
+            summary_data.append(['Project Filter', project])
+        if category:
+            summary_data.append(['Category Filter', category])
+        if vendor:
+            summary_data.append(['Vendor Filter', vendor])
+        if not project and not category and not vendor:
+            summary_data.append(['Filters', 'None (all data)'])
+
+        df_summary = pd.DataFrame(summary_data)
+        df_summary.to_excel(writer, sheet_name='Executive Summary', index=False, header=False)
+
+        ws = writer.sheets['Executive Summary']
+        ws.cell(row=1, column=1).font = title_font
+        ws.cell(row=6, column=1).font = subtitle_font
+        ws.cell(row=8, column=1).font = header_font
+        ws.cell(row=8, column=1).fill = header_fill
+        ws.cell(row=8, column=2).font = header_font
+        ws.cell(row=8, column=2).fill = header_fill
+
+        # Format currency cells
+        for r in range(9, 15):
+            cell = ws.cell(row=r, column=2)
+            if r == 12:  # Transaction count
+                pass
+            elif r == 13:  # Expense ratio
+                cell.number_format = pct_fmt
+            else:
+                cell.number_format = currency_fmt
+            if r == 9:
+                cell.font = income_font
+            elif r == 10:
+                cell.font = expense_font
+
+        # Style bank summary header
+        bank_header_row = None
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=1):
+            for cell in row:
+                if cell.value == 'Bank':
+                    bank_header_row = cell.row
+                    break
+        if bank_header_row:
+            style_header_row(ws, bank_header_row, 6)
+            for r in range(bank_header_row + 1, ws.max_row + 1):
+                c = ws.cell(row=r, column=1)
+                if c.value and ('Axis' in str(c.value) or 'KVB' in str(c.value) or 'Karur' in str(c.value)):
+                    for col in range(2, 5):
+                        ws.cell(row=r, column=col).number_format = currency_fmt
+                    ws.cell(row=r, column=6).number_format = pct_fmt
+
+        # Style filters header
+        for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=1):
+            for cell in row:
+                if cell.value == 'BANK-WISE SUMMARY' or cell.value == 'APPLIED FILTERS':
+                    cell.font = subtitle_font
+
+        auto_width(ws)
+        ws.column_dimensions['A'].width = 25
+        ws.column_dimensions['B'].width = 20
+
+        # ──────────────────────────────────────────────────────────
+        # TAB 2: Expense Breakdown (by Category)
+        # ──────────────────────────────────────────────────────────
+        if not combined.empty:
+            expense_df = combined[combined['DR Amount'] > 0]
+            if not expense_df.empty:
+                cat_data = expense_df.groupby('Category').agg(
+                    Total_Expense=('DR Amount', 'sum'),
+                    Transaction_Count=('DR Amount', 'count'),
+                    Avg_Transaction=('DR Amount', 'mean'),
+                    Max_Transaction=('DR Amount', 'max'),
+                    Min_Transaction=('DR Amount', 'min')
+                ).sort_values('Total_Expense', ascending=False).reset_index()
+
+                total_exp = cat_data['Total_Expense'].sum()
+                cat_data['% of Total'] = cat_data['Total_Expense'] / total_exp if total_exp > 0 else 0
+                cat_data['Cumulative %'] = cat_data['% of Total'].cumsum()
+
+                cat_data = cat_data[['Category', 'Total_Expense', 'Transaction_Count', '% of Total',
+                                     'Cumulative %', 'Avg_Transaction', 'Max_Transaction', 'Min_Transaction']]
+                cat_data.columns = ['Category', 'Total Expense', 'Txn Count', '% of Total',
+                                    'Cumulative %', 'Avg per Txn', 'Max Txn', 'Min Txn']
+
+                cat_data.to_excel(writer, sheet_name='Expense Breakdown', index=False, startrow=2)
+                ws2 = writer.sheets['Expense Breakdown']
+                ws2.cell(row=1, column=1, value='Expense Breakdown by Category').font = title_font
+                style_header_row(ws2, 3, len(cat_data.columns))
+
+                for r in range(4, 4 + len(cat_data)):
+                    for c in [2, 6, 7, 8]:
+                        ws2.cell(row=r, column=c).number_format = currency_fmt
+                    ws2.cell(row=r, column=4).number_format = pct_fmt
+                    ws2.cell(row=r, column=5).number_format = pct_fmt
+
+                # Add total row
+                total_row = 4 + len(cat_data)
+                ws2.cell(row=total_row, column=1, value='TOTAL').font = Font(bold=True)
+                ws2.cell(row=total_row, column=2, value=total_exp).font = Font(bold=True)
+                ws2.cell(row=total_row, column=2).number_format = currency_fmt
+                ws2.cell(row=total_row, column=3, value=len(expense_df)).font = Font(bold=True)
+
+                auto_width(ws2)
+            else:
+                pd.DataFrame({'Note': ['No expense data for the selected filters']}).to_excel(
+                    writer, sheet_name='Expense Breakdown', index=False)
+
+        # ──────────────────────────────────────────────────────────
+        # TAB 3: Cashflow Analysis (by Project)
+        # ──────────────────────────────────────────────────────────
+        if not combined.empty:
+            project_col = 'Project' if 'Project' in combined.columns else 'project'
+            if project_col in combined.columns:
+                proj_income = combined.groupby(project_col)['CR Amount'].sum()
+                proj_expense = combined.groupby(project_col)['DR Amount'].sum()
+                proj_count = combined.groupby(project_col).size()
+                all_projects_list = sorted(set(proj_income.index) | set(proj_expense.index))
+
+                proj_rows = []
+                for p in all_projects_list:
+                    p_inc = float(proj_income.get(p, 0))
+                    p_exp = float(proj_expense.get(p, 0))
+                    p_net = p_inc - p_exp
+                    p_cnt = int(proj_count.get(p, 0))
+                    p_margin = p_net / p_inc if p_inc > 0 else 0
+                    proj_rows.append({
+                        'Project': str(p) if p and str(p) != 'nan' else 'Unassigned',
+                        'Income': p_inc, 'Expense': p_exp,
+                        'Net Cashflow': p_net, 'Margin %': p_margin,
+                        'Transactions': p_cnt
+                    })
+
+                df_proj = pd.DataFrame(proj_rows).sort_values('Expense', ascending=False)
+                df_proj.to_excel(writer, sheet_name='Cashflow Analysis', index=False, startrow=2)
+
+                ws3 = writer.sheets['Cashflow Analysis']
+                ws3.cell(row=1, column=1, value='Project Cashflow Analysis').font = title_font
+                style_header_row(ws3, 3, len(df_proj.columns))
+
+                for r in range(4, 4 + len(df_proj)):
+                    for c in [2, 3, 4]:
+                        ws3.cell(row=r, column=c).number_format = currency_fmt
+                    ws3.cell(row=r, column=5).number_format = pct_fmt
+                    # Color net cashflow
+                    net_cell = ws3.cell(row=r, column=4)
+                    if net_cell.value and net_cell.value >= 0:
+                        net_cell.font = income_font
+                    else:
+                        net_cell.font = expense_font
+
+                # Add total row
+                total_row = 4 + len(df_proj)
+                ws3.cell(row=total_row, column=1, value='TOTAL').font = Font(bold=True)
+                ws3.cell(row=total_row, column=2, value=total_income).font = Font(bold=True)
+                ws3.cell(row=total_row, column=2).number_format = currency_fmt
+                ws3.cell(row=total_row, column=3, value=total_expense).font = Font(bold=True)
+                ws3.cell(row=total_row, column=3).number_format = currency_fmt
+                ws3.cell(row=total_row, column=4, value=net_cashflow).font = Font(bold=True)
+                ws3.cell(row=total_row, column=4).number_format = currency_fmt
+
+                auto_width(ws3)
+
+        # ──────────────────────────────────────────────────────────
+        # TAB 4: Vendor Breakdown
+        # ──────────────────────────────────────────────────────────
+        if not combined.empty:
+            expense_df = combined[combined['DR Amount'] > 0]
+            vendor_col = 'Client/Vendor' if 'Client/Vendor' in combined.columns else 'client_vendor'
+            if vendor_col in combined.columns and not expense_df.empty:
+                vendor_data = expense_df.groupby(vendor_col).agg(
+                    Total_Expense=('DR Amount', 'sum'),
+                    Transaction_Count=('DR Amount', 'count'),
+                    Avg_Transaction=('DR Amount', 'mean'),
+                    Max_Transaction=('DR Amount', 'max')
+                ).sort_values('Total_Expense', ascending=False).reset_index()
+
+                total_v_exp = vendor_data['Total_Expense'].sum()
+                vendor_data['% of Total'] = vendor_data['Total_Expense'] / total_v_exp if total_v_exp > 0 else 0
+                vendor_data['Cumulative %'] = vendor_data['% of Total'].cumsum()
+
+                vendor_data.columns = ['Vendor', 'Total Expense', 'Txn Count', 'Avg per Txn',
+                                       'Max Txn', '% of Total', 'Cumulative %']
+                vendor_data = vendor_data[['Vendor', 'Total Expense', 'Txn Count', '% of Total',
+                                           'Cumulative %', 'Avg per Txn', 'Max Txn']]
+
+                vendor_data.to_excel(writer, sheet_name='Vendor Breakdown', index=False, startrow=2)
+
+                ws4 = writer.sheets['Vendor Breakdown']
+                ws4.cell(row=1, column=1, value='Vendor Expense Breakdown').font = title_font
+                style_header_row(ws4, 3, len(vendor_data.columns))
+
+                for r in range(4, 4 + len(vendor_data)):
+                    for c in [2, 6, 7]:
+                        ws4.cell(row=r, column=c).number_format = currency_fmt
+                    ws4.cell(row=r, column=4).number_format = pct_fmt
+                    ws4.cell(row=r, column=5).number_format = pct_fmt
+
+                # Total row
+                total_row = 4 + len(vendor_data)
+                ws4.cell(row=total_row, column=1, value='TOTAL').font = Font(bold=True)
+                ws4.cell(row=total_row, column=2, value=total_v_exp).font = Font(bold=True)
+                ws4.cell(row=total_row, column=2).number_format = currency_fmt
+                ws4.cell(row=total_row, column=3, value=len(expense_df)).font = Font(bold=True)
+
+                auto_width(ws4)
+            else:
+                pd.DataFrame({'Note': ['No vendor expense data for the selected filters']}).to_excel(
+                    writer, sheet_name='Vendor Breakdown', index=False)
+
+        # ──────────────────────────────────────────────────────────
+        # TAB 5 & 6: Bank-wise Transactions (one tab per bank)
+        # ──────────────────────────────────────────────────────────
+        for bc in VALID_BANK_CODES:
+            bank_config = get_bank_config(bc)
+            sheet_name = f"{bank_config['name']} Txns"
+            if len(sheet_name) > 31:
+                sheet_name = sheet_name[:31]
+
+            if combined.empty:
+                pd.DataFrame({'Note': ['No data']}).to_excel(writer, sheet_name=sheet_name, index=False)
+                continue
+
+            bdf = combined[combined['bank'] == bc].sort_values('date', ascending=False).copy()
+            if bdf.empty:
+                pd.DataFrame({'Note': [f'No transactions for {bank_config["name"]}']}).to_excel(
+                    writer, sheet_name=sheet_name, index=False)
+                continue
+
+            bdf['Date'] = bdf['date'].dt.strftime('%d-%m-%Y')
+            export_cols = {
+                'Date': 'Date',
+                'Client/Vendor': 'Vendor',
+                'Category': 'Category',
+                'Project': 'Project',
+                'DR Amount': 'Debit (₹)',
+                'CR Amount': 'Credit (₹)'
+            }
+
+            df_export = pd.DataFrame()
+            for src, dst in export_cols.items():
+                if src in bdf.columns:
+                    df_export[dst] = bdf[src]
+                elif src.lower() in bdf.columns:
+                    df_export[dst] = bdf[src.lower()]
+                else:
+                    df_export[dst] = None
+
+            df_export.to_excel(writer, sheet_name=sheet_name, index=False, startrow=2)
+
+            ws_b = writer.sheets[sheet_name]
+            ws_b.cell(row=1, column=1, value=f'{bank_config["name"]} - Transaction Details').font = title_font
+            style_header_row(ws_b, 3, len(df_export.columns))
+
+            for r in range(4, 4 + len(df_export)):
+                ws_b.cell(row=r, column=5).number_format = currency_fmt
+                ws_b.cell(row=r, column=6).number_format = currency_fmt
+                dr_val = ws_b.cell(row=r, column=5).value
+                cr_val = ws_b.cell(row=r, column=6).value
+                if dr_val and float(dr_val) > 0:
+                    ws_b.cell(row=r, column=5).font = expense_font
+                if cr_val and float(cr_val) > 0:
+                    ws_b.cell(row=r, column=6).font = income_font
+
+            # Bank subtotals
+            total_row = 4 + len(df_export)
+            ws_b.cell(row=total_row, column=1, value='TOTAL').font = Font(bold=True)
+            ws_b.cell(row=total_row, column=5, value=float(bdf['DR Amount'].sum())).font = Font(bold=True)
+            ws_b.cell(row=total_row, column=5).number_format = currency_fmt
+            ws_b.cell(row=total_row, column=6, value=float(bdf['CR Amount'].sum())).font = Font(bold=True)
+            ws_b.cell(row=total_row, column=6).number_format = currency_fmt
+
+            auto_width(ws_b)
+
+    output.seek(0)
+    filename = f"Project_Summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
 
 
 if __name__ == '__main__':
