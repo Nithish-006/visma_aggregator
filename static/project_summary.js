@@ -12,14 +12,16 @@
             projectBreakdown: { page: 1, perPage: 15 },
             vendorBreakdown: { page: 1, perPage: 15, showAll: false },
             axisTransactions: { page: 1, perPage: 15 },
-            kvbTransactions: { page: 1, perPage: 15 }
+            kvbTransactions: { page: 1, perPage: 15 },
+            bills: { page: 1, perPage: 15 }
         },
         activeBankTab: 'axis',
         etBankFilter: 'all',
         data: {
             combined: null,
             personalTxns: [],
-            personalSummary: null
+            personalSummary: null,
+            bills: { bills: [], total: 0 }
         }
     };
 
@@ -211,6 +213,19 @@
 
         setOptions(items) {
             this.options = items;
+            // Auto-cleanup: remove selections no longer in the options list
+            const itemSet = new Set(items);
+            let changed = false;
+            for (const val of this.selectedValues) {
+                if (!itemSet.has(val)) {
+                    this.selectedValues.delete(val);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                this.updateTriggerText();
+                this.syncFilters();
+            }
             this.renderOptions(items);
         }
 
@@ -347,6 +362,7 @@
         state.pagination.vendorBreakdown.page = 1;
         state.pagination.axisTransactions.page = 1;
         state.pagination.kvbTransactions.page = 1;
+        state.pagination.bills.page = 1;
 
         refreshAll();
     }
@@ -542,17 +558,26 @@
         state.pagination.vendorBreakdown.page = 1;
         state.pagination.axisTransactions.page = 1;
         state.pagination.kvbTransactions.page = 1;
+        state.pagination.bills.page = 1;
 
         const params = buildQueryParams();
 
         try {
-            const [combined, personalTxns] = await Promise.all([
+            const [combined, personalTxns, filterOpts] = await Promise.all([
                 fetchJSON('/api/project-summary/combined?' + params.toString()),
-                fetchJSON('/api/personal/transactions?' + params.toString())
+                fetchJSON('/api/personal/transactions?' + params.toString()),
+                fetchJSON('/api/project-summary/filter-options?' + params.toString())
             ]);
 
             state.data.combined = combined;
             state.data.personalTxns = personalTxns.transactions || [];
+
+            // Update dropdown options dynamically
+            if (filterOpts) {
+                dropdowns['dropdown-project']?.setOptions(filterOpts.projects || []);
+                dropdowns['dropdown-category']?.setOptions(filterOpts.categories || []);
+                dropdowns['dropdown-vendor']?.setOptions(filterOpts.vendors || []);
+            }
 
             // Render all sections
             renderCrossFilterChips();
@@ -563,8 +588,9 @@
             renderVendorTable();
             renderExpenseTracker();
 
-            // Fetch active bank tab transactions
+            // Fetch active bank tab transactions and bills
             fetchBankTransactions(state.activeBankTab, 1);
+            fetchBills(1);
         } catch (err) {
             console.error('Refresh error:', err);
         }
@@ -889,6 +915,149 @@
         });
 
         container.innerHTML = html;
+    }
+
+    // ── Render: Bills Table (server-side pagination) ────────────────────
+    async function fetchBills(page) {
+        const params = buildQueryParams();
+        params.set('page', page);
+        params.set('per_page', state.pagination.bills.perPage);
+
+        try {
+            const result = await fetchJSON('/api/project-summary/bills?' + params.toString());
+            state.data.bills = result;
+            state.pagination.bills.page = result.page;
+            renderBillsTable();
+        } catch (err) {
+            console.error('Bills fetch error:', err);
+        }
+    }
+
+    function renderBillsTable() {
+        const data = state.data.bills;
+        const tbody = document.getElementById('bills-table-body');
+        if (!tbody) return;
+
+        if (!data.bills || data.bills.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="ps-empty">No bills found</td></tr>';
+            renderPaginationControls('bills-pagination', 1, 0, () => {});
+            const summaryEl = document.getElementById('bills-summary');
+            if (summaryEl) summaryEl.textContent = '';
+            return;
+        }
+
+        tbody.innerHTML = data.bills.map(b => `<tr>
+            <td><a href="#" class="ps-bill-link" data-bill-id="${b.id}">${escapeHtml(b.invoice_number || '-')}</a></td>
+            <td>${escapeHtml(b.invoice_date || '-')}</td>
+            <td class="cell-wrap">${escapeHtml(b.vendor_name || '-')}</td>
+            <td>${escapeHtml(b.vendor_gstin || '-')}</td>
+            <td class="text-right">${b.line_item_count || 0}</td>
+            <td class="text-right text-expense">${formatIndianNumber(b.total_amount || 0)}</td>
+            <td>${escapeHtml(b.project || '-')}</td>
+        </tr>`).join('');
+
+        // Bind bill detail links
+        tbody.querySelectorAll('.ps-bill-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                viewBillDetail(link.dataset.billId);
+            });
+        });
+
+        renderPaginationControls('bills-pagination', data.page, data.total_pages, (pg) => {
+            fetchBills(pg);
+        });
+
+        // Update summary text
+        const summaryEl = document.getElementById('bills-summary');
+        if (summaryEl && data.summary) {
+            summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}`;
+        }
+    }
+
+    async function viewBillDetail(id) {
+        try {
+            const bill = await fetchJSON(`/api/bills/stored/${id}`);
+            renderBillDetailModal(bill);
+        } catch (err) {
+            console.error('Bill detail error:', err);
+        }
+    }
+
+    function renderBillDetailModal(bill) {
+        const modal = document.getElementById('bill-detail-modal');
+        if (!modal) return;
+
+        const lineItems = bill.line_items || [];
+        let lineItemsHtml = '';
+        if (lineItems.length > 0) {
+            lineItemsHtml = `
+                <h4 style="margin-top:16px;margin-bottom:8px;">Line Items</h4>
+                <div class="ps-table-wrap">
+                <table class="ps-table">
+                    <thead><tr>
+                        <th>#</th><th>Description</th><th>HSN</th><th>Qty</th><th class="text-right">Rate</th><th class="text-right">Amount</th>
+                    </tr></thead>
+                    <tbody>${lineItems.map(item => `<tr>
+                        <td>${item.sl_no || ''}</td>
+                        <td class="cell-wrap">${escapeHtml(item.description || '')}</td>
+                        <td>${escapeHtml(item.hsn_sac_code || '')}</td>
+                        <td>${item.quantity || ''}</td>
+                        <td class="text-right">${item.rate_per_unit ? formatIndianNumber(item.rate_per_unit) : ''}</td>
+                        <td class="text-right">${item.amount ? formatIndianNumber(item.amount) : ''}</td>
+                    </tr>`).join('')}</tbody>
+                </table>
+                </div>`;
+        }
+
+        modal.innerHTML = `
+            <div class="ps-bill-modal-overlay" id="bill-modal-overlay">
+                <div class="ps-bill-modal-content">
+                    <div class="ps-bill-modal-header">
+                        <h3>Invoice #${escapeHtml(bill.invoice_number || 'N/A')}</h3>
+                        <button class="ps-bill-modal-close" id="bill-modal-close">&times;</button>
+                    </div>
+                    <div class="ps-bill-modal-body">
+                        <div class="ps-bill-detail-grid">
+                            <div class="ps-bill-detail-section">
+                                <h4>Invoice Details</h4>
+                                <div class="ps-bill-detail-row"><span>Date:</span><span>${escapeHtml(bill.invoice_date || '-')}</span></div>
+                                <div class="ps-bill-detail-row"><span>IRN:</span><span style="word-break:break-all;">${escapeHtml(bill.irn || '-')}</span></div>
+                                <div class="ps-bill-detail-row"><span>Project:</span><span>${escapeHtml(bill.project || '-')}</span></div>
+                            </div>
+                            <div class="ps-bill-detail-section">
+                                <h4>Vendor</h4>
+                                <div class="ps-bill-detail-row"><span>Name:</span><span>${escapeHtml(bill.vendor_name || '-')}</span></div>
+                                <div class="ps-bill-detail-row"><span>GSTIN:</span><span>${escapeHtml(bill.vendor_gstin || '-')}</span></div>
+                                <div class="ps-bill-detail-row"><span>Address:</span><span>${escapeHtml(bill.vendor_address || '-')}</span></div>
+                            </div>
+                            <div class="ps-bill-detail-section">
+                                <h4>Buyer</h4>
+                                <div class="ps-bill-detail-row"><span>Name:</span><span>${escapeHtml(bill.buyer_name || '-')}</span></div>
+                                <div class="ps-bill-detail-row"><span>GSTIN:</span><span>${escapeHtml(bill.buyer_gstin || '-')}</span></div>
+                            </div>
+                        </div>
+                        ${lineItemsHtml}
+                        <div class="ps-bill-totals">
+                            <div class="ps-bill-total-row"><span>Subtotal:</span><span>${formatIndianNumber(bill.subtotal || 0)}</span></div>
+                            <div class="ps-bill-total-row"><span>CGST:</span><span>${formatIndianNumber(bill.total_cgst || 0)}</span></div>
+                            <div class="ps-bill-total-row"><span>SGST:</span><span>${formatIndianNumber(bill.total_sgst || 0)}</span></div>
+                            ${bill.total_igst > 0 ? `<div class="ps-bill-total-row"><span>IGST:</span><span>${formatIndianNumber(bill.total_igst)}</span></div>` : ''}
+                            <div class="ps-bill-total-row total"><span>Total:</span><span>${formatIndianNumber(bill.total_amount || 0)}</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        modal.classList.remove('hidden');
+
+        document.getElementById('bill-modal-close')?.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+        document.getElementById('bill-modal-overlay')?.addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) modal.classList.add('hidden');
+        });
     }
 
     // ── Start ──────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <title>Project Summary | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=5">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=6">
 </head>
 
 <body>
@@ -188,6 +188,33 @@
                 </div>
                 <div class="ps-pagination" id="bank-txn-pagination"></div>
             </div>
+
+            <!-- Project Bills -->
+            <div class="ps-section">
+                <h2 class="ps-section-title">
+                    Project Bills
+                    <span class="ps-bills-summary-text" id="bills-summary"></span>
+                </h2>
+                <div class="ps-table-wrap">
+                    <table class="ps-table" id="bills-table">
+                        <thead>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Date</th>
+                                <th>Vendor</th>
+                                <th>GSTIN</th>
+                                <th class="text-right">Items</th>
+                                <th class="text-right">Total</th>
+                                <th>Project</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bills-table-body">
+                            <tr><td colspan="7" class="ps-empty">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ps-pagination" id="bills-pagination"></div>
+            </div>
         </div>
 
         <!-- RIGHT PANEL - Expense Tracker -->
@@ -220,13 +247,16 @@
         </div>
     </div>
 
+    <!-- Bill Detail Modal -->
+    <div id="bill-detail-modal" class="hidden"></div>
+
     <!-- Loading Overlay -->
     <div class="ps-loading hidden" id="loading-overlay">
         <div class="ps-spinner"></div>
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=6"></script>
 </body>
 
 </html>

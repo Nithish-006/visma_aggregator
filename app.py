@@ -293,6 +293,41 @@ def filter_by_vendor(df, vendor=None):
     return df[df[vendor_col] == vendor]
 
 
+def get_project_stems(project_str):
+    """Extract first token (stem) from each project name for fuzzy matching.
+    'RCH CT,SHOBA' -> ['rch', 'shoba']"""
+    if not project_str:
+        return []
+    projects = [p.strip() for p in project_str.split(',') if p.strip()]
+    stems = []
+    for p in projects:
+        tokens = p.split()
+        first_token = tokens[0].lower() if tokens else p.lower()
+        stems.append(first_token)
+    return stems
+
+
+def robust_filter_by_project(df, project=None):
+    """Filter dataframe by project using stem-based prefix matching.
+    Extracts first word from each selected project and matches case-insensitively."""
+    if not project or project == 'All':
+        return df
+
+    project_col = 'Project' if 'Project' in df.columns else 'project'
+    if project_col not in df.columns:
+        return df
+
+    stems = get_project_stems(project)
+    if not stems:
+        return df
+
+    lower_col = df[project_col].astype(str).str.lower().str.strip()
+    mask = pd.Series(False, index=df.index)
+    for stem in stems:
+        mask = mask | lower_col.str.startswith(stem)
+    return df[mask]
+
+
 def format_indian_number(amount):
     """Format number with Indian comma system (full numbers, no abbreviations)"""
     if pd.isna(amount) or amount == 0:
@@ -1681,8 +1716,13 @@ def get_personal_transactions():
         params = []
 
         if project and project != 'All':
-            query += " AND project = %s"
-            params.append(project)
+            stems = get_project_stems(project)
+            if stems:
+                stem_conditions = []
+                for stem in stems:
+                    stem_conditions.append("LOWER(project) LIKE %s")
+                    params.append(f"{stem}%")
+                query += f" AND ({' OR '.join(stem_conditions)})"
 
         if transaction_type and transaction_type != 'All':
             query += " AND COALESCE(transaction_type, 'expense') = %s"
@@ -3125,7 +3165,7 @@ def get_project_summary_combined():
             continue
 
         df = filter_by_date_range(df, start_date, end_date)
-        df = filter_by_project(df, project)
+        df = robust_filter_by_project(df, project)
         df = filter_by_category(df, category)
         df = filter_by_vendor(df, vendor)
 
@@ -3337,7 +3377,7 @@ def get_project_summary_bank_transactions():
         return jsonify({'transactions': [], 'total': 0, 'page': page, 'per_page': per_page, 'total_pages': 0})
 
     df = filter_by_date_range(df, start_date, end_date)
-    df = filter_by_project(df, project)
+    df = robust_filter_by_project(df, project)
     df = filter_by_category(df, category)
     df = filter_by_vendor(df, vendor)
 
@@ -3390,7 +3430,7 @@ def get_project_summary_vendors():
         if df.empty:
             continue
         df = filter_by_date_range(df, start_date, end_date)
-        df = filter_by_project(df, project)
+        df = robust_filter_by_project(df, project)
         df = filter_by_category(df, category)
         df = filter_by_vendor(df, vendor)
         if not df.empty:
@@ -3471,6 +3511,109 @@ def get_project_summary_projects():
     })
 
 
+@app.route('/api/project-summary/filter-options')
+@login_required
+def get_project_summary_filter_options():
+    """Get dynamic filter options constrained by current filters (exclude-field pattern)"""
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    project = request.args.get('project', None)
+    category = request.args.get('category', None)
+    vendor = request.args.get('vendor', None)
+
+    def get_filtered_df(exclude_field):
+        """Get combined df across all banks, applying all filters except the excluded one"""
+        rows = []
+        for bank_code in VALID_BANK_CODES:
+            df = get_bank_df(bank_code).copy()
+            if df.empty:
+                continue
+            df = filter_by_date_range(df, start_date, end_date)
+            if exclude_field != 'project':
+                df = robust_filter_by_project(df, project)
+            if exclude_field != 'category':
+                df = filter_by_category(df, category)
+            if exclude_field != 'vendor':
+                df = filter_by_vendor(df, vendor)
+            if not df.empty:
+                rows.append(df)
+        if not rows:
+            return pd.DataFrame()
+        return pd.concat(rows, ignore_index=True)
+
+    # Projects: filtered by date, category, vendor (not project itself)
+    proj_df = get_filtered_df('project')
+    all_projects = set()
+    if not proj_df.empty:
+        project_col = 'Project' if 'Project' in proj_df.columns else 'project'
+        if project_col in proj_df.columns:
+            vals = proj_df[project_col].dropna().unique()
+            all_projects.update([str(p) for p in vals if str(p) != 'nan'])
+
+    # Categories: filtered by date, project, vendor (not category itself)
+    cat_df = get_filtered_df('category')
+    all_categories = set()
+    if not cat_df.empty:
+        if 'Category' in cat_df.columns:
+            vals = cat_df['Category'].dropna().unique()
+            all_categories.update([str(c) for c in vals if str(c) != 'nan'])
+
+    # Vendors: filtered by date, project, category (not vendor itself)
+    vend_df = get_filtered_df('vendor')
+    all_vendors = set()
+    if not vend_df.empty:
+        vendor_col = 'Client/Vendor' if 'Client/Vendor' in vend_df.columns else 'client_vendor'
+        if vendor_col in vend_df.columns:
+            vals = vend_df[vendor_col].dropna().unique()
+            all_vendors.update([str(v) for v in vals if str(v) != 'nan' and str(v) != 'Unknown'])
+
+    return jsonify({
+        'projects': sorted(list(all_projects)),
+        'categories': sorted(list(all_categories)),
+        'vendors': sorted(list(all_vendors))
+    })
+
+
+@app.route('/api/project-summary/bills')
+@login_required
+def get_project_summary_bills():
+    """Get bills for project summary with filters and pagination"""
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    project = request.args.get('project', None)
+    vendor = request.args.get('vendor', None)
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 15))
+
+    try:
+        bills, total, summary = db_manager.get_bills_for_project_summary(
+            start_date=start_date,
+            end_date=end_date,
+            project=project,
+            vendor=vendor,
+            page=page,
+            per_page=per_page
+        )
+        return jsonify({
+            'bills': bills,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page if total > 0 else 0,
+            'summary': summary
+        })
+    except Exception as e:
+        print(f"[!] Bills fetch error: {e}")
+        return jsonify({
+            'bills': [],
+            'total': 0,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': 0,
+            'summary': {'total_amount': 0, 'total_gst': 0}
+        })
+
+
 @app.route('/api/project-summary/date-range')
 @login_required
 def get_project_summary_date_range():
@@ -3517,7 +3660,7 @@ def export_project_summary():
         if df.empty:
             continue
         df = filter_by_date_range(df, start_date, end_date)
-        df = filter_by_project(df, project)
+        df = robust_filter_by_project(df, project)
         df = filter_by_category(df, category)
         df = filter_by_vendor(df, vendor)
         if df.empty:
@@ -3898,6 +4041,71 @@ def export_project_summary():
             ws_b.cell(row=total_row, column=6).number_format = currency_fmt
 
             auto_width(ws_b)
+
+        # ──────────────────────────────────────────────────────────
+        # TAB 7: Bills
+        # ──────────────────────────────────────────────────────────
+        try:
+            bills, bills_total, bills_summary = db_manager.get_bills_for_project_summary(
+                start_date=start_date,
+                end_date=end_date,
+                project=project,
+                vendor=vendor,
+                page=1,
+                per_page=10000  # Get all for export
+            )
+
+            if bills:
+                bills_rows = []
+                for b in bills:
+                    bills_rows.append({
+                        'Invoice #': b.get('invoice_number', ''),
+                        'Date': b.get('invoice_date', ''),
+                        'Vendor': b.get('vendor_name', ''),
+                        'Vendor GSTIN': b.get('vendor_gstin', ''),
+                        'Buyer': b.get('buyer_name', ''),
+                        'Items': b.get('line_item_count', 0),
+                        'Subtotal': float(b.get('subtotal', 0) or 0),
+                        'CGST': float(b.get('total_cgst', 0) or 0),
+                        'SGST': float(b.get('total_sgst', 0) or 0),
+                        'IGST': float(b.get('total_igst', 0) or 0),
+                        'Total': float(b.get('total_amount', 0) or 0),
+                        'Project': b.get('project', '')
+                    })
+
+                df_bills = pd.DataFrame(bills_rows)
+                df_bills.to_excel(writer, sheet_name='Bills', index=False, startrow=2)
+
+                ws_bills = writer.sheets['Bills']
+                ws_bills.cell(row=1, column=1, value='Project Bills / Invoices').font = title_font
+                style_header_row(ws_bills, 3, len(df_bills.columns))
+
+                for r in range(4, 4 + len(df_bills)):
+                    for c in [7, 8, 9, 10, 11]:  # Subtotal, CGST, SGST, IGST, Total
+                        ws_bills.cell(row=r, column=c).number_format = currency_fmt
+
+                # Total row
+                total_row = 4 + len(df_bills)
+                ws_bills.cell(row=total_row, column=1, value='TOTAL').font = Font(bold=True)
+                ws_bills.cell(row=total_row, column=7, value=sum(b.get('Subtotal', 0) for b in bills_rows)).font = Font(bold=True)
+                ws_bills.cell(row=total_row, column=7).number_format = currency_fmt
+                ws_bills.cell(row=total_row, column=8, value=sum(b.get('CGST', 0) for b in bills_rows)).font = Font(bold=True)
+                ws_bills.cell(row=total_row, column=8).number_format = currency_fmt
+                ws_bills.cell(row=total_row, column=9, value=sum(b.get('SGST', 0) for b in bills_rows)).font = Font(bold=True)
+                ws_bills.cell(row=total_row, column=9).number_format = currency_fmt
+                ws_bills.cell(row=total_row, column=10, value=sum(b.get('IGST', 0) for b in bills_rows)).font = Font(bold=True)
+                ws_bills.cell(row=total_row, column=10).number_format = currency_fmt
+                ws_bills.cell(row=total_row, column=11, value=sum(b.get('Total', 0) for b in bills_rows)).font = Font(bold=True)
+                ws_bills.cell(row=total_row, column=11).number_format = currency_fmt
+
+                auto_width(ws_bills)
+            else:
+                pd.DataFrame({'Note': ['No bills for the selected filters']}).to_excel(
+                    writer, sheet_name='Bills', index=False)
+        except Exception as e:
+            print(f"[!] Bills export error: {e}")
+            pd.DataFrame({'Note': ['Error fetching bills data']}).to_excel(
+                writer, sheet_name='Bills', index=False)
 
     output.seek(0)
     filename = f"Project_Summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
