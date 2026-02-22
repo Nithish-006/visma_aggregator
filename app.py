@@ -3179,8 +3179,8 @@ def get_project_summary_combined():
         return jsonify({
             'summary': {
                 'total_income': 0, 'total_income_formatted': '₹0',
+                'total_bank_transfer': 0, 'total_bank_transfer_formatted': '₹0',
                 'total_expense': 0, 'total_expense_formatted': '₹0',
-                'net_cashflow': 0, 'net_cashflow_formatted': '₹0',
                 'total_transactions': 0
             },
             'bank_breakdown': [],
@@ -3194,18 +3194,20 @@ def get_project_summary_combined():
 
     combined = pd.concat(combined_rows, ignore_index=True)
 
-    # Summary
-    total_income = float(combined['CR Amount'].sum())
+    # Summary — Income = KVB credits only, Bank Transfer = Axis credits only
+    kvb_df = combined[combined['bank'] == 'kvb']
+    axis_df = combined[combined['bank'] == 'axis']
+    total_income = float(kvb_df['CR Amount'].sum()) if not kvb_df.empty else 0
+    total_bank_transfer = float(axis_df['CR Amount'].sum()) if not axis_df.empty else 0
     total_expense = float(combined['DR Amount'].sum())
-    net_cashflow = total_income - total_expense
 
     summary = {
         'total_income': total_income,
         'total_income_formatted': format_indian_number(total_income),
+        'total_bank_transfer': total_bank_transfer,
+        'total_bank_transfer_formatted': format_indian_number(total_bank_transfer),
         'total_expense': total_expense,
         'total_expense_formatted': format_indian_number(total_expense),
-        'net_cashflow': net_cashflow,
-        'net_cashflow_formatted': format_indian_number(net_cashflow),
         'total_transactions': len(combined)
     }
 
@@ -3714,9 +3716,12 @@ def export_project_summary():
         # ──────────────────────────────────────────────────────────
         # TAB 1: Executive Summary
         # ──────────────────────────────────────────────────────────
-        total_income = float(combined['CR Amount'].sum()) if not combined.empty else 0
+        kvb_export_df = combined[combined['bank'] == 'kvb'] if not combined.empty else pd.DataFrame()
+        axis_export_df = combined[combined['bank'] == 'axis'] if not combined.empty else pd.DataFrame()
+        total_income = float(kvb_export_df['CR Amount'].sum()) if not kvb_export_df.empty else 0
+        total_bank_transfer = float(axis_export_df['CR Amount'].sum()) if not axis_export_df.empty else 0
+        total_credit_all = float(combined['CR Amount'].sum()) if not combined.empty else 0
         total_expense = float(combined['DR Amount'].sum()) if not combined.empty else 0
-        net_cashflow = total_income - total_expense
         txn_count = len(combined) if not combined.empty else 0
 
         date_label = ''
@@ -3738,19 +3743,19 @@ def export_project_summary():
             ['KEY PERFORMANCE INDICATORS'],
             [''],
             ['Metric', 'Value'],
-            ['Total Income', total_income],
+            ['Total Income (KVB)', total_income],
+            ['Total Bank Transfer (Axis)', total_bank_transfer],
             ['Total Expense', total_expense],
-            ['Net Cashflow', net_cashflow],
             ['Total Transactions', txn_count],
             ['Expense Ratio', total_expense / total_income if total_income > 0 else 0],
-            ['Average Transaction Size', (total_income + total_expense) / txn_count if txn_count > 0 else 0],
+            ['Average Transaction Size', (total_income + total_bank_transfer + total_expense) / txn_count if txn_count > 0 else 0],
         ]
 
         # Per-bank KPIs
         summary_data.append([''])
         summary_data.append(['BANK-WISE SUMMARY'])
         summary_data.append([''])
-        summary_data.append(['Bank', 'Income', 'Expense', 'Net Cashflow', 'Transactions', '% of Total Expense'])
+        summary_data.append(['Bank', 'Income / Bank Transfer', 'Expense', 'Net', 'Transactions', '% of Total Expense'])
 
         for bc in VALID_BANK_CODES:
             if combined.empty:
@@ -3799,9 +3804,11 @@ def export_project_summary():
                 cell.number_format = pct_fmt
             else:
                 cell.number_format = currency_fmt
-            if r == 9:
+            if r == 9:   # Total Income (KVB)
                 cell.font = income_font
-            elif r == 10:
+            elif r == 10:  # Total Bank Transfer (Axis)
+                cell.font = Font(color='2563EB', bold=True)
+            elif r == 11:  # Total Expense
                 cell.font = expense_font
 
         # Style bank summary header
@@ -3896,7 +3903,7 @@ def export_project_summary():
                 # Add total row
                 total_row = 4 + len(df_proj)
                 ws3.cell(row=total_row, column=1, value='TOTAL').font = Font(bold=True)
-                ws3.cell(row=total_row, column=2, value=total_income).font = Font(bold=True)
+                ws3.cell(row=total_row, column=2, value=total_credit_all).font = Font(bold=True)
                 ws3.cell(row=total_row, column=2).number_format = currency_fmt
                 ws3.cell(row=total_row, column=3, value=total_expense).font = Font(bold=True)
                 ws3.cell(row=total_row, column=3).number_format = currency_fmt
@@ -4143,152 +4150,145 @@ def export_project_summary():
             auto_width(ws_pb)
 
         elif not combined.empty:
-            # ── Path B: Flat Excel Tables with native AutoFilter checkboxes ──
+            # ── Path B: Stem-grouped project breakdown ──
+            # Group all projects by their first-word prefix (stem) and create
+            # per-group sections with expense-by-category and vendor breakdown
             expense_df_all = combined[combined['DR Amount'] > 0]
             v_col = 'Client/Vendor' if 'Client/Vendor' in combined.columns else 'client_vendor'
 
+            # Build stem → [project names] mapping from all projects in data
+            all_projects = combined[project_col].dropna().unique() if project_col in combined.columns else []
+            stem_groups = {}  # stem -> set of original project names
+            for pname in all_projects:
+                p_str = str(pname).strip()
+                if not p_str or p_str == 'nan':
+                    stem_groups.setdefault('unassigned', set()).add(pname)
+                    continue
+                tokens = p_str.split()
+                stem = tokens[0].lower() if tokens else p_str.lower()
+                stem_groups.setdefault(stem, set()).add(pname)
+
             ws_pb = wb.create_sheet('Project Breakdown')
-            ws_pb.cell(row=1, column=1, value='Project Breakdown').font = title_font
+            ws_pb.cell(row=1, column=1, value='Project Breakdown by Group').font = title_font
             ws_pb.cell(row=2, column=1,
-                       value='Click the dropdown arrow on Project column headers to filter by project').font = Font(
+                       value='Projects are automatically grouped by their prefix (first word)').font = Font(
                 name='Calibri', italic=True, color='6B7280', size=10)
 
-            table_style = TableStyleInfo(
-                name='TableStyleMedium2', showFirstColumn=False,
-                showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+            group_fill = PatternFill(start_color='E8F0FE', end_color='E8F0FE', fill_type='solid')
+            group_font = Font(name='Calibri', bold=True, size=12, color='1A1A2E')
+            section_font = Font(name='Calibri', bold=True, size=10, color='4A4A68')
 
             current_row = 4
 
-            # ── Section 1: Expense by Category ──
-            ws_pb.cell(row=current_row, column=1, value='Expense by Category').font = subtitle_font
-            current_row += 1
+            for stem in sorted(stem_groups.keys()):
+                project_names = stem_groups[stem]
+                group_label = stem.upper() if stem != 'unassigned' else 'UNASSIGNED'
 
-            exp_data = []
-            if project_col in combined.columns and not expense_df_all.empty:
-                for pname in sorted(expense_df_all[project_col].dropna().unique()):
-                    p_label = str(pname) if pname and str(pname) != 'nan' else 'Unassigned'
-                    p_exp = expense_df_all[expense_df_all[project_col] == pname]
-                    if not p_exp.empty:
-                        p_cat = p_exp.groupby('Category')['DR Amount'].sum().sort_values(ascending=False)
-                        for cat_name, cat_total in p_cat.items():
-                            exp_data.append((p_label, str(cat_name), float(cat_total)))
+                # Filter combined data to only projects in this stem group
+                group_mask = combined[project_col].isin(project_names)
+                group_df = combined[group_mask]
+                if group_df.empty:
+                    continue
 
-            if exp_data:
-                exp_hdr = current_row
-                for ci, h in enumerate(['Project', 'Category', 'Total Expense'], 1):
-                    ws_pb.cell(row=exp_hdr, column=ci, value=h)
-                for idx, (proj, cat, total) in enumerate(exp_data):
-                    r = exp_hdr + 1 + idx
-                    ws_pb.cell(row=r, column=1, value=proj)
-                    ws_pb.cell(row=r, column=2, value=cat)
-                    ws_pb.cell(row=r, column=3, value=total)
-                    ws_pb.cell(row=r, column=3).number_format = currency_fmt
+                group_expense_df = group_df[group_df['DR Amount'] > 0]
+                group_total_expense = float(group_expense_df['DR Amount'].sum()) if not group_expense_df.empty else 0
+                group_total_credit = float(group_df['CR Amount'].sum())
 
-                exp_end = exp_hdr + len(exp_data)
-                exp_table = Table(displayName='ProjExpenseTable',
-                                  ref=f"A{exp_hdr}:C{exp_end}")
-                exp_table.tableStyleInfo = table_style
-                ws_pb.add_table(exp_table)
+                # ── Group Header ──
+                ws_pb.cell(row=current_row, column=1, value=f'{group_label} Projects').font = group_font
+                ws_pb.cell(row=current_row, column=1).fill = group_fill
+                for c in range(2, 5):
+                    ws_pb.cell(row=current_row, column=c).fill = group_fill
+                current_row += 1
 
-                sub_r = exp_end + 1
-                ws_pb.cell(row=sub_r, column=2, value='TOTAL (filtered)').font = Font(bold=True)
-                ws_pb.cell(row=sub_r, column=3).value = f'=SUBTOTAL(9,C{exp_hdr + 1}:C{exp_end})'
-                ws_pb.cell(row=sub_r, column=3).number_format = currency_fmt
-                ws_pb.cell(row=sub_r, column=3).font = Font(bold=True)
-                current_row = sub_r + 3
-            else:
-                ws_pb.cell(row=current_row, column=1, value='No expense data available')
-                current_row += 3
+                # List projects in this group
+                proj_list = ', '.join(sorted(str(p) for p in project_names if str(p) != 'nan'))
+                ws_pb.cell(row=current_row, column=1,
+                           value=f'Includes: {proj_list}').font = Font(
+                    name='Calibri', italic=True, color='6B7280', size=9)
+                current_row += 1
 
-            # ── Section 2: Vendor Breakdown ──
-            ws_pb.cell(row=current_row, column=1, value='Vendor Breakdown').font = subtitle_font
-            current_row += 1
+                # Group totals row
+                ws_pb.cell(row=current_row, column=1, value='Total Expense:').font = Font(bold=True)
+                ws_pb.cell(row=current_row, column=2, value=group_total_expense).font = expense_font
+                ws_pb.cell(row=current_row, column=2).number_format = currency_fmt
+                ws_pb.cell(row=current_row, column=3, value='Total Credit:').font = Font(bold=True)
+                ws_pb.cell(row=current_row, column=4, value=group_total_credit).font = income_font
+                ws_pb.cell(row=current_row, column=4).number_format = currency_fmt
+                current_row += 2
 
-            vend_data = []
-            if v_col in combined.columns and project_col in combined.columns and not expense_df_all.empty:
-                for pname in sorted(expense_df_all[project_col].dropna().unique()):
-                    p_label = str(pname) if pname and str(pname) != 'nan' else 'Unassigned'
-                    p_exp = expense_df_all[expense_df_all[project_col] == pname]
-                    if v_col in p_exp.columns and not p_exp.empty:
-                        p_vend = p_exp.groupby(v_col)['DR Amount'].sum().sort_values(ascending=False)
-                        for vend_name, vend_total in p_vend.items():
-                            vend_data.append((p_label, str(vend_name), float(vend_total)))
+                # ── Section: Expense by Category ──
+                ws_pb.cell(row=current_row, column=1, value='Expense by Category').font = section_font
+                current_row += 1
 
-            if vend_data:
-                vend_hdr = current_row
-                for ci, h in enumerate(['Project', 'Vendor', 'Total Expense'], 1):
-                    ws_pb.cell(row=vend_hdr, column=ci, value=h)
-                for idx, (proj, vend, total) in enumerate(vend_data):
-                    r = vend_hdr + 1 + idx
-                    ws_pb.cell(row=r, column=1, value=proj)
-                    ws_pb.cell(row=r, column=2, value=vend)
-                    ws_pb.cell(row=r, column=3, value=total)
-                    ws_pb.cell(row=r, column=3).number_format = currency_fmt
+                if not group_expense_df.empty:
+                    g_cat = group_expense_df.groupby('Category')['DR Amount'].sum().sort_values(ascending=False)
+                    headers_ec = ['Category', 'Total Expense', '% of Group']
+                    for ci, h in enumerate(headers_ec, 1):
+                        ws_pb.cell(row=current_row, column=ci, value=h)
+                    style_header_row(ws_pb, current_row, len(headers_ec))
+                    current_row += 1
 
-                vend_end = vend_hdr + len(vend_data)
-                vend_table = Table(displayName='ProjVendorTable',
-                                   ref=f"A{vend_hdr}:C{vend_end}")
-                vend_table.tableStyleInfo = table_style
-                ws_pb.add_table(vend_table)
+                    for cat_name, cat_total in g_cat.items():
+                        cat_val = float(cat_total)
+                        cat_pct = cat_val / group_total_expense if group_total_expense > 0 else 0
+                        ws_pb.cell(row=current_row, column=1, value=str(cat_name))
+                        ws_pb.cell(row=current_row, column=2, value=cat_val)
+                        ws_pb.cell(row=current_row, column=2).number_format = currency_fmt
+                        ws_pb.cell(row=current_row, column=3, value=cat_pct)
+                        ws_pb.cell(row=current_row, column=3).number_format = pct_fmt
+                        current_row += 1
 
-                sub_r = vend_end + 1
-                ws_pb.cell(row=sub_r, column=2, value='TOTAL (filtered)').font = Font(bold=True)
-                ws_pb.cell(row=sub_r, column=3).value = f'=SUBTOTAL(9,C{vend_hdr + 1}:C{vend_end})'
-                ws_pb.cell(row=sub_r, column=3).number_format = currency_fmt
-                ws_pb.cell(row=sub_r, column=3).font = Font(bold=True)
-                current_row = sub_r + 3
-            else:
-                ws_pb.cell(row=current_row, column=1, value='No vendor data available')
-                current_row += 3
+                    # Subtotal
+                    ws_pb.cell(row=current_row, column=1, value='TOTAL').font = Font(bold=True)
+                    ws_pb.cell(row=current_row, column=2, value=group_total_expense).font = Font(bold=True)
+                    ws_pb.cell(row=current_row, column=2).number_format = currency_fmt
+                    current_row += 1
+                else:
+                    ws_pb.cell(row=current_row, column=1, value='No expenses')
+                    current_row += 1
 
-            # ── Section 3: Bill Details ──
-            ws_pb.cell(row=current_row, column=1, value='Bill Details').font = subtitle_font
-            current_row += 1
+                current_row += 1
 
-            bill_data = []
-            for bill in bills_list:
-                bp = bill.get('Project', '') or 'Unassigned'
-                bill_data.append((
-                    bp,
-                    bill.get('Invoice #', ''),
-                    bill.get('Date', ''),
-                    bill.get('Vendor', ''),
-                    float(bill.get('Total', 0))
-                ))
+                # ── Section: Vendor Breakdown ──
+                ws_pb.cell(row=current_row, column=1, value='Vendor Breakdown').font = section_font
+                current_row += 1
 
-            if bill_data:
-                bill_hdr = current_row
-                for ci, h in enumerate(['Project', 'Invoice #', 'Date', 'Vendor', 'Total'], 1):
-                    ws_pb.cell(row=bill_hdr, column=ci, value=h)
-                for idx, (proj, inv, dt, vend, total) in enumerate(bill_data):
-                    r = bill_hdr + 1 + idx
-                    ws_pb.cell(row=r, column=1, value=proj)
-                    ws_pb.cell(row=r, column=2, value=inv)
-                    ws_pb.cell(row=r, column=3, value=dt)
-                    ws_pb.cell(row=r, column=4, value=vend)
-                    ws_pb.cell(row=r, column=5, value=total)
-                    ws_pb.cell(row=r, column=5).number_format = currency_fmt
+                if v_col in group_expense_df.columns and not group_expense_df.empty:
+                    g_vend = group_expense_df.groupby(v_col)['DR Amount'].sum().sort_values(ascending=False)
+                    headers_vb = ['Vendor', 'Total Expense', '% of Group']
+                    for ci, h in enumerate(headers_vb, 1):
+                        ws_pb.cell(row=current_row, column=ci, value=h)
+                    style_header_row(ws_pb, current_row, len(headers_vb))
+                    current_row += 1
 
-                bill_end = bill_hdr + len(bill_data)
-                bill_table = Table(displayName='ProjBillsTable',
-                                   ref=f"A{bill_hdr}:E{bill_end}")
-                bill_table.tableStyleInfo = table_style
-                ws_pb.add_table(bill_table)
+                    for vend_name, vend_total in g_vend.items():
+                        v_val = float(vend_total)
+                        v_pct = v_val / group_total_expense if group_total_expense > 0 else 0
+                        ws_pb.cell(row=current_row, column=1, value=str(vend_name))
+                        ws_pb.cell(row=current_row, column=2, value=v_val)
+                        ws_pb.cell(row=current_row, column=2).number_format = currency_fmt
+                        ws_pb.cell(row=current_row, column=3, value=v_pct)
+                        ws_pb.cell(row=current_row, column=3).number_format = pct_fmt
+                        current_row += 1
 
-                sub_r = bill_end + 1
-                ws_pb.cell(row=sub_r, column=4, value='TOTAL (filtered)').font = Font(bold=True)
-                ws_pb.cell(row=sub_r, column=5).value = f'=SUBTOTAL(9,E{bill_hdr + 1}:E{bill_end})'
-                ws_pb.cell(row=sub_r, column=5).number_format = currency_fmt
-                ws_pb.cell(row=sub_r, column=5).font = Font(bold=True)
-            else:
-                ws_pb.cell(row=current_row, column=1, value='No bill data available')
+                    # Subtotal
+                    ws_pb.cell(row=current_row, column=1, value='TOTAL').font = Font(bold=True)
+                    ws_pb.cell(row=current_row, column=2, value=group_total_expense).font = Font(bold=True)
+                    ws_pb.cell(row=current_row, column=2).number_format = currency_fmt
+                    current_row += 1
+                else:
+                    ws_pb.cell(row=current_row, column=1, value='No vendor data')
+                    current_row += 1
+
+                # Separator between groups
+                current_row += 2
 
             # Set column widths
-            ws_pb.column_dimensions['A'].width = 25
+            ws_pb.column_dimensions['A'].width = 30
             ws_pb.column_dimensions['B'].width = 20
             ws_pb.column_dimensions['C'].width = 18
             ws_pb.column_dimensions['D'].width = 20
-            ws_pb.column_dimensions['E'].width = 15
 
         # ── Sheet ordering ──
         if len(wb.sheetnames) > 1:

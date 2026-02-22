@@ -459,7 +459,7 @@ body {
     background: linear-gradient(90deg, #ef4444, #dc2626);
 }
 
-.kpi-net::before {
+.kpi-transfer::before {
     background: linear-gradient(90deg, #3b82f6, #2563eb);
 }
 
@@ -489,6 +489,10 @@ body {
 
 .kpi-expense .ps-kpi-value {
     color: var(--expense-color);
+}
+
+.kpi-transfer .ps-kpi-value {
+    color: var(--accent-color);
 }
 
 /* ============================================================================
@@ -579,6 +583,10 @@ body {
     color: var(--income-color);
 }
 
+.ps-bank-stat-value.bank-transfer {
+    color: var(--accent-color);
+}
+
 .ps-bank-stat-value.expense {
     color: var(--expense-color);
 }
@@ -612,7 +620,7 @@ body {
 }
 
 .ps-cat-label {
-    flex: 0 0 120px;
+    flex: 0 0 180px;
     font-size: 0.8125rem;
     font-weight: 500;
     color: var(--text-primary);

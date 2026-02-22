@@ -601,7 +601,7 @@
         if (!summary) return;
         $('#kpi-income').textContent = summary.total_income_formatted || '\u20B90';
         $('#kpi-expense').textContent = summary.total_expense_formatted || '\u20B90';
-        $('#kpi-net').textContent = summary.net_cashflow_formatted || '\u20B90';
+        $('#kpi-transfer').textContent = summary.total_bank_transfer_formatted || '\u20B90';
         $('#kpi-count').textContent = (summary.total_transactions || 0).toLocaleString();
     }
 
@@ -612,13 +612,17 @@
             container.innerHTML = '<div class="ps-empty">No bank data available</div>';
             return;
         }
-        container.innerHTML = bankBreakdown.map(b => `
+        container.innerHTML = bankBreakdown.map(b => {
+            const isAxis = b.bank_code === 'axis';
+            const creditLabel = isAxis ? 'Bank Transfer' : 'Income';
+            const creditClass = isAxis ? 'bank-transfer' : 'income';
+            return `
             <div class="ps-bank-card bank-${b.bank_code}">
                 <div class="ps-bank-name">${b.bank_name}</div>
                 <div class="ps-bank-stats">
                     <div class="ps-bank-stat-row">
-                        <span class="ps-bank-stat-label">Income</span>
-                        <span class="ps-bank-stat-value income">${b.income_formatted}</span>
+                        <span class="ps-bank-stat-label">${creditLabel}</span>
+                        <span class="ps-bank-stat-value ${creditClass}">${b.income_formatted}</span>
                     </div>
                     <div class="ps-bank-stat-row">
                         <span class="ps-bank-stat-label">Expense</span>
@@ -631,7 +635,7 @@
                 </div>
                 <div class="ps-bank-count">${b.transaction_count} transactions</div>
             </div>
-        `).join('');
+        `}).join('');
     }
 
     // ── Render: Category Horizontal Bars ───────────────────────────────
