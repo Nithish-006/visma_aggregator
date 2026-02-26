@@ -672,37 +672,32 @@
         });
     }
 
-    // ── Render: Project Table (client-side pagination) ─────────────────
+    // ── Render: Project Breakdown (auditor-style cards) ─────────────────
     function renderProjectTable() {
         const data = state.data.combined?.project_breakdown || [];
+        const tbody = document.getElementById('project-table-body');
+        if (!tbody) return;
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="ps-empty">No project data</td></tr>';
+            renderPaginationControls('project-pagination', 1, 1, () => {});
+            return;
+        }
+
         const { page, perPage } = state.pagination.projectBreakdown;
         const totalPages = Math.ceil(data.length / perPage) || 1;
         const start = (page - 1) * perPage;
         const pageData = data.slice(start, start + perPage);
 
-        const tbody = document.getElementById('project-table-body');
-        if (pageData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="ps-empty">No project data</td></tr>';
-        } else {
-            tbody.innerHTML = pageData.map(p => {
-                const netClass = p.net >= 0 ? 'text-net-positive' : 'text-net-negative';
-                const isActive = isCrossFilterActive('project', p.project);
-                return `<tr class="ps-clickable ${isActive ? 'ps-cf-active' : ''}" data-cf-type="project" data-cf-value="${escapeHtml(p.project)}">
-                    <td>${escapeHtml(p.project)}</td>
-                    <td class="text-right text-income">${p.income_formatted}</td>
-                    <td class="text-right text-expense">${p.expense_formatted}</td>
-                    <td class="text-right ${netClass}">${p.net_formatted}</td>
-                    <td class="text-right">${p.count}</td>
-                </tr>`;
-            }).join('');
-        }
-
-        // Bind cross-filter clicks on project rows
-        tbody.querySelectorAll('[data-cf-type="project"]').forEach(row => {
-            row.addEventListener('click', () => {
-                applyCrossFilter('project', row.dataset.cfValue);
-            });
-        });
+        tbody.innerHTML = pageData.map(p => `
+            <tr>
+                <td>${escapeHtml(p.project)}</td>
+                <td class="text-right text-income">${p.income_formatted || '0'}</td>
+                <td class="text-right text-expense">${p.material_total_formatted}</td>
+                <td class="text-right text-expense">${p.other_total_formatted}</td>
+                <td class="text-right" style="color:var(--accent-color);font-weight:600;">${p.labour_total_formatted}</td>
+            </tr>
+        `).join('');
 
         renderPaginationControls('project-pagination', page, totalPages, (pg) => {
             state.pagination.projectBreakdown.page = pg;

@@ -3444,28 +3444,100 @@ def get_project_summary_combined():
                 'percentage': round(pct, 1)
             })
 
-    # Project breakdown
+    # Project breakdown — smart stem-grouped with material, other expense, labour
     project_col = 'Project' if 'Project' in combined.columns else 'project'
+    v_col = 'Client/Vendor' if 'Client/Vendor' in combined.columns else 'client_vendor'
+    LABOUR_CATS_API = {'LABOUR PAYMENT', 'LABOR PAYMENT', 'LABOUR', 'LABOR'}
+    EXCLUDE_CATS_API = {'MATERIAL PURCHASE', 'AMOUNT RECEIVED', 'SALARY AC', 'BANK CHARGES', 'DUTIES & TAX'}
+
     project_breakdown = []
-    if project_col in combined.columns:
-        proj_income = combined.groupby(project_col)['CR Amount'].sum()
-        proj_expense = combined.groupby(project_col)['DR Amount'].sum()
-        proj_count = combined.groupby(project_col).size()
-        all_projects = set(proj_income.index) | set(proj_expense.index)
-        for proj in sorted(all_projects):
-            p_inc = float(proj_income.get(proj, 0))
-            p_exp = float(proj_expense.get(proj, 0))
+    try:
+        # Collect project names from bank txns
+        bank_proj_names = []
+        if project_col in combined.columns:
+            bank_proj_names = [str(p) for p in combined[project_col].dropna().unique()
+                               if str(p).strip() and str(p).lower() != 'nan']
+
+        # Fetch bills with line items
+        try:
+            api_bills = db_manager.get_bills_with_line_items_for_export(
+                start_date=start_date, end_date=end_date)
+        except:
+            api_bills = []
+        bill_proj_names = [str(b.get('project', '')) for b in api_bills
+                           if str(b.get('project', '')).strip() and str(b.get('project', '')).lower() != 'nan']
+
+        # Build stem groups
+        api_stem_groups = build_smart_project_groups(bank_proj_names, bill_proj_names)
+        api_bills_by_stem = match_bills_to_project_groups(api_bills, api_stem_groups)
+
+        # Fetch labour costs
+        try:
+            api_labour_raw = DatabaseManager.get_labour_costs_by_project(
+                start_date=start_date, end_date=end_date)
+            api_labour_by_stem = match_labour_to_project_groups(api_labour_raw, api_stem_groups)
+        except:
+            api_labour_by_stem = {}
+
+        for stem in sorted(api_stem_groups.keys()):
+            project_names = api_stem_groups[stem]
+            group_label = stem.upper()
+            proj_list = ', '.join(sorted(str(p) for p in project_names if str(p) != 'nan'))
+
+            # --- Material total from bills ---
+            group_bills = api_bills_by_stem.get(stem, [])
+            material_total = 0
+            for bill in group_bills:
+                if bill.get('line_items'):
+                    for item in bill['line_items']:
+                        material_total += item.get('amount', 0)
+                else:
+                    material_total += bill.get('total_amount', 0)
+
+            # --- Income + Other expense totals from bank txns ---
+            income_total = 0
+            other_total = 0
+            if project_col in combined.columns:
+                g_mask = combined[project_col].isin(project_names)
+                g_df = combined[g_mask]
+                if not g_df.empty:
+                    if 'CR Amount' in g_df.columns:
+                        income_total = float(g_df['CR Amount'].sum())
+
+                    exp_df = g_df[g_df['DR Amount'] > 0].copy()
+                    if 'Category' in exp_df.columns:
+                        upper_cats = exp_df['Category'].str.upper().str.strip()
+                        labour_mask = upper_cats.isin(LABOUR_CATS_API)
+                        exclude_mask = exp_df['Category'].isin(EXCLUDE_CATS_API) | labour_mask
+                        exp_df = exp_df[~exclude_mask]
+                    if not exp_df.empty:
+                        other_total = float(exp_df['DR Amount'].sum())
+
+            # --- Labour from salary DB ---
+            labour_total = api_labour_by_stem.get(stem, 0)
+
+            total_value = material_total + other_total + labour_total
+
             project_breakdown.append({
-                'project': str(proj) if proj and str(proj) != 'nan' else 'Unassigned',
-                'income': p_inc,
-                'income_formatted': format_indian_number(p_inc),
-                'expense': p_exp,
-                'expense_formatted': format_indian_number(p_exp),
-                'net': p_inc - p_exp,
-                'net_formatted': format_indian_number(p_inc - p_exp),
-                'count': int(proj_count.get(proj, 0))
+                'stem': stem,
+                'project': group_label,
+                'project_names': proj_list,
+                'income': income_total,
+                'income_formatted': format_indian_number(income_total),
+                'total_value': total_value,
+                'total_value_formatted': format_indian_number(total_value),
+                'material_total': material_total,
+                'material_total_formatted': format_indian_number(material_total),
+                'other_total': other_total,
+                'other_total_formatted': format_indian_number(other_total),
+                'labour_total': labour_total,
+                'labour_total_formatted': format_indian_number(labour_total),
             })
-        project_breakdown.sort(key=lambda x: x['expense'], reverse=True)
+        project_breakdown.sort(key=lambda x: x['total_value'], reverse=True)
+    except Exception as e:
+        print(f"[!] Project breakdown API error: {e}")
+        import traceback
+        traceback.print_exc()
 
     # Monthly trend
     monthly_trend = {'months': [], 'income': [], 'expense': [], 'net': []}
