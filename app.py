@@ -4227,22 +4227,34 @@ def export_project_summary():
         project_col = 'Project' if 'Project' in combined.columns else 'project' if not combined.empty else 'Project'
         v_col = 'Client/Vendor' if (not combined.empty and 'Client/Vendor' in combined.columns) else 'client_vendor'
 
-        # Styling for auditor format
-        yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+        # Auditor-format styling (matches ProjectSummary.jpeg)
+        green_fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+        project_name_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+        project_name_font = Font(name='Calibri', bold=True, size=14, color='FFFFFF')
+        separator_fill = PatternFill(start_color='2F2F2F', end_color='2F2F2F', fill_type='solid')
         section_bold = Font(name='Calibri', bold=True, size=11)
-        green_bold = Font(name='Calibri', bold=True, color='059669')
-        pb_currency_fmt = '#,##0.00'
+        green_amount = Font(name='Calibri', bold=True, color='006100')
+        red_amount = Font(name='Calibri', bold=True, color='DC2626')
+        blue_amount = Font(name='Calibri', bold=True, color='2563EB')
+        pb_currency = '#,##0.00'
         WEIGHT_UOMS = {'KGS', 'KG', 'MT', 'TONS', 'TON', 'MTS'}
-
-        # Categories to include in "Other Expense" (from bank transactions)
-        OTHER_EXPENSE_CATS = {
-            'TRANSPORT EXP', 'SITE EXP', 'FACTORY EXP', 'CONTRACT',
-            'OFFICE EXP', 'MISCELLANEOUS'
-        }
         EXCLUDE_CATS = {'MATERIAL PURCHASE', 'AMOUNT RECEIVED', 'SALARY AC', 'BANK CHARGES', 'DUTIES & TAX'}
+        NUM_COLS = 3  # A, B, C
+
+        def pb_section_header(ws, row, text):
+            """Green-filled section header spanning all columns."""
+            ws.cell(row=row, column=1, value=text).font = section_bold
+            for c in range(1, NUM_COLS + 1):
+                ws.cell(row=row, column=c).fill = green_fill
+            return row + 1
+
+        def pb_separator(ws, row):
+            """Dark separator row between project blocks."""
+            for c in range(1, NUM_COLS + 1):
+                ws.cell(row=row, column=c).fill = separator_fill
+            return row + 1
 
         try:
-            # Fetch bills with line items for material purchase section
             export_bills = db_manager.get_bills_with_line_items_for_export(
                 start_date=start_date, end_date=end_date
             )
@@ -4250,7 +4262,7 @@ def export_project_summary():
             print(f"[!] Error fetching bills with line items: {e}")
             export_bills = []
 
-        # Collect all project names from bank transactions and bills
+        # Collect project names from bank txns and bills
         bank_projects = []
         if not combined.empty and project_col in combined.columns:
             bank_projects = [str(p) for p in combined[project_col].dropna().unique()
@@ -4258,7 +4270,6 @@ def export_project_summary():
         bill_projects = [str(b.get('project', '')) for b in export_bills
                          if str(b.get('project', '')).strip() and str(b.get('project', '')).lower() != 'nan']
 
-        # Build smart project groups and match bills
         stem_groups = build_smart_project_groups(bank_projects, bill_projects)
         bills_by_stem = match_bills_to_project_groups(export_bills, stem_groups)
 
@@ -4266,10 +4277,11 @@ def export_project_summary():
             ws_pb = wb.create_sheet('Project Breakdown')
             current_row = 1
 
-            for stem in sorted(stem_groups.keys()):
+            for stem_idx, stem in enumerate(sorted(stem_groups.keys())):
                 project_names = stem_groups[stem]
                 group_label = stem.upper()
                 group_bills = bills_by_stem.get(stem, [])
+                proj_list = ', '.join(sorted(str(p) for p in project_names if str(p) != 'nan'))
 
                 # Filter bank transactions for this project group
                 if not combined.empty and project_col in combined.columns:
@@ -4278,67 +4290,61 @@ def export_project_summary():
                 else:
                     group_df = pd.DataFrame()
 
-                # Skip groups with no data at all
                 if group_df.empty and not group_bills:
                     continue
 
-                # ── OVERALL SUMMARY header ──
-                ws_pb.cell(row=current_row, column=1, value='OVERALL SUMMARY').font = section_bold
-                ws_pb.cell(row=current_row, column=1).fill = yellow_fill
-                for c in range(2, 4):
-                    ws_pb.cell(row=current_row, column=c).fill = yellow_fill
+                # ════════════════════════════════════════════════════════
+                # PROJECT NAME — big, bold, blue fill, white text
+                # ════════════════════════════════════════════════════════
+                for c in range(1, NUM_COLS + 1):
+                    ws_pb.cell(row=current_row, column=c).fill = project_name_fill
+                ws_pb.cell(row=current_row, column=1,
+                           value=f'PROJECT :  {group_label}').font = project_name_font
                 current_row += 1
 
-                # PROJECT label
-                proj_list = ', '.join(sorted(str(p) for p in project_names if str(p) != 'nan'))
+                # Sub-label showing all project name variants in this group
                 ws_pb.cell(row=current_row, column=1,
-                           value=f'PROJECT: {group_label}').font = section_bold
-                current_row += 1
-                ws_pb.cell(row=current_row, column=1,
-                           value=f'Includes: {proj_list}').font = Font(
+                           value=f'({proj_list})').font = Font(
                     name='Calibri', italic=True, color='6B7280', size=9)
-                current_row += 1
+                current_row += 2  # blank row gap
 
-                # TOTAL PROJECT VALUE (placeholder)
-                ws_pb.cell(row=current_row, column=1, value='TOTAL PROJECT VALUE')
+                # ── OVERALL SUMMARY ──
+                current_row = pb_section_header(ws_pb, current_row, 'OVERALL SUMMARY')
+
+                # TOTAL PROJECT VALUE row
+                ws_pb.cell(row=current_row, column=1, value='TOTAL PROJECT VALUE').font = Font(bold=True)
+                # Compute total = material from bills + other from bank txns
+                # (will be filled after computing both sections below)
+                total_value_row = current_row
                 current_row += 2  # blank row
 
-                # ── MAIN MATERIAL PURCHASE section ──
-                ws_pb.cell(row=current_row, column=1, value='MAIN MATERIAL PURCHASE').font = section_bold
-                ws_pb.cell(row=current_row, column=1).fill = yellow_fill
-                for c in range(2, 4):
-                    ws_pb.cell(row=current_row, column=c).fill = yellow_fill
-                current_row += 1
+                # ── MAIN MATERIAL PURCHASE ──
+                current_row = pb_section_header(ws_pb, current_row, 'MAIN MATERIAL PURCHASE')
 
-                # Headers
-                ws_pb.cell(row=current_row, column=1, value='VENDOR / DESCRIPTION').font = Font(bold=True)
+                # Column headers
                 ws_pb.cell(row=current_row, column=2, value='WEIGHT').font = Font(bold=True)
                 ws_pb.cell(row=current_row, column=3, value='AMOUNT').font = Font(bold=True)
                 current_row += 1
 
-                # Aggregate bill line items by vendor
                 material_total = 0
                 if group_bills:
-                    vendor_agg = {}  # vendor_name -> {description, weight, amount}
+                    vendor_agg = {}
                     for bill in group_bills:
                         vname = bill.get('vendor_name', 'Unknown Vendor')
                         if vname not in vendor_agg:
                             vendor_agg[vname] = {'description': '', 'weight': 0, 'amount': 0}
                         for item in bill.get('line_items', []):
-                            # Use first description encountered as primary
                             if not vendor_agg[vname]['description'] and item.get('description'):
                                 vendor_agg[vname]['description'] = item['description']
-                            # Sum weight only for weight-based UOMs
                             uom = str(item.get('uom', '')).upper().strip()
                             if uom in WEIGHT_UOMS:
                                 vendor_agg[vname]['weight'] += item.get('quantity', 0)
                             vendor_agg[vname]['amount'] += item.get('amount', 0)
-                        # If bill has no line items, use bill total
                         if not bill.get('line_items'):
                             vendor_agg[vname]['amount'] += bill.get('total_amount', 0)
 
                     for vname, data in sorted(vendor_agg.items(), key=lambda x: x[1]['amount'], reverse=True):
-                        label = f"{vname}"
+                        label = vname
                         if data['description']:
                             label += f" - {data['description']}"
                         ws_pb.cell(row=current_row, column=1, value=label)
@@ -4346,89 +4352,96 @@ def export_project_summary():
                             ws_pb.cell(row=current_row, column=2, value=data['weight'])
                             ws_pb.cell(row=current_row, column=2).number_format = '#,##0.00'
                         ws_pb.cell(row=current_row, column=3, value=data['amount'])
-                        ws_pb.cell(row=current_row, column=3).number_format = pb_currency_fmt
+                        ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                         material_total += data['amount']
                         current_row += 1
-                else:
-                    ws_pb.cell(row=current_row, column=1,
-                               value='(No purchase bills for this project)').font = Font(
-                        name='Calibri', italic=True, color='6B7280')
-                    current_row += 1
 
-                # Material purchase total
+                # Material total row (green filled label + green amount)
                 ws_pb.cell(row=current_row, column=1, value='MAIN MATERIAL PURCHASE').font = section_bold
-                ws_pb.cell(row=current_row, column=3, value=material_total).font = green_bold
-                ws_pb.cell(row=current_row, column=3).number_format = pb_currency_fmt
+                ws_pb.cell(row=current_row, column=1).fill = green_fill
+                for c in range(2, NUM_COLS + 1):
+                    ws_pb.cell(row=current_row, column=c).fill = green_fill
+                ws_pb.cell(row=current_row, column=3, value=material_total).font = green_amount
+                ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                 current_row += 2  # blank row
 
-                # ── OTHER EXPENSE section ──
-                ws_pb.cell(row=current_row, column=1, value='OTHER EXPENSE').font = section_bold
-                ws_pb.cell(row=current_row, column=1).fill = yellow_fill
-                for c in range(2, 4):
-                    ws_pb.cell(row=current_row, column=c).fill = yellow_fill
-                current_row += 1
-
-                ws_pb.cell(row=current_row, column=1, value='VENDOR / DESCRIPTION').font = Font(bold=True)
-                ws_pb.cell(row=current_row, column=3, value='AMOUNT').font = Font(bold=True)
-                current_row += 1
+                # ── OTHER EXPENSE ──
+                current_row = pb_section_header(ws_pb, current_row, 'OTHER EXPENSE')
 
                 other_total = 0
                 if not group_df.empty:
                     expense_df = group_df[group_df['DR Amount'] > 0].copy()
                     if 'Category' in expense_df.columns:
-                        # Include categories that are NOT in the exclude list
                         cat_mask = ~expense_df['Category'].isin(EXCLUDE_CATS)
                         expense_df = expense_df[cat_mask]
 
                     if not expense_df.empty and v_col in expense_df.columns:
-                        # Group by vendor + category
                         for (vend, cat), grp in expense_df.groupby([v_col, 'Category']):
                             amt = float(grp['DR Amount'].sum())
                             vend_str = str(vend).strip()
                             cat_str = str(cat).strip()
-                            # If vendor is generic/unknown, show category instead
                             if not vend_str or vend_str.lower() in ('unknown', 'nan', '', 'unassigned'):
                                 label = cat_str
                             else:
                                 label = f"{cat_str} - {vend_str}"
                             ws_pb.cell(row=current_row, column=1, value=label)
                             ws_pb.cell(row=current_row, column=3, value=amt)
-                            ws_pb.cell(row=current_row, column=3).number_format = pb_currency_fmt
+                            ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                             other_total += amt
                             current_row += 1
                     elif not expense_df.empty:
-                        # No vendor column, just group by category
                         for cat, grp in expense_df.groupby('Category'):
                             amt = float(grp['DR Amount'].sum())
                             ws_pb.cell(row=current_row, column=1, value=str(cat))
                             ws_pb.cell(row=current_row, column=3, value=amt)
-                            ws_pb.cell(row=current_row, column=3).number_format = pb_currency_fmt
+                            ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                             other_total += amt
                             current_row += 1
 
-                if other_total == 0:
-                    ws_pb.cell(row=current_row, column=1,
-                               value='(No other expenses for this project)').font = Font(
-                        name='Calibri', italic=True, color='6B7280')
-                    current_row += 1
-
-                # Other expense total
-                ws_pb.cell(row=current_row, column=1, value='OTHER EXPENSE TOTAL').font = section_bold
-                ws_pb.cell(row=current_row, column=3, value=other_total).font = green_bold
-                ws_pb.cell(row=current_row, column=3).number_format = pb_currency_fmt
+                # Other expense total row (green amount)
+                ws_pb.cell(row=current_row, column=3, value=other_total).font = green_amount
+                ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                 current_row += 2  # blank row
 
-                # ── Placeholder rows ──
-                placeholders = ['LABOUR PAYMENT', 'BALANCE GST PAYMENT', 'OVER HEADS',
-                                'TOTAL EXP', 'BALANCE']
-                for ph in placeholders:
-                    ws_pb.cell(row=current_row, column=1, value=ph).font = Font(bold=True)
-                    current_row += 1
+                # ── LABOUR PAYMENT (placeholder, blue amount) ──
+                ws_pb.cell(row=current_row, column=1, value='LABOUR PAYMENT').font = Font(bold=True)
+                ws_pb.cell(row=current_row, column=3).font = blue_amount
+                ws_pb.cell(row=current_row, column=3).number_format = pb_currency
+                current_row += 2  # blank row
 
-                # 3 blank rows separator between groups
-                current_row += 3
+                # ── BALANCE GST PAYMENT ──
+                ws_pb.cell(row=current_row, column=1, value='BALANCE GST PAYMENT').font = Font(bold=True)
+                ws_pb.cell(row=current_row, column=3).number_format = pb_currency
+                current_row += 2  # blank row
 
-            # Set column widths (auditor format)
+                # ── OVER HEADS ──
+                ws_pb.cell(row=current_row, column=1, value='OVER HEADS').font = Font(bold=True)
+                ws_pb.cell(row=current_row, column=3).number_format = pb_currency
+                current_row += 2  # blank row
+
+                # ── TOTAL EXP (green amount) ──
+                ws_pb.cell(row=current_row, column=1, value='TOTAL EXP').font = Font(bold=True)
+                ws_pb.cell(row=current_row, column=3).font = green_amount
+                ws_pb.cell(row=current_row, column=3).number_format = pb_currency
+                current_row += 2  # blank row
+
+                # ── BALANCE (green amount) ──
+                ws_pb.cell(row=current_row, column=1, value='BALANCE').font = Font(bold=True)
+                ws_pb.cell(row=current_row, column=3).font = green_amount
+                ws_pb.cell(row=current_row, column=3).number_format = pb_currency
+                current_row += 1
+
+                # Fill TOTAL PROJECT VALUE now (material + other)
+                total_project = material_total + other_total
+                ws_pb.cell(row=total_value_row, column=3, value=total_project).font = red_amount
+                ws_pb.cell(row=total_value_row, column=3).number_format = pb_currency
+
+                # ── Dark separator + blank rows between project blocks ──
+                current_row += 1
+                current_row = pb_separator(ws_pb, current_row)
+                current_row += 2  # gap before next project
+
+            # Column widths
             ws_pb.column_dimensions['A'].width = 40
             ws_pb.column_dimensions['B'].width = 15
             ws_pb.column_dimensions['C'].width = 20
