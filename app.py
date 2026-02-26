@@ -308,9 +308,10 @@ def get_project_stems(project_str):
 
 
 NON_PROJECT_STEMS = {
-    'axis', 'kvb', 'factory', 'labour', 'labor', 'office', 'bank', 'salary',
+    'axis', 'axi', 'kvb', 'factory', 'labour', 'labor', 'office', 'bank', 'salary',
     'tax', 'gst', 'tds', 'neft', 'rtgs', 'imps', 'upi', 'interest', 'charges',
-    'unknown', 'unassigned', 'general', 'misc'
+    'unknown', 'unassigned', 'general', 'misc', 'amount', 'transfer', 'return',
+    'received', 'payment', 'deposit', 'withdrawal', 'credit', 'debit'
 }
 
 PROJECT_ALIASES = {
@@ -320,12 +321,12 @@ PROJECT_ALIASES = {
 
 
 def normalize_project_stem(name):
-    """Lowercase, strip whitespace, strip trailing 's'/'es' for plural handling."""
+    """Lowercase, strip whitespace, normalize plurals via alias lookup only."""
     s = name.lower().strip()
-    # Apply known aliases first
+    # Check exact alias first
     if s in PROJECT_ALIASES:
         return PROJECT_ALIASES[s]
-    # Strip trailing plurals
+    # Try stripping trailing 's'/'es' and check if the base form is a known alias
     if s.endswith('es') and len(s) > 3:
         candidate = s[:-2]
         if candidate in PROJECT_ALIASES:
@@ -334,7 +335,7 @@ def normalize_project_stem(name):
         candidate = s[:-1]
         if candidate in PROJECT_ALIASES:
             return PROJECT_ALIASES[candidate]
-        return candidate
+    # Return as-is (no blind plural stripping)
     return s
 
 
