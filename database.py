@@ -760,8 +760,9 @@ class DatabaseManager:
             traceback.print_exc()
             return False, None, str(e)
 
-    def get_all_bills(self, limit: int = 100, offset: int = 0, project: str = None,
-                       date_from: str = None, date_to: str = None) -> List[Dict]:
+    def get_all_bills(self, limit: int = 100, offset: int = 0, projects: list = None,
+                       date_from: str = None, date_to: str = None,
+                       added_from: str = None, added_to: str = None) -> List[Dict]:
         """Get all bills from database with pagination and optional project/date filters"""
         query = """
         SELECT
@@ -777,21 +778,30 @@ class DatabaseManager:
         """
         params = []
 
-        if project:
-            query += " AND bi.project = %s"
-            params.append(project)
+        if projects:
+            placeholders = ','.join(['%s'] * len(projects))
+            query += f" AND bi.project IN ({placeholders})"
+            params.extend(projects)
 
         if date_from:
-            query += " AND DATE(bi.created_at) >= %s"
+            query += " AND bi.invoice_date >= %s"
             params.append(date_from)
 
         if date_to:
-            query += " AND DATE(bi.created_at) <= %s"
+            query += " AND bi.invoice_date <= %s"
             params.append(date_to)
+
+        if added_from:
+            query += " AND DATE(bi.created_at) >= %s"
+            params.append(added_from)
+
+        if added_to:
+            query += " AND DATE(bi.created_at) <= %s"
+            params.append(added_to)
 
         query += """
         GROUP BY bi.id
-        ORDER BY bi.created_at DESC
+        ORDER BY bi.invoice_date DESC, bi.created_at DESC
         LIMIT %s OFFSET %s
         """
         params.extend([limit, offset])
@@ -890,22 +900,32 @@ class DatabaseManager:
             print(f"[!] Error fetching unique projects: {e}")
             return []
 
-    def get_bill_count(self, project: str = None, date_from: str = None, date_to: str = None) -> int:
-        """Get total number of stored bills, optionally filtered by project and date range"""
+    def get_bill_count(self, projects: list = None, date_from: str = None, date_to: str = None,
+                        added_from: str = None, added_to: str = None) -> int:
+        """Get total number of stored bills, optionally filtered by projects and date range"""
         query = "SELECT COUNT(*) FROM bill_invoices WHERE 1=1"
         params = []
 
-        if project:
-            query += " AND project = %s"
-            params.append(project)
+        if projects:
+            placeholders = ','.join(['%s'] * len(projects))
+            query += f" AND project IN ({placeholders})"
+            params.extend(projects)
 
         if date_from:
-            query += " AND DATE(created_at) >= %s"
+            query += " AND invoice_date >= %s"
             params.append(date_from)
 
         if date_to:
-            query += " AND DATE(created_at) <= %s"
+            query += " AND invoice_date <= %s"
             params.append(date_to)
+
+        if added_from:
+            query += " AND DATE(created_at) >= %s"
+            params.append(added_from)
+
+        if added_to:
+            query += " AND DATE(created_at) <= %s"
+            params.append(added_to)
 
         result = self.fetch_all(query, tuple(params) if params else None)
         return result[0][0] if result else 0

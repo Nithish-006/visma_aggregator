@@ -5,8 +5,9 @@
 // State
 let storedBills = [];
 let allProjects = [];
-let currentProjectFilter = '';
-let currentTimeFilter = '';
+let selectedProjects = [];
+let projectDropdownOpen = false;
+let currentAddedFilter = '';
 let fileQueue = [];
 let processedResults = [];
 let rawResults = [];
@@ -41,11 +42,21 @@ function init() {
     loadSummary();
     loadStoredBills();
 
-    // Project filter
-    document.getElementById('projectFilter').addEventListener('change', handleProjectFilterChange);
+    // Date range filters
+    document.getElementById('filterDateFrom').addEventListener('change', handleFilterChange);
+    document.getElementById('filterDateTo').addEventListener('change', handleFilterChange);
 
-    // Time filter (desktop)
-    document.getElementById('timeFilter').addEventListener('change', handleTimeFilterChange);
+    // Added filter
+    document.getElementById('addedFilter').addEventListener('change', (e) => {
+        currentAddedFilter = e.target.value;
+        handleFilterChange();
+    });
+
+    // Reset filters
+    document.getElementById('resetFilters').addEventListener('click', resetAllFilters);
+
+    // Project multi-select dropdown
+    initProjectDropdown();
 
     // Mobile time filter chips
     initMobileTimeFilters();
@@ -128,116 +139,172 @@ async function loadProjects() {
     }
 }
 
-function populateProjectFilter() {
-    const select = document.getElementById('projectFilter');
-    const currentValue = select.value;
+function handleFilterChange() {
+    loadSummary();
+    loadStoredBills();
+}
 
-    // Keep "All Projects" option and add projects
-    select.innerHTML = '<option value="">All Projects</option>';
-    allProjects.forEach(project => {
-        const option = document.createElement('option');
-        option.value = project;
-        option.textContent = project;
-        if (project === currentValue) option.selected = true;
-        select.appendChild(option);
+function getDateFilters() {
+    const dateFrom = document.getElementById('filterDateFrom').value || null;
+    const dateTo = document.getElementById('filterDateTo').value || null;
+    return { dateFrom, dateTo };
+}
+
+function getAddedDateRange() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fmt = d => d.toISOString().split('T')[0];
+    let addedFrom = null, addedTo = null;
+
+    switch (currentAddedFilter) {
+        case 'today':
+            addedFrom = fmt(today); addedTo = fmt(today); break;
+        case 'yesterday':
+            const y = new Date(today); y.setDate(y.getDate() - 1);
+            addedFrom = fmt(y); addedTo = fmt(y); break;
+        case 'week':
+            const ws = new Date(today); ws.setDate(ws.getDate() - ws.getDay());
+            addedFrom = fmt(ws); addedTo = fmt(today); break;
+        case 'month':
+            addedFrom = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
+            addedTo = fmt(today); break;
+        case '30days':
+            const d30 = new Date(today); d30.setDate(d30.getDate() - 30);
+            addedFrom = fmt(d30); addedTo = fmt(today); break;
+        case '90days':
+            const d90 = new Date(today); d90.setDate(d90.getDate() - 90);
+            addedFrom = fmt(d90); addedTo = fmt(today); break;
+        case 'year':
+            addedFrom = fmt(new Date(today.getFullYear(), 0, 1));
+            addedTo = fmt(today); break;
+    }
+    return { addedFrom, addedTo };
+}
+
+function resetAllFilters() {
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    document.getElementById('addedFilter').value = '';
+    currentAddedFilter = '';
+    selectedProjects = [];
+    updateProjectTriggerText();
+    // Sync mobile chips
+    document.querySelectorAll('.time-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.value === '');
+    });
+    handleFilterChange();
+}
+
+// ── Project Multi-Select Dropdown ──────────────────────────────────────
+
+function initProjectDropdown() {
+    const trigger = document.getElementById('projectTrigger');
+    const searchInput = document.getElementById('projectSearchInput');
+
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleProjectDropdown();
+    });
+
+    searchInput.addEventListener('input', () => {
+        renderProjectOptions(searchInput.value.trim().toLowerCase());
+    });
+
+    searchInput.addEventListener('click', (e) => e.stopPropagation());
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#projectDropdown')) {
+            closeProjectDropdown();
+        }
     });
 }
 
-function handleProjectFilterChange(e) {
-    currentProjectFilter = e.target.value;
-    loadSummary();
-    loadStoredBills();
+function toggleProjectDropdown() {
+    const dropdown = document.getElementById('projectDropdown');
+    projectDropdownOpen = !projectDropdownOpen;
+    dropdown.classList.toggle('open', projectDropdownOpen);
+    if (projectDropdownOpen) {
+        document.getElementById('projectSearchInput').value = '';
+        renderProjectOptions('');
+        setTimeout(() => document.getElementById('projectSearchInput').focus(), 50);
+    }
 }
 
-function handleTimeFilterChange(e) {
-    currentTimeFilter = e.target.value;
-    // Sync mobile chips with desktop dropdown
-    syncMobileTimeChips(currentTimeFilter);
-    loadSummary();
-    loadStoredBills();
+function closeProjectDropdown() {
+    if (!projectDropdownOpen) return;
+    projectDropdownOpen = false;
+    document.getElementById('projectDropdown').classList.remove('open');
+}
+
+function populateProjectFilter() {
+    renderProjectOptions('');
+    updateProjectTriggerText();
+}
+
+function renderProjectOptions(search) {
+    const container = document.getElementById('projectOptions');
+    const filtered = search
+        ? allProjects.filter(p => p.toLowerCase().includes(search))
+        : allProjects;
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="bp-dd-empty">No projects found</div>';
+        return;
+    }
+
+    container.innerHTML = filtered.map(p => {
+        const isSelected = selectedProjects.includes(p);
+        return `<div class="bp-dd-option ${isSelected ? 'selected' : ''}" data-value="${escapeForAttr(p)}">
+            <div class="bp-dd-checkbox"></div>
+            <span>${escapeHtml(p)}</span>
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('.bp-dd-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const val = opt.dataset.value;
+            if (selectedProjects.includes(val)) {
+                selectedProjects = selectedProjects.filter(v => v !== val);
+                opt.classList.remove('selected');
+            } else {
+                selectedProjects.push(val);
+                opt.classList.add('selected');
+            }
+            updateProjectTriggerText();
+            handleFilterChange();
+        });
+    });
+}
+
+function updateProjectTriggerText() {
+    const trigger = document.getElementById('projectTrigger');
+    const textEl = trigger.querySelector('.bp-dd-text');
+    if (selectedProjects.length === 0) {
+        textEl.textContent = 'All Projects';
+        trigger.classList.remove('has-selection');
+    } else if (selectedProjects.length === 1) {
+        textEl.textContent = selectedProjects[0];
+        trigger.classList.add('has-selection');
+    } else {
+        textEl.textContent = `${selectedProjects.length} projects`;
+        trigger.classList.add('has-selection');
+    }
 }
 
 function initMobileTimeFilters() {
     const chips = document.querySelectorAll('.time-chip');
     chips.forEach(chip => {
         chip.addEventListener('click', () => {
-            // Update active state
             chips.forEach(c => c.classList.remove('active'));
             chip.classList.add('active');
 
-            // Update filter and sync desktop dropdown
-            currentTimeFilter = chip.dataset.value;
-            document.getElementById('timeFilter').value = currentTimeFilter;
-
-            loadSummary();
-            loadStoredBills();
+            // Sync with "Added" dropdown
+            currentAddedFilter = chip.dataset.value;
+            document.getElementById('addedFilter').value = currentAddedFilter;
+            handleFilterChange();
         });
     });
-}
-
-function syncMobileTimeChips(value) {
-    const chips = document.querySelectorAll('.time-chip');
-    chips.forEach(chip => {
-        chip.classList.toggle('active', chip.dataset.value === value);
-    });
-}
-
-function getDateRange(filterValue) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let dateFrom = null;
-    let dateTo = null;
-
-    switch (filterValue) {
-        case 'today':
-            dateFrom = formatDateForAPI(today);
-            dateTo = formatDateForAPI(today);
-            break;
-        case 'yesterday':
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            dateFrom = formatDateForAPI(yesterday);
-            dateTo = formatDateForAPI(yesterday);
-            break;
-        case 'week':
-            const weekStart = new Date(today);
-            weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of week (Sunday)
-            dateFrom = formatDateForAPI(weekStart);
-            dateTo = formatDateForAPI(today);
-            break;
-        case 'month':
-            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-            dateFrom = formatDateForAPI(monthStart);
-            dateTo = formatDateForAPI(today);
-            break;
-        case '30days':
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            dateFrom = formatDateForAPI(thirtyDaysAgo);
-            dateTo = formatDateForAPI(today);
-            break;
-        case '90days':
-            const ninetyDaysAgo = new Date(today);
-            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-            dateFrom = formatDateForAPI(ninetyDaysAgo);
-            dateTo = formatDateForAPI(today);
-            break;
-        case 'year':
-            const yearStart = new Date(today.getFullYear(), 0, 1);
-            dateFrom = formatDateForAPI(yearStart);
-            dateTo = formatDateForAPI(today);
-            break;
-        default:
-            // All time - no filter
-            break;
-    }
-
-    return { dateFrom, dateTo };
-}
-
-function formatDateForAPI(date) {
-    return date.toISOString().split('T')[0];
 }
 
 function handleOutsideClick(e) {
@@ -270,11 +337,17 @@ function handleTableClick(e) {
 
 async function loadSummary() {
     try {
-        let url = '/api/bills/summary';
-        if (currentProjectFilter) {
-            url += `?project=${encodeURIComponent(currentProjectFilter)}`;
-        }
+        const params = new URLSearchParams();
+        const { dateFrom, dateTo } = getDateFilters();
+        if (dateFrom) params.set('date_from', dateFrom);
+        if (dateTo) params.set('date_to', dateTo);
+        const { addedFrom, addedTo } = getAddedDateRange();
+        if (addedFrom) params.set('added_from', addedFrom);
+        if (addedTo) params.set('added_to', addedTo);
+        if (selectedProjects.length > 0) params.set('projects', selectedProjects.join(','));
 
+        const qs = params.toString();
+        const url = '/api/bills/summary' + (qs ? '?' + qs : '');
         const response = await fetch(url);
         const data = await response.json();
 
@@ -295,21 +368,17 @@ async function loadSummary() {
 
 async function loadStoredBills() {
     try {
-        let url = '/api/bills/stored?limit=500';
-        if (currentProjectFilter) {
-            url += `&project=${encodeURIComponent(currentProjectFilter)}`;
-        }
+        const params = new URLSearchParams();
+        params.set('limit', '500');
+        const { dateFrom, dateTo } = getDateFilters();
+        if (dateFrom) params.set('date_from', dateFrom);
+        if (dateTo) params.set('date_to', dateTo);
+        const { addedFrom, addedTo } = getAddedDateRange();
+        if (addedFrom) params.set('added_from', addedFrom);
+        if (addedTo) params.set('added_to', addedTo);
+        if (selectedProjects.length > 0) params.set('projects', selectedProjects.join(','));
 
-        // Add date range filter
-        const { dateFrom, dateTo } = getDateRange(currentTimeFilter);
-        if (dateFrom) {
-            url += `&date_from=${dateFrom}`;
-        }
-        if (dateTo) {
-            url += `&date_to=${dateTo}`;
-        }
-
-        const response = await fetch(url);
+        const response = await fetch('/api/bills/stored?' + params.toString());
         const data = await response.json();
 
         if (data.success) {

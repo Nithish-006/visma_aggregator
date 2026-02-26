@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Bill Processor | Visma Financials</title>
+    <title>Purchase Bills | Visma Financials</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#2563eb">
@@ -30,7 +30,7 @@
                     <polyline points="12 19 5 12 12 5"></polyline>
                 </svg>
             </a>
-            <h1 class="page-title">Bill Processor</h1>
+            <h1 class="page-title">Purchase Bills</h1>
         </div>
         <div class="header-right">
             <button class="btn btn-secondary" id="bulkUploadBtn" title="Upload original bill files">
@@ -157,6 +157,62 @@
             </div>
         </section>
 
+        <!-- Filter Bar -->
+        <div class="bp-filter-bar">
+            <div class="bp-filters">
+                <div class="bp-filter-group">
+                    <label>From</label>
+                    <input type="date" id="filterDateFrom" class="bp-filter-input">
+                </div>
+                <div class="bp-filter-group">
+                    <label>To</label>
+                    <input type="date" id="filterDateTo" class="bp-filter-input">
+                </div>
+                <div class="bp-filter-group bp-filter-dropdown">
+                    <label>Project</label>
+                    <div class="bp-project-dropdown" id="projectDropdown">
+                        <div class="bp-dd-trigger" id="projectTrigger">
+                            <span class="bp-dd-text">All Projects</span>
+                            <svg class="bp-dd-arrow" xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                        <div class="bp-dd-menu" id="projectMenu">
+                            <div class="bp-dd-search">
+                                <input type="text" id="projectSearchInput" placeholder="Search projects...">
+                            </div>
+                            <div class="bp-dd-options" id="projectOptions"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bp-filter-group bp-filter-dropdown">
+                    <label>Added</label>
+                    <div class="bp-select-wrapper">
+                        <select id="addedFilter" class="bp-filter-select">
+                            <option value="">All Time</option>
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="30days">Last 30 Days</option>
+                            <option value="90days">Last 90 Days</option>
+                            <option value="year">This Year</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="bp-reset-btn" id="resetFilters" title="Reset Filters">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="1 4 1 10 7 10"></polyline>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                    </svg>
+                    Reset
+                </button>
+            </div>
+        </div>
+
         <!-- Mobile Time Filter Chips -->
         <section class="mobile-time-filters" id="mobileTimeFilters">
             <div class="time-chips-scroll">
@@ -180,29 +236,6 @@
                         <polyline points="14 2 14 8 20 8"></polyline>
                     </svg>
                     Invoice Summary
-                </div>
-                <div class="filter-section">
-                    <label for="timeFilter">Added:</label>
-                    <div class="select-wrapper">
-                        <select id="timeFilter" class="filter-select">
-                            <option value="">All Time</option>
-                            <option value="today">Today</option>
-                            <option value="yesterday">Yesterday</option>
-                            <option value="week">This Week</option>
-                            <option value="month">This Month</option>
-                            <option value="30days">Last 30 Days</option>
-                            <option value="90days">Last 90 Days</option>
-                            <option value="year">This Year</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="filter-section">
-                    <label for="projectFilter">Project:</label>
-                    <div class="select-wrapper">
-                        <select id="projectFilter" class="filter-select">
-                            <option value="">All Projects</option>
-                        </select>
-                    </div>
                 </div>
                 <div class="tabs-actions">
                     <button class="btn btn-secondary btn-sm" id="refreshBtn">

@@ -2434,12 +2434,24 @@ def get_stored_bills():
         limit = request.args.get('limit', 100, type=int)
         offset = request.args.get('offset', 0, type=int)
         project = request.args.get('project', None)
+        projects_csv = request.args.get('projects', None)
         date_from = request.args.get('date_from', None)
         date_to = request.args.get('date_to', None)
+        added_from = request.args.get('added_from', None)
+        added_to = request.args.get('added_to', None)
 
-        bills = db_manager.get_all_bills(limit=limit, offset=offset, project=project,
-                                         date_from=date_from, date_to=date_to)
-        total = db_manager.get_bill_count(project=project, date_from=date_from, date_to=date_to)
+        # Multi-project support: comma-separated list takes precedence
+        projects_list = None
+        if projects_csv:
+            projects_list = [p.strip() for p in projects_csv.split(',') if p.strip()]
+        elif project:
+            projects_list = [project]
+
+        bills = db_manager.get_all_bills(limit=limit, offset=offset, projects=projects_list,
+                                         date_from=date_from, date_to=date_to,
+                                         added_from=added_from, added_to=added_to)
+        total = db_manager.get_bill_count(projects=projects_list, date_from=date_from, date_to=date_to,
+                                          added_from=added_from, added_to=added_to)
 
 
 
@@ -2530,35 +2542,54 @@ def get_bills_summary():
     """Get summary statistics for stored bills"""
     try:
         project = request.args.get('project', None)
+        projects_csv = request.args.get('projects', None)
+        date_from = request.args.get('date_from', None)
+        date_to = request.args.get('date_to', None)
+        added_from = request.args.get('added_from', None)
+        added_to = request.args.get('added_to', None)
 
-        # Get totals with optional project filter
-        if project:
-            query = """
-            SELECT
-                COUNT(*) as cnt,
-                COALESCE(SUM(total_amount), 0) as sum_value,
-                COALESCE(SUM(COALESCE(total_cgst, 0) + COALESCE(total_sgst, 0) + COALESCE(total_igst, 0)), 0) as sum_gst,
-                COALESCE(SUM(COALESCE(total_cgst, 0)), 0) as sum_cgst,
-                COALESCE(SUM(COALESCE(total_sgst, 0)), 0) as sum_sgst,
-                COALESCE(SUM(COALESCE(total_igst, 0)), 0) as sum_igst,
-                COUNT(DISTINCT vendor_name) as vendor_cnt
-            FROM bill_invoices
-            WHERE project = %s
-            """
-            result = db_manager.fetch_all(query, (project,))
-        else:
-            query = """
-            SELECT
-                COUNT(*) as cnt,
-                COALESCE(SUM(total_amount), 0) as sum_value,
-                COALESCE(SUM(COALESCE(total_cgst, 0) + COALESCE(total_sgst, 0) + COALESCE(total_igst, 0)), 0) as sum_gst,
-                COALESCE(SUM(COALESCE(total_cgst, 0)), 0) as sum_cgst,
-                COALESCE(SUM(COALESCE(total_sgst, 0)), 0) as sum_sgst,
-                COALESCE(SUM(COALESCE(total_igst, 0)), 0) as sum_igst,
-                COUNT(DISTINCT vendor_name) as vendor_cnt
-            FROM bill_invoices
-            """
-            result = db_manager.fetch_all(query)
+        projects_list = None
+        if projects_csv:
+            projects_list = [p.strip() for p in projects_csv.split(',') if p.strip()]
+        elif project:
+            projects_list = [project]
+
+        query = """
+        SELECT
+            COUNT(*) as cnt,
+            COALESCE(SUM(total_amount), 0) as sum_value,
+            COALESCE(SUM(COALESCE(total_cgst, 0) + COALESCE(total_sgst, 0) + COALESCE(total_igst, 0)), 0) as sum_gst,
+            COALESCE(SUM(COALESCE(total_cgst, 0)), 0) as sum_cgst,
+            COALESCE(SUM(COALESCE(total_sgst, 0)), 0) as sum_sgst,
+            COALESCE(SUM(COALESCE(total_igst, 0)), 0) as sum_igst,
+            COUNT(DISTINCT vendor_name) as vendor_cnt
+        FROM bill_invoices
+        WHERE 1=1
+        """
+        params = []
+
+        if projects_list:
+            placeholders = ','.join(['%s'] * len(projects_list))
+            query += f" AND project IN ({placeholders})"
+            params.extend(projects_list)
+
+        if date_from:
+            query += " AND invoice_date >= %s"
+            params.append(date_from)
+
+        if date_to:
+            query += " AND invoice_date <= %s"
+            params.append(date_to)
+
+        if added_from:
+            query += " AND DATE(created_at) >= %s"
+            params.append(added_from)
+
+        if added_to:
+            query += " AND DATE(created_at) <= %s"
+            params.append(added_to)
+
+        result = db_manager.fetch_all(query, tuple(params) if params else None)
 
 
         if result and len(result) > 0 and result[0] is not None:
