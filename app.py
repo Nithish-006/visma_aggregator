@@ -452,6 +452,55 @@ def match_bills_to_project_groups(bills_list, stem_groups):
     return result
 
 
+def match_labour_to_project_groups(labour_costs, stem_groups):
+    """Match salary/attendance project names to stem groups.
+
+    labour_costs: {project_name: cost} from salary DB
+    stem_groups: {stem: set(names)} from build_smart_project_groups
+
+    Returns {stem: total_labour_cost}
+    """
+    # Build reverse lookup from existing stem groups
+    name_to_stem = {}
+    for stem, names in stem_groups.items():
+        for name in names:
+            name_to_stem[name.lower().strip()] = stem
+
+    result = {}
+    for project, cost in labour_costs.items():
+        p = project.strip()
+        p_lower = p.lower()
+
+        # Direct match
+        matched_stem = name_to_stem.get(p_lower)
+
+        # Fuzzy match using same logic as other matchers
+        if matched_stem is None:
+            if ' - ' in p:
+                after_dash = p.split(' - ', 1)[1].strip()
+                if after_dash:
+                    candidate = normalize_project_stem(after_dash.split()[0])
+                    if candidate in stem_groups:
+                        matched_stem = candidate
+        if matched_stem is None:
+            tokens = p.split()
+            for token in tokens:
+                candidate = normalize_project_stem(token)
+                if candidate in stem_groups:
+                    matched_stem = candidate
+                    break
+        if matched_stem is None:
+            tokens = p.split()
+            first = normalize_project_stem(tokens[0]) if tokens else normalize_project_stem(p)
+            if first in stem_groups:
+                matched_stem = first
+
+        if matched_stem:
+            result[matched_stem] = result.get(matched_stem, 0) + cost
+
+    return result
+
+
 def robust_filter_by_project(df, project=None):
     """Filter dataframe by project using stem-based prefix matching.
     Extracts first word from each selected project and matches case-insensitively."""
@@ -4284,6 +4333,16 @@ def export_project_summary():
         stem_groups = build_smart_project_groups(bank_projects, bill_projects)
         bills_by_stem = match_bills_to_project_groups(export_bills, stem_groups)
 
+        # Fetch labour costs from salary/attendance DB
+        try:
+            labour_costs_raw = DatabaseManager.get_labour_costs_by_project(
+                start_date=start_date, end_date=end_date
+            )
+            labour_by_stem = match_labour_to_project_groups(labour_costs_raw, stem_groups)
+        except Exception as e:
+            print(f"[!] Error matching labour costs: {e}")
+            labour_by_stem = {}
+
         if stem_groups:
             ws_pb = wb.create_sheet('Project Breakdown')
             current_row = 1
@@ -4373,17 +4432,12 @@ def export_project_summary():
                 current_row = pb_section_header(ws_pb, current_row, 'OTHER EXPENSE')
 
                 other_total = 0
-                labour_total = 0
                 if not group_df.empty:
                     expense_df = group_df[group_df['DR Amount'] > 0].copy()
                     if 'Category' in expense_df.columns:
-                        # Separate labour from other expenses
+                        # Exclude labour + standard exclusions from other expense
                         upper_cats = expense_df['Category'].str.upper().str.strip()
                         labour_mask = upper_cats.isin(LABOUR_CATS)
-                        labour_df = expense_df[labour_mask]
-                        labour_total = float(labour_df['DR Amount'].sum()) if not labour_df.empty else 0
-
-                        # Exclude labour + standard exclusions from other expense
                         exclude_mask = expense_df['Category'].isin(EXCLUDE_CATS) | labour_mask
                         expense_df = expense_df[~exclude_mask]
 
@@ -4415,10 +4469,11 @@ def export_project_summary():
                 ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                 current_row += 2  # blank row
 
-                # ── LABOUR PAYMENT (blue amount, auto-filled from bank txns) ──
+                # ── LABOUR PAYMENT (blue amount, from salary/attendance DB) ──
+                salary_labour = labour_by_stem.get(stem, 0)
                 ws_pb.cell(row=current_row, column=1, value='LABOUR PAYMENT').font = Font(bold=True)
-                if labour_total > 0:
-                    ws_pb.cell(row=current_row, column=3, value=labour_total).font = blue_amount
+                if salary_labour > 0:
+                    ws_pb.cell(row=current_row, column=3, value=salary_labour).font = blue_amount
                     ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                 current_row += 2  # blank row
 
@@ -4445,7 +4500,7 @@ def export_project_summary():
                 current_row += 1
 
                 # Fill TOTAL PROJECT VALUE (material + other + labour)
-                total_project = material_total + other_total + labour_total
+                total_project = material_total + other_total + salary_labour
                 ws_pb.cell(row=total_value_row, column=3, value=total_project).font = red_amount
                 ws_pb.cell(row=total_value_row, column=3).number_format = pb_currency
 
@@ -4465,6 +4520,266 @@ def export_project_summary():
             ws_pb.column_dimensions['B'].width = 15
             ws_pb.column_dimensions['C'].width = 20
 
+        # ──────────────────────────────────────────────────────────
+        # TAB 9: Labour Attendance & Salary Summary (single month)
+        # ──────────────────────────────────────────────────────────
+        import calendar as cal
+        from datetime import date as date_cls
+
+        labour_sheet_names = []
+        try:
+            # Determine the single target month from date filters
+            # Use end_date's month (or start_date if no end_date)
+            target_date_str = end_date or start_date
+            if target_date_str:
+                from dateutil import parser as dp
+                target_dt = dp.parse(str(target_date_str))
+                t_year, t_month = target_dt.year, target_dt.month
+            else:
+                from datetime import date as _d
+                today = _d.today()
+                t_year, t_month = today.year, today.month
+
+            # Fetch only that single month
+            first_day = f"{t_year}-{t_month:02d}-01"
+            last_day = f"{t_year}-{t_month:02d}-{cal.monthrange(t_year, t_month)[1]:02d}"
+            monthly_data = DatabaseManager.get_monthly_salary_and_attendance(
+                start_date=first_day, end_date=last_day
+            )
+
+            # Styling for labour sheets
+            labour_title_font = Font(name='Calibri', bold=True, size=13, color='1A1A2E')
+            labour_header_font = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
+            labour_header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+            summary_header_fill = PatternFill(start_color='2F5496', end_color='2F5496', fill_type='solid')
+            sunday_fill = PatternFill(start_color='FCE4EC', end_color='FCE4EC', fill_type='solid')
+            present_font = Font(color='006100')
+            absent_font = Font(color='DC2626')
+            labour_currency = '#,##0.00'
+
+            for month_data in monthly_data[:1]:  # single month only
+                sheet_name = f"Labour {month_data['sheet_name']}"
+                if len(sheet_name) > 31:
+                    sheet_name = sheet_name[:31]
+                labour_sheet_names.append(sheet_name)
+
+                ws_l = wb.create_sheet(sheet_name)
+                days_in_month = month_data['days_in_month']
+                yr = month_data['year']
+                mn = month_data['month_num']
+
+                # Build attendance lookup: worker_id -> day -> {status, ot, project}
+                att_map = {}
+                for a in month_data['attendance']:
+                    wid = a['worker_id']
+                    try:
+                        from dateutil import parser as dp
+                        d = dp.parse(str(a['date'])).day
+                    except:
+                        continue
+                    if wid not in att_map:
+                        att_map[wid] = {}
+                    att_map[wid][d] = {
+                        'status': a['status'],
+                        'ot': a['ot_hours'],
+                        'project': a['project']
+                    }
+
+                # ===== ROW 1: Title =====
+                ws_l.cell(row=1, column=1,
+                          value=f"LABOUR ATTENDANCE FOR {month_data['sheet_name']}").font = labour_title_font
+                ws_l.merge_cells(start_row=1, start_column=1, end_row=1, end_column=4)
+
+                # ===== ROW 2-3: Headers =====
+                # Fixed columns
+                fixed_headers = ['S.No', 'Name', 'DESIGNATION', 'TEAM']
+                for ci, h in enumerate(fixed_headers, 1):
+                    c = ws_l.cell(row=2, column=ci, value=h)
+                    c.font = labour_header_font
+                    c.fill = labour_header_fill
+                    c.alignment = Alignment(horizontal='center')
+                    # Row 3 empty for fixed cols
+                    ws_l.cell(row=3, column=ci).fill = labour_header_fill
+
+                # Day columns: 3 cols per day (status, OT, project)
+                col = 5  # start after fixed
+                day_col_starts = {}  # day -> starting column
+                for day in range(1, days_in_month + 1):
+                    day_col_starts[day] = col
+                    dt = date_cls(yr, mn, day)
+                    is_sunday = dt.weekday() == 6
+                    day_label = f"{day} SUN" if is_sunday else str(day)
+
+                    cell_h1 = ws_l.cell(row=2, column=col, value=day_label)
+                    cell_h1.font = labour_header_font
+                    cell_h1.fill = sunday_fill if is_sunday else labour_header_fill
+                    cell_h1.alignment = Alignment(horizontal='center')
+                    # Merge across 3 cols for day header
+                    ws_l.merge_cells(start_row=2, start_column=col, end_row=2, end_column=col + 2)
+
+                    # Sub-headers
+                    for si, sub in enumerate(['', 'OT', 'Pr']):
+                        sc = ws_l.cell(row=3, column=col + si, value=sub)
+                        sc.font = Font(size=8, bold=True)
+                        sc.fill = sunday_fill if is_sunday else labour_header_fill
+                        if not is_sunday:
+                            sc.font = Font(size=8, bold=True, color='FFFFFF')
+                        sc.alignment = Alignment(horizontal='center')
+                    col += 3
+
+                # Summary column headers
+                summary_start_col = col
+                sum_headers = ['TOTAL PRESENT', 'TOTAL OT', 'BASE SALARY',
+                               'BASE PAY', 'OT PAY', 'TOTAL SALARY']
+                # Main header merged across summary cols
+                ws_l.cell(row=2, column=summary_start_col,
+                          value=f"{month_data['sheet_name']} MONTH LABOUR ATTENDANCE & PAYMENT").font = Font(
+                    bold=True, size=9, color='FFFFFF')
+                ws_l.cell(row=2, column=summary_start_col).fill = summary_header_fill
+                for c in range(summary_start_col, summary_start_col + 6):
+                    ws_l.cell(row=2, column=c).fill = summary_header_fill
+                ws_l.merge_cells(start_row=2, start_column=summary_start_col,
+                                 end_row=2, end_column=summary_start_col + 5)
+                for si, sh in enumerate(sum_headers):
+                    sc = ws_l.cell(row=3, column=summary_start_col + si, value=sh)
+                    sc.font = Font(bold=True, size=8, color='FFFFFF')
+                    sc.fill = summary_header_fill
+                    sc.alignment = Alignment(horizontal='center')
+
+                # ===== DATA ROWS (one per worker) =====
+                data_row = 4
+                sno = 1
+                for w in month_data['workers']:
+                    ws_l.cell(row=data_row, column=1, value=sno)
+                    ws_l.cell(row=data_row, column=2, value=w['name'])
+                    ws_l.cell(row=data_row, column=3, value=w['designation'])
+                    ws_l.cell(row=data_row, column=4, value=w['team'])
+
+                    # Day-by-day columns
+                    for day in range(1, days_in_month + 1):
+                        dc = day_col_starts[day]
+                        att = att_map.get(w['worker_id'], {}).get(day)
+                        if att:
+                            status_cell = ws_l.cell(row=data_row, column=dc, value=att['status'])
+                            if att['status'] == 'P':
+                                status_cell.font = present_font
+                            elif att['status'] == 'A':
+                                status_cell.font = absent_font
+                            if att['ot']:
+                                ws_l.cell(row=data_row, column=dc + 1, value=att['ot'])
+                            if att['project']:
+                                ws_l.cell(row=data_row, column=dc + 2, value=att['project'])
+
+                    # Summary columns
+                    ws_l.cell(row=data_row, column=summary_start_col, value=w['working_days'])
+                    ws_l.cell(row=data_row, column=summary_start_col + 1, value=w['ot_hours'])
+                    ws_l.cell(row=data_row, column=summary_start_col + 2,
+                              value=w['base_salary_per_day']).number_format = labour_currency
+                    ws_l.cell(row=data_row, column=summary_start_col + 3,
+                              value=w['base_pay']).number_format = labour_currency
+                    ws_l.cell(row=data_row, column=summary_start_col + 4,
+                              value=w['ot_pay']).number_format = labour_currency
+                    ws_l.cell(row=data_row, column=summary_start_col + 5,
+                              value=w['total_salary']).number_format = labour_currency
+
+                    sno += 1
+                    data_row += 1
+
+                # ===== SUMMARY SECTIONS =====
+                data_row += 1  # blank row
+
+                # Monthly Summary
+                ws_l.cell(row=data_row, column=1, value='MONTHLY SUMMARY').font = Font(bold=True, size=11)
+                ws_l.cell(row=data_row, column=1).fill = PatternFill(
+                    start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
+                data_row += 1
+
+                total_workers = len(month_data['workers'])
+                total_present = sum(w['working_days'] for w in month_data['workers'])
+                total_ot = sum(w['ot_hours'] for w in month_data['workers'])
+                total_sal = month_data['total_salary']
+
+                kpi_labels = ['Total Workers', 'Total Present Days', 'Total OT Hours', 'Total Salary']
+                kpi_values = [total_workers, total_present, round(total_ot, 2), total_sal]
+                for ki, (kl, kv) in enumerate(zip(kpi_labels, kpi_values)):
+                    c = ki * 3
+                    ws_l.cell(row=data_row, column=c + 1, value=kl).font = Font(bold=True)
+                    cell = ws_l.cell(row=data_row, column=c + 2, value=kv)
+                    if kl == 'Total Salary':
+                        cell.number_format = labour_currency
+                        cell.font = Font(bold=True, color='006100')
+                data_row += 2
+
+                # Project Breakdown
+                ws_l.cell(row=data_row, column=1, value='PROJECT BREAKDOWN').font = Font(bold=True, size=11)
+                ws_l.cell(row=data_row, column=1).fill = PatternFill(
+                    start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
+                data_row += 1
+
+                pb_headers = ['Project', 'Workers', 'Working Days', 'OT Hours']
+                for ci, h in enumerate(pb_headers, 1):
+                    c = ws_l.cell(row=data_row, column=ci, value=h)
+                    c.font = Font(bold=True, color='FFFFFF', size=9)
+                    c.fill = labour_header_fill
+                data_row += 1
+
+                for proj in sorted(month_data['project_breakdown'], key=lambda x: x['name']):
+                    ws_l.cell(row=data_row, column=1, value=proj['name'])
+                    ws_l.cell(row=data_row, column=2, value=proj['workers'])
+                    ws_l.cell(row=data_row, column=3, value=proj['working_days'])
+                    ws_l.cell(row=data_row, column=4, value=proj['ot_hours'])
+                    data_row += 1
+                data_row += 1
+
+                # Daily Headcount
+                ws_l.cell(row=data_row, column=1, value='DAILY HEADCOUNT').font = Font(bold=True, size=11)
+                ws_l.cell(row=data_row, column=1).fill = PatternFill(
+                    start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
+                data_row += 1
+
+                dh_headers = ['Day', 'Date', 'Present', 'Absent', 'Holiday', 'OT Hours']
+                for ci, h in enumerate(dh_headers, 1):
+                    c = ws_l.cell(row=data_row, column=ci, value=h)
+                    c.font = Font(bold=True, color='FFFFFF', size=9)
+                    c.fill = labour_header_fill
+                data_row += 1
+
+                day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                for dh in month_data['daily_headcount']:
+                    try:
+                        from dateutil import parser as dp
+                        dd = dp.parse(str(dh['date']))
+                        ws_l.cell(row=data_row, column=1, value=day_names[dd.weekday()])
+                        ws_l.cell(row=data_row, column=2, value=dd.strftime('%d/%m/%Y'))
+                    except:
+                        ws_l.cell(row=data_row, column=2, value=str(dh['date']))
+                    ws_l.cell(row=data_row, column=3, value=dh['present'])
+                    ws_l.cell(row=data_row, column=4, value=dh['absent'])
+                    ws_l.cell(row=data_row, column=5, value=dh['holiday'])
+                    ws_l.cell(row=data_row, column=6, value=dh['ot_hours'])
+                    data_row += 1
+
+                # Column widths
+                ws_l.column_dimensions['A'].width = 5
+                ws_l.column_dimensions['B'].width = 20
+                ws_l.column_dimensions['C'].width = 12
+                ws_l.column_dimensions['D'].width = 10
+                # Day columns are narrow (3 per day)
+                for day in range(1, days_in_month + 1):
+                    dc = day_col_starts[day]
+                    for offset, w in enumerate([3, 3, 8]):
+                        col_letter = get_column_letter(dc + offset)
+                        ws_l.column_dimensions[col_letter].width = w
+                # Summary columns
+                for si, sw in enumerate([13, 10, 12, 10, 10, 12]):
+                    col_letter = get_column_letter(summary_start_col + si)
+                    ws_l.column_dimensions[col_letter].width = sw
+
+        except Exception as e:
+            print(f"[!] Labour tab export error: {e}")
+            import traceback
+            traceback.print_exc()
+
         # ── Sheet ordering ──
         if len(wb.sheetnames) > 1:
             desired_order = [
@@ -4478,6 +4793,7 @@ def export_project_summary():
                     sn = sn[:31]
                 desired_order.append(sn)
             desired_order.extend(['Bills', 'Project Breakdown'])
+            desired_order.extend(labour_sheet_names)
 
             desired_order = [s for s in desired_order if s in wb.sheetnames]
             desired_order += [s for s in wb.sheetnames if s not in desired_order]

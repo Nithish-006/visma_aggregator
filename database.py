@@ -1127,6 +1127,272 @@ class DatabaseManager:
             print(f"[!] Error fetching bills with line items for export: {e}")
             return []
 
+    # ── Salary / Attendance DB helpers ──────────────────────
+    SALARY_DB_CONFIG = {
+        'host': 'caboose.proxy.rlwy.net',
+        'port': 47978,
+        'user': 'root',
+        'password': 'DZktxKRJxEMmOBBkqLjAFxcPvViPBHkH',
+        'database': 'railway'
+    }
+
+    @staticmethod
+    def _get_salary_connection():
+        return mysql.connector.connect(**DatabaseManager.SALARY_DB_CONFIG)
+
+    @staticmethod
+    def get_labour_costs_by_project(start_date=None, end_date=None):
+        """Fetch labour costs per project from the salary/attendance database.
+
+        Uses the correct formula from the attendance app:
+          per present day: base_salary_per_day
+          per OT hour:     base_salary_per_day / 8
+        Uses latest salary record per worker for base_salary_per_day.
+
+        Returns dict: {project_name: total_labour_cost}
+        """
+        try:
+            conn = DatabaseManager._get_salary_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            conditions = ["a.status = 'P'", "a.project IS NOT NULL", "a.project != ''"]
+            params = []
+
+            if start_date:
+                conditions.append("a.date >= %s")
+                params.append(start_date)
+            if end_date:
+                conditions.append("a.date <= %s")
+                params.append(end_date)
+
+            where_clause = " AND ".join(conditions)
+
+            query = f"""
+            SELECT
+                a.project,
+                SUM(s.base_salary_per_day) as base_cost,
+                SUM((s.base_salary_per_day / 8) * a.ot_hours) as ot_cost
+            FROM attendance a
+            JOIN (
+                SELECT s1.* FROM salary s1
+                INNER JOIN (
+                    SELECT worker_id, MAX(year * 100 + month) AS max_period
+                    FROM salary GROUP BY worker_id
+                ) s2 ON s1.worker_id = s2.worker_id
+                    AND (s1.year * 100 + s1.month) = s2.max_period
+            ) s ON a.worker_id = s.worker_id
+            WHERE {where_clause}
+            GROUP BY a.project
+            ORDER BY (SUM(s.base_salary_per_day) + SUM((s.base_salary_per_day / 8) * a.ot_hours)) DESC
+            """
+
+            cursor.execute(query, tuple(params) if params else None)
+            rows = cursor.fetchall()
+            cursor.close()
+            conn.close()
+
+            result = {}
+            for row in rows:
+                project = row.get('project', '')
+                base = float(row['base_cost'] or 0)
+                ot = float(row['ot_cost'] or 0)
+                cost = round(base + ot, 2)
+                if project and cost > 0:
+                    result[project] = cost
+            return result
+
+        except Exception as e:
+            print(f"[!] Error fetching labour costs from salary DB: {e}")
+            return {}
+
+    @staticmethod
+    def get_monthly_salary_and_attendance(start_date=None, end_date=None):
+        """Fetch complete monthly salary + attendance data for the Labour tab export.
+
+        Returns list of month dicts (newest first), each containing:
+        - month_name, year, month_num
+        - workers: list of worker dicts with salary breakdown
+        - attendance: list of daily attendance records for that month
+        - total_salary
+        """
+        import calendar as cal
+        from datetime import date as date_type
+
+        try:
+            conn = DatabaseManager._get_salary_connection()
+            cursor = conn.cursor(dictionary=True)
+
+            # Determine month range from date filters
+            if start_date:
+                try:
+                    from dateutil import parser
+                    sd = parser.parse(str(start_date)).date() if not isinstance(start_date, date_type) else start_date
+                except:
+                    sd = date_type(2025, 1, 1)
+            else:
+                sd = date_type(2025, 1, 1)
+
+            if end_date:
+                try:
+                    from dateutil import parser
+                    ed = parser.parse(str(end_date)).date() if not isinstance(end_date, date_type) else end_date
+                except:
+                    ed = date_type.today()
+            else:
+                ed = date_type.today()
+
+            # Build list of (year, month) tuples in range
+            months_in_range = []
+            y, m = sd.year, sd.month
+            while (y, m) <= (ed.year, ed.month):
+                months_in_range.append((y, m))
+                m += 1
+                if m > 12:
+                    m = 1
+                    y += 1
+
+            result = []
+
+            for year, month in reversed(months_in_range):
+                # 1. Worker salary data
+                cursor.execute("""
+                    SELECT worker_id, name, designation, team,
+                           base_salary_per_day, total_working_days, ot_hours, total_salary
+                    FROM salary
+                    WHERE year = %s AND month = %s
+                    ORDER BY team, name
+                """, (year, month))
+                salary_rows = cursor.fetchall()
+
+                if not salary_rows:
+                    continue
+
+                workers = []
+                total_salary = 0
+                for w in salary_rows:
+                    base = float(w['base_salary_per_day'] or 0)
+                    days = int(w['total_working_days'] or 0)
+                    ot = float(w['ot_hours'] or 0)
+                    base_pay = days * base
+                    ot_pay = (base / 8) * ot if base > 0 else 0
+                    ts = float(w['total_salary'] or 0)
+                    total_salary += ts
+                    workers.append({
+                        'worker_id': w['worker_id'],
+                        'name': w['name'],
+                        'designation': w['designation'] or '',
+                        'team': w['team'] or '',
+                        'base_salary_per_day': base,
+                        'working_days': days,
+                        'ot_hours': ot,
+                        'base_pay': round(base_pay, 2),
+                        'ot_pay': round(ot_pay, 2),
+                        'total_salary': ts
+                    })
+
+                # 2. Attendance records for this month
+                cursor.execute("""
+                    SELECT DISTINCT
+                        a.id, a.worker_id, a.date, a.status, a.ot_hours, a.project,
+                        s.name, s.designation, s.team
+                    FROM attendance a
+                    JOIN salary s ON a.worker_id = s.worker_id
+                    WHERE YEAR(a.date) = %s AND MONTH(a.date) = %s
+                    ORDER BY a.date, s.team, s.name
+                """, (year, month))
+                att_rows = cursor.fetchall()
+
+                # Deduplicate by attendance id
+                seen_ids = set()
+                attendance = []
+                for a in att_rows:
+                    aid = a['id']
+                    if aid not in seen_ids:
+                        seen_ids.add(aid)
+                        att_date = a['date']
+                        if hasattr(att_date, 'isoformat'):
+                            att_date = att_date.isoformat()
+                        attendance.append({
+                            'date': att_date,
+                            'worker_id': a['worker_id'],
+                            'name': a['name'],
+                            'designation': a['designation'] or '',
+                            'team': a['team'] or '',
+                            'status': a['status'],
+                            'ot_hours': float(a['ot_hours'] or 0),
+                            'project': a['project'] or ''
+                        })
+
+                # 3. Daily headcount
+                cursor.execute("""
+                    SELECT date,
+                           SUM(status = 'P') AS present,
+                           SUM(status = 'A') AS absent,
+                           SUM(status = 'H') AS holiday,
+                           SUM(ot_hours) AS ot_hours
+                    FROM attendance
+                    WHERE YEAR(date) = %s AND MONTH(date) = %s
+                    GROUP BY date ORDER BY date
+                """, (year, month))
+                daily_rows = cursor.fetchall()
+                daily = []
+                for d in daily_rows:
+                    dd = d['date']
+                    if hasattr(dd, 'isoformat'):
+                        dd = dd.isoformat()
+                    daily.append({
+                        'date': dd,
+                        'present': int(d['present'] or 0),
+                        'absent': int(d['absent'] or 0),
+                        'holiday': int(d['holiday'] or 0),
+                        'ot_hours': round(float(d['ot_hours'] or 0), 2)
+                    })
+
+                # 4. Project breakdown
+                cursor.execute("""
+                    SELECT COALESCE(project, 'Unassigned') AS project,
+                           COUNT(DISTINCT worker_id) AS workers,
+                           COUNT(DISTINCT CASE WHEN status='P' THEN date END) AS working_days,
+                           SUM(ot_hours) AS ot_hours
+                    FROM attendance
+                    WHERE YEAR(date) = %s AND MONTH(date) = %s AND status = 'P'
+                    GROUP BY COALESCE(project, 'Unassigned')
+                """, (year, month))
+                proj_rows = cursor.fetchall()
+                projects = []
+                for p in proj_rows:
+                    projects.append({
+                        'name': p['project'],
+                        'workers': int(p['workers'] or 0),
+                        'working_days': int(p['working_days'] or 0),
+                        'ot_hours': round(float(p['ot_hours'] or 0), 2)
+                    })
+
+                month_abbr = cal.month_abbr[month].upper()
+                result.append({
+                    'month': f"{year}-{month:02d}",
+                    'year': year,
+                    'month_num': month,
+                    'month_name': f"{cal.month_name[month]} {year}",
+                    'sheet_name': f"{month_abbr}-{str(year)[-2:]}",
+                    'days_in_month': cal.monthrange(year, month)[1],
+                    'workers': workers,
+                    'attendance': attendance,
+                    'daily_headcount': daily,
+                    'project_breakdown': projects,
+                    'total_salary': round(total_salary, 2)
+                })
+
+            cursor.close()
+            conn.close()
+            return result
+
+        except Exception as e:
+            print(f"[!] Error fetching monthly salary data: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
     def update_bill(self, invoice_id: int, bill_data: Dict) -> Tuple[bool, Optional[str]]:
         """
         Update a bill invoice and its line items in the database.
