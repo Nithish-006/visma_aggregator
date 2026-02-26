@@ -1051,6 +1051,82 @@ class DatabaseManager:
             print(f"[!] Error fetching bills for project summary: {e}")
             return [], 0, {'total_amount': 0, 'total_gst': 0}
 
+    def get_bills_with_line_items_for_export(self, start_date=None, end_date=None):
+        """Fetch all bills with their nested line items for Excel export.
+
+        Returns list of bill dicts, each with a 'line_items' list containing
+        description, quantity, uom, and amount for each line item.
+        No pagination - export needs all data.
+        """
+        conditions = []
+        params = []
+
+        if start_date:
+            conditions.append("bi.invoice_date >= %s")
+            params.append(start_date)
+        if end_date:
+            conditions.append("bi.invoice_date <= %s")
+            params.append(end_date)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        query = f"""
+        SELECT
+            bi.id as bill_id, bi.invoice_number, bi.invoice_date,
+            bi.vendor_name, bi.project, bi.subtotal, bi.total_amount,
+            bli.description as item_description,
+            bli.quantity as item_quantity,
+            bli.uom as item_uom,
+            bli.amount as item_amount
+        FROM bill_invoices bi
+        LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
+        WHERE {where_clause}
+        ORDER BY bi.id, bli.sl_no
+        """
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(query, tuple(params) if params else None)
+                rows = cursor.fetchall()
+                cursor.close()
+
+                # Group flat JOIN rows by bill_id using OrderedDict
+                from collections import OrderedDict
+                bills_map = OrderedDict()
+                for row in rows:
+                    bid = row['bill_id']
+                    if bid not in bills_map:
+                        inv_date = row.get('invoice_date')
+                        if inv_date and hasattr(inv_date, 'strftime'):
+                            inv_date = inv_date.strftime('%d-%b-%Y')
+                        bills_map[bid] = {
+                            'bill_id': bid,
+                            'invoice_number': row.get('invoice_number', ''),
+                            'invoice_date': inv_date,
+                            'vendor_name': row.get('vendor_name', ''),
+                            'project': row.get('project', ''),
+                            'subtotal': float(row['subtotal']) if row.get('subtotal') else 0,
+                            'total_amount': float(row['total_amount']) if row.get('total_amount') else 0,
+                            'line_items': []
+                        }
+                    # Add line item if present
+                    if row.get('item_description'):
+                        qty = row.get('item_quantity')
+                        amt = row.get('item_amount')
+                        bills_map[bid]['line_items'].append({
+                            'description': row['item_description'],
+                            'quantity': float(qty) if qty else 0,
+                            'uom': row.get('item_uom', ''),
+                            'amount': float(amt) if amt else 0
+                        })
+
+                return list(bills_map.values())
+
+        except Exception as e:
+            print(f"[!] Error fetching bills with line items for export: {e}")
+            return []
+
     def update_bill(self, invoice_id: int, bill_data: Dict) -> Tuple[bool, Optional[str]]:
         """
         Update a bill invoice and its line items in the database.

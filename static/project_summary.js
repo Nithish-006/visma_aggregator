@@ -1065,6 +1065,18 @@
     }
 
     // ── Start ──────────────────────────────────────────────────────────
-    document.addEventListener('DOMContentLoaded', init);
+    // Handle normal page load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    // Re-initialize when page is restored from back-forward cache
+    window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+            init();
+        }
+    });
 
 })();
