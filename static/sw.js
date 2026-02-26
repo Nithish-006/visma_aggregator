@@ -1,25 +1,10 @@
-const CACHE_NAME = 'visma-v3';
+const CACHE_NAME = 'visma-v4';
 
 const PRECACHE_ASSETS = [
-  '/static/logo.png',
-  '/static/hub.css',
-  '/static/hub.js',
-  '/static/style.css',
-  '/static/dashboard.js',
-  '/static/edit_transactions.css',
-  '/static/edit_transactions.js',
-  '/static/charts.js',
-  '/static/personal_tracker.css',
-  '/static/personal_tracker.js',
-  '/static/expense_form.css',
-  '/static/expense_form.js',
-  '/static/bill_processor.css',
-  '/static/bill_processor.js',
-  '/static/edit.js',
-  '/static/upload.js'
+  '/static/logo.png'
 ];
 
-// Install: pre-cache core static assets
+// Install: pre-cache only essential assets, activate immediately
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -40,30 +25,20 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: cache-first for static assets, network-first for everything else
+// Fetch: network-first for everything, cache as offline fallback only
 self.addEventListener('fetch', (event) => {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') return;
+
+  // Skip API calls - let the browser handle them normally
   const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) return;
 
-  // Cache-first for static assets
-  if (url.pathname.startsWith('/static/')) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        return cached || fetch(event.request).then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        });
-      })
-    );
-    return;
-  }
-
-  // Network-first for API calls and HTML pages
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cache successful GET responses for offline fallback
-        if (event.request.method === 'GET' && response.status === 200) {
+        // Cache successful responses for offline fallback
+        if (response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
