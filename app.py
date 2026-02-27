@@ -5188,6 +5188,16 @@ def export_project_summary():
                          if str(b.get('project', '')).strip() and str(b.get('project', '')).lower() != 'nan']
 
         stem_groups = build_smart_project_groups(bank_projects, bill_projects)
+
+        # Apply project filter to stem_groups (same logic as bills tabs)
+        if project:
+            pb_proj_stems = get_project_stems(project)
+            stem_groups = {
+                s: names for s, names in stem_groups.items()
+                if s in pb_proj_stems or any(normalize_project_stem(t) in pb_proj_stems
+                                             for n in names for t in str(n).split())
+            }
+
         bills_by_stem = match_bills_to_project_groups(export_bills, stem_groups)
 
         # Fetch labour costs from salary/attendance DB
@@ -5441,6 +5451,49 @@ def export_project_summary():
                         'project': a['project']
                     }
 
+                # Filter workers by selected project(s) if active
+                labour_workers = month_data['workers']
+                labour_attendance = month_data['attendance']
+                labour_project_breakdown = month_data['project_breakdown']
+                labour_daily_headcount = month_data['daily_headcount']
+                if project:
+                    labour_stems = get_project_stems(project)
+                    # Find worker_ids who have at least one attendance day
+                    # on a matching project
+                    matching_worker_ids = set()
+                    for a in month_data['attendance']:
+                        proj_name = str(a.get('project', '') or '').lower().strip()
+                        if proj_name and any(proj_name.startswith(s) for s in labour_stems):
+                            matching_worker_ids.add(a['worker_id'])
+
+                    if matching_worker_ids:
+                        labour_workers = [w for w in month_data['workers']
+                                          if w['worker_id'] in matching_worker_ids]
+                        labour_attendance = [a for a in month_data['attendance']
+                                             if a['worker_id'] in matching_worker_ids]
+                        labour_project_breakdown = [
+                            p for p in month_data['project_breakdown']
+                            if any(str(p.get('name', '')).lower().startswith(s)
+                                   for s in labour_stems)
+                        ]
+
+                        # Rebuild att_map for filtered workers only
+                        att_map = {}
+                        for a in labour_attendance:
+                            wid = a['worker_id']
+                            try:
+                                from dateutil import parser as dp
+                                d = dp.parse(str(a['date'])).day
+                            except:
+                                continue
+                            if wid not in att_map:
+                                att_map[wid] = {}
+                            att_map[wid][d] = {
+                                'status': a['status'],
+                                'ot': a['ot_hours'],
+                                'project': a['project']
+                            }
+
                 # ===== ROW 1: Title =====
                 ws_l.cell(row=1, column=1,
                           value=f"LABOUR ATTENDANCE FOR {month_data['sheet_name']}").font = labour_title_font
@@ -5505,7 +5558,7 @@ def export_project_summary():
                 # ===== DATA ROWS (one per worker) =====
                 data_row = 4
                 sno = 1
-                for w in month_data['workers']:
+                for w in labour_workers:
                     ws_l.cell(row=data_row, column=1, value=sno)
                     ws_l.cell(row=data_row, column=2, value=w['name'])
                     ws_l.cell(row=data_row, column=3, value=w['designation'])
@@ -5550,10 +5603,10 @@ def export_project_summary():
                     start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
                 data_row += 1
 
-                total_workers = len(month_data['workers'])
-                total_present = sum(w['working_days'] for w in month_data['workers'])
-                total_ot = sum(w['ot_hours'] for w in month_data['workers'])
-                total_sal = month_data['total_salary']
+                total_workers = len(labour_workers)
+                total_present = sum(w['working_days'] for w in labour_workers)
+                total_ot = sum(w['ot_hours'] for w in labour_workers)
+                total_sal = sum(w['total_salary'] for w in labour_workers)
 
                 kpi_labels = ['Total Workers', 'Total Present Days', 'Total OT Hours', 'Total Salary']
                 kpi_values = [total_workers, total_present, round(total_ot, 2), total_sal]
@@ -5579,7 +5632,7 @@ def export_project_summary():
                     c.fill = labour_header_fill
                 data_row += 1
 
-                for proj in sorted(month_data['project_breakdown'], key=lambda x: x['name']):
+                for proj in sorted(labour_project_breakdown, key=lambda x: x['name']):
                     ws_l.cell(row=data_row, column=1, value=proj['name'])
                     ws_l.cell(row=data_row, column=2, value=proj['workers'])
                     ws_l.cell(row=data_row, column=3, value=proj['working_days'])
@@ -5601,7 +5654,7 @@ def export_project_summary():
                 data_row += 1
 
                 day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                for dh in month_data['daily_headcount']:
+                for dh in labour_daily_headcount:
                     try:
                         from dateutil import parser as dp
                         dd = dp.parse(str(dh['date']))
@@ -5648,8 +5701,8 @@ def export_project_summary():
                 if len(sn) > 31:
                     sn = sn[:31]
                 desired_order.append(sn)
-            desired_order.extend(['Bills', 'Project Breakdown'])
-            desired_order.extend(labour_sheet_names)
+            desired_order.extend(['Purchase Bills', 'Sales Bills', 'Project Breakdown'])
+            desired_order.extend(labour_sheet_names)  # Labour always last
 
             desired_order = [s for s in desired_order if s in wb.sheetnames]
             desired_order += [s for s in wb.sheetnames if s not in desired_order]
