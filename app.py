@@ -4266,8 +4266,10 @@ def get_project_summary_projects():
 
         project_col = 'Project' if 'Project' in df.columns else 'project'
         if project_col in df.columns:
-            projects = df[project_col].dropna().unique()
-            all_projects.update([str(p) for p in projects if str(p) != 'nan'])
+            raw_names = [str(p) for p in df[project_col].dropna().unique()
+                         if str(p).strip() and str(p).lower() != 'nan']
+            stem_groups = build_smart_project_groups(raw_names, [])
+            all_projects.update(stem.upper() for stem in stem_groups.keys())
 
         if 'Category' in df.columns:
             cats = df['Category'].dropna().unique()
@@ -4316,13 +4318,16 @@ def get_project_summary_filter_options():
         return pd.concat(rows, ignore_index=True)
 
     # Projects: filtered by date, category, vendor (not project itself)
+    # Return only cleaned stem-grouped project names (same as project breakdown)
     proj_df = get_filtered_df('project')
     all_projects = set()
     if not proj_df.empty:
         project_col = 'Project' if 'Project' in proj_df.columns else 'project'
         if project_col in proj_df.columns:
-            vals = proj_df[project_col].dropna().unique()
-            all_projects.update([str(p) for p in vals if str(p) != 'nan'])
+            raw_names = [str(p) for p in proj_df[project_col].dropna().unique()
+                         if str(p).strip() and str(p).lower() != 'nan']
+            stem_groups = build_smart_project_groups(raw_names, [])
+            all_projects = {stem.upper() for stem in stem_groups.keys()}
 
     # Categories: filtered by date, project, vendor (not category itself)
     cat_df = get_filtered_df('category')
