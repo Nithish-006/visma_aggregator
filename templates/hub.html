@@ -77,7 +77,9 @@
     <main class="hub-main">
         <div class="hub-container">
             <div class="hub-grid">
-                <!-- Expense Tracker Card (First/Primary) -->
+                <!-- Row 1: Expense Tracker + Project Summary -->
+
+                <!-- Expense Tracker Card -->
                 <a href="/personal-tracker" class="hub-card bank-card personal-card">
                     <div class="card-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
@@ -102,6 +104,30 @@
                         </svg>
                     </div>
                 </a>
+
+                <!-- Project Summary Card -->
+                <a href="/project-summary" class="hub-card bank-card summary-card">
+                    <div class="card-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
+                            </path>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <h3>Project Summary</h3>
+                        <p class="card-subtitle">Track projects across banks</p>
+                    </div>
+                    <div class="card-arrow">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </div>
+                </a>
+
+                <!-- Row 2: Axis Bank + KVB -->
 
                 <!-- Axis Bank Card -->
                 <a href="/dashboard/axis" class="hub-card bank-card axis-card">
@@ -157,7 +183,9 @@
                     </div>
                 </a>
 
-                <!-- Bill Processor Card -->
+                <!-- Row 3: Purchase Bills + Sales Bills -->
+
+                <!-- Purchase Bills Card -->
                 <a href="/bill-processor" class="hub-card bank-card bill-card">
                     <div class="card-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
@@ -186,18 +214,23 @@
                     </div>
                 </a>
 
-                <!-- Project Summary Card -->
-                <a href="/project-summary" class="hub-card bank-card summary-card">
+                <!-- Sales Bills Card -->
+                <a href="/sales-processor" class="hub-card bank-card sales-card">
                     <div class="card-icon">
                         <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
-                            </path>
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            <line x1="9" y1="9" x2="15" y2="9"></line>
+                            <line x1="12" y1="6" x2="12" y2="12"></line>
                         </svg>
                     </div>
                     <div class="card-content">
-                        <h3>Project Summary</h3>
-                        <p class="card-subtitle">Track projects across banks</p>
+                        <h3>Sales Bills</h3>
+                        <p class="card-subtitle">AI-powered sales extraction</p>
+                        <div class="card-stats">
+                            <span class="stat-value" id="sales-count">-</span>
+                            <span class="stat-label">invoices</span>
+                        </div>
                     </div>
                     <div class="card-arrow">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"

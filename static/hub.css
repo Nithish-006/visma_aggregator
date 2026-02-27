@@ -397,6 +397,26 @@ body {
     background-clip: text;
 }
 
+/* Sales Bills Card - Orange/Coral Theme */
+.sales-card::before {
+    background: linear-gradient(90deg, #f97316, #ea580c, #c2410c);
+}
+
+.sales-card:hover {
+    background: linear-gradient(145deg, #fff7ed 0%, #ffedd5 100%);
+}
+
+.sales-card .card-icon svg {
+    stroke: #ea580c;
+}
+
+.sales-card .stat-value {
+    background: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
 /* Placeholder Cards */
 .placeholder-card {
     opacity: 0.6;

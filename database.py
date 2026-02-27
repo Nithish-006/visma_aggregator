@@ -1147,6 +1147,551 @@ class DatabaseManager:
             print(f"[!] Error fetching bills with line items for export: {e}")
             return []
 
+    # ========================================================================
+    # SALES BILLS DATABASE METHODS
+    # ========================================================================
+
+    def ensure_sales_tables(self):
+        """Create sales_invoices and sales_line_items tables if they don't exist"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sales_invoices (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    filename VARCHAR(255),
+                    page_number INT DEFAULT 1,
+                    invoice_number VARCHAR(100),
+                    invoice_date DATE,
+                    irn VARCHAR(255),
+                    ack_number VARCHAR(100),
+                    eway_bill_number VARCHAR(100),
+                    vendor_name VARCHAR(255),
+                    vendor_gstin VARCHAR(20),
+                    vendor_address TEXT,
+                    vendor_state VARCHAR(100),
+                    vendor_pan VARCHAR(20),
+                    vendor_phone VARCHAR(50),
+                    vendor_bank_name VARCHAR(255),
+                    vendor_bank_account VARCHAR(50),
+                    vendor_bank_ifsc VARCHAR(20),
+                    buyer_name VARCHAR(255),
+                    buyer_gstin VARCHAR(20),
+                    buyer_address TEXT,
+                    buyer_state VARCHAR(100),
+                    ship_to_name VARCHAR(255),
+                    ship_to_address TEXT,
+                    subtotal DECIMAL(15, 2) DEFAULT 0,
+                    total_cgst DECIMAL(15, 2) DEFAULT 0,
+                    total_sgst DECIMAL(15, 2) DEFAULT 0,
+                    total_igst DECIMAL(15, 2) DEFAULT 0,
+                    other_charges DECIMAL(15, 2) DEFAULT 0,
+                    round_off DECIMAL(10, 2) DEFAULT 0,
+                    total_amount DECIMAL(15, 2) DEFAULT 0,
+                    amount_in_words TEXT,
+                    vehicle_number VARCHAR(50),
+                    transporter_name VARCHAR(255),
+                    project VARCHAR(255),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """)
+
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sales_line_items (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    invoice_id INT NOT NULL,
+                    sl_no INT DEFAULT 0,
+                    description TEXT,
+                    hsn_sac_code VARCHAR(20),
+                    quantity DECIMAL(15, 3) DEFAULT 0,
+                    uom VARCHAR(20),
+                    rate_per_unit DECIMAL(15, 2) DEFAULT 0,
+                    discount_percent DECIMAL(5, 2) DEFAULT 0,
+                    discount_amount DECIMAL(15, 2) DEFAULT 0,
+                    taxable_value DECIMAL(15, 2) DEFAULT 0,
+                    cgst_rate DECIMAL(5, 2) DEFAULT 0,
+                    cgst_amount DECIMAL(15, 2) DEFAULT 0,
+                    sgst_rate DECIMAL(5, 2) DEFAULT 0,
+                    sgst_amount DECIMAL(15, 2) DEFAULT 0,
+                    igst_rate DECIMAL(5, 2) DEFAULT 0,
+                    igst_amount DECIMAL(15, 2) DEFAULT 0,
+                    amount DECIMAL(15, 2) DEFAULT 0,
+                    FOREIGN KEY (invoice_id) REFERENCES sales_invoices(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """)
+
+                cursor.close()
+                print("[+] Sales tables ensured")
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring sales tables: {e}")
+            return False
+
+    def insert_sales_bill(self, bill_data: Dict) -> Tuple[bool, Optional[int], Optional[str]]:
+        """Insert a sales invoice and its line items into the database."""
+        if not bill_data.get('success') or not bill_data.get('data'):
+            return False, None, "No valid bill data"
+
+        data = bill_data['data']
+        header = data.get('invoice_header', {})
+        vendor = data.get('vendor', {})
+        buyer = data.get('buyer', {})
+        ship_to = data.get('ship_to', {})
+        taxes = data.get('taxes', {})
+        transport = data.get('transport', {})
+        line_items = data.get('line_items', [])
+        other_charges = data.get('other_charges', [])
+
+        invoice_date = None
+        date_str = header.get('invoice_date', '')
+        if date_str:
+            try:
+                from dateutil import parser
+                invoice_date = parser.parse(date_str, dayfirst=True).date()
+            except:
+                pass
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                conn.autocommit = False
+
+                invoice_query = """
+                INSERT INTO sales_invoices (
+                    filename, page_number, invoice_number, invoice_date, irn, ack_number, eway_bill_number,
+                    vendor_name, vendor_gstin, vendor_address, vendor_state, vendor_pan, vendor_phone,
+                    vendor_bank_name, vendor_bank_account, vendor_bank_ifsc,
+                    buyer_name, buyer_gstin, buyer_address, buyer_state,
+                    ship_to_name, ship_to_address,
+                    subtotal, total_cgst, total_sgst, total_igst, other_charges, round_off, total_amount, amount_in_words,
+                    vehicle_number, transporter_name
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s
+                )
+                """
+
+                other_charges_total = sum(c.get('amount', 0) or 0 for c in other_charges if c.get('description'))
+
+                cursor.execute(invoice_query, (
+                    bill_data.get('filename', ''),
+                    bill_data.get('page', 1),
+                    header.get('invoice_number', ''),
+                    invoice_date,
+                    header.get('irn', ''),
+                    header.get('ack_number', ''),
+                    header.get('eway_bill_number', ''),
+                    vendor.get('name', ''),
+                    vendor.get('gstin', ''),
+                    vendor.get('address', ''),
+                    vendor.get('state', ''),
+                    vendor.get('pan', ''),
+                    vendor.get('phone', ''),
+                    vendor.get('bank_name', ''),
+                    vendor.get('bank_account', ''),
+                    vendor.get('bank_ifsc', ''),
+                    buyer.get('name', ''),
+                    buyer.get('gstin', ''),
+                    buyer.get('address', ''),
+                    buyer.get('state', ''),
+                    ship_to.get('name', ''),
+                    ship_to.get('address', ''),
+                    float(taxes.get('subtotal', 0) or taxes.get('taxable_amount', 0) or 0),
+                    float(taxes.get('total_cgst', 0) or taxes.get('cgst_amount', 0) or 0),
+                    float(taxes.get('total_sgst', 0) or taxes.get('sgst_amount', 0) or 0),
+                    float(taxes.get('total_igst', 0) or taxes.get('igst_amount', 0) or 0),
+                    float(other_charges_total),
+                    float(taxes.get('round_off', 0) or 0),
+                    float(taxes.get('total_amount', 0) or 0),
+                    taxes.get('amount_in_words', ''),
+                    transport.get('vehicle_number', ''),
+                    transport.get('transporter_name', '')
+                ))
+
+                invoice_id = cursor.lastrowid
+
+                if line_items:
+                    line_item_query = """
+                    INSERT INTO sales_line_items (
+                        invoice_id, sl_no, description, hsn_sac_code, quantity, uom,
+                        rate_per_unit, discount_percent, discount_amount, taxable_value,
+                        cgst_rate, cgst_amount, sgst_rate, sgst_amount, igst_rate, igst_amount, amount
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+
+                    for item in line_items:
+                        if item.get('description'):
+                            cursor.execute(line_item_query, (
+                                invoice_id,
+                                item.get('sl_no', 0),
+                                item.get('description', ''),
+                                item.get('hsn_sac_code', '') or item.get('hsn_code', ''),
+                                float(item.get('quantity', 0) or 0),
+                                item.get('uom', ''),
+                                float(item.get('rate_per_unit', 0) or item.get('rate', 0) or 0),
+                                float(item.get('discount_percent', 0) or 0),
+                                float(item.get('discount_amount', 0) or 0),
+                                float(item.get('taxable_value', 0) or 0),
+                                float(item.get('cgst_rate', 0) or 0),
+                                float(item.get('cgst_amount', 0) or 0),
+                                float(item.get('sgst_rate', 0) or 0),
+                                float(item.get('sgst_amount', 0) or 0),
+                                float(item.get('igst_rate', 0) or 0),
+                                float(item.get('igst_amount', 0) or 0),
+                                float(item.get('amount', 0) or 0)
+                            ))
+
+                conn.commit()
+                cursor.close()
+
+                print(f"[+] Saved sales bill to DB: Invoice #{header.get('invoice_number', 'N/A')} (ID: {invoice_id})")
+                return True, invoice_id, None
+
+        except mysql.connector.IntegrityError as e:
+            if e.errno == 1062:
+                print(f"[!] Duplicate sales bill: {header.get('invoice_number', '')}")
+                return False, None, "Duplicate invoice"
+            return False, None, str(e)
+        except Exception as e:
+            print(f"[!] Error saving sales bill: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, None, str(e)
+
+    def get_all_sales_bills(self, limit: int = 100, offset: int = 0, projects: list = None,
+                             date_from: str = None, date_to: str = None,
+                             added_from: str = None, added_to: str = None) -> List[Dict]:
+        """Get all sales bills from database with pagination and optional filters"""
+        query = """
+        SELECT
+            si.id, si.filename, si.page_number, si.invoice_number, si.invoice_date,
+            si.vendor_name, si.vendor_gstin, si.buyer_name, si.buyer_gstin,
+            si.subtotal, si.total_cgst, si.total_sgst, si.total_igst,
+            si.total_amount, si.vehicle_number, si.eway_bill_number, si.irn,
+            si.project, si.created_at,
+            COUNT(sli.id) as line_item_count
+        FROM sales_invoices si
+        LEFT JOIN sales_line_items sli ON si.id = sli.invoice_id
+        WHERE 1=1
+        """
+        params = []
+
+        if projects:
+            placeholders = ','.join(['%s'] * len(projects))
+            query += f" AND si.project IN ({placeholders})"
+            params.extend(projects)
+
+        if date_from:
+            query += " AND si.invoice_date >= %s"
+            params.append(date_from)
+
+        if date_to:
+            query += " AND si.invoice_date <= %s"
+            params.append(date_to)
+
+        if added_from:
+            query += " AND DATE(si.created_at) >= %s"
+            params.append(added_from)
+
+        if added_to:
+            query += " AND DATE(si.created_at) <= %s"
+            params.append(added_to)
+
+        query += """
+        GROUP BY si.id
+        ORDER BY si.invoice_date DESC, si.created_at DESC
+        LIMIT %s OFFSET %s
+        """
+        params.extend([limit, offset])
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(query, tuple(params))
+                results = cursor.fetchall()
+                cursor.close()
+
+                for row in results:
+                    if row.get('invoice_date'):
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                    if row.get('created_at'):
+                        row['created_at'] = row['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                    for key, val in row.items():
+                        if isinstance(val, DecimalType):
+                            row[key] = float(val)
+
+                return results
+        except Exception as e:
+            print(f"[!] Error fetching sales bills: {e}")
+            return []
+
+    def get_sales_bill_detail(self, invoice_id: int) -> Optional[Dict]:
+        """Get full sales bill detail including line items"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT * FROM sales_invoices WHERE id = %s", (invoice_id,))
+                invoice = cursor.fetchone()
+
+                if not invoice:
+                    cursor.close()
+                    return None
+
+                if invoice.get('invoice_date'):
+                    invoice['invoice_date'] = invoice['invoice_date'].strftime('%d-%b-%Y')
+                if invoice.get('created_at'):
+                    invoice['created_at'] = invoice['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                if invoice.get('updated_at'):
+                    invoice['updated_at'] = invoice['updated_at'].strftime('%Y-%m-%d %H:%M:%S')
+                for key, val in invoice.items():
+                    if isinstance(val, DecimalType):
+                        invoice[key] = float(val)
+
+                cursor.execute("""
+                    SELECT * FROM sales_line_items WHERE invoice_id = %s ORDER BY sl_no
+                """, (invoice_id,))
+                line_items = cursor.fetchall()
+                cursor.close()
+
+                for item in line_items:
+                    for key in ['quantity', 'rate_per_unit', 'discount_percent', 'discount_amount',
+                               'taxable_value', 'cgst_rate', 'cgst_amount', 'sgst_rate', 'sgst_amount',
+                               'igst_rate', 'igst_amount', 'amount']:
+                        if item.get(key) is not None:
+                            item[key] = float(item[key])
+
+                invoice['line_items'] = line_items
+                return invoice
+
+        except Exception as e:
+            print(f"[!] Error fetching sales bill detail: {e}")
+            return None
+
+    def delete_sales_bill(self, invoice_id: int) -> bool:
+        """Delete a sales bill and its line items"""
+        return self.execute_query("DELETE FROM sales_invoices WHERE id = %s", (invoice_id,))
+
+    def update_sales_bill_project(self, invoice_id: int, project: str) -> bool:
+        """Update the project field for a sales bill"""
+        return self.execute_query(
+            "UPDATE sales_invoices SET project = %s WHERE id = %s",
+            (project if project else None, invoice_id)
+        )
+
+    def get_unique_sales_projects(self) -> List[str]:
+        """Get all unique project names from sales bills"""
+        query = """
+        SELECT DISTINCT project FROM sales_invoices
+        WHERE project IS NOT NULL AND project != ''
+        ORDER BY project
+        """
+        try:
+            results = self.fetch_all(query)
+            return [row[0] for row in results if row[0]]
+        except Exception as e:
+            print(f"[!] Error fetching unique sales projects: {e}")
+            return []
+
+    def get_sales_bill_count(self, projects: list = None, date_from: str = None, date_to: str = None,
+                              added_from: str = None, added_to: str = None) -> int:
+        """Get total number of stored sales bills"""
+        query = "SELECT COUNT(*) FROM sales_invoices WHERE 1=1"
+        params = []
+
+        if projects:
+            placeholders = ','.join(['%s'] * len(projects))
+            query += f" AND project IN ({placeholders})"
+            params.extend(projects)
+
+        if date_from:
+            query += " AND invoice_date >= %s"
+            params.append(date_from)
+
+        if date_to:
+            query += " AND invoice_date <= %s"
+            params.append(date_to)
+
+        if added_from:
+            query += " AND DATE(created_at) >= %s"
+            params.append(added_from)
+
+        if added_to:
+            query += " AND DATE(created_at) <= %s"
+            params.append(added_to)
+
+        result = self.fetch_all(query, tuple(params) if params else None)
+        return result[0][0] if result else 0
+
+    def check_duplicate_sales_invoice(self, invoice_number: str) -> Optional[Dict]:
+        """Check if a sales bill with the given invoice number already exists."""
+        if not invoice_number or invoice_number.strip() == '':
+            return None
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("""
+                    SELECT id, invoice_number, invoice_date, vendor_name, vendor_gstin,
+                           total_amount, filename, created_at
+                    FROM sales_invoices
+                    WHERE invoice_number = %s
+                    LIMIT 1
+                """, (invoice_number.strip(),))
+                result = cursor.fetchone()
+                cursor.close()
+
+                if result:
+                    if result.get('invoice_date'):
+                        result['invoice_date'] = result['invoice_date'].strftime('%d-%b-%Y')
+                    if result.get('created_at'):
+                        result['created_at'] = result['created_at'].strftime('%Y-%m-%d %H:%M:%S')
+                    return result
+                return None
+        except Exception as e:
+            print(f"[!] Error checking duplicate sales invoice: {e}")
+            return None
+
+    def update_sales_bill(self, invoice_id: int, bill_data: Dict) -> Tuple[bool, Optional[str]]:
+        """Update a sales invoice and its line items in the database."""
+        invoice_date = None
+        date_str = bill_data.get('invoice_date', '')
+        if date_str:
+            try:
+                from dateutil import parser
+                invoice_date = parser.parse(date_str, dayfirst=True).date()
+            except:
+                pass
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                conn.autocommit = False
+
+                update_query = """
+                UPDATE sales_invoices SET
+                    invoice_number = %s,
+                    invoice_date = %s,
+                    irn = %s,
+                    ack_number = %s,
+                    eway_bill_number = %s,
+                    vendor_name = %s,
+                    vendor_gstin = %s,
+                    vendor_address = %s,
+                    vendor_state = %s,
+                    vendor_pan = %s,
+                    vendor_phone = %s,
+                    vendor_bank_name = %s,
+                    vendor_bank_account = %s,
+                    vendor_bank_ifsc = %s,
+                    buyer_name = %s,
+                    buyer_gstin = %s,
+                    buyer_address = %s,
+                    buyer_state = %s,
+                    ship_to_name = %s,
+                    ship_to_address = %s,
+                    subtotal = %s,
+                    total_cgst = %s,
+                    total_sgst = %s,
+                    total_igst = %s,
+                    other_charges = %s,
+                    round_off = %s,
+                    total_amount = %s,
+                    amount_in_words = %s,
+                    vehicle_number = %s,
+                    transporter_name = %s,
+                    project = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                """
+
+                cursor.execute(update_query, (
+                    bill_data.get('invoice_number', ''),
+                    invoice_date,
+                    bill_data.get('irn', ''),
+                    bill_data.get('ack_number', ''),
+                    bill_data.get('eway_bill_number', ''),
+                    bill_data.get('vendor_name', ''),
+                    bill_data.get('vendor_gstin', ''),
+                    bill_data.get('vendor_address', ''),
+                    bill_data.get('vendor_state', ''),
+                    bill_data.get('vendor_pan', ''),
+                    bill_data.get('vendor_phone', ''),
+                    bill_data.get('vendor_bank_name', ''),
+                    bill_data.get('vendor_bank_account', ''),
+                    bill_data.get('vendor_bank_ifsc', ''),
+                    bill_data.get('buyer_name', ''),
+                    bill_data.get('buyer_gstin', ''),
+                    bill_data.get('buyer_address', ''),
+                    bill_data.get('buyer_state', ''),
+                    bill_data.get('ship_to_name', ''),
+                    bill_data.get('ship_to_address', ''),
+                    float(bill_data.get('subtotal', 0) or 0),
+                    float(bill_data.get('total_cgst', 0) or 0),
+                    float(bill_data.get('total_sgst', 0) or 0),
+                    float(bill_data.get('total_igst', 0) or 0),
+                    float(bill_data.get('other_charges', 0) or 0),
+                    float(bill_data.get('round_off', 0) or 0),
+                    float(bill_data.get('total_amount', 0) or 0),
+                    bill_data.get('amount_in_words', ''),
+                    bill_data.get('vehicle_number', ''),
+                    bill_data.get('transporter_name', ''),
+                    bill_data.get('project', '') or None,
+                    invoice_id
+                ))
+
+                cursor.execute("DELETE FROM sales_line_items WHERE invoice_id = %s", (invoice_id,))
+
+                line_items = bill_data.get('line_items', [])
+                if line_items:
+                    line_item_query = """
+                    INSERT INTO sales_line_items (
+                        invoice_id, sl_no, description, hsn_sac_code, quantity, uom,
+                        rate_per_unit, discount_percent, discount_amount, taxable_value,
+                        cgst_rate, cgst_amount, sgst_rate, sgst_amount, igst_rate, igst_amount, amount
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+
+                    for idx, item in enumerate(line_items):
+                        if item.get('description'):
+                            cursor.execute(line_item_query, (
+                                invoice_id,
+                                item.get('sl_no', idx + 1),
+                                item.get('description', ''),
+                                item.get('hsn_sac_code', ''),
+                                float(item.get('quantity', 0) or 0),
+                                item.get('uom', ''),
+                                float(item.get('rate_per_unit', 0) or 0),
+                                float(item.get('discount_percent', 0) or 0),
+                                float(item.get('discount_amount', 0) or 0),
+                                float(item.get('taxable_value', 0) or 0),
+                                float(item.get('cgst_rate', 0) or 0),
+                                float(item.get('cgst_amount', 0) or 0),
+                                float(item.get('sgst_rate', 0) or 0),
+                                float(item.get('sgst_amount', 0) or 0),
+                                float(item.get('igst_rate', 0) or 0),
+                                float(item.get('igst_amount', 0) or 0),
+                                float(item.get('amount', 0) or 0)
+                            ))
+
+                conn.commit()
+                cursor.close()
+
+                print(f"[+] Updated sales bill ID: {invoice_id}")
+                return True, None
+
+        except Exception as e:
+            print(f"[!] Error updating sales bill: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
+
     # ── Salary / Attendance DB helpers ──────────────────────
     SALARY_DB_CONFIG = {
         'host': 'caboose.proxy.rlwy.net',

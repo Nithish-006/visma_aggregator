@@ -1,0 +1,2392 @@
+/* ============================================================================
+   BILL PROCESSOR - FRONTEND JAVASCRIPT
+   ============================================================================ */
+
+// State
+let storedBills = [];
+let allProjects = [];
+let selectedProjects = [];
+let projectDropdownOpen = false;
+let currentAddedFilter = '';
+let fileQueue = [];
+let processedResults = [];
+let rawResults = [];
+let activeProjectEdit = null;
+
+// Edit Modal State
+let currentEditBill = null;
+let editLineItems = [];
+let pdfDoc = null;
+let currentPdfPage = 1;
+let totalPdfPages = 1;
+let currentZoom = 1;
+
+// DOM Elements
+const uploadModal = document.getElementById('uploadModal');
+const detailModal = document.getElementById('detailModal');
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+const fileQueueEl = document.getElementById('fileQueue');
+const queueList = document.getElementById('queueList');
+const clearQueueBtn = document.getElementById('clearQueue');
+const processBtn = document.getElementById('processBtn');
+const toast = document.getElementById('toast');
+
+// Initialize
+document.addEventListener('DOMContentLoaded', init);
+
+
+function init() {
+    // Load data on page load
+    loadProjects();
+    loadSummary();
+    loadStoredBills();
+
+    // Date range filters
+    document.getElementById('filterDateFrom').addEventListener('change', handleFilterChange);
+    document.getElementById('filterDateTo').addEventListener('change', handleFilterChange);
+
+    // Added filter
+    document.getElementById('addedFilter').addEventListener('change', (e) => {
+        currentAddedFilter = e.target.value;
+        handleFilterChange();
+    });
+
+    // Reset filters
+    document.getElementById('resetFilters').addEventListener('click', resetAllFilters);
+
+    // Project multi-select dropdown
+    initProjectDropdown();
+
+    // Mobile time filter chips
+    initMobileTimeFilters();
+
+    // Header buttons
+    document.getElementById('newBillBtn').addEventListener('click', openUploadModal);
+    document.getElementById('refreshBtn').addEventListener('click', refreshData);
+    document.getElementById('exportAllBtn').addEventListener('click', exportAllBills);
+
+    // Event delegation for project cell clicks
+    document.getElementById('invoicesBody').addEventListener('click', handleTableClick);
+
+    // Close project edit on outside click
+    document.addEventListener('click', handleOutsideClick);
+
+    // Upload modal events
+    document.getElementById('closeUploadModal').addEventListener('click', closeUploadModal);
+    document.getElementById('cancelUpload').addEventListener('click', closeUploadModal);
+    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('dragover', handleDragOver);
+    uploadArea.addEventListener('dragleave', handleDragLeave);
+    uploadArea.addEventListener('drop', handleDrop);
+    fileInput.addEventListener('change', handleFileSelect);
+    clearQueueBtn.addEventListener('click', clearQueue);
+    processBtn.addEventListener('click', processFiles);
+
+    // Detail modal events
+    document.getElementById('closeDetailModal').addEventListener('click', closeDetailModal);
+    detailModal.addEventListener('click', (e) => {
+        if (e.target === detailModal) closeDetailModal();
+    });
+
+    // Close modals on escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeUploadModal();
+            closeDetailModal();
+            closeEditModal();
+        }
+    });
+
+    // Edit modal events
+    const editModal = document.getElementById('editModal');
+    document.getElementById('closeEditModal').addEventListener('click', closeEditModal);
+    document.getElementById('cancelEditBtn').addEventListener('click', closeEditModal);
+    document.getElementById('saveEditBtn').addEventListener('click', saveEditChanges);
+    document.getElementById('addLineItemBtn').addEventListener('click', addLineItem);
+    editModal.addEventListener('click', (e) => {
+        if (e.target === editModal) closeEditModal();
+    });
+
+    // Document viewer controls
+    document.getElementById('zoomInBtn').addEventListener('click', () => adjustZoom(0.25));
+    document.getElementById('zoomOutBtn').addEventListener('click', () => adjustZoom(-0.25));
+    document.getElementById('zoomResetBtn').addEventListener('click', resetZoom);
+    document.getElementById('prevPageBtn').addEventListener('click', () => changePdfPage(-1));
+    document.getElementById('nextPageBtn').addEventListener('click', () => changePdfPage(1));
+
+    // Close upload modal when clicking outside
+    uploadModal.addEventListener('click', (e) => {
+        if (e.target === uploadModal) closeUploadModal();
+    });
+}
+
+// ============================================================================
+// DATA LOADING
+// ============================================================================
+
+async function loadProjects() {
+    try {
+        const response = await fetch('/api/sales/projects');
+        const data = await response.json();
+
+        if (data.success) {
+            allProjects = data.projects;
+            populateProjectFilter();
+        }
+    } catch (error) {
+        console.error('Error loading projects:', error);
+    }
+}
+
+function handleFilterChange() {
+    loadSummary();
+    loadStoredBills();
+}
+
+function getDateFilters() {
+    const dateFrom = document.getElementById('filterDateFrom').value || null;
+    const dateTo = document.getElementById('filterDateTo').value || null;
+    return { dateFrom, dateTo };
+}
+
+function getAddedDateRange() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fmt = d => d.toISOString().split('T')[0];
+    let addedFrom = null, addedTo = null;
+
+    switch (currentAddedFilter) {
+        case 'today':
+            addedFrom = fmt(today); addedTo = fmt(today); break;
+        case 'yesterday':
+            const y = new Date(today); y.setDate(y.getDate() - 1);
+            addedFrom = fmt(y); addedTo = fmt(y); break;
+        case 'week':
+            const ws = new Date(today); ws.setDate(ws.getDate() - ws.getDay());
+            addedFrom = fmt(ws); addedTo = fmt(today); break;
+        case 'month':
+            addedFrom = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
+            addedTo = fmt(today); break;
+        case '30days':
+            const d30 = new Date(today); d30.setDate(d30.getDate() - 30);
+            addedFrom = fmt(d30); addedTo = fmt(today); break;
+        case '90days':
+            const d90 = new Date(today); d90.setDate(d90.getDate() - 90);
+            addedFrom = fmt(d90); addedTo = fmt(today); break;
+        case 'year':
+            addedFrom = fmt(new Date(today.getFullYear(), 0, 1));
+            addedTo = fmt(today); break;
+    }
+    return { addedFrom, addedTo };
+}
+
+function resetAllFilters() {
+    document.getElementById('filterDateFrom').value = '';
+    document.getElementById('filterDateTo').value = '';
+    document.getElementById('addedFilter').value = '';
+    currentAddedFilter = '';
+    selectedProjects = [];
+    updateProjectTriggerText();
+    // Sync mobile chips
+    document.querySelectorAll('.time-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.value === '');
+    });
+    handleFilterChange();
+}
+
+// ── Project Multi-Select Dropdown ──────────────────────────────────────
+
+function initProjectDropdown() {
+    const trigger = document.getElementById('projectTrigger');
+    const searchInput = document.getElementById('projectSearchInput');
+
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleProjectDropdown();
+    });
+
+    searchInput.addEventListener('input', () => {
+        renderProjectOptions(searchInput.value.trim().toLowerCase());
+    });
+
+    searchInput.addEventListener('click', (e) => e.stopPropagation());
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#projectDropdown')) {
+            closeProjectDropdown();
+        }
+    });
+}
+
+function toggleProjectDropdown() {
+    const dropdown = document.getElementById('projectDropdown');
+    projectDropdownOpen = !projectDropdownOpen;
+    dropdown.classList.toggle('open', projectDropdownOpen);
+    if (projectDropdownOpen) {
+        document.getElementById('projectSearchInput').value = '';
+        renderProjectOptions('');
+        setTimeout(() => document.getElementById('projectSearchInput').focus(), 50);
+    }
+}
+
+function closeProjectDropdown() {
+    if (!projectDropdownOpen) return;
+    projectDropdownOpen = false;
+    document.getElementById('projectDropdown').classList.remove('open');
+}
+
+function populateProjectFilter() {
+    renderProjectOptions('');
+    updateProjectTriggerText();
+}
+
+function renderProjectOptions(search) {
+    const container = document.getElementById('projectOptions');
+    const filtered = search
+        ? allProjects.filter(p => p.toLowerCase().includes(search))
+        : allProjects;
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="bp-dd-empty">No projects found</div>';
+        return;
+    }
+
+    container.innerHTML = filtered.map(p => {
+        const isSelected = selectedProjects.includes(p);
+        return `<div class="bp-dd-option ${isSelected ? 'selected' : ''}" data-value="${escapeForAttr(p)}">
+            <div class="bp-dd-checkbox"></div>
+            <span>${escapeHtml(p)}</span>
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('.bp-dd-option').forEach(opt => {
+        opt.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const val = opt.dataset.value;
+            if (selectedProjects.includes(val)) {
+                selectedProjects = selectedProjects.filter(v => v !== val);
+                opt.classList.remove('selected');
+            } else {
+                selectedProjects.push(val);
+                opt.classList.add('selected');
+            }
+            updateProjectTriggerText();
+            handleFilterChange();
+        });
+    });
+}
+
+function updateProjectTriggerText() {
+    const trigger = document.getElementById('projectTrigger');
+    const textEl = trigger.querySelector('.bp-dd-text');
+    if (selectedProjects.length === 0) {
+        textEl.textContent = 'All Projects';
+        trigger.classList.remove('has-selection');
+    } else if (selectedProjects.length === 1) {
+        textEl.textContent = selectedProjects[0];
+        trigger.classList.add('has-selection');
+    } else {
+        textEl.textContent = `${selectedProjects.length} projects`;
+        trigger.classList.add('has-selection');
+    }
+}
+
+function initMobileTimeFilters() {
+    const chips = document.querySelectorAll('.time-chip');
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            chips.forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+
+            // Sync with "Added" dropdown
+            currentAddedFilter = chip.dataset.value;
+            document.getElementById('addedFilter').value = currentAddedFilter;
+            handleFilterChange();
+        });
+    });
+}
+
+function handleOutsideClick(e) {
+    if (activeProjectEdit && !e.target.closest('.project-cell')) {
+        closeProjectEdit();
+    }
+}
+
+function handleTableClick(e) {
+    // Handle project cell clicks
+    const projectDisplay = e.target.closest('.project-display');
+    if (projectDisplay) {
+        const cell = projectDisplay.closest('.project-cell');
+        if (cell) {
+            const billId = parseInt(cell.dataset.billId);
+            const project = cell.dataset.project || '';
+            openProjectEdit(billId, project);
+            e.stopPropagation();
+            return;
+        }
+    }
+
+    // Handle suggestion clicks
+    const suggestion = e.target.closest('.project-suggestion');
+    if (suggestion) {
+        e.stopPropagation();
+        return;
+    }
+}
+
+async function loadSummary() {
+    try {
+        const params = new URLSearchParams();
+        const { dateFrom, dateTo } = getDateFilters();
+        if (dateFrom) params.set('date_from', dateFrom);
+        if (dateTo) params.set('date_to', dateTo);
+        const { addedFrom, addedTo } = getAddedDateRange();
+        if (addedFrom) params.set('added_from', addedFrom);
+        if (addedTo) params.set('added_to', addedTo);
+        if (selectedProjects.length > 0) params.set('projects', selectedProjects.join(','));
+
+        const qs = params.toString();
+        const url = '/api/sales/summary' + (qs ? '?' + qs : '');
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.success) {
+            const s = data.summary;
+            document.getElementById('statTotalInvoices').textContent = s.total_invoices || 0;
+            document.getElementById('statTotalValue').textContent = formatIndianCurrency(s.total_value || 0);
+            document.getElementById('statTotalGST').textContent = formatIndianCurrency(s.total_gst || 0);
+            document.getElementById('statUniqueVendors').textContent = s.unique_vendors || 0;
+            document.getElementById('statTotalCGST').textContent = formatIndianCurrency(s.total_cgst || 0);
+            document.getElementById('statTotalSGST').textContent = formatIndianCurrency(s.total_sgst || 0);
+            document.getElementById('statTotalIGST').textContent = formatIndianCurrency(s.total_igst || 0);
+        }
+    } catch (error) {
+        console.error('Error loading summary:', error);
+    }
+}
+
+async function loadStoredBills() {
+    try {
+        const params = new URLSearchParams();
+        params.set('limit', '500');
+        const { dateFrom, dateTo } = getDateFilters();
+        if (dateFrom) params.set('date_from', dateFrom);
+        if (dateTo) params.set('date_to', dateTo);
+        const { addedFrom, addedTo } = getAddedDateRange();
+        if (addedFrom) params.set('added_from', addedFrom);
+        if (addedTo) params.set('added_to', addedTo);
+        if (selectedProjects.length > 0) params.set('projects', selectedProjects.join(','));
+
+        const response = await fetch('/api/sales/stored?' + params.toString());
+        const data = await response.json();
+
+        if (data.success) {
+            storedBills = data.bills;
+            renderInvoicesTable();
+        } else {
+            showEmptyState('invoices');
+        }
+    } catch (error) {
+        console.error('Error loading bills:', error);
+        showEmptyState('invoices');
+    }
+}
+
+function refreshData() {
+    loadProjects();
+    loadSummary();
+    loadStoredBills();
+    showToast('Data refreshed', 'success');
+}
+
+// ============================================================================
+// RENDER TABLES
+// ============================================================================
+
+function renderInvoicesTable() {
+    const tbody = document.getElementById('invoicesBody');
+    const emptyState = document.getElementById('invoicesEmpty');
+    const tableContainer = document.querySelector('#invoicesTab .table-container');
+    const mobileList = document.getElementById('mobileInvoiceList');
+
+    if (storedBills.length === 0) {
+        tableContainer.style.display = 'none';
+        if (mobileList) mobileList.innerHTML = '';
+        emptyState.style.display = 'flex';
+        return;
+    }
+
+    tableContainer.style.display = 'block';
+    emptyState.style.display = 'none';
+
+    // Render desktop table
+    tbody.innerHTML = storedBills.map(bill => {
+        const projectDisplay = bill.project || '';
+        const projectClass = projectDisplay ? '' : 'empty';
+        const projectText = projectDisplay || 'Click to add';
+        const addedDisplay = formatAddedDate(bill.created_at);
+
+        return `
+            <tr>
+                <td class="cell-link" onclick="viewInvoiceDetail(${bill.id})">${bill.invoice_number || '-'}</td>
+                <td>${bill.invoice_date || '-'}</td>
+                <td class="cell-wrap">${bill.vendor_name || '-'}</td>
+                <td>${bill.vendor_gstin || '-'}</td>
+                <td class="cell-wrap">${bill.buyer_name || '-'}</td>
+                <td>${bill.line_item_count || 0}</td>
+                <td class="text-right">${formatIndianCurrency(bill.subtotal)}</td>
+                <td class="text-right">${formatIndianCurrency(bill.total_cgst)}</td>
+                <td class="text-right">${formatIndianCurrency(bill.total_sgst)}</td>
+                <td class="text-right">${formatIndianCurrency(bill.total_igst)}</td>
+                <td class="text-right cell-amount">${formatIndianCurrency(bill.total_amount)}</td>
+                <td class="project-cell" data-bill-id="${bill.id}" data-project="${escapeForAttr(projectDisplay)}">
+                    <div class="project-display">
+                        <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
+                        <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </div>
+                </td>
+                <td class="cell-added">${addedDisplay}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn-icon" onclick="viewInvoiceDetail(${bill.id})" title="View Details">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-edit" onclick="openEditModal(${bill.id})" title="Edit Invoice">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-danger" onclick="deleteInvoice(${bill.id})" title="Delete">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    // Render mobile cards
+    renderMobileInvoiceCards();
+}
+
+// ============================================================================
+// MOBILE INVOICE CARDS RENDERING
+// ============================================================================
+
+function renderMobileInvoiceCards() {
+    const mobileList = document.getElementById('mobileInvoiceList');
+    if (!mobileList) return;
+
+    mobileList.innerHTML = storedBills.map(bill => {
+        const cgst = parseFloat(bill.total_cgst) || 0;
+        const sgst = parseFloat(bill.total_sgst) || 0;
+        const igst = parseFloat(bill.total_igst) || 0;
+        const gst = cgst + sgst + igst;
+        const projectDisplay = bill.project || '';
+        const projectClass = projectDisplay ? '' : 'empty';
+        const projectText = projectDisplay || 'No project';
+
+        // Format date nicely
+        const dateDisplay = formatMobileDate(bill.invoice_date);
+        const addedAgo = formatRelativeTime(bill.created_at);
+
+        // Build GST detail line
+        const gstParts = [];
+        if (cgst > 0) gstParts.push(`C: ${formatIndianCurrency(cgst)}`);
+        if (sgst > 0) gstParts.push(`S: ${formatIndianCurrency(sgst)}`);
+        if (igst > 0) gstParts.push(`I: ${formatIndianCurrency(igst)}`);
+        const gstDetail = gstParts.length > 0 ? gstParts.join(' | ') : '';
+
+        return `
+            <div class="invoice-card" onclick="viewInvoiceDetail(${bill.id})">
+                <div class="invoice-card-header">
+                    <span class="invoice-card-number">#${escapeHtml(bill.invoice_number || 'N/A')}</span>
+                    <span class="invoice-card-date">${dateDisplay}</span>
+                </div>
+                <div class="invoice-card-vendor">${escapeHtml(bill.vendor_name || 'Unknown Vendor')}</div>
+                <div class="invoice-card-buyer">To: ${escapeHtml(bill.buyer_name || '-')}</div>
+                <div class="invoice-card-meta">
+                    <span class="invoice-meta-item">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="8" y1="6" x2="21" y2="6"></line>
+                            <line x1="8" y1="12" x2="21" y2="12"></line>
+                            <line x1="8" y1="18" x2="21" y2="18"></line>
+                            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                        </svg>
+                        ${bill.line_item_count || 0} items
+                    </span>
+                    <span class="invoice-meta-item invoice-added">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        ${addedAgo}
+                    </span>
+                </div>
+                <div class="invoice-card-footer">
+                    <span class="invoice-card-project ${projectClass}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        ${escapeHtml(projectText)}
+                    </span>
+                    <div class="invoice-card-amount">
+                        <div class="invoice-card-total">${formatIndianCurrency(bill.total_amount)}</div>
+                        ${gstDetail ? `<div class="invoice-card-gst">${gstDetail}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function formatMobileDate(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: '2-digit'
+        });
+    } catch {
+        return dateStr;
+    }
+}
+
+function formatAddedDate(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+
+        const now = new Date();
+        const diffTime = Math.abs(now - date);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        // If today, show time
+        if (diffDays === 0) {
+            return 'Today ' + date.toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        }
+
+        // If yesterday
+        if (diffDays === 1) {
+            return 'Yesterday';
+        }
+
+        // If within this week (less than 7 days)
+        if (diffDays < 7) {
+            return `${diffDays} days ago`;
+        }
+
+        // Otherwise show date
+        return date.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+        });
+    } catch {
+        return dateStr;
+    }
+}
+
+function formatRelativeTime(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+
+        const now = new Date();
+        const diffTime = Math.abs(now - date);
+        const diffMinutes = Math.floor(diffTime / (1000 * 60));
+        const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        // Just now (less than 1 minute)
+        if (diffMinutes < 1) {
+            return 'Just now';
+        }
+
+        // Minutes ago
+        if (diffMinutes < 60) {
+            return `${diffMinutes}m ago`;
+        }
+
+        // Hours ago (same day)
+        if (diffHours < 24 && diffDays === 0) {
+            return `${diffHours}h ago`;
+        }
+
+        // Yesterday
+        if (diffDays === 1) {
+            return 'Yesterday';
+        }
+
+        // Days ago (up to 7 days)
+        if (diffDays < 7) {
+            return `${diffDays}d ago`;
+        }
+
+        // Weeks ago (up to 4 weeks)
+        if (diffDays < 30) {
+            const weeks = Math.floor(diffDays / 7);
+            return `${weeks}w ago`;
+        }
+
+        // Months ago
+        const months = Math.floor(diffDays / 30);
+        if (months < 12) {
+            return `${months}mo ago`;
+        }
+
+        // Years ago
+        const years = Math.floor(diffDays / 365);
+        return `${years}y ago`;
+    } catch {
+        return dateStr;
+    }
+}
+
+function showEmptyState() {
+    document.querySelector('#invoicesTab .table-container').style.display = 'none';
+    document.getElementById('invoicesEmpty').style.display = 'flex';
+}
+
+// ============================================================================
+// PROJECT EDITING
+// ============================================================================
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function escapeForAttr(text) {
+    if (!text) return '';
+    return text.replace(/\\/g, '\\\\')
+               .replace(/'/g, "\\'")
+               .replace(/"/g, '&quot;')
+               .replace(/\n/g, '\\n')
+               .replace(/\r/g, '\\r');
+}
+
+function openProjectEdit(billId, currentProject) {
+    // Close any existing edit
+    closeProjectEdit();
+
+    const cell = document.querySelector(`.project-cell[data-bill-id="${billId}"]`);
+    if (!cell) {
+        return;
+    }
+
+    activeProjectEdit = billId;
+
+    // Create edit container
+    const editHtml = `
+        <div class="project-edit-container">
+            <input type="text" class="project-input" id="projectInput-${billId}"
+                   value="${escapeHtml(currentProject)}" placeholder="Enter project name">
+            <div class="project-suggestions" id="projectSuggestions-${billId}"></div>
+        </div>
+    `;
+
+    cell.innerHTML = editHtml;
+
+    const input = document.getElementById(`projectInput-${billId}`);
+
+    // Add event listeners
+    input.addEventListener('keydown', (e) => handleProjectKeydown(e, billId));
+    input.addEventListener('input', () => filterProjectSuggestions(billId));
+
+    input.focus();
+    input.select();
+
+    // Show suggestions
+    filterProjectSuggestions(billId);
+}
+
+function closeProjectEdit() {
+    if (!activeProjectEdit) return;
+
+    const cell = document.querySelector(`.project-cell[data-bill-id="${activeProjectEdit}"]`);
+    if (cell) {
+        const project = cell.dataset.project || '';
+        const projectClass = project ? '' : 'empty';
+        const projectText = project || 'Click to add';
+
+        cell.innerHTML = `
+            <div class="project-display">
+                <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
+                <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+            </div>
+        `;
+    }
+
+    activeProjectEdit = null;
+}
+
+let highlightedSuggestionIndex = -1;
+
+function filterProjectSuggestions(billId) {
+    const input = document.getElementById(`projectInput-${billId}`);
+    const suggestionsEl = document.getElementById(`projectSuggestions-${billId}`);
+
+    if (!input || !suggestionsEl) return;
+
+    const value = input.value.toLowerCase().trim();
+
+    // Filter projects that match
+    let filtered = allProjects.filter(p => p.toLowerCase().includes(value));
+
+    // If current value is not in suggestions and not empty, add it as "new" option
+    if (value && !allProjects.some(p => p.toLowerCase() === value)) {
+        filtered = [`${input.value} (new)`, ...filtered];
+    }
+
+    if (filtered.length === 0) {
+        suggestionsEl.style.display = 'none';
+        highlightedSuggestionIndex = -1;
+        return;
+    }
+
+    // Reset highlight index
+    highlightedSuggestionIndex = -1;
+
+    suggestionsEl.innerHTML = filtered.map(project => {
+        const isNew = project.endsWith(' (new)');
+        const displayText = isNew ? project : project;
+        const selectValue = isNew ? input.value : project;
+        return `<div class="project-suggestion" data-value="${escapeForAttr(selectValue)}">${escapeHtml(displayText)}</div>`;
+    }).join('');
+
+    // Add click handlers to suggestions
+    suggestionsEl.querySelectorAll('.project-suggestion').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const value = el.dataset.value;
+            selectProject(billId, value);
+        });
+    });
+
+    suggestionsEl.style.display = 'block';
+}
+
+function updateSuggestionHighlight(billId) {
+    const suggestionsEl = document.getElementById(`projectSuggestions-${billId}`);
+    if (!suggestionsEl) return;
+
+    const items = suggestionsEl.querySelectorAll('.project-suggestion');
+    items.forEach((item, idx) => {
+        item.classList.toggle('highlighted', idx === highlightedSuggestionIndex);
+    });
+
+    // Scroll highlighted item into view
+    if (highlightedSuggestionIndex >= 0 && items[highlightedSuggestionIndex]) {
+        items[highlightedSuggestionIndex].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function handleProjectKeydown(event, billId) {
+    const suggestionsEl = document.getElementById(`projectSuggestions-${billId}`);
+    const items = suggestionsEl ? suggestionsEl.querySelectorAll('.project-suggestion') : [];
+    const totalItems = items.length;
+
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (totalItems > 0) {
+            highlightedSuggestionIndex = (highlightedSuggestionIndex + 1) % totalItems;
+            updateSuggestionHighlight(billId);
+        }
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (totalItems > 0) {
+            highlightedSuggestionIndex = highlightedSuggestionIndex <= 0 ? totalItems - 1 : highlightedSuggestionIndex - 1;
+            updateSuggestionHighlight(billId);
+        }
+    } else if (event.key === 'Tab') {
+        // Tab selects highlighted suggestion if any, otherwise moves to next
+        if (highlightedSuggestionIndex >= 0 && items[highlightedSuggestionIndex]) {
+            event.preventDefault();
+            const value = items[highlightedSuggestionIndex].dataset.value;
+            selectProject(billId, value);
+        } else if (totalItems > 0) {
+            event.preventDefault();
+            // Select first suggestion on Tab
+            const value = items[0].dataset.value;
+            selectProject(billId, value);
+        }
+    } else if (event.key === 'Enter') {
+        event.preventDefault();
+        // If a suggestion is highlighted, select it; otherwise save current input value
+        if (highlightedSuggestionIndex >= 0 && items[highlightedSuggestionIndex]) {
+            const value = items[highlightedSuggestionIndex].dataset.value;
+            selectProject(billId, value);
+        } else {
+            const input = document.getElementById(`projectInput-${billId}`);
+            if (input) {
+                saveProject(billId, input.value, true);
+            }
+        }
+    } else if (event.key === 'Escape') {
+        closeProjectEdit();
+    }
+}
+
+function selectProject(billId, project) {
+    saveProject(billId, project, true);
+}
+
+function getNextProjectBillId(currentBillId) {
+    const cells = Array.from(document.querySelectorAll('.project-cell[data-bill-id]'));
+    const currentIndex = cells.findIndex(c => String(c.dataset.billId) === String(currentBillId));
+    if (currentIndex >= 0 && currentIndex < cells.length - 1) {
+        return cells[currentIndex + 1].dataset.billId;
+    }
+    return null;
+}
+
+
+async function saveProject(billId, project, moveToNext = false) {
+    const trimmedProject = project.trim();
+
+    try {
+        const response = await fetch(`/api/sales/stored/${billId}/project`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project: trimmedProject })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Update local state
+            const bill = storedBills.find(b => b.id === billId);
+            if (bill) {
+                bill.project = trimmedProject;
+            }
+
+            // Update cell data attribute
+            const cell = document.querySelector(`.project-cell[data-bill-id="${billId}"]`);
+            if (cell) {
+                cell.dataset.project = trimmedProject;
+            }
+
+            // Find next bill id before closing edit
+            const nextBillId = moveToNext ? getNextProjectBillId(billId) : null;
+
+            // Close edit and refresh display
+            closeProjectEdit();
+
+            // Add to projects list if new
+            if (trimmedProject && !allProjects.includes(trimmedProject)) {
+                allProjects.push(trimmedProject);
+                allProjects.sort();
+                populateProjectFilter();
+            }
+
+            showToast('Project updated', 'success');
+
+            // Move to next row's project cell
+            if (nextBillId) {
+                const nextCell = document.querySelector(`.project-cell[data-bill-id="${nextBillId}"]`);
+                const nextProject = nextCell ? (nextCell.dataset.project || '') : '';
+                openProjectEdit(Number(nextBillId) || nextBillId, nextProject);
+            }
+        } else {
+            showToast(data.error || 'Failed to update project', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving project:', error);
+        showToast('Failed to save project', 'error');
+    }
+}
+
+// ============================================================================
+// INVOICE DETAIL
+// ============================================================================
+
+async function viewInvoiceDetail(invoiceId) {
+    try {
+        const response = await fetch(`/api/sales/stored/${invoiceId}`);
+        const data = await response.json();
+
+        if (!data.success) {
+            showToast('Failed to load invoice details', 'error');
+            return;
+        }
+
+        const bill = data.bill;
+        const items = bill.line_items || [];
+
+        document.getElementById('modalTitle').textContent = `Invoice: ${bill.invoice_number || 'N/A'}`;
+        document.getElementById('modalBody').innerHTML = `
+            <div class="detail-section">
+                <div class="detail-section-title">Invoice Header</div>
+                <div class="detail-grid">
+                    ${detailItem('Invoice Number', bill.invoice_number)}
+                    ${detailItem('Invoice Date', bill.invoice_date)}
+                    ${detailItem('E-Way Bill', bill.eway_bill_number)}
+                    ${detailItem('IRN', bill.irn)}
+                    ${detailItem('Ack Number', bill.ack_number)}
+                    ${detailItem('Vehicle Number', bill.vehicle_number)}
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title">Vendor Details</div>
+                <div class="detail-grid">
+                    ${detailItem('Name', bill.vendor_name)}
+                    ${detailItem('GSTIN', bill.vendor_gstin)}
+                    ${detailItem('Address', bill.vendor_address)}
+                    ${detailItem('State', bill.vendor_state)}
+                    ${detailItem('PAN', bill.vendor_pan)}
+                    ${detailItem('Phone', bill.vendor_phone)}
+                    ${detailItem('Bank', bill.vendor_bank_name)}
+                    ${detailItem('Account', bill.vendor_bank_account)}
+                    ${detailItem('IFSC', bill.vendor_bank_ifsc)}
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title">Buyer Details</div>
+                <div class="detail-grid">
+                    ${detailItem('Name', bill.buyer_name)}
+                    ${detailItem('GSTIN', bill.buyer_gstin)}
+                    ${detailItem('Address', bill.buyer_address)}
+                    ${detailItem('State', bill.buyer_state)}
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title">Line Items (${items.length})</div>
+                ${items.length > 0 ? `
+                <div style="overflow-x: auto;">
+                <table class="line-items-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Description</th>
+                            <th>HSN</th>
+                            <th class="text-right">Qty</th>
+                            <th>UOM</th>
+                            <th class="text-right">Rate</th>
+                            <th class="text-right">Taxable</th>
+                            <th class="text-right">GST</th>
+                            <th class="text-right">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${items.map(item => `
+                        <tr>
+                            <td>${item.sl_no || '-'}</td>
+                            <td style="max-width: 200px;">${item.description || '-'}</td>
+                            <td>${item.hsn_sac_code || '-'}</td>
+                            <td class="text-right">${item.quantity || 0}</td>
+                            <td>${item.uom || '-'}</td>
+                            <td class="text-right">${formatNumber(item.rate_per_unit)}</td>
+                            <td class="text-right">${formatNumber(item.taxable_value)}</td>
+                            <td class="text-right">${formatNumber((item.cgst_amount || 0) + (item.sgst_amount || 0) + (item.igst_amount || 0))}</td>
+                            <td class="text-right">${formatNumber(item.amount)}</td>
+                        </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                </div>
+                ` : '<p class="empty-text">No line items</p>'}
+            </div>
+
+            <div class="detail-section">
+                <div class="detail-section-title">Tax Summary</div>
+                <div class="detail-grid">
+                    ${detailItem('Subtotal', formatIndianCurrency(bill.subtotal))}
+                    ${detailItem('CGST', formatIndianCurrency(bill.total_cgst))}
+                    ${detailItem('SGST', formatIndianCurrency(bill.total_sgst))}
+                    ${detailItem('IGST', formatIndianCurrency(bill.total_igst))}
+                    ${detailItem('Other Charges', formatIndianCurrency(bill.other_charges))}
+                    ${detailItem('Round Off', formatNumber(bill.round_off))}
+                    ${detailItem('Total Amount', formatIndianCurrency(bill.total_amount), true)}
+                </div>
+            </div>
+        `;
+
+        detailModal.classList.add('show');
+    } catch (error) {
+        console.error('Error loading invoice detail:', error);
+        showToast('Failed to load invoice details', 'error');
+    }
+}
+
+function detailItem(label, value, highlight = false) {
+    const displayValue = value || '-';
+    const emptyClass = !value ? 'empty' : '';
+    const style = highlight ? 'font-size: 1.25rem; color: var(--success-color); font-weight: 600;' : '';
+
+    return `
+        <div class="detail-item">
+            <span class="detail-label">${label}</span>
+            <span class="detail-value ${emptyClass}" style="${style}">${displayValue}</span>
+        </div>
+    `;
+}
+
+async function deleteInvoice(invoiceId) {
+    if (!confirm('Are you sure you want to delete this invoice?')) return;
+
+    try {
+        const response = await fetch(`/api/sales/stored/${invoiceId}`, { method: 'DELETE' });
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Invoice deleted', 'success');
+            refreshData();
+        } else {
+            showToast(data.error || 'Failed to delete', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting invoice:', error);
+        showToast('Failed to delete invoice', 'error');
+    }
+}
+
+// ============================================================================
+// UPLOAD MODAL
+// ============================================================================
+
+function openUploadModal() {
+    resetUploadModal();
+    uploadModal.classList.add('show');
+}
+
+function closeUploadModal() {
+    uploadModal.classList.remove('show');
+    resetUploadModal();
+}
+
+function resetUploadModal() {
+    fileQueue = [];
+    processedResults = [];
+    rawResults = [];
+    renderQueue();
+    document.getElementById('processingStatus').style.display = 'none';
+    document.getElementById('resultsPreview').style.display = 'none';
+    document.getElementById('uploadArea').style.display = 'block';
+    processBtn.disabled = true;
+    processBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polygon points="10 8 16 12 10 16 10 8"></polygon>
+        </svg>
+        Process Bills
+    `;
+}
+
+function closeDetailModal() {
+    detailModal.classList.remove('show');
+}
+
+// ============================================================================
+// FILE HANDLING
+// ============================================================================
+
+function handleDragOver(e) {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+}
+
+function handleDragLeave(e) {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    addFilesToQueue(Array.from(e.dataTransfer.files));
+}
+
+function handleFileSelect(e) {
+    addFilesToQueue(Array.from(e.target.files));
+    fileInput.value = '';
+}
+
+function addFilesToQueue(files) {
+    const validExtensions = ['.jpg', '.jpeg', '.png', '.pdf', '.webp'];
+
+    files.forEach(file => {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (validExtensions.includes(ext)) {
+            if (!fileQueue.some(f => f.name === file.name && f.size === file.size)) {
+                fileQueue.push(file);
+            }
+        } else {
+            showToast(`Skipped ${file.name}: Unsupported format`, 'error');
+        }
+    });
+
+    renderQueue();
+}
+
+function renderQueue() {
+    document.getElementById('fileCount').textContent = fileQueue.length;
+
+    if (fileQueue.length === 0) {
+        fileQueueEl.classList.remove('show');
+        processBtn.disabled = true;
+        return;
+    }
+
+    fileQueueEl.classList.add('show');
+    processBtn.disabled = false;
+
+    queueList.innerHTML = fileQueue.map((file, idx) => `
+        <div class="queue-item">
+            <div class="queue-item-icon">${getFileIcon(file.name)}</div>
+            <div class="queue-item-info">
+                <div class="queue-item-name">${file.name}</div>
+                <div class="queue-item-size">${formatFileSize(file.size)}</div>
+            </div>
+            <button class="queue-item-remove" onclick="removeFromQueue(${idx})">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removeFromQueue(index) {
+    fileQueue.splice(index, 1);
+    renderQueue();
+}
+
+function clearQueue() {
+    fileQueue = [];
+    renderQueue();
+}
+
+function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (ext === 'pdf') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`;
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// ============================================================================
+// PROCESSING
+// ============================================================================
+
+let processingStartTime = null;
+let totalProcessingTime = 0;
+
+function addProcessingLog(message, status = 'info') {
+    const logsContainer = document.getElementById('processingLogs');
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+    const statusIcon = {
+        'info': '○',
+        'success': '✓',
+        'error': '✗',
+        'duplicate': '⚠'
+    }[status] || '○';
+
+    const logEntry = document.createElement('div');
+    logEntry.className = `log-entry log-${status}`;
+    logEntry.innerHTML = `<span class="log-time">${timestamp}</span> <span class="log-icon">${statusIcon}</span> ${message}`;
+
+    logsContainer.appendChild(logEntry);
+    logsContainer.scrollTop = logsContainer.scrollHeight;
+}
+
+function clearProcessingLogs() {
+    document.getElementById('processingLogs').innerHTML = '';
+}
+
+function formatDuration(ms) {
+    if (ms < 1000) return `${ms}ms`;
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    if (minutes > 0) {
+        return `${minutes}m ${remainingSeconds}s`;
+    }
+    return `${seconds}.${Math.floor((ms % 1000) / 100)}s`;
+}
+
+async function processFiles() {
+    if (fileQueue.length === 0) return;
+
+    // Show processing status
+    document.getElementById('uploadArea').style.display = 'none';
+    fileQueueEl.classList.remove('show');
+    document.getElementById('processingStatus').style.display = 'block';
+    processBtn.disabled = true;
+
+    const total = fileQueue.length;
+    let processed = 0;
+    processedResults = [];
+    rawResults = [];
+
+    // Clear logs and start timer
+    clearProcessingLogs();
+    processingStartTime = Date.now();
+    addProcessingLog(`Starting batch processing of ${total} file${total > 1 ? 's' : ''}...`, 'info');
+
+    updateProgress(0, total);
+
+    for (const file of fileQueue) {
+        const fileStartTime = Date.now();
+        document.getElementById('processingText').textContent = `Processing ${file.name}...`;
+        addProcessingLog(`Processing: ${file.name}`, 'info');
+
+        try {
+            const result = await uploadAndProcessFile(file);
+            const fileTime = Date.now() - fileStartTime;
+
+            if (result.success) {
+                rawResults.push(...result.results);
+
+                // Log each result from display_data
+                for (const item of result.display_data) {
+                    if (item.is_duplicate) {
+                        addProcessingLog(`Duplicate: Invoice #${item.invoice_number || 'N/A'} already exists`, 'duplicate');
+                    } else if (item.success) {
+                        addProcessingLog(`Extracted: Invoice #${item.invoice_number || 'N/A'} - ${item.vendor_name || 'Unknown'} (${formatDuration(fileTime)})`, 'success');
+                    }
+                }
+                processedResults.push(...result.display_data);
+            } else {
+                addProcessingLog(`Failed: ${result.error || 'Unknown error'}`, 'error');
+                processedResults.push({
+                    success: false,
+                    error: result.error || 'Unknown error',
+                    filename: file.name
+                });
+            }
+        } catch (error) {
+            addProcessingLog(`Error: ${error.message || 'Processing failed'}`, 'error');
+            processedResults.push({
+                success: false,
+                error: error.message || 'Processing failed',
+                filename: file.name
+            });
+        }
+
+        processed++;
+        updateProgress(processed, total);
+    }
+
+    // Calculate total time
+    totalProcessingTime = Date.now() - processingStartTime;
+    addProcessingLog(`Completed in ${formatDuration(totalProcessingTime)}`, 'info');
+
+    // Show results
+    showProcessingResults();
+}
+
+async function uploadAndProcessFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/sales/process', {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+    }
+
+    return await response.json();
+}
+
+function updateProgress(current, total) {
+    const percent = total > 0 ? (current / total) * 100 : 0;
+    document.getElementById('progressFill').style.width = percent + '%';
+    document.getElementById('progressText').textContent = `${current} / ${total}`;
+}
+
+function showProcessingResults() {
+    document.getElementById('processingStatus').style.display = 'none';
+    document.getElementById('resultsPreview').style.display = 'block';
+
+    const successCount = processedResults.filter(r => r.success && !r.is_duplicate).length;
+    const duplicateCount = processedResults.filter(r => r.is_duplicate).length;
+    const errorCount = processedResults.filter(r => !r.success && !r.is_duplicate).length;
+
+    document.getElementById('successCount').textContent = successCount;
+
+    // Show total processing time
+    const timeDisplay = document.getElementById('totalTimeDisplay');
+    if (totalProcessingTime > 0) {
+        timeDisplay.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${formatDuration(totalProcessingTime)}`;
+    }
+    document.getElementById('errorCount').textContent = errorCount + duplicateCount;
+
+    document.getElementById('resultsList').innerHTML = processedResults.map(result => {
+        // Determine the status class and icon
+        let statusClass = 'error';
+        let icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+
+        if (result.is_duplicate) {
+            statusClass = 'duplicate';
+            icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+        } else if (result.success) {
+            statusClass = 'success';
+            icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+        }
+
+        // Build the detail message
+        let detailMessage = '';
+        if (result.is_duplicate && result.existing_bill) {
+            const existing = result.existing_bill;
+            detailMessage = `<span class="duplicate-warning">DUPLICATE BILL</span> - Already processed on ${existing.created_at || 'N/A'}<br>Existing: Invoice #${existing.invoice_number} | ${existing.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(existing.total_amount)}`;
+        } else if (result.success) {
+            detailMessage = `Invoice: ${result.invoice_number || 'N/A'} | ${result.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(result.total_amount)}`;
+        } else {
+            detailMessage = `Error: ${result.error}`;
+        }
+
+        return `
+            <div class="result-item ${statusClass}">
+                <div class="result-icon">${icon}</div>
+                <div class="result-info">
+                    <div class="result-filename">${result.filename || 'Unknown'}</div>
+                    <div class="result-detail">${detailMessage}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Update button to close
+    processBtn.disabled = false;
+    processBtn.innerHTML = 'Done';
+    processBtn.onclick = () => {
+        closeUploadModal();
+        refreshData();
+    };
+
+    fileQueue = [];
+}
+
+// ============================================================================
+// EXPORT
+// ============================================================================
+
+async function exportAllBills() {
+    if (storedBills.length === 0) {
+        showToast('No bills to export', 'error');
+        return;
+    }
+
+    showToast('Preparing export...', 'info');
+
+    // Fetch all bill details for export
+    const allBillData = [];
+    for (const bill of storedBills) {
+        try {
+            const response = await fetch(`/api/sales/stored/${bill.id}`);
+            const data = await response.json();
+            if (data.success) {
+                allBillData.push({
+                    success: true,
+                    data: {
+                        invoice_header: {
+                            invoice_number: data.bill.invoice_number,
+                            invoice_date: data.bill.invoice_date,
+                            irn: data.bill.irn,
+                            ack_number: data.bill.ack_number,
+                            eway_bill_number: data.bill.eway_bill_number
+                        },
+                        vendor: {
+                            name: data.bill.vendor_name,
+                            gstin: data.bill.vendor_gstin,
+                            address: data.bill.vendor_address
+                        },
+                        buyer: {
+                            name: data.bill.buyer_name,
+                            gstin: data.bill.buyer_gstin
+                        },
+                        taxes: {
+                            subtotal: data.bill.subtotal,
+                            total_cgst: data.bill.total_cgst,
+                            total_sgst: data.bill.total_sgst,
+                            total_igst: data.bill.total_igst,
+                            total_amount: data.bill.total_amount,
+                            round_off: data.bill.round_off
+                        },
+                        transport: {
+                            vehicle_number: data.bill.vehicle_number
+                        },
+                        project: data.bill.project,
+                        line_items: data.bill.line_items
+                    },
+                    filename: data.bill.filename
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching bill for export:', error);
+        }
+    }
+
+    // Download
+    try {
+        const response = await fetch('/api/sales/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ results: allBillData })
+        });
+
+        if (!response.ok) throw new Error('Download failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `all_sales_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        showToast('Export downloaded!', 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        showToast('Export failed', 'error');
+    }
+}
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+function formatIndianCurrency(amount) {
+    if (!amount || isNaN(amount)) return '0';
+    const num = parseFloat(amount);
+    const isNegative = num < 0;
+    const absNum = Math.abs(num);
+
+    const parts = absNum.toFixed(2).split('.');
+    let intPart = parts[0];
+    const decPart = parts[1];
+
+    if (intPart.length > 3) {
+        let result = intPart.slice(-3);
+        intPart = intPart.slice(0, -3);
+        while (intPart.length > 0) {
+            result = intPart.slice(-2) + ',' + result;
+            intPart = intPart.slice(0, -2);
+        }
+        intPart = result;
+    }
+
+    const formatted = decPart === '00' ? intPart : intPart + '.' + decPart;
+    return (isNegative ? '-' : '') + formatted;
+}
+
+function formatNumber(num) {
+    if (!num || isNaN(num)) return '0';
+    return parseFloat(num).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+}
+
+function truncate(str, maxLength) {
+    if (!str) return '';
+    if (str.length <= maxLength) return str;
+    return str.substring(0, maxLength) + '...';
+}
+
+function showToast(message, type = 'info') {
+    toast.textContent = message;
+    toast.className = 'toast show ' + type;
+    setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// ============================================================================
+// EDIT MODAL FUNCTIONS
+// ============================================================================
+
+async function openEditModal(invoiceId) {
+
+    try {
+        // Fetch full bill details
+        const response = await fetch(`/api/sales/stored/${invoiceId}`);
+        const data = await response.json();
+
+        if (!data.success) {
+            showToast('Failed to load invoice details', 'error');
+            return;
+        }
+
+        currentEditBill = data.bill;
+        editLineItems = [...(currentEditBill.line_items || [])];
+
+        // Populate form fields
+        populateEditForm(currentEditBill);
+
+        // Render line items
+        renderEditLineItems();
+
+        // Populate project suggestions
+        populateProjectSuggestions();
+
+        // Load document viewer
+        loadDocumentViewer(currentEditBill.filename);
+
+        // Show modal
+        document.getElementById('editModal').classList.add('show');
+        document.getElementById('editModalTitle').textContent = `Edit Invoice: ${currentEditBill.invoice_number || 'N/A'}`;
+
+    } catch (error) {
+        console.error('Error opening edit modal:', error);
+        showToast('Failed to open edit modal', 'error');
+    }
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.remove('show');
+    currentEditBill = null;
+    editLineItems = [];
+    pdfDoc = null;
+    currentPdfPage = 1;
+    currentZoom = 1;
+
+    // Clear document container
+    document.getElementById('documentContainer').innerHTML = `
+        <div class="document-placeholder">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <p>Loading document...</p>
+        </div>
+    `;
+}
+
+function populateEditForm(bill) {
+    // Invoice Header
+    document.getElementById('edit_invoice_number').value = bill.invoice_number || '';
+    document.getElementById('edit_invoice_date').value = formatDateForInput(bill.invoice_date);
+    document.getElementById('edit_irn').value = bill.irn || '';
+    document.getElementById('edit_ack_number').value = bill.ack_number || '';
+    document.getElementById('edit_eway_bill_number').value = bill.eway_bill_number || '';
+    document.getElementById('edit_project').value = bill.project || '';
+
+    // Vendor Details
+    document.getElementById('edit_vendor_name').value = bill.vendor_name || '';
+    document.getElementById('edit_vendor_gstin').value = bill.vendor_gstin || '';
+    document.getElementById('edit_vendor_pan').value = bill.vendor_pan || '';
+    document.getElementById('edit_vendor_address').value = bill.vendor_address || '';
+    document.getElementById('edit_vendor_state').value = bill.vendor_state || '';
+    document.getElementById('edit_vendor_phone').value = bill.vendor_phone || '';
+    document.getElementById('edit_vendor_bank_name').value = bill.vendor_bank_name || '';
+    document.getElementById('edit_vendor_bank_account').value = bill.vendor_bank_account || '';
+    document.getElementById('edit_vendor_bank_ifsc').value = bill.vendor_bank_ifsc || '';
+
+    // Buyer Details
+    document.getElementById('edit_buyer_name').value = bill.buyer_name || '';
+    document.getElementById('edit_buyer_gstin').value = bill.buyer_gstin || '';
+    document.getElementById('edit_buyer_state').value = bill.buyer_state || '';
+    document.getElementById('edit_buyer_address').value = bill.buyer_address || '';
+
+    // Ship-To Details
+    document.getElementById('edit_ship_to_name').value = bill.ship_to_name || '';
+    document.getElementById('edit_ship_to_address').value = bill.ship_to_address || '';
+
+    // Totals
+    document.getElementById('edit_subtotal').value = bill.subtotal || 0;
+    document.getElementById('edit_total_cgst').value = bill.total_cgst || 0;
+    document.getElementById('edit_total_sgst').value = bill.total_sgst || 0;
+    document.getElementById('edit_total_igst').value = bill.total_igst || 0;
+    document.getElementById('edit_other_charges').value = bill.other_charges || 0;
+    document.getElementById('edit_round_off').value = bill.round_off || 0;
+    document.getElementById('edit_total_amount').value = bill.total_amount || 0;
+    document.getElementById('edit_amount_in_words').value = bill.amount_in_words || '';
+
+    // Transport
+    document.getElementById('edit_vehicle_number').value = bill.vehicle_number || '';
+    document.getElementById('edit_transporter_name').value = bill.transporter_name || '';
+}
+
+function formatDateForInput(dateStr) {
+    if (!dateStr) return '';
+    // Handle various date formats
+    try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return '';
+        return date.toISOString().split('T')[0];
+    } catch {
+        return '';
+    }
+}
+
+let editProjectHighlightIndex = -1;
+
+function populateProjectSuggestions() {
+    const input = document.getElementById('edit_project');
+    const suggestionsEl = document.getElementById('editProjectSuggestions');
+    if (!input || !suggestionsEl) return;
+
+    // Remove old listeners to avoid duplicates
+    input.removeEventListener('input', handleEditProjectInput);
+    input.removeEventListener('keydown', handleEditProjectKeydown);
+    input.removeEventListener('focus', handleEditProjectFocus);
+
+    input.addEventListener('input', handleEditProjectInput);
+    input.addEventListener('keydown', handleEditProjectKeydown);
+    input.addEventListener('focus', handleEditProjectFocus);
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.edit-project-group')) {
+            suggestionsEl.style.display = 'none';
+        }
+    });
+}
+
+function handleEditProjectFocus() {
+    renderEditProjectSuggestions();
+}
+
+function handleEditProjectInput() {
+    editProjectHighlightIndex = -1;
+    renderEditProjectSuggestions();
+}
+
+function renderEditProjectSuggestions() {
+    const input = document.getElementById('edit_project');
+    const suggestionsEl = document.getElementById('editProjectSuggestions');
+    if (!input || !suggestionsEl) return;
+
+    const value = input.value.toLowerCase().trim();
+    let filtered = allProjects.filter(p => p.toLowerCase().includes(value));
+
+    if (value && !allProjects.some(p => p.toLowerCase() === value)) {
+        filtered = [`${input.value} (new)`, ...filtered];
+    }
+
+    if (filtered.length === 0 && !value) {
+        filtered = [...allProjects];
+    }
+
+    if (filtered.length === 0) {
+        suggestionsEl.style.display = 'none';
+        return;
+    }
+
+    suggestionsEl.innerHTML = filtered.map((project, idx) => {
+        const isNew = project.endsWith(' (new)');
+        const selectValue = isNew ? input.value : project;
+        const highlightClass = idx === editProjectHighlightIndex ? 'highlighted' : '';
+        return `<div class="project-suggestion ${highlightClass}" data-value="${escapeForAttr(selectValue)}">${escapeHtml(project)}</div>`;
+    }).join('');
+
+    suggestionsEl.querySelectorAll('.project-suggestion').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            input.value = el.dataset.value;
+            suggestionsEl.style.display = 'none';
+            editProjectHighlightIndex = -1;
+        });
+    });
+
+    suggestionsEl.style.display = 'block';
+}
+
+function handleEditProjectKeydown(event) {
+    const suggestionsEl = document.getElementById('editProjectSuggestions');
+    const input = document.getElementById('edit_project');
+    if (!suggestionsEl || suggestionsEl.style.display === 'none') return;
+
+    const items = suggestionsEl.querySelectorAll('.project-suggestion');
+    const totalItems = items.length;
+
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (totalItems > 0) {
+            editProjectHighlightIndex = (editProjectHighlightIndex + 1) % totalItems;
+            updateEditProjectHighlight(items);
+        }
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (totalItems > 0) {
+            editProjectHighlightIndex = editProjectHighlightIndex <= 0 ? totalItems - 1 : editProjectHighlightIndex - 1;
+            updateEditProjectHighlight(items);
+        }
+    } else if (event.key === 'Tab') {
+        if (editProjectHighlightIndex >= 0 && items[editProjectHighlightIndex]) {
+            event.preventDefault();
+            input.value = items[editProjectHighlightIndex].dataset.value;
+            suggestionsEl.style.display = 'none';
+            editProjectHighlightIndex = -1;
+        } else if (totalItems > 0 && suggestionsEl.style.display === 'block') {
+            // Let Tab move to next field naturally if nothing highlighted
+        }
+    } else if (event.key === 'Enter') {
+        if (editProjectHighlightIndex >= 0 && items[editProjectHighlightIndex]) {
+            event.preventDefault();
+            input.value = items[editProjectHighlightIndex].dataset.value;
+            suggestionsEl.style.display = 'none';
+            editProjectHighlightIndex = -1;
+        }
+    } else if (event.key === 'Escape') {
+        suggestionsEl.style.display = 'none';
+        editProjectHighlightIndex = -1;
+    }
+}
+
+function updateEditProjectHighlight(items) {
+    items.forEach((item, idx) => {
+        item.classList.toggle('highlighted', idx === editProjectHighlightIndex);
+    });
+    if (editProjectHighlightIndex >= 0 && items[editProjectHighlightIndex]) {
+        items[editProjectHighlightIndex].scrollIntoView({ block: 'nearest' });
+    }
+}
+
+function renderEditLineItems() {
+    const tbody = document.getElementById('lineItemsBody');
+
+    if (editLineItems.length === 0) {
+        tbody.innerHTML = `
+            <tr class="empty-row">
+                <td colspan="12" class="text-center text-muted">
+                    No line items. Click "Add Item" to add one.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = editLineItems.map((item, index) => `
+        <tr data-index="${index}">
+            <td>
+                <input type="number" class="line-input line-input-sm" value="${item.sl_no || index + 1}"
+                       onchange="updateLineItem(${index}, 'sl_no', this.value)">
+            </td>
+            <td>
+                <input type="text" class="line-input line-input-desc" value="${escapeHtml(item.description || '')}"
+                       onchange="updateLineItem(${index}, 'description', this.value)">
+            </td>
+            <td>
+                <input type="text" class="line-input line-input-sm" value="${escapeHtml(item.hsn_sac_code || '')}"
+                       onchange="updateLineItem(${index}, 'hsn_sac_code', this.value)">
+            </td>
+            <td>
+                <input type="number" step="0.001" class="line-input line-input-num" value="${item.quantity || 0}"
+                       onchange="updateLineItem(${index}, 'quantity', this.value)">
+            </td>
+            <td>
+                <input type="text" class="line-input line-input-sm" value="${escapeHtml(item.uom || '')}"
+                       onchange="updateLineItem(${index}, 'uom', this.value)">
+            </td>
+            <td>
+                <input type="number" step="0.01" class="line-input line-input-num" value="${item.rate_per_unit || 0}"
+                       onchange="updateLineItem(${index}, 'rate_per_unit', this.value)">
+            </td>
+            <td>
+                <input type="number" step="0.01" class="line-input line-input-num" value="${item.taxable_value || 0}"
+                       onchange="updateLineItem(${index}, 'taxable_value', this.value)">
+            </td>
+            <td>
+                <input type="number" step="0.01" class="line-input line-input-sm" value="${item.cgst_rate || 0}"
+                       onchange="updateLineItem(${index}, 'cgst_rate', this.value)">
+            </td>
+            <td>
+                <input type="number" step="0.01" class="line-input line-input-sm" value="${item.sgst_rate || 0}"
+                       onchange="updateLineItem(${index}, 'sgst_rate', this.value)">
+            </td>
+            <td>
+                <input type="number" step="0.01" class="line-input line-input-sm" value="${item.igst_rate || 0}"
+                       onchange="updateLineItem(${index}, 'igst_rate', this.value)">
+            </td>
+            <td>
+                <input type="number" step="0.01" class="line-input line-input-num" value="${item.amount || 0}"
+                       onchange="updateLineItem(${index}, 'amount', this.value)">
+            </td>
+            <td>
+                <button type="button" class="btn-icon btn-danger btn-sm" onclick="removeLineItem(${index})" title="Remove Item">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function updateLineItem(index, field, value) {
+    if (editLineItems[index]) {
+        if (['sl_no', 'quantity', 'rate_per_unit', 'taxable_value', 'cgst_rate', 'cgst_amount',
+             'sgst_rate', 'sgst_amount', 'igst_rate', 'igst_amount', 'amount',
+             'discount_percent', 'discount_amount'].includes(field)) {
+            editLineItems[index][field] = parseFloat(value) || 0;
+        } else {
+            editLineItems[index][field] = value;
+        }
+    }
+}
+
+function addLineItem() {
+    const newItem = {
+        sl_no: editLineItems.length + 1,
+        description: '',
+        hsn_sac_code: '',
+        quantity: 0,
+        uom: '',
+        rate_per_unit: 0,
+        discount_percent: 0,
+        discount_amount: 0,
+        taxable_value: 0,
+        cgst_rate: 0,
+        cgst_amount: 0,
+        sgst_rate: 0,
+        sgst_amount: 0,
+        igst_rate: 0,
+        igst_amount: 0,
+        amount: 0
+    };
+    editLineItems.push(newItem);
+    renderEditLineItems();
+
+    // Scroll to the new item
+    const tbody = document.getElementById('lineItemsBody');
+    tbody.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function removeLineItem(index) {
+    if (editLineItems.length === 1) {
+        showToast('Cannot remove the last item', 'warning');
+        return;
+    }
+    editLineItems.splice(index, 1);
+    // Re-number items
+    editLineItems.forEach((item, i) => item.sl_no = i + 1);
+    renderEditLineItems();
+}
+
+// ============================================================================
+// DOCUMENT VIEWER FUNCTIONS
+// ============================================================================
+
+async function loadDocumentViewer(filename) {
+    const container = document.getElementById('documentContainer');
+    const pdfControls = document.getElementById('pdfPageControls');
+
+    if (!filename) {
+        container.innerHTML = `
+            <div class="document-placeholder">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <p>No document available</p>
+            </div>
+        `;
+        pdfControls.style.display = 'none';
+        return;
+    }
+
+    const fileUrl = `/api/sales/file/${encodeURIComponent(filename)}`;
+    const ext = filename.toLowerCase().split('.').pop();
+
+    if (ext === 'pdf') {
+        // Load PDF
+        pdfControls.style.display = 'flex';
+        await loadPdfDocument(fileUrl);
+    } else {
+        // Load Image
+        pdfControls.style.display = 'none';
+        loadImageDocument(fileUrl);
+    }
+}
+
+async function loadPdfDocument(url) {
+    const container = document.getElementById('documentContainer');
+    container.innerHTML = '<div class="document-loading"><div class="loading-spinner"></div><p>Loading PDF...</p></div>';
+
+    try {
+        // Set PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        pdfDoc = await pdfjsLib.getDocument(url).promise;
+        totalPdfPages = pdfDoc.numPages;
+        currentPdfPage = 1;
+
+        document.getElementById('totalPages').textContent = totalPdfPages;
+        document.getElementById('currentPage').textContent = currentPdfPage;
+
+        // Create canvas for PDF rendering
+        container.innerHTML = '<canvas id="pdfCanvas"></canvas>';
+        await renderPdfPage(currentPdfPage);
+
+    } catch (error) {
+        console.error('Error loading PDF:', error);
+        container.innerHTML = `
+            <div class="document-placeholder error">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+                <p>Failed to load PDF</p>
+            </div>
+        `;
+    }
+}
+
+async function renderPdfPage(pageNum) {
+    if (!pdfDoc) return;
+
+    try {
+        const page = await pdfDoc.getPage(pageNum);
+        const canvas = document.getElementById('pdfCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Calculate scale to fit container width
+        const container = document.getElementById('documentContainer');
+        const containerWidth = container.clientWidth - 20;
+        const viewport = page.getViewport({ scale: 1 });
+        const baseScale = containerWidth / viewport.width;
+        const scaledViewport = page.getViewport({ scale: baseScale * currentZoom });
+
+        canvas.width = scaledViewport.width;
+        canvas.height = scaledViewport.height;
+
+        await page.render({
+            canvasContext: ctx,
+            viewport: scaledViewport
+        }).promise;
+
+        document.getElementById('currentPage').textContent = pageNum;
+        updateZoomDisplay();
+
+    } catch (error) {
+        console.error('Error rendering PDF page:', error);
+    }
+}
+
+function changePdfPage(delta) {
+    const newPage = currentPdfPage + delta;
+    if (newPage >= 1 && newPage <= totalPdfPages) {
+        currentPdfPage = newPage;
+        renderPdfPage(currentPdfPage);
+    }
+}
+
+function loadImageDocument(url) {
+    const container = document.getElementById('documentContainer');
+    container.innerHTML = `
+        <div class="image-wrapper" id="imageWrapper">
+            <img id="documentImage" src="${url}" alt="Invoice Document"
+                 style="transform: scale(${currentZoom})"
+                 onload="updateZoomDisplay()"
+                 onerror="handleImageError()">
+        </div>
+    `;
+}
+
+function handleImageError() {
+    const container = document.getElementById('documentContainer');
+    container.innerHTML = `
+        <div class="document-placeholder error">
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            <p>Failed to load image</p>
+        </div>
+    `;
+}
+
+function adjustZoom(delta) {
+    const newZoom = Math.max(0.25, Math.min(3, currentZoom + delta));
+    if (newZoom !== currentZoom) {
+        currentZoom = newZoom;
+        applyZoom();
+    }
+}
+
+function resetZoom() {
+    currentZoom = 1;
+    applyZoom();
+}
+
+function applyZoom() {
+    const image = document.getElementById('documentImage');
+    const canvas = document.getElementById('pdfCanvas');
+
+    if (image) {
+        image.style.transform = `scale(${currentZoom})`;
+    } else if (canvas && pdfDoc) {
+        renderPdfPage(currentPdfPage);
+    }
+
+    updateZoomDisplay();
+}
+
+function updateZoomDisplay() {
+    document.getElementById('zoomLevel').textContent = Math.round(currentZoom * 100) + '%';
+}
+
+// ============================================================================
+// SAVE EDIT CHANGES
+// ============================================================================
+
+async function saveEditChanges() {
+    if (!currentEditBill) return;
+
+    const saveBtn = document.getElementById('saveEditBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<div class="btn-spinner"></div> Saving...';
+
+    try {
+        // Collect form data
+        const formData = {
+            invoice_number: document.getElementById('edit_invoice_number').value,
+            invoice_date: document.getElementById('edit_invoice_date').value,
+            irn: document.getElementById('edit_irn').value,
+            ack_number: document.getElementById('edit_ack_number').value,
+            eway_bill_number: document.getElementById('edit_eway_bill_number').value,
+            project: document.getElementById('edit_project').value,
+
+            vendor_name: document.getElementById('edit_vendor_name').value,
+            vendor_gstin: document.getElementById('edit_vendor_gstin').value,
+            vendor_pan: document.getElementById('edit_vendor_pan').value,
+            vendor_address: document.getElementById('edit_vendor_address').value,
+            vendor_state: document.getElementById('edit_vendor_state').value,
+            vendor_phone: document.getElementById('edit_vendor_phone').value,
+            vendor_bank_name: document.getElementById('edit_vendor_bank_name').value,
+            vendor_bank_account: document.getElementById('edit_vendor_bank_account').value,
+            vendor_bank_ifsc: document.getElementById('edit_vendor_bank_ifsc').value,
+
+            buyer_name: document.getElementById('edit_buyer_name').value,
+            buyer_gstin: document.getElementById('edit_buyer_gstin').value,
+            buyer_state: document.getElementById('edit_buyer_state').value,
+            buyer_address: document.getElementById('edit_buyer_address').value,
+
+            ship_to_name: document.getElementById('edit_ship_to_name').value,
+            ship_to_address: document.getElementById('edit_ship_to_address').value,
+
+            subtotal: parseFloat(document.getElementById('edit_subtotal').value) || 0,
+            total_cgst: parseFloat(document.getElementById('edit_total_cgst').value) || 0,
+            total_sgst: parseFloat(document.getElementById('edit_total_sgst').value) || 0,
+            total_igst: parseFloat(document.getElementById('edit_total_igst').value) || 0,
+            other_charges: parseFloat(document.getElementById('edit_other_charges').value) || 0,
+            round_off: parseFloat(document.getElementById('edit_round_off').value) || 0,
+            total_amount: parseFloat(document.getElementById('edit_total_amount').value) || 0,
+            amount_in_words: document.getElementById('edit_amount_in_words').value,
+
+            vehicle_number: document.getElementById('edit_vehicle_number').value,
+            transporter_name: document.getElementById('edit_transporter_name').value,
+
+            line_items: editLineItems
+        };
+
+        const response = await fetch(`/api/sales/stored/${currentEditBill.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('Invoice updated successfully', 'success');
+            closeEditModal();
+            refreshData();
+        } else {
+            showToast(result.error || 'Failed to update invoice', 'error');
+        }
+
+    } catch (error) {
+        console.error('Error saving changes:', error);
+        showToast('Failed to save changes', 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            Save Changes
+        `;
+    }
+}
+
+// ============================================================================
+// BULK UPLOAD FUNCTIONS
+// ============================================================================
+
+let bulkUploadFiles = [];
+
+function initBulkUpload() {
+    const bulkUploadModal = document.getElementById('bulkUploadModal');
+    const bulkUploadArea = document.getElementById('bulkUploadArea');
+    const bulkFileInput = document.getElementById('bulkFileInput');
+
+    // Button to open modal
+    document.getElementById('bulkUploadBtn').addEventListener('click', openBulkUploadModal);
+
+    // Close modal events
+    document.getElementById('closeBulkUploadModal').addEventListener('click', closeBulkUploadModal);
+    document.getElementById('cancelBulkUpload').addEventListener('click', closeBulkUploadModal);
+    bulkUploadModal.addEventListener('click', (e) => {
+        if (e.target === bulkUploadModal) closeBulkUploadModal();
+    });
+
+    // Upload area events
+    bulkUploadArea.addEventListener('click', () => bulkFileInput.click());
+    bulkUploadArea.addEventListener('dragover', handleBulkDragOver);
+    bulkUploadArea.addEventListener('dragleave', handleBulkDragLeave);
+    bulkUploadArea.addEventListener('drop', handleBulkDrop);
+    bulkFileInput.addEventListener('change', handleBulkFileSelect);
+
+    // Start upload button
+    document.getElementById('startBulkUpload').addEventListener('click', startBulkUpload);
+}
+
+function openBulkUploadModal() {
+    bulkUploadFiles = [];
+    document.getElementById('bulkUploadModal').classList.add('show');
+    document.getElementById('bulkFileList').style.display = 'none';
+    document.getElementById('bulkUploadProgress').style.display = 'none';
+    document.getElementById('bulkUploadResults').style.display = 'none';
+    document.getElementById('startBulkUpload').disabled = true;
+    document.getElementById('bulkFileInput').value = '';
+}
+
+function closeBulkUploadModal() {
+    document.getElementById('bulkUploadModal').classList.remove('show');
+    bulkUploadFiles = [];
+}
+
+function handleBulkDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function handleBulkDragLeave(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleBulkDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files);
+    addBulkFiles(files);
+}
+
+function handleBulkFileSelect(e) {
+    const files = Array.from(e.target.files);
+    addBulkFiles(files);
+}
+
+function addBulkFiles(files) {
+    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
+
+    files.forEach(file => {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (allowedExtensions.includes(ext)) {
+            // Avoid duplicates
+            if (!bulkUploadFiles.find(f => f.name === file.name)) {
+                bulkUploadFiles.push(file);
+            }
+        }
+    });
+
+    renderBulkFileList();
+}
+
+function renderBulkFileList() {
+    const container = document.getElementById('bulkFileListContainer');
+    const fileList = document.getElementById('bulkFileList');
+    const fileCount = document.getElementById('bulkFileCount');
+    const uploadBtn = document.getElementById('startBulkUpload');
+
+    if (bulkUploadFiles.length === 0) {
+        fileList.style.display = 'none';
+        uploadBtn.disabled = true;
+        return;
+    }
+
+    fileList.style.display = 'block';
+    fileCount.textContent = bulkUploadFiles.length;
+    uploadBtn.disabled = false;
+
+    container.innerHTML = bulkUploadFiles.map((file, index) => `
+        <div class="bulk-file-item">
+            <span class="file-name">${file.name}</span>
+            <span class="file-size">${formatFileSize(file.size)}</span>
+            <button type="button" class="btn-remove-file" onclick="removeBulkFile(${index})" title="Remove">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removeBulkFile(index) {
+    bulkUploadFiles.splice(index, 1);
+    renderBulkFileList();
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function startBulkUpload() {
+    if (bulkUploadFiles.length === 0) return;
+
+    const uploadBtn = document.getElementById('startBulkUpload');
+    const progressSection = document.getElementById('bulkUploadProgress');
+    const progressFill = document.getElementById('bulkProgressFill');
+    const progressText = document.getElementById('bulkProgressText');
+    const resultsSection = document.getElementById('bulkUploadResults');
+    const resultSummary = document.getElementById('bulkResultSummary');
+
+    // Show progress
+    uploadBtn.disabled = true;
+    progressSection.style.display = 'block';
+    resultsSection.style.display = 'none';
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Preparing upload...';
+
+    try {
+        const formData = new FormData();
+        bulkUploadFiles.forEach(file => {
+            formData.append('files', file);
+        });
+
+        progressText.textContent = `Uploading ${bulkUploadFiles.length} files...`;
+        progressFill.style.width = '50%';
+
+        const response = await fetch('/api/sales/upload-files', {
+            method: 'POST',
+            body: formData
+        });
+
+        progressFill.style.width = '100%';
+        const data = await response.json();
+
+        // Show results
+        progressSection.style.display = 'none';
+        resultsSection.style.display = 'block';
+
+        if (data.success) {
+            resultSummary.innerHTML = `
+                <div class="result-success">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <div>
+                        <strong>${data.uploaded} files uploaded successfully</strong>
+                        ${data.skipped > 0 ? `<br><span class="text-muted">${data.skipped} files skipped</span>` : ''}
+                    </div>
+                </div>
+                ${data.details && data.details.length > 0 ? `
+                    <div class="result-details">
+                        ${data.details.map(d => `
+                            <div class="result-item ${d.status}">
+                                <span class="filename">${d.filename}</span>
+                                <span class="status-badge ${d.status}">${d.status}${d.reason ? ': ' + d.reason : ''}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            `;
+            showToast(`${data.uploaded} files uploaded successfully`, 'success');
+        } else {
+            resultSummary.innerHTML = `
+                <div class="result-error">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                    <div>
+                        <strong>Upload failed</strong>
+                        <br><span class="text-muted">${data.error || 'Unknown error'}</span>
+                    </div>
+                </div>
+            `;
+            showToast('Upload failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+
+        // Clear the file list
+        bulkUploadFiles = [];
+        document.getElementById('bulkFileList').style.display = 'none';
+
+    } catch (error) {
+        console.error('Bulk upload error:', error);
+        progressSection.style.display = 'none';
+        resultsSection.style.display = 'block';
+        resultSummary.innerHTML = `
+            <div class="result-error">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+                <div>
+                    <strong>Upload failed</strong>
+                    <br><span class="text-muted">${error.message}</span>
+                </div>
+            </div>
+        `;
+        showToast('Upload failed: ' + error.message, 'error');
+    }
+
+    uploadBtn.disabled = false;
+}
+
+// Initialize bulk upload on page load
+document.addEventListener('DOMContentLoaded', initBulkUpload);
+
+// ============================================================================
+// EXPOSE FUNCTIONS TO GLOBAL SCOPE (for remaining inline onclick handlers)
+// ============================================================================
+window.viewInvoiceDetail = viewInvoiceDetail;
+window.deleteInvoice = deleteInvoice;
+window.openEditModal = openEditModal;
+window.updateLineItem = updateLineItem;
+window.removeLineItem = removeLineItem;
+window.handleImageError = handleImageError;
+window.updateZoomDisplay = updateZoomDisplay;
+window.removeBulkFile = removeBulkFile;

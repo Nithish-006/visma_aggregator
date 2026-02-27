@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Load bill processor count
     loadBillProcessorCount();
 
+    // Load sales bill count
+    loadSalesBillCount();
+
     // Add animation on card hover
     initCardAnimations();
 });
@@ -115,6 +118,30 @@ async function loadBillProcessorCount() {
 }
 
 /**
+ * Load sales bill invoice count
+ */
+async function loadSalesBillCount() {
+    try {
+        const response = await fetch('/api/sales/stats');
+        if (!response.ok) {
+            throw new Error('Failed to fetch sales stats');
+        }
+
+        const data = await response.json();
+        const salesCount = document.getElementById('sales-count');
+        if (salesCount && data.invoice_count !== undefined) {
+            salesCount.textContent = formatNumber(data.invoice_count);
+        }
+    } catch (error) {
+        console.error('Error loading sales bill count:', error);
+        const salesCount = document.getElementById('sales-count');
+        if (salesCount) {
+            salesCount.textContent = '0';
+        }
+    }
+}
+
+/**
  * Clear server cache and reload hub stats
  */
 async function refreshCache() {
@@ -130,6 +157,7 @@ async function refreshCache() {
         await refreshBankStats();
         await loadPersonalTrackerCount();
         await loadBillProcessorCount();
+        await loadSalesBillCount();
 
         btn.querySelector('span').textContent = 'Done!';
         setTimeout(() => { btn.querySelector('span').textContent = 'Refresh'; }, 1500);
