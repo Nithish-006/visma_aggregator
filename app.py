@@ -3970,6 +3970,15 @@ def get_project_summary_combined():
                 start_date=start_date, end_date=end_date)
         except:
             api_bills = []
+
+        # Filter bills by project stems when a project filter is active
+        if project and project != 'All':
+            proj_stems = get_project_stems(project)
+            if proj_stems:
+                api_bills = [b for b in api_bills
+                             if any(str(b.get('project', '')).lower().strip().startswith(s)
+                                    for s in proj_stems)]
+
         bill_proj_names = [str(b.get('project', '')) for b in api_bills
                            if str(b.get('project', '')).strip() and str(b.get('project', '')).lower() != 'nan']
 
@@ -3981,6 +3990,12 @@ def get_project_summary_combined():
         try:
             api_labour_raw = DatabaseManager.get_labour_costs_by_project(
                 start_date=start_date, end_date=end_date)
+            # Filter labour by project stems when a project filter is active
+            if project and project != 'All':
+                proj_stems = get_project_stems(project)
+                if proj_stems:
+                    api_labour_raw = {k: v for k, v in api_labour_raw.items()
+                                      if any(k.lower().strip().startswith(s) for s in proj_stems)}
             api_labour_by_stem = match_labour_to_project_groups(api_labour_raw, api_stem_groups)
         except:
             api_labour_by_stem = {}
