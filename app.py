@@ -2107,6 +2107,168 @@ def delete_personal_transaction(transaction_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/personal/export')
+@login_required
+def export_personal_transactions():
+    """Export personal transactions as Excel"""
+    if not app.config['USE_DATABASE']:
+        return jsonify({'error': 'Database not available'}), 503
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    try:
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("""
+                SELECT transaction_date, vendor, description, project, amount,
+                       COALESCE(transaction_type, 'expense') as transaction_type, bank
+                FROM personal_transactions
+                ORDER BY transaction_date DESC, created_at DESC
+            """)
+            rows = cursor.fetchall()
+            cursor.close()
+
+        wb = Workbook()
+
+        # ── Styles ──
+        header_font = Font(name='Calibri', bold=True, color='FFFFFF', size=11)
+        header_fill = PatternFill(start_color='2563EB', end_color='2563EB', fill_type='solid')
+        header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        thin_border = Border(
+            left=Side(style='thin', color='D1D5DB'),
+            right=Side(style='thin', color='D1D5DB'),
+            top=Side(style='thin', color='D1D5DB'),
+            bottom=Side(style='thin', color='D1D5DB')
+        )
+        currency_fmt = '#,##0.00'
+        date_fmt = 'DD-MMM-YYYY'
+        income_fill = PatternFill(start_color='DCFCE7', end_color='DCFCE7', fill_type='solid')
+        expense_fill = PatternFill(start_color='FEE2E2', end_color='FEE2E2', fill_type='solid')
+
+        # ── All Transactions sheet ──
+        ws = wb.active
+        ws.title = 'All Transactions'
+        headers = ['Date', 'Type', 'Vendor', 'Description', 'Project', 'Bank', 'Amount']
+        col_widths = [14, 10, 25, 30, 20, 10, 15]
+
+        for col_idx, (header, width) in enumerate(zip(headers, col_widths), 1):
+            cell = ws.cell(row=1, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+            cell.border = thin_border
+            ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+        for row_idx, row in enumerate(rows, 2):
+            trans_type = row.get('transaction_type', 'expense') or 'expense'
+            row_fill = income_fill if trans_type == 'income' else expense_fill
+
+            values = [
+                row['transaction_date'],
+                trans_type.capitalize(),
+                row['vendor'],
+                row['description'] or '',
+                row['project'],
+                (row.get('bank') or '').upper(),
+                float(row['amount'])
+            ]
+            for col_idx, val in enumerate(values, 1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                cell.border = thin_border
+                cell.fill = row_fill
+                if col_idx == 1:
+                    cell.number_format = date_fmt
+                    cell.alignment = Alignment(horizontal='center')
+                elif col_idx == 7:
+                    cell.number_format = currency_fmt
+                    cell.alignment = Alignment(horizontal='right')
+
+        ws.auto_filter.ref = f"A1:G{max(len(rows) + 1, 2)}"
+        ws.freeze_panes = 'A2'
+
+        # ── Monthly Summary sheet ──
+        ws_monthly = wb.create_sheet('Monthly Summary')
+        monthly = {}
+        for row in rows:
+            key = row['transaction_date'].strftime('%Y-%m')
+            if key not in monthly:
+                monthly[key] = {'income': 0, 'expense': 0}
+            trans_type = row.get('transaction_type', 'expense') or 'expense'
+            monthly[key][trans_type] += float(row['amount'])
+
+        m_headers = ['Month', 'Income', 'Expenses', 'Net']
+        m_widths = [16, 15, 15, 15]
+        for col_idx, (header, width) in enumerate(zip(m_headers, m_widths), 1):
+            cell = ws_monthly.cell(row=1, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+            cell.border = thin_border
+            ws_monthly.column_dimensions[get_column_letter(col_idx)].width = width
+
+        for row_idx, (month_key, totals) in enumerate(sorted(monthly.items(), reverse=True), 2):
+            month_label = datetime.strptime(month_key, '%Y-%m').strftime('%B %Y')
+            net = totals['income'] - totals['expense']
+            values = [month_label, totals['income'], totals['expense'], net]
+            for col_idx, val in enumerate(values, 1):
+                cell = ws_monthly.cell(row=row_idx, column=col_idx, value=val)
+                cell.border = thin_border
+                if col_idx >= 2:
+                    cell.number_format = currency_fmt
+                    cell.alignment = Alignment(horizontal='right')
+
+        # ── Project Summary sheet ──
+        ws_proj = wb.create_sheet('Project Summary')
+        proj_totals = {}
+        for row in rows:
+            proj = row['project']
+            trans_type = row.get('transaction_type', 'expense') or 'expense'
+            if proj not in proj_totals:
+                proj_totals[proj] = {'income': 0, 'expense': 0, 'count': 0}
+            proj_totals[proj][trans_type] += float(row['amount'])
+            proj_totals[proj]['count'] += 1
+
+        p_headers = ['Project', 'Income', 'Expenses', 'Net', 'Transactions']
+        p_widths = [25, 15, 15, 15, 14]
+        for col_idx, (header, width) in enumerate(zip(p_headers, p_widths), 1):
+            cell = ws_proj.cell(row=1, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_align
+            cell.border = thin_border
+            ws_proj.column_dimensions[get_column_letter(col_idx)].width = width
+
+        sorted_projs = sorted(proj_totals.items(), key=lambda x: x[1]['expense'], reverse=True)
+        for row_idx, (proj, totals) in enumerate(sorted_projs, 2):
+            net = totals['income'] - totals['expense']
+            values = [proj, totals['income'], totals['expense'], net, totals['count']]
+            for col_idx, val in enumerate(values, 1):
+                cell = ws_proj.cell(row=row_idx, column=col_idx, value=val)
+                cell.border = thin_border
+                if col_idx in (2, 3, 4):
+                    cell.number_format = currency_fmt
+                    cell.alignment = Alignment(horizontal='right')
+                elif col_idx == 5:
+                    cell.alignment = Alignment(horizontal='center')
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"Expense_Tracker_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/personal/summary')
 @login_required
 def get_personal_summary():
@@ -5701,7 +5863,7 @@ def export_project_summary():
                 if len(sn) > 31:
                     sn = sn[:31]
                 desired_order.append(sn)
-            desired_order.extend(['Purchase Bills', 'Sales Bills', 'Project Breakdown'])
+            desired_order.extend(['Project Breakdown', 'Purchase Bills', 'Sales Bills'])
             desired_order.extend(labour_sheet_names)  # Labour always last
 
             desired_order = [s for s in desired_order if s in wb.sheetnames]

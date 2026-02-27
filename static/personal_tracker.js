@@ -129,6 +129,11 @@
         elements.searchClose.addEventListener('click', closeSearch);
         elements.searchInput.addEventListener('input', debounce(handleSearch, 300));
 
+        // Export
+        document.getElementById('export-btn').addEventListener('click', () => {
+            window.location.href = '/api/personal/export';
+        });
+
         // Tabs
         elements.tabs.forEach(tab => {
             tab.addEventListener('click', () => switchTab(tab.dataset.tab));
