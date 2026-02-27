@@ -4005,15 +4005,11 @@ def get_project_summary_combined():
             group_label = stem.upper()
             proj_list = ', '.join(sorted(str(p) for p in project_names if str(p) != 'nan'))
 
-            # --- Material total from bills ---
+            # --- Material total from bills (use total_amount = subtotal + taxes) ---
             group_bills = api_bills_by_stem.get(stem, [])
             material_total = 0
             for bill in group_bills:
-                if bill.get('line_items'):
-                    for item in bill['line_items']:
-                        material_total += item.get('amount', 0)
-                else:
-                    material_total += bill.get('total_amount', 0)
+                material_total += bill.get('total_amount', 0)
 
             # --- Income + Other expense totals from bank txns ---
             income_total = 0
@@ -4862,13 +4858,12 @@ def export_project_summary():
             gstin_key: 'vendor_gstin' or 'buyer_gstin'
             total_font: font colour for totals (red_amount or green_amount-like)
             """
-            BILL_COLS = 14  # SL.NO, Party, GSTIN, Invoice#, Date, Description, HSN/SAC, QTY, UOM, RATE, TAXABLE, CGST, SGST, IGST
+            BILL_COLS = 15  # SL.NO, Party, GSTIN, Invoice#, Date, Description, HSN/SAC, QTY, UOM, RATE, TAXABLE, CGST, SGST, IGST, TOTAL
             bill_header_labels = [
                 'SL.NO', party_label, 'GSTIN', 'INVOICE #', 'DATE',
                 'DESCRIPTION', 'HSN/SAC', 'QTY', 'UOM', 'RATE',
-                'TAXABLE AMT', 'CGST', 'SGST', 'IGST'
+                'TAXABLE AMT', 'CGST', 'SGST', 'IGST', 'TOTAL'
             ]
-            bill_currency_cols = [10, 11, 12, 13, 14]  # RATE, TAXABLE, CGST, SGST, IGST
 
             ws.cell(row=1, column=1, value=sheet_title).font = title_font
             cr = 3  # current row
@@ -4979,6 +4974,8 @@ def export_project_summary():
                         ws.cell(row=cr, column=13).number_format = currency_fmt
                         ws.cell(row=cr, column=14, value=b_igst)
                         ws.cell(row=cr, column=14).number_format = currency_fmt
+                        ws.cell(row=cr, column=15, value=b_total)
+                        ws.cell(row=cr, column=15).number_format = currency_fmt
                         cr += 1
 
                     # ── Bill Total row ──
@@ -4991,6 +4988,8 @@ def export_project_summary():
                     ws.cell(row=cr, column=13).number_format = currency_fmt
                     ws.cell(row=cr, column=14, value=b_igst).font = Font(bold=True)
                     ws.cell(row=cr, column=14).number_format = currency_fmt
+                    ws.cell(row=cr, column=15, value=b_total).font = Font(bold=True)
+                    ws.cell(row=cr, column=15).number_format = currency_fmt
                     # Thin bottom border on bill total row
                     for c in range(1, BILL_COLS + 1):
                         ws.cell(row=cr, column=c).border = thin_border
@@ -5014,6 +5013,8 @@ def export_project_summary():
                 ws.cell(row=cr, column=13).number_format = currency_fmt
                 ws.cell(row=cr, column=14, value=proj_igst).font = total_font
                 ws.cell(row=cr, column=14).number_format = currency_fmt
+                ws.cell(row=cr, column=15, value=proj_total).font = total_font
+                ws.cell(row=cr, column=15).number_format = currency_fmt
                 cr += 1
 
                 # Yellow background on all content rows in this block
@@ -5045,12 +5046,14 @@ def export_project_summary():
                 ws.cell(row=cr, column=13).number_format = currency_fmt
                 ws.cell(row=cr, column=14, value=grand_igst).font = Font(bold=True, size=12)
                 ws.cell(row=cr, column=14).number_format = currency_fmt
+                ws.cell(row=cr, column=15, value=grand_total).font = Font(bold=True, size=12)
+                ws.cell(row=cr, column=15).number_format = currency_fmt
 
             # Column widths
             col_widths = {
                 'A': 8, 'B': 28, 'C': 18, 'D': 18, 'E': 14,
                 'F': 35, 'G': 12, 'H': 10, 'I': 8, 'J': 12,
-                'K': 15, 'L': 12, 'M': 12, 'N': 12
+                'K': 15, 'L': 12, 'M': 12, 'N': 12, 'O': 15
             }
             for col_letter, width in col_widths.items():
                 ws.column_dimensions[col_letter].width = width
@@ -5251,7 +5254,7 @@ def export_project_summary():
                 ws_pb.cell(row=current_row, column=3, value='AMOUNT').font = Font(bold=True)
                 current_row += 1
 
-                # Aggregate bill line items by vendor — vendor name only, total per vendor
+                # Aggregate bills by vendor — use total_amount (subtotal + taxes)
                 material_total = 0
                 if group_bills:
                     vendor_agg = {}  # vendor_name -> {weight, amount}
@@ -5263,9 +5266,8 @@ def export_project_summary():
                             uom = str(item.get('uom', '')).upper().strip()
                             if uom in WEIGHT_UOMS:
                                 vendor_agg[vname]['weight'] += item.get('quantity', 0)
-                            vendor_agg[vname]['amount'] += item.get('amount', 0)
-                        if not bill.get('line_items'):
-                            vendor_agg[vname]['amount'] += bill.get('total_amount', 0)
+                        # Use bill total_amount (includes taxes) for consistent totals
+                        vendor_agg[vname]['amount'] += bill.get('total_amount', 0)
 
                     for vname, data in sorted(vendor_agg.items(), key=lambda x: x[1]['amount'], reverse=True):
                         ws_pb.cell(row=current_row, column=1, value=vname)
