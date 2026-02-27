@@ -1071,6 +1071,112 @@ class DatabaseManager:
             print(f"[!] Error fetching bills for project summary: {e}")
             return [], 0, {'total_amount': 0, 'total_gst': 0}
 
+    def get_sales_bills_for_project_summary(self, start_date=None, end_date=None,
+                                            project=None, vendor=None,
+                                            page=1, per_page=15):
+        """Get sales bills for project summary with robust project matching and pagination.
+
+        Returns:
+            Tuple of (bills_list, total_count, summary_dict)
+        """
+        conditions = []
+        params = []
+
+        if start_date:
+            conditions.append("si.invoice_date >= %s")
+            params.append(start_date)
+        if end_date:
+            conditions.append("si.invoice_date <= %s")
+            params.append(end_date)
+
+        # Robust project matching: stem-based, case-insensitive prefix
+        if project:
+            stems = []
+            for p in project.split(','):
+                p = p.strip()
+                if p:
+                    tokens = p.split()
+                    first_token = tokens[0].lower() if tokens else p.lower()
+                    stems.append(first_token)
+            if stems:
+                stem_conditions = []
+                for stem in stems:
+                    stem_conditions.append("LOWER(si.project) LIKE %s")
+                    params.append(f"{stem}%")
+                conditions.append(f"({' OR '.join(stem_conditions)})")
+
+        # Vendor/buyer filter: case-insensitive contains
+        if vendor:
+            vendors = [v.strip() for v in vendor.split(',') if v.strip()]
+            if vendors:
+                vendor_conditions = []
+                for v in vendors:
+                    vendor_conditions.append("(LOWER(si.buyer_name) LIKE %s OR LOWER(si.vendor_name) LIKE %s)")
+                    params.append(f"%{v.lower()}%")
+                    params.append(f"%{v.lower()}%")
+                conditions.append(f"({' OR '.join(vendor_conditions)})")
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+
+                # Count
+                count_query = f"SELECT COUNT(*) as cnt FROM sales_invoices si WHERE {where_clause}"
+                cursor.execute(count_query, tuple(params) if params else None)
+                total = cursor.fetchone()['cnt']
+
+                # Summary
+                summary_query = f"""
+                SELECT COALESCE(SUM(si.total_amount), 0) as total_amount,
+                       COALESCE(SUM(COALESCE(si.total_cgst, 0) + COALESCE(si.total_sgst, 0) + COALESCE(si.total_igst, 0)), 0) as total_gst
+                FROM sales_invoices si WHERE {where_clause}
+                """
+                cursor.execute(summary_query, tuple(params) if params else None)
+                summary_row = cursor.fetchone()
+                summary = {
+                    'total_amount': float(summary_row['total_amount']) if summary_row else 0,
+                    'total_gst': float(summary_row['total_gst']) if summary_row else 0
+                }
+
+                # Data
+                offset = (page - 1) * per_page
+                data_query = f"""
+                SELECT
+                    si.id, si.invoice_number, si.invoice_date,
+                    si.vendor_name, si.vendor_gstin,
+                    si.buyer_name, si.buyer_gstin,
+                    si.subtotal, si.total_cgst, si.total_sgst, si.total_igst,
+                    si.total_amount, si.project,
+                    COUNT(sli.id) as line_item_count
+                FROM sales_invoices si
+                LEFT JOIN sales_line_items sli ON si.id = sli.invoice_id
+                WHERE {where_clause}
+                GROUP BY si.id
+                ORDER BY si.invoice_date DESC, si.id DESC
+                LIMIT %s OFFSET %s
+                """
+                data_params = list(params) + [per_page, offset]
+                cursor.execute(data_query, tuple(data_params))
+                rows = cursor.fetchall()
+                cursor.close()
+
+                bills = []
+                for row in rows:
+                    if row.get('invoice_date'):
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                    for key, val in row.items():
+                        if isinstance(val, DecimalType):
+                            row[key] = float(val)
+                    bills.append(row)
+
+                return bills, total, summary
+
+        except Exception as e:
+            print(f"[!] Error fetching sales bills for project summary: {e}")
+            return [], 0, {'total_amount': 0, 'total_gst': 0}
+
     def get_bills_with_line_items_for_export(self, start_date=None, end_date=None):
         """Fetch all bills with their nested line items for Excel export.
 

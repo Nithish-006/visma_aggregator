@@ -13,7 +13,8 @@
             vendorBreakdown: { page: 1, perPage: 15, showAll: false },
             axisTransactions: { page: 1, perPage: 15 },
             kvbTransactions: { page: 1, perPage: 15 },
-            bills: { page: 1, perPage: 15 }
+            bills: { page: 1, perPage: 15 },
+            salesBills: { page: 1, perPage: 15 }
         },
         activeBankTab: 'axis',
         etBankFilter: 'all',
@@ -21,7 +22,8 @@
             combined: null,
             personalTxns: [],
             personalSummary: null,
-            bills: { bills: [], total: 0 }
+            bills: { bills: [], total: 0 },
+            salesBills: { bills: [], total: 0 }
         }
     };
 
@@ -559,6 +561,7 @@
         state.pagination.axisTransactions.page = 1;
         state.pagination.kvbTransactions.page = 1;
         state.pagination.bills.page = 1;
+        state.pagination.salesBills.page = 1;
 
         const params = buildQueryParams();
 
@@ -591,6 +594,7 @@
             // Fetch active bank tab transactions and bills
             fetchBankTransactions(state.activeBankTab, 1);
             fetchBills(1);
+            fetchSalesBills(1);
         } catch (err) {
             console.error('Refresh error:', err);
         }
@@ -971,6 +975,73 @@
         const summaryEl = document.getElementById('bills-summary');
         if (summaryEl && data.summary) {
             summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}`;
+        }
+    }
+
+    // ── Render: Sales Bills Table (server-side pagination) ──────────────
+    async function fetchSalesBills(page) {
+        const params = buildQueryParams();
+        params.set('page', page);
+        params.set('per_page', state.pagination.salesBills.perPage);
+
+        try {
+            const result = await fetchJSON('/api/project-summary/sales-bills?' + params.toString());
+            state.data.salesBills = result;
+            state.pagination.salesBills.page = result.page;
+            renderSalesBillsTable();
+        } catch (err) {
+            console.error('Sales bills fetch error:', err);
+        }
+    }
+
+    function renderSalesBillsTable() {
+        const data = state.data.salesBills;
+        const tbody = document.getElementById('sales-bills-table-body');
+        if (!tbody) return;
+
+        if (!data.bills || data.bills.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="ps-empty">No sales bills found</td></tr>';
+            renderPaginationControls('sales-bills-pagination', 1, 0, () => {});
+            const summaryEl = document.getElementById('sales-bills-summary');
+            if (summaryEl) summaryEl.textContent = '';
+            return;
+        }
+
+        tbody.innerHTML = data.bills.map(b => `<tr>
+            <td><a href="#" class="ps-sales-bill-link" data-bill-id="${b.id}">${escapeHtml(b.invoice_number || '-')}</a></td>
+            <td>${escapeHtml(b.invoice_date || '-')}</td>
+            <td class="cell-wrap">${escapeHtml(b.buyer_name || '-')}</td>
+            <td>${escapeHtml(b.buyer_gstin || '-')}</td>
+            <td class="text-right">${b.line_item_count || 0}</td>
+            <td class="text-right text-income">${formatIndianNumber(b.total_amount || 0)}</td>
+            <td>${escapeHtml(b.project || '-')}</td>
+        </tr>`).join('');
+
+        // Bind sales bill detail links
+        tbody.querySelectorAll('.ps-sales-bill-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                viewSalesBillDetail(link.dataset.billId);
+            });
+        });
+
+        renderPaginationControls('sales-bills-pagination', data.page, data.total_pages, (pg) => {
+            fetchSalesBills(pg);
+        });
+
+        // Update summary text
+        const summaryEl = document.getElementById('sales-bills-summary');
+        if (summaryEl && data.summary) {
+            summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}`;
+        }
+    }
+
+    async function viewSalesBillDetail(id) {
+        try {
+            const response = await fetchJSON(`/api/sales/stored/${id}`);
+            renderBillDetailModal(response.bill);
+        } catch (err) {
+            console.error('Sales bill detail error:', err);
         }
     }
 

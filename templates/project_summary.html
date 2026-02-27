@@ -189,10 +189,10 @@
                 <div class="ps-pagination" id="bank-txn-pagination"></div>
             </div>
 
-            <!-- Project Bills -->
+            <!-- Purchase Bills -->
             <div class="ps-section">
                 <h2 class="ps-section-title">
-                    Project Bills
+                    Purchase Bills
                     <span class="ps-bills-summary-text" id="bills-summary"></span>
                 </h2>
                 <div class="ps-table-wrap">
@@ -214,6 +214,33 @@
                     </table>
                 </div>
                 <div class="ps-pagination" id="bills-pagination"></div>
+            </div>
+
+            <!-- Sales Bills -->
+            <div class="ps-section">
+                <h2 class="ps-section-title">
+                    Sales Bills
+                    <span class="ps-bills-summary-text" id="sales-bills-summary"></span>
+                </h2>
+                <div class="ps-table-wrap">
+                    <table class="ps-table" id="sales-bills-table">
+                        <thead>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Date</th>
+                                <th>Buyer</th>
+                                <th>GSTIN</th>
+                                <th class="text-right">Items</th>
+                                <th class="text-right">Total</th>
+                                <th>Project</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sales-bills-table-body">
+                            <tr><td colspan="7" class="ps-empty">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="ps-pagination" id="sales-bills-pagination"></div>
             </div>
         </div>
 

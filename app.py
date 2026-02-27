@@ -4408,6 +4408,46 @@ def get_project_summary_bills():
         })
 
 
+@app.route('/api/project-summary/sales-bills')
+@login_required
+def get_project_summary_sales_bills():
+    """Get sales bills for project summary with filters and pagination"""
+    start_date = request.args.get('start_date', None)
+    end_date = request.args.get('end_date', None)
+    project = request.args.get('project', None)
+    vendor = request.args.get('vendor', None)
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 15))
+
+    try:
+        bills, total, summary = db_manager.get_sales_bills_for_project_summary(
+            start_date=start_date,
+            end_date=end_date,
+            project=project,
+            vendor=vendor,
+            page=page,
+            per_page=per_page
+        )
+        return jsonify({
+            'bills': bills,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page if total > 0 else 0,
+            'summary': summary
+        })
+    except Exception as e:
+        print(f"[!] Sales bills fetch error: {e}")
+        return jsonify({
+            'bills': [],
+            'total': 0,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': 0,
+            'summary': {'total_amount': 0, 'total_gst': 0}
+        })
+
+
 @app.route('/api/project-summary/date-range')
 @login_required
 def get_project_summary_date_range():
