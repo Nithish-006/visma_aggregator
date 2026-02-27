@@ -4842,85 +4842,301 @@ def export_project_summary():
             auto_width(ws_b)
 
         # ──────────────────────────────────────────────────────────
-        # TAB 7: Bills
+        # TAB 7 & 8: Purchase Bills / Sales Bills (project-grouped)
         # ──────────────────────────────────────────────────────────
-        bills_list = []
-        try:
-            bills, bills_total, bills_summary = db_manager.get_bills_for_project_summary(
-                start_date=start_date,
-                end_date=end_date,
-                project=project,
-                vendor=vendor,
-                page=1,
-                per_page=10000  # Get all for export
-            )
-
-            if bills:
-                bills_rows = []
-                for b in bills:
-                    bills_rows.append({
-                        'Invoice #': b.get('invoice_number', ''),
-                        'Date': b.get('invoice_date', ''),
-                        'Vendor': b.get('vendor_name', ''),
-                        'Vendor GSTIN': b.get('vendor_gstin', ''),
-                        'Buyer': b.get('buyer_name', ''),
-                        'Items': b.get('line_item_count', 0),
-                        'Subtotal': float(b.get('subtotal', 0) or 0),
-                        'CGST': float(b.get('total_cgst', 0) or 0),
-                        'SGST': float(b.get('total_sgst', 0) or 0),
-                        'IGST': float(b.get('total_igst', 0) or 0),
-                        'Total': float(b.get('total_amount', 0) or 0),
-                        'Project': b.get('project', '')
-                    })
-
-                bills_list = bills_rows
-                df_bills = pd.DataFrame(bills_rows)
-                df_bills.to_excel(writer, sheet_name='Bills', index=False, startrow=2)
-
-                ws_bills = writer.sheets['Bills']
-                ws_bills.cell(row=1, column=1, value='Project Bills / Invoices').font = title_font
-                style_header_row(ws_bills, 3, len(df_bills.columns))
-
-                for r in range(4, 4 + len(df_bills)):
-                    for c in [7, 8, 9, 10, 11]:  # Subtotal, CGST, SGST, IGST, Total
-                        ws_bills.cell(row=r, column=c).number_format = currency_fmt
-
-                # Total row
-                total_row = 4 + len(df_bills)
-                ws_bills.cell(row=total_row, column=1, value='TOTAL').font = Font(bold=True)
-                ws_bills.cell(row=total_row, column=7, value=sum(b.get('Subtotal', 0) for b in bills_rows)).font = Font(bold=True)
-                ws_bills.cell(row=total_row, column=7).number_format = currency_fmt
-                ws_bills.cell(row=total_row, column=8, value=sum(b.get('CGST', 0) for b in bills_rows)).font = Font(bold=True)
-                ws_bills.cell(row=total_row, column=8).number_format = currency_fmt
-                ws_bills.cell(row=total_row, column=9, value=sum(b.get('SGST', 0) for b in bills_rows)).font = Font(bold=True)
-                ws_bills.cell(row=total_row, column=9).number_format = currency_fmt
-                ws_bills.cell(row=total_row, column=10, value=sum(b.get('IGST', 0) for b in bills_rows)).font = Font(bold=True)
-                ws_bills.cell(row=total_row, column=10).number_format = currency_fmt
-                ws_bills.cell(row=total_row, column=11, value=sum(b.get('Total', 0) for b in bills_rows)).font = Font(bold=True)
-                ws_bills.cell(row=total_row, column=11).number_format = currency_fmt
-
-                auto_width(ws_bills)
-            else:
-                pd.DataFrame({'Note': ['No bills for the selected filters']}).to_excel(
-                    writer, sheet_name='Bills', index=False)
-        except Exception as e:
-            print(f"[!] Bills export error: {e}")
-            pd.DataFrame({'Note': ['Error fetching bills data']}).to_excel(
-                writer, sheet_name='Bills', index=False)
-
-        # ──────────────────────────────────────────────────────────
-        # TAB 8: Project Breakdown (Auditor Format)
-        # ──────────────────────────────────────────────────────────
-        wb = writer.book
-        project_col = 'Project' if 'Project' in combined.columns else 'project' if not combined.empty else 'Project'
-        v_col = 'Client/Vendor' if (not combined.empty and 'Client/Vendor' in combined.columns) else 'client_vendor'
-
-        # Auditor-format styling (matches ProjectSummary.jpeg)
+        # Shared auditor-format styles (reused by Project Breakdown tab too)
         green_fill = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
         block_bg = PatternFill(start_color='FFFDE7', end_color='FFFDE7', fill_type='solid')  # mild yellow
         project_name_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
         project_name_font = Font(name='Calibri', bold=True, size=14, color='FFFFFF')
         separator_fill = PatternFill(start_color='2F2F2F', end_color='2F2F2F', fill_type='solid')
+
+        # Shared helper: writes a project-grouped bills sheet
+        def write_bills_sheet(ws, bills_by_stem_local, stem_groups_local,
+                              sheet_title, party_label, party_key, gstin_key,
+                              total_font):
+            """Write a project-grouped bills sheet with expanded line items.
+
+            party_label: 'VENDOR' or 'BUYER'
+            party_key: 'vendor_name' or 'buyer_name'
+            gstin_key: 'vendor_gstin' or 'buyer_gstin'
+            total_font: font colour for totals (red_amount or green_amount-like)
+            """
+            BILL_COLS = 14  # SL.NO, Party, GSTIN, Invoice#, Date, Description, HSN/SAC, QTY, UOM, RATE, TAXABLE, CGST, SGST, IGST
+            bill_header_labels = [
+                'SL.NO', party_label, 'GSTIN', 'INVOICE #', 'DATE',
+                'DESCRIPTION', 'HSN/SAC', 'QTY', 'UOM', 'RATE',
+                'TAXABLE AMT', 'CGST', 'SGST', 'IGST'
+            ]
+            bill_currency_cols = [10, 11, 12, 13, 14]  # RATE, TAXABLE, CGST, SGST, IGST
+
+            ws.cell(row=1, column=1, value=sheet_title).font = title_font
+            cr = 3  # current row
+            grand_taxable = 0
+            grand_cgst = 0
+            grand_sgst = 0
+            grand_igst = 0
+            grand_total = 0
+            bill_serial = 0
+
+            for stem in sorted(stem_groups_local.keys()):
+                group_bills = bills_by_stem_local.get(stem, [])
+                if not group_bills:
+                    continue
+
+                project_names = stem_groups_local[stem]
+                group_label = stem.upper()
+                proj_list = ', '.join(sorted(str(p) for p in project_names if str(p) != 'nan'))
+
+                block_start = cr
+
+                # ── PROJECT HEADER (blue fill, white text) ──
+                for c in range(1, BILL_COLS + 1):
+                    ws.cell(row=cr, column=c).fill = project_name_fill
+                ws.cell(row=cr, column=1,
+                        value=f'PROJECT :  {group_label}').font = project_name_font
+                cr += 1
+
+                # Variant names
+                ws.cell(row=cr, column=1,
+                        value=f'({proj_list})').font = Font(
+                    name='Calibri', italic=True, color='6B7280', size=9)
+                cr += 2
+
+                # ── COLUMN HEADERS ──
+                for ci, lbl in enumerate(bill_header_labels, 1):
+                    cell = ws.cell(row=cr, column=ci, value=lbl)
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                cr += 1
+
+                proj_taxable = 0
+                proj_cgst = 0
+                proj_sgst = 0
+                proj_igst = 0
+                proj_total = 0
+
+                for bill in group_bills:
+                    bill_serial += 1
+                    line_items = bill.get('line_items', [])
+                    b_taxable = float(bill.get('subtotal', 0) or 0)
+                    b_cgst = float(bill.get('total_cgst', 0) or 0)
+                    b_sgst = float(bill.get('total_sgst', 0) or 0)
+                    b_igst = float(bill.get('total_igst', 0) or 0)
+                    b_total = float(bill.get('total_amount', 0) or 0)
+
+                    if line_items:
+                        # First line item shares the row with bill header info
+                        for li_idx, item in enumerate(line_items):
+                            if li_idx == 0:
+                                ws.cell(row=cr, column=1, value=bill_serial)
+                                ws.cell(row=cr, column=2, value=bill.get(party_key, ''))
+                                ws.cell(row=cr, column=3, value=bill.get(gstin_key, ''))
+                                ws.cell(row=cr, column=4, value=bill.get('invoice_number', ''))
+                                ws.cell(row=cr, column=5, value=bill.get('invoice_date', ''))
+                            # Line item detail columns
+                            ws.cell(row=cr, column=6, value=item.get('description', ''))
+                            ws.cell(row=cr, column=7, value=item.get('hsn_sac_code', ''))
+                            qty = item.get('quantity', 0)
+                            if qty:
+                                ws.cell(row=cr, column=8, value=qty)
+                                ws.cell(row=cr, column=8).number_format = '#,##0.00'
+                            ws.cell(row=cr, column=9, value=item.get('uom', ''))
+                            rate = item.get('rate_per_unit', 0)
+                            if rate:
+                                ws.cell(row=cr, column=10, value=rate)
+                                ws.cell(row=cr, column=10).number_format = currency_fmt
+                            taxable = item.get('taxable_value', 0)
+                            if taxable:
+                                ws.cell(row=cr, column=11, value=taxable)
+                                ws.cell(row=cr, column=11).number_format = currency_fmt
+                            item_cgst = item.get('cgst_amount', 0)
+                            if item_cgst:
+                                ws.cell(row=cr, column=12, value=item_cgst)
+                                ws.cell(row=cr, column=12).number_format = currency_fmt
+                            item_sgst = item.get('sgst_amount', 0)
+                            if item_sgst:
+                                ws.cell(row=cr, column=13, value=item_sgst)
+                                ws.cell(row=cr, column=13).number_format = currency_fmt
+                            item_igst = item.get('igst_amount', 0)
+                            if item_igst:
+                                ws.cell(row=cr, column=14, value=item_igst)
+                                ws.cell(row=cr, column=14).number_format = currency_fmt
+                            cr += 1
+                    else:
+                        # Bill with no line items - single row with bill totals
+                        ws.cell(row=cr, column=1, value=bill_serial)
+                        ws.cell(row=cr, column=2, value=bill.get(party_key, ''))
+                        ws.cell(row=cr, column=3, value=bill.get(gstin_key, ''))
+                        ws.cell(row=cr, column=4, value=bill.get('invoice_number', ''))
+                        ws.cell(row=cr, column=5, value=bill.get('invoice_date', ''))
+                        ws.cell(row=cr, column=11, value=b_taxable)
+                        ws.cell(row=cr, column=11).number_format = currency_fmt
+                        ws.cell(row=cr, column=12, value=b_cgst)
+                        ws.cell(row=cr, column=12).number_format = currency_fmt
+                        ws.cell(row=cr, column=13, value=b_sgst)
+                        ws.cell(row=cr, column=13).number_format = currency_fmt
+                        ws.cell(row=cr, column=14, value=b_igst)
+                        ws.cell(row=cr, column=14).number_format = currency_fmt
+                        cr += 1
+
+                    # ── Bill Total row ──
+                    ws.cell(row=cr, column=6, value='Bill Total').font = Font(bold=True)
+                    ws.cell(row=cr, column=11, value=b_taxable).font = Font(bold=True)
+                    ws.cell(row=cr, column=11).number_format = currency_fmt
+                    ws.cell(row=cr, column=12, value=b_cgst).font = Font(bold=True)
+                    ws.cell(row=cr, column=12).number_format = currency_fmt
+                    ws.cell(row=cr, column=13, value=b_sgst).font = Font(bold=True)
+                    ws.cell(row=cr, column=13).number_format = currency_fmt
+                    ws.cell(row=cr, column=14, value=b_igst).font = Font(bold=True)
+                    ws.cell(row=cr, column=14).number_format = currency_fmt
+                    # Thin bottom border on bill total row
+                    for c in range(1, BILL_COLS + 1):
+                        ws.cell(row=cr, column=c).border = thin_border
+                    cr += 1
+
+                    proj_taxable += b_taxable
+                    proj_cgst += b_cgst
+                    proj_sgst += b_sgst
+                    proj_igst += b_igst
+                    proj_total += b_total
+
+                # ── PROJECT TOTAL (green fill) ──
+                for c in range(1, BILL_COLS + 1):
+                    ws.cell(row=cr, column=c).fill = green_fill
+                ws.cell(row=cr, column=1, value=f'PROJECT TOTAL — {group_label}').font = Font(bold=True)
+                ws.cell(row=cr, column=11, value=proj_taxable).font = total_font
+                ws.cell(row=cr, column=11).number_format = currency_fmt
+                ws.cell(row=cr, column=12, value=proj_cgst).font = total_font
+                ws.cell(row=cr, column=12).number_format = currency_fmt
+                ws.cell(row=cr, column=13, value=proj_sgst).font = total_font
+                ws.cell(row=cr, column=13).number_format = currency_fmt
+                ws.cell(row=cr, column=14, value=proj_igst).font = total_font
+                ws.cell(row=cr, column=14).number_format = currency_fmt
+                cr += 1
+
+                # Yellow background on all content rows in this block
+                for r in range(block_start, cr):
+                    for c in range(1, BILL_COLS + 1):
+                        cell = ws.cell(row=r, column=c)
+                        if cell.fill == PatternFill(fill_type=None) or cell.fill == PatternFill():
+                            cell.fill = block_bg
+
+                # ── Dark separator ──
+                for c in range(1, BILL_COLS + 1):
+                    ws.cell(row=cr, column=c).fill = separator_fill
+                cr += 2
+
+                grand_taxable += proj_taxable
+                grand_cgst += proj_cgst
+                grand_sgst += proj_sgst
+                grand_igst += proj_igst
+                grand_total += proj_total
+
+            # ── GRAND TOTAL ──
+            if grand_total > 0:
+                ws.cell(row=cr, column=1, value='GRAND TOTAL').font = Font(bold=True, size=12)
+                ws.cell(row=cr, column=11, value=grand_taxable).font = Font(bold=True, size=12)
+                ws.cell(row=cr, column=11).number_format = currency_fmt
+                ws.cell(row=cr, column=12, value=grand_cgst).font = Font(bold=True, size=12)
+                ws.cell(row=cr, column=12).number_format = currency_fmt
+                ws.cell(row=cr, column=13, value=grand_sgst).font = Font(bold=True, size=12)
+                ws.cell(row=cr, column=13).number_format = currency_fmt
+                ws.cell(row=cr, column=14, value=grand_igst).font = Font(bold=True, size=12)
+                ws.cell(row=cr, column=14).number_format = currency_fmt
+
+            # Column widths
+            col_widths = {
+                'A': 8, 'B': 28, 'C': 18, 'D': 18, 'E': 14,
+                'F': 35, 'G': 12, 'H': 10, 'I': 8, 'J': 12,
+                'K': 15, 'L': 12, 'M': 12, 'N': 12
+            }
+            for col_letter, width in col_widths.items():
+                ws.column_dimensions[col_letter].width = width
+
+        # ── Fetch purchase bills and build project groups ──
+        try:
+            purchase_bills = db_manager.get_bills_with_line_items_for_export(
+                start_date=start_date, end_date=end_date
+            )
+        except Exception as e:
+            print(f"[!] Error fetching purchase bills for export: {e}")
+            purchase_bills = []
+
+        try:
+            sales_bills = db_manager.get_sales_bills_with_line_items_for_export(
+                start_date=start_date, end_date=end_date
+            )
+        except Exception as e:
+            print(f"[!] Error fetching sales bills for export: {e}")
+            sales_bills = []
+
+        # Collect project names from bank txns, purchase bills, and sales bills
+        pb_bank_projects = []
+        pb_project_col = 'Project' if 'Project' in combined.columns else 'project' if not combined.empty else 'Project'
+        if not combined.empty and pb_project_col in combined.columns:
+            pb_bank_projects = [str(p) for p in combined[pb_project_col].dropna().unique()
+                                if str(p).strip() and str(p).lower() != 'nan']
+        pb_bill_projects = [str(b.get('project', '')) for b in purchase_bills
+                            if str(b.get('project', '')).strip() and str(b.get('project', '')).lower() != 'nan']
+        sb_bill_projects = [str(b.get('project', '')) for b in sales_bills
+                            if str(b.get('project', '')).strip() and str(b.get('project', '')).lower() != 'nan']
+
+        bills_stem_groups = build_smart_project_groups(
+            pb_bank_projects, pb_bill_projects + sb_bill_projects
+        )
+
+        # Apply project filter if active
+        if project:
+            proj_stems = get_project_stems(project)
+            bills_stem_groups = {
+                s: names for s, names in bills_stem_groups.items()
+                if s in proj_stems or any(normalize_project_stem(t) in proj_stems
+                                          for n in names for t in str(n).split())
+            }
+
+        purchase_by_stem = match_bills_to_project_groups(purchase_bills, bills_stem_groups)
+        sales_by_stem = match_bills_to_project_groups(sales_bills, bills_stem_groups)
+
+        # TAB 7: Purchase Bills
+        wb_tabs = writer.book
+        if purchase_by_stem:
+            ws_purchase = wb_tabs.create_sheet('Purchase Bills')
+            write_bills_sheet(
+                ws_purchase, purchase_by_stem, bills_stem_groups,
+                sheet_title='Purchase Bills — Project Grouped',
+                party_label='VENDOR', party_key='vendor_name',
+                gstin_key='vendor_gstin',
+                total_font=Font(name='Calibri', bold=True, color='DC2626')
+            )
+        else:
+            pd.DataFrame({'Note': ['No purchase bills for the selected filters']}).to_excel(
+                writer, sheet_name='Purchase Bills', index=False)
+
+        # TAB 8: Sales Bills
+        if sales_by_stem:
+            ws_sales = wb_tabs.create_sheet('Sales Bills')
+            write_bills_sheet(
+                ws_sales, sales_by_stem, bills_stem_groups,
+                sheet_title='Sales Bills — Project Grouped',
+                party_label='BUYER', party_key='buyer_name',
+                gstin_key='buyer_gstin',
+                total_font=Font(name='Calibri', bold=True, color='059669')
+            )
+        else:
+            pd.DataFrame({'Note': ['No sales bills for the selected filters']}).to_excel(
+                writer, sheet_name='Sales Bills', index=False)
+
+        # ──────────────────────────────────────────────────────────
+        # TAB 9: Project Breakdown (Auditor Format)
+        # ──────────────────────────────────────────────────────────
+        wb = writer.book
+        project_col = 'Project' if 'Project' in combined.columns else 'project' if not combined.empty else 'Project'
+        v_col = 'Client/Vendor' if (not combined.empty and 'Client/Vendor' in combined.columns) else 'client_vendor'
+
+        # Auditor-format styling (green_fill, block_bg, project_name_fill/font,
+        # separator_fill already defined above for bills tabs)
         section_bold = Font(name='Calibri', bold=True, size=11)
         green_amount = Font(name='Calibri', bold=True, color='006100')
         red_amount = Font(name='Calibri', bold=True, color='DC2626')
@@ -5159,7 +5375,7 @@ def export_project_summary():
             ws_pb.column_dimensions['C'].width = 20
 
         # ──────────────────────────────────────────────────────────
-        # TAB 9: Labour Attendance & Salary Summary (single month)
+        # TAB 10: Labour Attendance & Salary Summary (single month)
         # ──────────────────────────────────────────────────────────
         import calendar as cal
         from datetime import date as date_cls

@@ -1181,8 +1181,9 @@ class DatabaseManager:
         """Fetch all bills with their nested line items for Excel export.
 
         Returns list of bill dicts, each with a 'line_items' list containing
-        description, quantity, uom, and amount for each line item.
-        No pagination - export needs all data.
+        full line-item detail (description, hsn_sac_code, quantity, uom,
+        rate_per_unit, taxable_value, cgst_amount, sgst_amount, igst_amount, amount)
+        plus bill-level tax totals. No pagination - export needs all data.
         """
         conditions = []
         params = []
@@ -1199,10 +1200,19 @@ class DatabaseManager:
         query = f"""
         SELECT
             bi.id as bill_id, bi.invoice_number, bi.invoice_date,
-            bi.vendor_name, bi.project, bi.subtotal, bi.total_amount,
+            bi.vendor_name, bi.vendor_gstin,
+            bi.project, bi.subtotal,
+            bi.total_cgst, bi.total_sgst, bi.total_igst,
+            bi.total_amount,
             bli.description as item_description,
+            bli.hsn_sac_code as item_hsn_sac,
             bli.quantity as item_quantity,
             bli.uom as item_uom,
+            bli.rate_per_unit as item_rate,
+            bli.taxable_value as item_taxable,
+            bli.cgst_amount as item_cgst,
+            bli.sgst_amount as item_sgst,
+            bli.igst_amount as item_igst,
             bli.amount as item_amount
         FROM bill_invoices bi
         LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
@@ -1231,26 +1241,127 @@ class DatabaseManager:
                             'invoice_number': row.get('invoice_number', ''),
                             'invoice_date': inv_date,
                             'vendor_name': row.get('vendor_name', ''),
+                            'vendor_gstin': row.get('vendor_gstin', ''),
                             'project': row.get('project', ''),
                             'subtotal': float(row['subtotal']) if row.get('subtotal') else 0,
+                            'total_cgst': float(row['total_cgst']) if row.get('total_cgst') else 0,
+                            'total_sgst': float(row['total_sgst']) if row.get('total_sgst') else 0,
+                            'total_igst': float(row['total_igst']) if row.get('total_igst') else 0,
                             'total_amount': float(row['total_amount']) if row.get('total_amount') else 0,
                             'line_items': []
                         }
                     # Add line item if present
                     if row.get('item_description'):
-                        qty = row.get('item_quantity')
-                        amt = row.get('item_amount')
                         bills_map[bid]['line_items'].append({
                             'description': row['item_description'],
-                            'quantity': float(qty) if qty else 0,
+                            'hsn_sac_code': row.get('item_hsn_sac', ''),
+                            'quantity': float(row['item_quantity']) if row.get('item_quantity') else 0,
                             'uom': row.get('item_uom', ''),
-                            'amount': float(amt) if amt else 0
+                            'rate_per_unit': float(row['item_rate']) if row.get('item_rate') else 0,
+                            'taxable_value': float(row['item_taxable']) if row.get('item_taxable') else 0,
+                            'cgst_amount': float(row['item_cgst']) if row.get('item_cgst') else 0,
+                            'sgst_amount': float(row['item_sgst']) if row.get('item_sgst') else 0,
+                            'igst_amount': float(row['item_igst']) if row.get('item_igst') else 0,
+                            'amount': float(row['item_amount']) if row.get('item_amount') else 0
                         })
 
                 return list(bills_map.values())
 
         except Exception as e:
             print(f"[!] Error fetching bills with line items for export: {e}")
+            return []
+
+    def get_sales_bills_with_line_items_for_export(self, start_date=None, end_date=None):
+        """Fetch all sales bills with their nested line items for Excel export.
+
+        Same structure as get_bills_with_line_items_for_export but targets
+        sales_invoices / sales_line_items. Returns buyer_name/buyer_gstin.
+        """
+        conditions = []
+        params = []
+
+        if start_date:
+            conditions.append("si.invoice_date >= %s")
+            params.append(start_date)
+        if end_date:
+            conditions.append("si.invoice_date <= %s")
+            params.append(end_date)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        query = f"""
+        SELECT
+            si.id as bill_id, si.invoice_number, si.invoice_date,
+            si.buyer_name, si.buyer_gstin,
+            si.vendor_name, si.vendor_gstin,
+            si.project, si.subtotal,
+            si.total_cgst, si.total_sgst, si.total_igst,
+            si.total_amount,
+            sli.description as item_description,
+            sli.hsn_sac_code as item_hsn_sac,
+            sli.quantity as item_quantity,
+            sli.uom as item_uom,
+            sli.rate_per_unit as item_rate,
+            sli.taxable_value as item_taxable,
+            sli.cgst_amount as item_cgst,
+            sli.sgst_amount as item_sgst,
+            sli.igst_amount as item_igst,
+            sli.amount as item_amount
+        FROM sales_invoices si
+        LEFT JOIN sales_line_items sli ON si.id = sli.invoice_id
+        WHERE {where_clause}
+        ORDER BY si.id, sli.sl_no
+        """
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(query, tuple(params) if params else None)
+                rows = cursor.fetchall()
+                cursor.close()
+
+                from collections import OrderedDict
+                bills_map = OrderedDict()
+                for row in rows:
+                    bid = row['bill_id']
+                    if bid not in bills_map:
+                        inv_date = row.get('invoice_date')
+                        if inv_date and hasattr(inv_date, 'strftime'):
+                            inv_date = inv_date.strftime('%d-%b-%Y')
+                        bills_map[bid] = {
+                            'bill_id': bid,
+                            'invoice_number': row.get('invoice_number', ''),
+                            'invoice_date': inv_date,
+                            'buyer_name': row.get('buyer_name', ''),
+                            'buyer_gstin': row.get('buyer_gstin', ''),
+                            'vendor_name': row.get('vendor_name', ''),
+                            'vendor_gstin': row.get('vendor_gstin', ''),
+                            'project': row.get('project', ''),
+                            'subtotal': float(row['subtotal']) if row.get('subtotal') else 0,
+                            'total_cgst': float(row['total_cgst']) if row.get('total_cgst') else 0,
+                            'total_sgst': float(row['total_sgst']) if row.get('total_sgst') else 0,
+                            'total_igst': float(row['total_igst']) if row.get('total_igst') else 0,
+                            'total_amount': float(row['total_amount']) if row.get('total_amount') else 0,
+                            'line_items': []
+                        }
+                    if row.get('item_description'):
+                        bills_map[bid]['line_items'].append({
+                            'description': row['item_description'],
+                            'hsn_sac_code': row.get('item_hsn_sac', ''),
+                            'quantity': float(row['item_quantity']) if row.get('item_quantity') else 0,
+                            'uom': row.get('item_uom', ''),
+                            'rate_per_unit': float(row['item_rate']) if row.get('item_rate') else 0,
+                            'taxable_value': float(row['item_taxable']) if row.get('item_taxable') else 0,
+                            'cgst_amount': float(row['item_cgst']) if row.get('item_cgst') else 0,
+                            'sgst_amount': float(row['item_sgst']) if row.get('item_sgst') else 0,
+                            'igst_amount': float(row['item_igst']) if row.get('item_igst') else 0,
+                            'amount': float(row['item_amount']) if row.get('item_amount') else 0
+                        })
+
+                return list(bills_map.values())
+
+        except Exception as e:
+            print(f"[!] Error fetching sales bills with line items for export: {e}")
             return []
 
     # ========================================================================
