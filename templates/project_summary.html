@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <title>Project Summary | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=9">
 </head>
 
 <body>
@@ -100,6 +100,14 @@
                 <div class="ps-kpi-card kpi-count">
                     <div class="ps-kpi-label">Transactions</div>
                     <div class="ps-kpi-value" id="kpi-count">0</div>
+                </div>
+                <div class="ps-kpi-card kpi-purchase-bills">
+                    <div class="ps-kpi-label">Purchase Bills Value</div>
+                    <div class="ps-kpi-value" id="kpi-purchase-bills">₹0</div>
+                </div>
+                <div class="ps-kpi-card kpi-sales-bills">
+                    <div class="ps-kpi-label">Sales Bills Value</div>
+                    <div class="ps-kpi-value" id="kpi-sales-bills">₹0</div>
                 </div>
             </div>
 
@@ -283,7 +291,7 @@
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=8"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=9"></script>
 </body>
 
 </html>

@@ -428,7 +428,7 @@ body {
 
 .ps-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 16px;
     margin-bottom: 24px;
 }
@@ -467,6 +467,14 @@ body {
     background: linear-gradient(90deg, #f59e0b, #d97706);
 }
 
+.kpi-purchase-bills::before {
+    background: linear-gradient(90deg, #f97316, #ea580c);
+}
+
+.kpi-sales-bills::before {
+    background: linear-gradient(90deg, #8b5cf6, #7c3aed);
+}
+
 .ps-kpi-label {
     font-size: 0.75rem;
     font-weight: 600;
@@ -493,6 +501,14 @@ body {
 
 .kpi-transfer .ps-kpi-value {
     color: var(--accent-color);
+}
+
+.kpi-purchase-bills .ps-kpi-value {
+    color: #f97316;
+}
+
+.kpi-sales-bills .ps-kpi-value {
+    color: #8b5cf6;
 }
 
 /* ============================================================================

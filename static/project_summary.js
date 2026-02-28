@@ -607,6 +607,9 @@
         $('#kpi-expense').textContent = summary.total_expense_formatted || '\u20B90';
         $('#kpi-transfer').textContent = summary.total_bank_transfer_formatted || '\u20B90';
         $('#kpi-count').textContent = (summary.total_transactions || 0).toLocaleString();
+        // Reset bill KPIs (will be updated when bills data loads)
+        $('#kpi-purchase-bills').textContent = '\u20B90';
+        $('#kpi-sales-bills').textContent = '\u20B90';
     }
 
     // ── Render: Bank Breakdown ─────────────────────────────────────────
@@ -946,6 +949,8 @@
             renderPaginationControls('bills-pagination', 1, 0, () => {});
             const summaryEl = document.getElementById('bills-summary');
             if (summaryEl) summaryEl.textContent = '';
+            const kpiEl = $('#kpi-purchase-bills');
+            if (kpiEl) kpiEl.textContent = '\u20B90';
             return;
         }
 
@@ -976,6 +981,12 @@
         if (summaryEl && data.summary) {
             summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}`;
         }
+
+        // Update KPI card
+        const kpiEl = $('#kpi-purchase-bills');
+        if (kpiEl && data.summary) {
+            kpiEl.textContent = formatIndianNumber(data.summary.total_amount || 0);
+        }
     }
 
     // ── Render: Sales Bills Table (server-side pagination) ──────────────
@@ -1004,6 +1015,8 @@
             renderPaginationControls('sales-bills-pagination', 1, 0, () => {});
             const summaryEl = document.getElementById('sales-bills-summary');
             if (summaryEl) summaryEl.textContent = '';
+            const kpiEl = $('#kpi-sales-bills');
+            if (kpiEl) kpiEl.textContent = '\u20B90';
             return;
         }
 
@@ -1033,6 +1046,12 @@
         const summaryEl = document.getElementById('sales-bills-summary');
         if (summaryEl && data.summary) {
             summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}`;
+        }
+
+        // Update KPI card
+        const kpiEl = $('#kpi-sales-bills');
+        if (kpiEl && data.summary) {
+            kpiEl.textContent = formatIndianNumber(data.summary.total_amount || 0);
         }
     }
 
