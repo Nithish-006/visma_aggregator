@@ -1554,17 +1554,17 @@ def update_bank_transaction(bank_code):
         dr_amount = float(dr_amount) if dr_amount is not None else 0.0
         cr_amount = float(cr_amount) if cr_amount is not None else 0.0
 
-        category = data.get('category') or 'Uncategorized'
+        category = (data.get('category') or 'Uncategorized').strip().upper()
         code = data.get('code')
-        vendor = data.get('vendor') or 'Unknown'
-        project = data.get('project')
+        vendor = (data.get('vendor') or 'Unknown').strip()
+        project = (data.get('project') or '').strip().upper()
 
         # Derive code from category if not provided
         category_codes = {
-            'OFFICE EXP': 'OE', 'FACTORY EXP': 'FE', 'SITE EXP': 'SE',
-            'TRANSPORT EXP': 'TE', 'MATERIAL PURCHASE': 'MP',
+            'OFFICE EXPENSES': 'OE', 'FACTORY EXPENSES': 'FE', 'SITE EXPENSES': 'SE',
+            'TRANSPORT EXPENSES': 'TE', 'MATERIAL PURCHASE': 'MP',
             'DUTIES & TAX': 'DT', 'SALARY AC': 'SA', 'BANK CHARGES': 'BC',
-            'AMOUNT RECEIVED': 'AR', 'Uncategorized': 'UC'
+            'AMOUNT RECEIVED': 'AR', 'UNCATEGORIZED': 'UC'
         }
         if not code:
             code = category_codes.get(category, 'UC')
@@ -1717,10 +1717,10 @@ def split_bank_transaction(bank_code):
                     # Determine category code if not provided
                     if not split_code:
                         category_codes = {
-                            'OFFICE EXP': 'OE', 'FACTORY EXP': 'FE', 'SITE EXP': 'SE',
-                            'TRANSPORT EXP': 'TE', 'MATERIAL PURCHASE': 'MP',
+                            'OFFICE EXPENSES': 'OE', 'FACTORY EXPENSES': 'FE', 'SITE EXPENSES': 'SE',
+                            'TRANSPORT EXPENSES': 'TE', 'MATERIAL PURCHASE': 'MP',
                             'DUTIES & TAX': 'DT', 'SALARY AC': 'SA', 'BANK CHARGES': 'BC',
-                            'AMOUNT RECEIVED': 'AR', 'Uncategorized': 'UC'
+                            'AMOUNT RECEIVED': 'AR', 'UNCATEGORIZED': 'UC'
                         }
                         split_code = category_codes.get(split_category, 'UC')
 
@@ -3666,7 +3666,7 @@ def get_top_vendors():
 @login_required
 def get_categories():
     """Get list of all categories"""
-    categories = ['All'] + sorted(df_global['Category'].unique().tolist())
+    categories = ['All'] + sorted(df_global['Category'].str.strip().unique().tolist())
     return jsonify({'categories': categories})
 
 @app.route('/api/months')
@@ -3786,18 +3786,18 @@ def update_transaction():
         dr_amount = float(dr_amount) if dr_amount is not None else 0.0
         cr_amount = float(cr_amount) if cr_amount is not None else 0.0
 
-        # Editable fields
-        category = data.get('category') or 'Uncategorized'
+        # Editable fields - normalize to uppercase and trim
+        category = (data.get('category') or 'Uncategorized').strip().upper()
         code = data.get('code')
-        vendor = data.get('vendor') or 'Unknown'
-        project = data.get('project')
+        vendor = (data.get('vendor') or 'Unknown').strip()
+        project = (data.get('project') or '').strip().upper()
 
         # Derive code from category if not provided
         category_codes = {
-            'OFFICE EXP': 'OE', 'FACTORY EXP': 'FE', 'SITE EXP': 'SE',
-            'TRANSPORT EXP': 'TE', 'MATERIAL PURCHASE': 'MP',
+            'OFFICE EXPENSES': 'OE', 'FACTORY EXPENSES': 'FE', 'SITE EXPENSES': 'SE',
+            'TRANSPORT EXPENSES': 'TE', 'MATERIAL PURCHASE': 'MP',
             'DUTIES & TAX': 'DT', 'SALARY AC': 'SA', 'BANK CHARGES': 'BC',
-            'AMOUNT RECEIVED': 'AR', 'Uncategorized': 'UC'
+            'AMOUNT RECEIVED': 'AR', 'UNCATEGORIZED': 'UC'
         }
         if not code:
             code = category_codes.get(category, 'UC')

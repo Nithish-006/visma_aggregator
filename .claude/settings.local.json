@@ -4,7 +4,10 @@
       "Bash(python -c:*)",
       "Bash(node -c:*)",
       "Bash(node -e \"try{new Function\\(require\\(''fs''\\).readFileSync\\(''static/project_summary.js'',''utf8''\\)\\);console.log\\(''JS: OK''\\)}catch\\(e\\){console.log\\(''JS Error:'',e.message\\)}\")",
-      "Bash(cd C:\\\\VISMA - AGGREGATOR:)"
+      "Bash(cd C:\\\\VISMA - AGGREGATOR:)",
+      "Bash(python:*)",
+      "Bash(where:*)",
+      "Bash(py:*)"
     ]
   }
 }

@@ -309,13 +309,14 @@
             const dd = new CustomDropdown('edit-category-filter', 'All Categories', 'category');
             dd.setOptions(categories.filter(c => c !== 'All'));
 
-            // Populate bulk category datalist (allows typing new categories)
-            const bulkCategoryDatalist = document.getElementById('bulk-category-datalist');
-            bulkCategoryDatalist.innerHTML = '';
+            // Populate bulk category select
+            const bulkCategorySelect = document.getElementById('bulk-category');
+            bulkCategorySelect.innerHTML = '<option value="">Change Category...</option>';
             categories.forEach(cat => {
                 const option = document.createElement('option');
                 option.value = cat;
-                bulkCategoryDatalist.appendChild(option);
+                option.textContent = cat;
+                bulkCategorySelect.appendChild(option);
             });
 
         } catch (error) {
@@ -417,14 +418,15 @@
             const projectDd = new CustomDropdown('edit-project-filter', 'All Projects', 'project');
             projectDd.setOptions(projects);
 
-            // Populate bulk project datalist
-            const bulkProjectDatalist = document.getElementById('bulk-project-datalist');
-            if (bulkProjectDatalist) {
-                bulkProjectDatalist.innerHTML = '';
+            // Populate bulk project select
+            const bulkProjectSelect = document.getElementById('bulk-project');
+            if (bulkProjectSelect) {
+                bulkProjectSelect.innerHTML = '<option value="">Set Project...</option>';
                 projects.forEach(proj => {
                     const option = document.createElement('option');
                     option.value = proj;
-                    bulkProjectDatalist.appendChild(option);
+                    option.textContent = proj;
+                    bulkProjectSelect.appendChild(option);
                 });
             }
 
@@ -606,6 +608,185 @@
     }
 
     /**
+     * Create an inline combobox: text input + filtered dropdown of historical values.
+     * Allows selecting from list OR typing a new value.
+     */
+    function createCombobox(cell, currentValue, options, field, txnId) {
+        // Build the combobox container
+        const wrapper = document.createElement('div');
+        wrapper.className = 'combobox-wrapper';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue;
+        input.className = 'combobox-input';
+        input.placeholder = field === 'category' ? 'Type or select category...' : 'Type or select project...';
+        input.setAttribute('autocomplete', 'off');
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'combobox-dropdown';
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(dropdown);
+
+        cell.innerHTML = '';
+        cell.appendChild(wrapper);
+        input.focus();
+        input.select();
+
+        let highlightedIndex = -1;
+
+        function renderDropdown(filter = '') {
+            dropdown.innerHTML = '';
+            const lowerFilter = filter.toLowerCase();
+            const filtered = options.filter(opt => opt.toLowerCase().includes(lowerFilter));
+            highlightedIndex = -1;
+
+            if (filtered.length === 0 && filter) {
+                const noMatch = document.createElement('div');
+                noMatch.className = 'combobox-item combobox-new-value';
+                noMatch.innerHTML = `<span class="combobox-add-icon">+</span> Add "<strong>${filter}</strong>"`;
+                noMatch.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    input.value = filter.toUpperCase();
+                    finishCellEdit(cell, input, field, txnId, 'down');
+                });
+                dropdown.appendChild(noMatch);
+                dropdown.style.display = 'block';
+                return;
+            }
+
+            filtered.forEach((opt, idx) => {
+                const item = document.createElement('div');
+                item.className = 'combobox-item';
+                if (opt === currentValue) item.classList.add('combobox-current');
+
+                // Highlight the matching portion
+                if (lowerFilter) {
+                    const matchIdx = opt.toLowerCase().indexOf(lowerFilter);
+                    if (matchIdx >= 0) {
+                        item.innerHTML = opt.substring(0, matchIdx) +
+                            '<strong>' + opt.substring(matchIdx, matchIdx + lowerFilter.length) + '</strong>' +
+                            opt.substring(matchIdx + lowerFilter.length);
+                    } else {
+                        item.textContent = opt;
+                    }
+                } else {
+                    item.textContent = opt;
+                }
+
+                item.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // Prevent input blur
+                    input.value = opt;
+                    finishCellEdit(cell, input, field, txnId, 'down');
+                });
+                dropdown.appendChild(item);
+            });
+
+            // If filter text doesn't exactly match any option, show "Add new" at bottom
+            if (filter && !options.some(o => o.toLowerCase() === lowerFilter)) {
+                const addNew = document.createElement('div');
+                addNew.className = 'combobox-item combobox-new-value';
+                addNew.innerHTML = `<span class="combobox-add-icon">+</span> Add "<strong>${filter.toUpperCase()}</strong>"`;
+                addNew.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    input.value = filter.toUpperCase();
+                    finishCellEdit(cell, input, field, txnId, 'down');
+                });
+                dropdown.appendChild(addNew);
+            }
+
+            dropdown.style.display = filtered.length > 0 || filter ? 'block' : 'block';
+        }
+
+        function updateHighlight() {
+            const items = dropdown.querySelectorAll('.combobox-item');
+            items.forEach((item, idx) => {
+                item.classList.toggle('combobox-highlighted', idx === highlightedIndex);
+                if (idx === highlightedIndex) {
+                    item.scrollIntoView({ block: 'nearest' });
+                }
+            });
+        }
+
+        // Show dropdown immediately
+        renderDropdown(currentValue ? '' : '');
+
+        // Filter on input
+        input.addEventListener('input', () => {
+            renderDropdown(input.value);
+        });
+
+        // Show full list on focus
+        input.addEventListener('focus', () => {
+            renderDropdown(input.value);
+        });
+
+        // Keyboard navigation
+        input.addEventListener('keydown', (e) => {
+            const items = dropdown.querySelectorAll('.combobox-item');
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (items.length > 0) {
+                    highlightedIndex = Math.min(highlightedIndex + 1, items.length - 1);
+                    updateHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (items.length > 0) {
+                    highlightedIndex = Math.max(highlightedIndex - 1, 0);
+                    updateHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (highlightedIndex >= 0 && highlightedIndex < items.length) {
+                    items[highlightedIndex].dispatchEvent(new MouseEvent('mousedown'));
+                } else {
+                    // Accept typed value as-is (uppercase it)
+                    if (input.value.trim()) {
+                        input.value = input.value.trim().toUpperCase();
+                    }
+                    finishCellEdit(cell, input, field, txnId, 'down');
+                }
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cell.classList.remove('editing');
+                if (field === 'category') {
+                    const val = allTransactionsMap.get(txnId)?.category || allTransactionsMap.get(txnId)?.Category || '';
+                    const isUncat = isUncategorized(val);
+                    cell.innerHTML = `<span class="category-badge ${isUncat ? 'uncategorized' : ''}">${val}</span>`;
+                } else {
+                    const val = allTransactionsMap.get(txnId)?.project || allTransactionsMap.get(txnId)?.Project || '';
+                    const isEmpty = !val;
+                    cell.innerHTML = `<span class="project-badge ${isEmpty ? 'empty' : ''}">${val || '-'}</span>`;
+                }
+                setFocusedCell(cell);
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                if (input.value.trim()) {
+                    input.value = input.value.trim().toUpperCase();
+                }
+                finishCellEdit(cell, input, field, txnId, e.shiftKey ? 'left' : 'right');
+            }
+        });
+
+        // Close dropdown on blur
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (cell.classList.contains('editing')) {
+                    if (input.value.trim()) {
+                        input.value = input.value.trim().toUpperCase();
+                    }
+                    finishCellEdit(cell, input, field, txnId);
+                }
+            }, 100);
+        });
+
+        return { input, wrapper };
+    }
+
+    /**
      * Handle cell click for inline editing
      */
     function handleCellClick(e) {
@@ -636,40 +817,12 @@
         cell.classList.add('editing');
 
         let input;
-        let datalist = null;
 
-        if (field === 'category') {
-            // Use input with datalist for category (allows typing new values + selection)
-            input = document.createElement('input');
-            input.type = 'text';
-            input.value = currentValue;
-            input.setAttribute('list', `category-datalist-${txnId}`);
-            input.placeholder = 'Type or select category';
-
-            // Create datalist for suggestions
-            datalist = document.createElement('datalist');
-            datalist.id = `category-datalist-${txnId}`;
-            categories.forEach(cat => {
-                const option = document.createElement('option');
-                option.value = cat;
-                datalist.appendChild(option);
-            });
-        } else if (field === 'project') {
-            // Use input with datalist for project (allows typing new values + selection)
-            input = document.createElement('input');
-            input.type = 'text';
-            input.value = currentValue;
-            input.setAttribute('list', `project-datalist-${txnId}`);
-            input.placeholder = 'Type or select project';
-
-            // Create datalist for suggestions
-            datalist = document.createElement('datalist');
-            datalist.id = `project-datalist-${txnId}`;
-            projects.forEach(proj => {
-                const option = document.createElement('option');
-                option.value = proj;
-                datalist.appendChild(option);
-            });
+        if (field === 'category' || field === 'project') {
+            // Use combobox: searchable dropdown with historical values + accepts new values
+            const options = field === 'category' ? categories : projects;
+            const combobox = createCombobox(cell, currentValue, options, field, txnId);
+            input = combobox.input;
         } else {
             // Use input for other fields
             input = document.createElement('input');
@@ -677,11 +830,11 @@
             input.value = currentValue;
         }
 
+        // For combobox fields, the event listeners are handled inside createCombobox
+        if (field === 'category' || field === 'project') return;
+
         cell.innerHTML = '';
         cell.appendChild(input);
-        if (datalist) {
-            cell.appendChild(datalist);
-        }
         input.focus();
 
         // Save on blur (only if not navigating via keyboard)
@@ -703,27 +856,16 @@
                 e.preventDefault();
                 // Cancel edit without saving - restore original value
                 cell.classList.remove('editing');
-                if (field === 'category') {
-                    const val = allTransactionsMap.get(txnId)?.category || allTransactionsMap.get(txnId)?.Category || '';
-                    const isUncat = isUncategorized(val);
-                    cell.innerHTML = `<span class="category-badge ${isUncat ? 'uncategorized' : ''}">${val}</span>`;
-                } else if (field === 'project') {
-                    const val = allTransactionsMap.get(txnId)?.project || allTransactionsMap.get(txnId)?.Project || '';
-                    const isEmpty = !val;
-                    cell.innerHTML = `<span class="project-badge ${isEmpty ? 'empty' : ''}">${val || '-'}</span>`;
-                } else {
-                    const val = field === 'vendor' ? (allTransactionsMap.get(txnId)?.vendor || allTransactionsMap.get(txnId)?.['Client/Vendor'] || '') : '';
-                    cell.textContent = val;
-                }
+                const val = field === 'vendor' ? (allTransactionsMap.get(txnId)?.vendor || allTransactionsMap.get(txnId)?.['Client/Vendor'] || '') : '';
+                cell.textContent = val;
                 setFocusedCell(cell);
             } else if (e.key === 'Tab') {
                 e.preventDefault();
                 finishCellEdit(cell, input, field, txnId, e.shiftKey ? 'left' : 'right');
-            } else if (e.key === 'ArrowDown' && field !== 'category' && field !== 'project') {
-                // For non-datalist fields, allow arrow nav while editing
+            } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 finishCellEdit(cell, input, field, txnId, 'down');
-            } else if (e.key === 'ArrowUp' && field !== 'category' && field !== 'project') {
+            } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 finishCellEdit(cell, input, field, txnId, 'up');
             }

@@ -467,16 +467,16 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
 
-                # Get unique categories
-                cursor.execute(f"SELECT DISTINCT category FROM {table} WHERE category IS NOT NULL AND category != '' ORDER BY category")
+                # Get unique categories (TRIM to avoid whitespace duplicates)
+                cursor.execute(f"SELECT DISTINCT TRIM(category) AS category FROM {table} WHERE TRIM(category) IS NOT NULL AND TRIM(category) != '' ORDER BY category")
                 categories = [row[0] for row in cursor.fetchall()]
 
                 # Get unique projects
-                cursor.execute(f"SELECT DISTINCT project FROM {table} WHERE project IS NOT NULL AND project != '' ORDER BY project")
+                cursor.execute(f"SELECT DISTINCT TRIM(project) AS project FROM {table} WHERE TRIM(project) IS NOT NULL AND TRIM(project) != '' ORDER BY project")
                 projects = [row[0] for row in cursor.fetchall()]
 
                 # Get unique vendors
-                cursor.execute(f"SELECT DISTINCT client_vendor FROM {table} WHERE client_vendor IS NOT NULL AND client_vendor != '' AND client_vendor != 'Unknown' ORDER BY client_vendor")
+                cursor.execute(f"SELECT DISTINCT TRIM(client_vendor) AS client_vendor FROM {table} WHERE TRIM(client_vendor) IS NOT NULL AND TRIM(client_vendor) != '' AND TRIM(client_vendor) != 'Unknown' ORDER BY client_vendor")
                 vendors = [row[0] for row in cursor.fetchall()]
 
                 cursor.close()
@@ -543,17 +543,17 @@ class DatabaseManager:
 
                 # Categories: filtered by project, vendor, date, search (not by category itself)
                 w, p = build_conditions(exclude_field='category')
-                cursor.execute(f"SELECT DISTINCT category FROM {table} WHERE {w} AND category IS NOT NULL AND category != '' ORDER BY category", tuple(p))
+                cursor.execute(f"SELECT DISTINCT TRIM(category) AS category FROM {table} WHERE {w} AND TRIM(category) IS NOT NULL AND TRIM(category) != '' ORDER BY category", tuple(p))
                 categories = [row[0] for row in cursor.fetchall()]
 
                 # Projects: filtered by category, vendor, date, search (not by project itself)
                 w, p = build_conditions(exclude_field='project')
-                cursor.execute(f"SELECT DISTINCT project FROM {table} WHERE {w} AND project IS NOT NULL AND project != '' ORDER BY project", tuple(p))
+                cursor.execute(f"SELECT DISTINCT TRIM(project) AS project FROM {table} WHERE {w} AND TRIM(project) IS NOT NULL AND TRIM(project) != '' ORDER BY project", tuple(p))
                 projects = [row[0] for row in cursor.fetchall()]
 
                 # Vendors: filtered by category, project, date, search (not by vendor itself)
                 w, p = build_conditions(exclude_field='vendor')
-                cursor.execute(f"SELECT DISTINCT client_vendor FROM {table} WHERE {w} AND client_vendor IS NOT NULL AND client_vendor != '' AND client_vendor != 'Unknown' ORDER BY client_vendor", tuple(p))
+                cursor.execute(f"SELECT DISTINCT TRIM(client_vendor) AS client_vendor FROM {table} WHERE {w} AND TRIM(client_vendor) IS NOT NULL AND TRIM(client_vendor) != '' AND TRIM(client_vendor) != 'Unknown' ORDER BY client_vendor", tuple(p))
                 vendors = [row[0] for row in cursor.fetchall()]
 
                 cursor.close()

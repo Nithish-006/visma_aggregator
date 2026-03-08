@@ -23,11 +23,11 @@ except ImportError:
 # ============================================================================
 
 CATEGORIES = {
-    "OFFICE EXP": "OE",
-    "FACTORY EXP": "FE",
+    "OFFICE EXPENSES": "OE",
+    "FACTORY EXPENSES": "FE",
     "AMOUNT RECEIVED": "AR",
-    "SITE EXP": "SE",
-    "TRANSPORT EXP": "TE",
+    "SITE EXPENSES": "SE",
+    "TRANSPORT EXPENSES": "TE",
     "MATERIAL PURCHASE": "MP",
     "DUTIES & TAX": "DT",
     "SALARY AC": "SA",
@@ -36,20 +36,20 @@ CATEGORIES = {
 
 # Category detection patterns (keywords to look for in transaction descriptions)
 CATEGORY_PATTERNS = {
-    "OFFICE EXP": [
+    "OFFICE EXPENSES": [
         "office", "stationery", "printer", "paper", "pen", "supplies",
         "furniture", "computer", "laptop", "software", "internet", "phone",
         "mobile", "postage", "courier", "xerox", "photocopy"
     ],
-    "FACTORY EXP": [
+    "FACTORY EXPENSES": [
         "factory", "machinery", "equipment", "maintenance", "repair",
         "spare parts", "tools", "workshop", "industrial"
     ],
-    "SITE EXP": [
+    "SITE EXPENSES": [
         "site", "construction", "building", "cement", "sand", "labour",
         "labor", "worker", "contractor", "excavation", "painting"
     ],
-    "TRANSPORT EXP": [
+    "TRANSPORT EXPENSES": [
         "transport", "truck", "vehicle", "fuel", "diesel", "petrol",
         "filling station", "driver", "logistics", "freight", "cargo",
         "weighment", "weigh", "toll", "lpg"
