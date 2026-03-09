@@ -222,8 +222,21 @@ ILLEGAL_XML_CHARS = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
 def sanitize_for_excel(df):
     """Remove illegal XML characters that cause openpyxl to crash"""
     for col in df.select_dtypes(include=['object']).columns:
-        df[col] = df[col].apply(lambda x: ILLEGAL_XML_CHARS.sub('', str(x)) if pd.notna(x) else x)
+        df[col] = df[col].apply(
+            lambda x: ILLEGAL_XML_CHARS.sub('', x) if isinstance(x, str) else x
+        )
     return df
+
+
+def safe_col_width(series, col_name):
+    """Calculate column width safely, handling empty/mixed-type columns"""
+    if series.empty:
+        return len(str(col_name)) + 2
+    try:
+        col_max = series.fillna('').astype(str).apply(len).max()
+        return min(max(int(col_max), len(str(col_name))) + 2, 50)
+    except Exception:
+        return len(str(col_name)) + 2
 
 
 def filter_by_date_range(df, start_date=None, end_date=None):
@@ -1824,9 +1837,7 @@ def download_bank_transactions(bank_code):
             df_final.to_excel(writer, index=False, sheet_name='Transactions')
             worksheet = writer.sheets['Transactions']
             for idx, col in enumerate(df_final.columns):
-                col_max = df_final[col].astype(str).apply(len).max() if not df_final.empty else 0
-                max_length = max(col_max if pd.notna(col_max) else 0, len(str(col))) + 2
-                worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
+                worksheet.column_dimensions[chr(65 + idx)].width = safe_col_width(df_final[col], col)
 
         output.seek(0)
 
