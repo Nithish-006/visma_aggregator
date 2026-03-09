@@ -6,6 +6,7 @@ import io
 import os
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
+import re
 
 # Import our modules
 from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank_config, get_bank_table
@@ -214,6 +215,15 @@ def filter_by_months(df, month_list):
     if month_list == ['All']:
         return df
     return df[df['month'].isin(month_list)]
+
+
+ILLEGAL_XML_CHARS = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
+
+def sanitize_for_excel(df):
+    """Remove illegal XML characters that cause openpyxl to crash"""
+    for col in df.select_dtypes(include=['object']).columns:
+        df[col] = df[col].apply(lambda x: ILLEGAL_XML_CHARS.sub('', str(x)) if pd.notna(x) else x)
+    return df
 
 
 def filter_by_date_range(df, start_date=None, end_date=None):
@@ -1807,12 +1817,15 @@ def download_bank_transactions(bank_code):
         else:
             df_final[col] = None
 
+    df_final = sanitize_for_excel(df_final)
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_final.to_excel(writer, index=False, sheet_name='Transactions')
         worksheet = writer.sheets['Transactions']
         for idx, col in enumerate(df_final.columns):
-            max_length = max(df_final[col].astype(str).apply(len).max(), len(str(col))) + 2
+            col_max = df_final[col].astype(str).apply(len).max() if not df_final.empty else 0
+            max_length = max(col_max if pd.notna(col_max) else 0, len(str(col))) + 2
             worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
 
     output.seek(0)
@@ -3914,6 +3927,8 @@ def download_transactions():
         else:
             df_final[col] = None
 
+    df_final = sanitize_for_excel(df_final)
+
     # Create Excel file in memory
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -3922,10 +3937,8 @@ def download_transactions():
         # Auto-adjust column widths
         worksheet = writer.sheets['Transactions']
         for idx, col in enumerate(df_final.columns):
-            max_length = max(
-                df_final[col].astype(str).apply(len).max(),
-                len(str(col))
-            ) + 2
+            col_max = df_final[col].astype(str).apply(len).max() if not df_final.empty else 0
+            max_length = max(col_max if pd.notna(col_max) else 0, len(str(col))) + 2
             worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
 
     output.seek(0)
