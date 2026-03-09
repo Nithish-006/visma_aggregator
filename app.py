@@ -1785,60 +1785,64 @@ def download_bank_transactions(bank_code):
     if bank_code not in VALID_BANK_CODES:
         return jsonify({'error': 'Invalid bank code'}), 400
 
-    category = request.args.get('category', 'All')
-    project = request.args.get('project', None)
-    vendor = request.args.get('vendor', None)
-    start_date = request.args.get('start_date', None)
-    end_date = request.args.get('end_date', None)
+    try:
+        category = request.args.get('category', 'All')
+        project = request.args.get('project', None)
+        vendor = request.args.get('vendor', None)
+        start_date = request.args.get('start_date', None)
+        end_date = request.args.get('end_date', None)
 
-    df = get_bank_df(bank_code).copy()
+        df = get_bank_df(bank_code).copy()
 
-    # Apply multi-select filters
-    df = filter_by_category(df, category)
-    df = filter_by_date_range(df, start_date, end_date)
-    df = filter_by_project(df, project)
-    df = filter_by_vendor(df, vendor)
+        # Apply multi-select filters
+        df = filter_by_category(df, category)
+        df = filter_by_date_range(df, start_date, end_date)
+        df = filter_by_project(df, project)
+        df = filter_by_vendor(df, vendor)
 
-    df_export = df.sort_values('date', ascending=False).copy()
-    df_export['Date'] = df_export['date'].dt.strftime('%d-%m-%Y')
+        df_export = df.sort_values('date', ascending=False).copy()
+        df_export['Date'] = df_export['date'].dt.strftime('%d-%m-%Y')
 
-    export_columns = [
-        'Date', 'Transaction Description', 'Client/Vendor',
-        'Category', 'Code', 'DR Amount', 'CR Amount', 'Project'
-    ]
+        export_columns = [
+            'Date', 'Transaction Description', 'Client/Vendor',
+            'Category', 'Code', 'DR Amount', 'CR Amount', 'Project'
+        ]
 
-    df_final = pd.DataFrame()
-    for col in export_columns:
-        if col == 'Category':
-            # Use Category field
-            df_final[col] = df_export.get('Category', None)
-        elif col in df_export.columns:
-            df_final[col] = df_export[col]
-        else:
-            df_final[col] = None
+        df_final = pd.DataFrame()
+        for col in export_columns:
+            if col == 'Category':
+                df_final[col] = df_export.get('Category', None)
+            elif col in df_export.columns:
+                df_final[col] = df_export[col]
+            else:
+                df_final[col] = None
 
-    df_final = sanitize_for_excel(df_final)
+        df_final = sanitize_for_excel(df_final)
 
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_final.to_excel(writer, index=False, sheet_name='Transactions')
-        worksheet = writer.sheets['Transactions']
-        for idx, col in enumerate(df_final.columns):
-            col_max = df_final[col].astype(str).apply(len).max() if not df_final.empty else 0
-            max_length = max(col_max if pd.notna(col_max) else 0, len(str(col))) + 2
-            worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_final.to_excel(writer, index=False, sheet_name='Transactions')
+            worksheet = writer.sheets['Transactions']
+            for idx, col in enumerate(df_final.columns):
+                col_max = df_final[col].astype(str).apply(len).max() if not df_final.empty else 0
+                max_length = max(col_max if pd.notna(col_max) else 0, len(str(col))) + 2
+                worksheet.column_dimensions[chr(65 + idx)].width = min(max_length, 50)
 
-    output.seek(0)
+        output.seek(0)
 
-    bank_name = BANK_CONFIG[bank_code]['name'].replace(' ', '_')
-    filename = f"{bank_name}_transactions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        bank_name = BANK_CONFIG[bank_code]['name'].replace(' ', '_')
+        filename = f"{bank_name}_transactions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-    return send_file(
-        output,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=filename
-    )
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Export failed: {str(e)}'}), 500
 
 
 # ============================================================================
