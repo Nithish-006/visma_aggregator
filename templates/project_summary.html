@@ -34,6 +34,14 @@
                 </svg>
                 Export
             </button>
+            <button class="ps-icon-btn" title="Hard Refresh" onclick="hardRefresh()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="23 4 23 10 17 10"></polyline>
+                    <polyline points="1 20 1 14 7 14"></polyline>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+            </button>
             <a href="/logout" class="ps-icon-btn" title="Logout">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -292,6 +300,14 @@
     </div>
 
     <script src="{{ url_for('static', filename='project_summary.js') }}?v=9"></script>
+<script>
+function hardRefresh() {
+    if ('caches' in window) {
+        caches.keys().then(names => names.forEach(name => caches.delete(name)));
+    }
+    window.location.href = window.location.pathname + '?_=' + Date.now();
+}
+</script>
 </body>
 
 </html>

@@ -151,6 +151,10 @@ async function refreshCache() {
     icon.style.animation = 'spin 0.8s linear infinite';
 
     try {
+        if ('caches' in window) {
+            const names = await caches.keys();
+            await Promise.all(names.map(name => caches.delete(name)));
+        }
         const response = await fetch('/api/clear-cache', { method: 'POST' });
         if (!response.ok) throw new Error('Failed to clear cache');
 
