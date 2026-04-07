@@ -5579,30 +5579,24 @@ def export_project_summary():
             ws_pb.column_dimensions['C'].width = 20
 
         # ──────────────────────────────────────────────────────────
-        # TAB 10: Labour Attendance & Salary Summary (single month)
+        # TAB 10: Labour Attendance & Salary Summary (all months in range)
         # ──────────────────────────────────────────────────────────
         import calendar as cal
         from datetime import date as date_cls
 
         labour_sheet_names = []
         try:
-            # Determine the single target month from date filters
-            # Use end_date's month (or start_date if no end_date)
-            target_date_str = end_date or start_date
-            if target_date_str:
-                from dateutil import parser as dp
-                target_dt = dp.parse(str(target_date_str))
-                t_year, t_month = target_dt.year, target_dt.month
-            else:
+            # Use the actual date filters so all months in the range get a sheet
+            labour_start = start_date
+            labour_end = end_date
+            if not labour_start and not labour_end:
                 from datetime import date as _d
                 today = _d.today()
-                t_year, t_month = today.year, today.month
+                labour_start = f"{today.year}-{today.month:02d}-01"
+                labour_end = f"{today.year}-{today.month:02d}-{cal.monthrange(today.year, today.month)[1]:02d}"
 
-            # Fetch only that single month
-            first_day = f"{t_year}-{t_month:02d}-01"
-            last_day = f"{t_year}-{t_month:02d}-{cal.monthrange(t_year, t_month)[1]:02d}"
             monthly_data = DatabaseManager.get_monthly_salary_and_attendance(
-                start_date=first_day, end_date=last_day
+                start_date=labour_start, end_date=labour_end
             )
 
             # Styling for labour sheets
@@ -5615,7 +5609,7 @@ def export_project_summary():
             absent_font = Font(color='DC2626')
             labour_currency = '#,##0.00'
 
-            for month_data in monthly_data[:1]:  # single month only
+            for month_data in monthly_data:
                 sheet_name = f"Labour {month_data['sheet_name']}"
                 if len(sheet_name) > 31:
                     sheet_name = sheet_name[:31]
