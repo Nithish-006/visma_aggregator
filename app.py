@@ -5369,6 +5369,14 @@ def export_project_summary():
             print(f"[!] Error fetching bills with line items: {e}")
             export_bills = []
 
+        # Filter export_bills by project stems (same as combined API)
+        if project:
+            pb_proj_stems = get_project_stems(project)
+            if pb_proj_stems:
+                export_bills = [b for b in export_bills
+                                if any(str(b.get('project', '')).lower().strip().startswith(s)
+                                       for s in pb_proj_stems)]
+
         # Collect project names from bank txns and bills
         bank_projects = []
         if not combined.empty and project_col in combined.columns:
@@ -5379,22 +5387,18 @@ def export_project_summary():
 
         stem_groups = build_smart_project_groups(bank_projects, bill_projects)
 
-        # Apply project filter to stem_groups (same logic as bills tabs)
-        if project:
-            pb_proj_stems = get_project_stems(project)
-            stem_groups = {
-                s: names for s, names in stem_groups.items()
-                if s in pb_proj_stems or any(normalize_project_stem(t) in pb_proj_stems
-                                             for n in names for t in str(n).split())
-            }
-
         bills_by_stem = match_bills_to_project_groups(export_bills, stem_groups)
 
-        # Fetch labour costs from salary/attendance DB
+        # Fetch labour costs from salary/attendance DB, filtered by project
         try:
             labour_costs_raw = DatabaseManager.get_labour_costs_by_project(
                 start_date=start_date, end_date=end_date
             )
+            if project:
+                pb_proj_stems = get_project_stems(project)
+                if pb_proj_stems:
+                    labour_costs_raw = {k: v for k, v in labour_costs_raw.items()
+                                        if any(k.lower().strip().startswith(s) for s in pb_proj_stems)}
             labour_by_stem = match_labour_to_project_groups(labour_costs_raw, stem_groups)
         except Exception as e:
             print(f"[!] Error matching labour costs: {e}")
@@ -5544,8 +5548,9 @@ def export_project_summary():
                 current_row += 2  # blank row
 
                 # ── TOTAL EXP ──
+                total_project = material_total + other_total + salary_labour
                 ws_pb.cell(row=current_row, column=1, value='TOTAL EXP').font = Font(bold=True)
-                ws_pb.cell(row=current_row, column=3).font = green_amount
+                ws_pb.cell(row=current_row, column=3, value=total_project).font = green_amount
                 ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                 current_row += 2  # blank row
 
@@ -5555,10 +5560,7 @@ def export_project_summary():
                 ws_pb.cell(row=current_row, column=3).number_format = pb_currency
                 current_row += 1
 
-                # Fill TOTAL PROJECT VALUE (material + other + labour)
-                total_project = material_total + other_total + salary_labour
-                ws_pb.cell(row=total_value_row, column=3, value=total_project).font = red_amount
-                ws_pb.cell(row=total_value_row, column=3).number_format = pb_currency
+                # TOTAL PROJECT VALUE left empty (user-fillable)
 
                 block_end_row = current_row
 
@@ -5683,6 +5685,32 @@ def export_project_summary():
                                 'ot': a['ot_hours'],
                                 'project': a['project']
                             }
+
+                        # Recompute daily headcount from filtered attendance only
+                        from collections import defaultdict as _dd
+                        _dh_map = _dd(lambda: {'present': 0, 'absent': 0, 'holiday': 0, 'ot_hours': 0.0})
+                        for a in labour_attendance:
+                            _date_key = str(a['date'])
+                            _status = a['status']
+                            if _status == 'P':
+                                _dh_map[_date_key]['present'] += 1
+                                _dh_map[_date_key]['ot_hours'] += float(a.get('ot_hours', 0) or 0)
+                            elif _status == 'A':
+                                _dh_map[_date_key]['absent'] += 1
+                            elif _status == 'H':
+                                _dh_map[_date_key]['holiday'] += 1
+                        labour_daily_headcount = [
+                            {'date': d, 'present': v['present'], 'absent': v['absent'],
+                             'holiday': v['holiday'], 'ot_hours': round(v['ot_hours'], 2)}
+                            for d, v in sorted(_dh_map.items())
+                        ]
+                    else:
+                        # No workers found for this project — show empty data
+                        labour_workers = []
+                        labour_attendance = []
+                        labour_project_breakdown = []
+                        labour_daily_headcount = []
+                        att_map = {}
 
                 # ===== ROW 1: Title =====
                 ws_l.cell(row=1, column=1,
