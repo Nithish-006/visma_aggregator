@@ -5644,26 +5644,55 @@ def export_project_summary():
                 labour_daily_headcount = month_data['daily_headcount']
                 if project:
                     labour_stems = get_project_stems(project)
-                    # Find worker_ids who have at least one attendance day
-                    # on a matching project
-                    matching_worker_ids = set()
-                    for a in month_data['attendance']:
-                        proj_name = str(a.get('project', '') or '').lower().strip()
-                        if proj_name and any(proj_name.startswith(s) for s in labour_stems):
-                            matching_worker_ids.add(a['worker_id'])
+
+                    # Step 1: Filter attendance to ONLY records on the selected project
+                    project_attendance = [
+                        a for a in month_data['attendance']
+                        if any(str(a.get('project', '') or '').lower().strip().startswith(s)
+                               for s in labour_stems)
+                    ]
+
+                    # Step 2: Get worker IDs from project-filtered attendance
+                    matching_worker_ids = set(a['worker_id'] for a in project_attendance)
 
                     if matching_worker_ids:
-                        labour_workers = [w for w in month_data['workers']
-                                          if w['worker_id'] in matching_worker_ids]
-                        labour_attendance = [a for a in month_data['attendance']
-                                             if a['worker_id'] in matching_worker_ids]
+                        labour_attendance = project_attendance
+
+                        # Step 3: Recompute worker stats from project-filtered attendance only
+                        from collections import defaultdict as _dd
+                        worker_stats = _dd(lambda: {'present_days': 0, 'ot_hours': 0.0})
+                        for a in labour_attendance:
+                            wid = a['worker_id']
+                            if a['status'] == 'P':
+                                worker_stats[wid]['present_days'] += 1
+                                worker_stats[wid]['ot_hours'] += float(a.get('ot_hours', 0) or 0)
+
+                        labour_workers = []
+                        for w in month_data['workers']:
+                            if w['worker_id'] not in matching_worker_ids:
+                                continue
+                            wid = w['worker_id']
+                            proj_days = worker_stats[wid]['present_days']
+                            proj_ot = worker_stats[wid]['ot_hours']
+                            base = w['base_salary_per_day']
+                            proj_base_pay = round(proj_days * base, 2)
+                            proj_ot_pay = round((base / 8) * proj_ot, 2) if base > 0 else 0
+                            labour_workers.append({
+                                **w,
+                                'working_days': proj_days,
+                                'ot_hours': proj_ot,
+                                'base_pay': proj_base_pay,
+                                'ot_pay': proj_ot_pay,
+                                'total_salary': round(proj_base_pay + proj_ot_pay, 2)
+                            })
+
                         labour_project_breakdown = [
                             p for p in month_data['project_breakdown']
                             if any(str(p.get('name', '')).lower().startswith(s)
                                    for s in labour_stems)
                         ]
 
-                        # Rebuild att_map for filtered workers only
+                        # Rebuild att_map for filtered attendance only
                         att_map = {}
                         for a in labour_attendance:
                             wid = a['worker_id']
@@ -5681,7 +5710,6 @@ def export_project_summary():
                             }
 
                         # Recompute daily headcount from filtered attendance only
-                        from collections import defaultdict as _dd
                         _dh_map = _dd(lambda: {'present': 0, 'absent': 0, 'holiday': 0, 'ot_hours': 0.0})
                         for a in labour_attendance:
                             _date_key = str(a['date'])
@@ -5699,12 +5727,8 @@ def export_project_summary():
                             for d, v in sorted(_dh_map.items())
                         ]
                     else:
-                        # No workers found for this project — show empty data
-                        labour_workers = []
-                        labour_attendance = []
-                        labour_project_breakdown = []
-                        labour_daily_headcount = []
-                        att_map = {}
+                        # No attendance on this project for this month — skip sheet entirely
+                        continue
 
                 # ===== ROW 1: Title =====
                 ws_l.cell(row=1, column=1,
