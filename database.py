@@ -1938,6 +1938,133 @@ class DatabaseManager:
             traceback.print_exc()
             return False, str(e)
 
+    # ========================================================================
+    # PROJECTS REFERENCE TABLE (canonical source of project ids + stem names)
+    # ========================================================================
+
+    def ensure_projects_table(self):
+        """Create the projects reference table if it doesn't exist."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS projects (
+                        id           INT PRIMARY KEY,
+                        stem_name    VARCHAR(255) NOT NULL,
+                        po_filename  VARCHAR(255) DEFAULT NULL,
+                        po_path      VARCHAR(500) DEFAULT NULL,
+                        description  TEXT DEFAULT NULL,
+                        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY uk_stem_ci (stem_name)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring projects table: {e}")
+            return False
+
+    def list_projects(self) -> List[Dict]:
+        """Return all canonical projects ordered by id."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT id, stem_name, po_filename, po_path, description, created_at "
+                    "FROM projects ORDER BY id"
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                for r in rows:
+                    r['display'] = f"{r['id']} - {r['stem_name']}"
+                    r['has_po'] = bool(r['po_filename'])
+                    if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
+                        r['created_at'] = r['created_at'].isoformat()
+                return rows
+        except Exception as e:
+            print(f"[!] Error listing projects: {e}")
+            return []
+
+    def get_project(self, project_id: int) -> Optional[Dict]:
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT id, stem_name, po_filename, po_path, description, created_at "
+                    "FROM projects WHERE id = %s",
+                    (project_id,)
+                )
+                row = cursor.fetchone()
+                cursor.close()
+                if row:
+                    row['display'] = f"{row['id']} - {row['stem_name']}"
+                    row['has_po'] = bool(row['po_filename'])
+                    if row.get('created_at') and hasattr(row['created_at'], 'isoformat'):
+                        row['created_at'] = row['created_at'].isoformat()
+                return row
+        except Exception as e:
+            print(f"[!] Error fetching project {project_id}: {e}")
+            return None
+
+    def find_project_by_stem(self, stem_name: str) -> Optional[Dict]:
+        """Case-insensitive stem lookup."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT id, stem_name FROM projects WHERE LOWER(stem_name) = LOWER(%s)",
+                    (stem_name,)
+                )
+                row = cursor.fetchone()
+                cursor.close()
+                return row
+        except Exception as e:
+            print(f"[!] Error finding project by stem: {e}")
+            return None
+
+    def create_project(self, project_id: int, stem_name: str,
+                       po_filename: str = None, po_path: str = None) -> Tuple[bool, Optional[str]]:
+        """Insert a new project. Returns (ok, error_message)."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO projects (id, stem_name, po_filename, po_path) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (project_id, stem_name, po_filename, po_path)
+                )
+                conn.commit()
+                cursor.close()
+                return True, None
+        except mysql.connector.errors.IntegrityError as e:
+            msg = str(e)
+            if 'PRIMARY' in msg:
+                return False, 'duplicate_id'
+            if 'uk_stem_ci' in msg or 'stem_name' in msg:
+                return False, 'duplicate_stem'
+            return False, msg
+        except Exception as e:
+            return False, str(e)
+
+    def attach_project_po(self, project_id: int, po_filename: str, po_path: str) -> Tuple[bool, Optional[str]]:
+        """Set the PO file for a project, only if one isn't already attached."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE projects SET po_filename = %s, po_path = %s "
+                    "WHERE id = %s AND po_filename IS NULL",
+                    (po_filename, po_path, project_id)
+                )
+                affected = cursor.rowcount
+                conn.commit()
+                cursor.close()
+                if affected == 0:
+                    return False, 'po_already_attached_or_missing_project'
+                return True, None
+        except Exception as e:
+            return False, str(e)
+
     # ── Salary / Attendance DB helpers ──────────────────────
     SALARY_DB_CONFIG = {
         'host': 'caboose.proxy.rlwy.net',

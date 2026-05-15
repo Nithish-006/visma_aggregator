@@ -15,7 +15,9 @@
     let selectedTransactionIds = new Set();  // Track by ID instead of index
     let modifiedTransactions = new Map();    // Map of id -> modified transaction data
     let categories = [];
-    let projects = [];
+    let projects = [];               // historical values — feeds the FILTER multi-select only
+    let canonicalProjects = [];      // from /api/projects — feeds the EDIT picker + bulk-set
+    let canonicalProjectSet = new Set(); // lower-cased canonical strings for legacy detection
 
     // Pagination state (server-side)
     let currentPage = 1;
@@ -253,10 +255,11 @@
     async function init() {
         showLoading();
 
-        // Load categories, filter options, and date range in parallel for faster loading
+        // Load categories, filter options, canonical projects, and date range in parallel
         await Promise.all([
             loadCategories(),
             loadFilterOptions(),
+            loadCanonicalProjects(),
             loadDateRange()
         ]);
 
@@ -411,30 +414,53 @@
             const response = await fetch(`/api/${BANK_CODE}/filter-options`);
             const data = await response.json();
 
-            // Store projects for autocomplete
+            // Store historical project values — used ONLY for the filter dropdown so that
+            // legacy data (RCH, FACTORY, etc.) stays searchable from the top of the page.
             projects = data.projects || [];
 
-            // Init Project Dropdown
+            // Init Project Dropdown (filter)
             const projectDd = new CustomDropdown('edit-project-filter', 'All Projects', 'project');
             projectDd.setOptions(projects);
 
-            // Populate bulk project select
-            const bulkProjectSelect = document.getElementById('bulk-project');
-            if (bulkProjectSelect) {
-                bulkProjectSelect.innerHTML = '<option value="">Set Project...</option>';
-                projects.forEach(proj => {
-                    const option = document.createElement('option');
-                    option.value = proj;
-                    option.textContent = proj;
-                    bulkProjectSelect.appendChild(option);
-                });
-            }
+            // (bulk-set select gets populated from canonical /api/projects — see loadCanonicalProjects)
 
             // Init Vendor Dropdown
             const vendorDd = new CustomDropdown('edit-vendor-filter', 'All Vendors', 'vendor');
             vendorDd.setOptions(data.vendors || []);
         } catch (error) {
             console.error('Error loading filter options:', error);
+        }
+    }
+
+    /**
+     * Load canonical projects from /api/projects. These feed the project edit picker
+     * and the bulk-set dropdown — anywhere we're writing a project value, only canonical
+     * options are offered. Legacy free-text values stay readable but cannot be re-typed.
+     */
+    async function loadCanonicalProjects() {
+        try {
+            const response = await fetch('/api/projects');
+            const data = await response.json();
+            const list = (data.projects || []).map(p => p.display);
+            canonicalProjects = list;
+            canonicalProjectSet = new Set(list.map(s => s.toLowerCase()));
+
+            const bulkProjectSelect = document.getElementById('bulk-project');
+            if (bulkProjectSelect) {
+                bulkProjectSelect.innerHTML = '<option value="">Set Project...</option>';
+                bulkProjectSelect.appendChild(Object.assign(document.createElement('option'), {
+                    value: '__CLEAR__',
+                    textContent: '(Clear project)'
+                }));
+                list.forEach(disp => {
+                    const opt = document.createElement('option');
+                    opt.value = disp;
+                    opt.textContent = disp;
+                    bulkProjectSelect.appendChild(opt);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading canonical projects:', error);
         }
     }
 
@@ -535,6 +561,7 @@
 
             const projectValue = txn.project || txn.Project || '';
             const isProjectEmpty = !projectValue;
+            const isProjectLegacy = !!projectValue && !canonicalProjectSet.has(projectValue.toLowerCase());
 
             row.innerHTML = `
                 <td data-label="">
@@ -549,7 +576,10 @@
                 <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
                 <td class="text-right" data-label="Credit">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
                 <td class="editable-cell" data-field="project" data-id="${txnId}" data-label="Project">
-                    <span class="project-badge ${isProjectEmpty ? 'empty' : ''}">${projectValue || '-'}</span>
+                    <span class="project-badge ${isProjectEmpty ? 'empty' : ''} ${isProjectLegacy ? 'legacy' : ''}"
+                          ${isProjectLegacy ? 'title="Legacy free-text — click to standardize"' : ''}>
+                        ${isProjectLegacy ? '<span class="legacy-dot"></span>' : ''}${projectValue || '-'}
+                    </span>
                 </td>
                 <td style="text-align: center;" data-label="">
                     ${isModified ? '<span style="color: #f59e0b; font-size: 18px;" title="Unsaved changes">●</span>' : ''}
@@ -605,6 +635,92 @@
 
         // Scroll to top of table on mobile
         document.querySelector('.edit-table-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /**
+     * Render a canonical-only project picker (native <select>) inside the cell.
+     * Only canonical projects from /api/projects can be set. The current value, if
+     * legacy, is shown as a disabled option so the auditor can see what's there but
+     * cannot re-save it without picking a canonical alternative.
+     */
+    function renderCanonicalProjectSelect(cell, currentValue, txnId) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'project-select-wrapper';
+
+        const select = document.createElement('select');
+        select.className = 'project-select';
+
+        // "(none)" — clears the project
+        select.appendChild(Object.assign(document.createElement('option'), {
+            value: '',
+            textContent: '(none)'
+        }));
+
+        const currentLower = (currentValue || '').toLowerCase();
+        const isCurrentCanonical = !currentValue || canonicalProjectSet.has(currentLower);
+
+        // If the current cell value is a legacy (non-canonical) value, surface it as a
+        // disabled option so the auditor sees it on open but is forced to pick canonical.
+        if (currentValue && !isCurrentCanonical) {
+            const legacyOpt = document.createElement('option');
+            legacyOpt.value = currentValue;
+            legacyOpt.textContent = `${currentValue} — legacy, pick canonical`;
+            legacyOpt.disabled = true;
+            legacyOpt.selected = true;
+            select.appendChild(legacyOpt);
+        }
+
+        canonicalProjects.forEach(disp => {
+            const opt = document.createElement('option');
+            opt.value = disp;
+            opt.textContent = disp;
+            if (isCurrentCanonical && disp.toLowerCase() === currentLower) {
+                opt.selected = true;
+            }
+            select.appendChild(opt);
+        });
+
+        wrapper.appendChild(select);
+        cell.innerHTML = '';
+        cell.appendChild(wrapper);
+        select.focus();
+
+        let finished = false;
+        const finish = (newValue, direction = null) => {
+            if (finished) return;
+            finished = true;
+            // Hand off to the existing finish path so modification tracking + re-render works
+            const fakeInput = { value: newValue };
+            finishCellEdit(cell, fakeInput, 'project', txnId, direction);
+        };
+
+        select.addEventListener('change', () => finish(select.value, 'down'));
+        select.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                finish(select.value, 'down');
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                finished = true;
+                cell.classList.remove('editing');
+                // Restore display
+                const projectBadge = `<span class="project-badge ${currentValue ? '' : 'empty'} ${(!isCurrentCanonical && currentValue) ? 'legacy' : ''}">${currentValue || '-'}</span>`;
+                cell.innerHTML = projectBadge;
+                setFocusedCell(cell);
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                finish(select.value, e.shiftKey ? 'left' : 'right');
+            }
+        });
+        select.addEventListener('blur', () => {
+            setTimeout(() => {
+                if (cell.classList.contains('editing') && !finished) {
+                    finish(select.value);
+                }
+            }, 60);
+        });
+
+        return select;
     }
 
     /**
@@ -759,7 +875,10 @@
                 } else {
                     const val = allTransactionsMap.get(txnId)?.project || allTransactionsMap.get(txnId)?.Project || '';
                     const isEmpty = !val;
-                    cell.innerHTML = `<span class="project-badge ${isEmpty ? 'empty' : ''}">${val || '-'}</span>`;
+                    const isLegacy = !!val && !canonicalProjectSet.has(val.toLowerCase());
+                    cell.innerHTML = `<span class="project-badge ${isEmpty ? 'empty' : ''} ${isLegacy ? 'legacy' : ''}"
+                        ${isLegacy ? 'title="Legacy free-text — click to standardize"' : ''}>
+                        ${isLegacy ? '<span class="legacy-dot"></span>' : ''}${val || '-'}</span>`;
                 }
                 setFocusedCell(cell);
             } else if (e.key === 'Tab') {
@@ -818,20 +937,24 @@
 
         let input;
 
-        if (field === 'category' || field === 'project') {
-            // Use combobox: searchable dropdown with historical values + accepts new values
-            const options = field === 'category' ? categories : projects;
-            const combobox = createCombobox(cell, currentValue, options, field, txnId);
-            input = combobox.input;
-        } else {
-            // Use input for other fields
-            input = document.createElement('input');
-            input.type = 'text';
-            input.value = currentValue;
+        if (field === 'project') {
+            // Canonical-only picker: native <select> populated from /api/projects.
+            // No free-text "add new" — auditors must register new projects on /projects.
+            input = renderCanonicalProjectSelect(cell, currentValue, txnId);
+            return;
         }
 
-        // For combobox fields, the event listeners are handled inside createCombobox
-        if (field === 'category' || field === 'project') return;
+        if (field === 'category') {
+            // Categories still use the combobox (free-text allowed)
+            const combobox = createCombobox(cell, currentValue, categories, field, txnId);
+            input = combobox.input;
+            return;
+        }
+
+        // Use input for other fields
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue;
 
         cell.innerHTML = '';
         cell.appendChild(input);
@@ -896,11 +1019,6 @@
         } else if (field === 'project') {
             txn['Project'] = newValue;
             txn['project'] = newValue;
-            // Add new project to suggestions list if not already present
-            if (newValue && !projects.includes(newValue)) {
-                projects.push(newValue);
-                projects.sort();
-            }
         }
 
         // Track modification by ID
@@ -1302,9 +1420,12 @@
      */
     async function applyBulkEdit() {
         const bulkCategory = document.getElementById('bulk-category').value;
-        const bulkProject = document.getElementById('bulk-project').value.trim();
+        const bulkProjectRaw = document.getElementById('bulk-project').value;
+        const bulkProjectIsClear = bulkProjectRaw === '__CLEAR__';
+        const bulkProject = bulkProjectIsClear ? '' : bulkProjectRaw.trim();
+        const projectChosen = bulkProjectIsClear || !!bulkProject;
 
-        if (!bulkCategory && !bulkProject) {
+        if (!bulkCategory && !projectChosen) {
             alert('Please select at least one field to update');
             return;
         }
@@ -1320,7 +1441,7 @@
                 txn.Category = bulkCategory;
                 txn.category = bulkCategory;
             }
-            if (bulkProject) {
+            if (projectChosen) {
                 txn.Project = bulkProject;
                 txn.project = bulkProject;
             }
@@ -1332,7 +1453,7 @@
             if (bulkCategory) {
                 modifiedTransactions.get(txn.id).category = bulkCategory;
             }
-            if (bulkProject) {
+            if (projectChosen) {
                 modifiedTransactions.get(txn.id).project = bulkProject;
             }
             modifiedTransactions.get(txn.id).id = txn.id;

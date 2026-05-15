@@ -222,7 +222,7 @@ body {
 }
 
 .hub-container {
-    max-width: 900px;
+    max-width: 720px;
     width: 100%;
 }
 
@@ -243,17 +243,11 @@ body {
     color: var(--text-secondary);
 }
 
-/* Hub Grid */
+/* Hub Grid — single column list for even display */
 .hub-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1.5rem;
-}
-
-@media (max-width: 768px) {
-    .hub-grid {
-        grid-template-columns: 1fr;
-    }
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
 }
 
 /* Hub Cards - Gradient Glass */
@@ -372,6 +366,26 @@ body {
 
 .bill-card .stat-value {
     background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Projects Card - Indigo Theme */
+.projects-card::before {
+    background: linear-gradient(90deg, #818cf8, #6366f1, #4338ca);
+}
+
+.projects-card:hover {
+    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+}
+
+.projects-card .card-icon svg {
+    stroke: #4f46e5;
+}
+
+.projects-card .stat-value {
+    background: linear-gradient(135deg, #818cf8 0%, #4338ca 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

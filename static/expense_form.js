@@ -40,10 +40,12 @@ function initializeForm() {
 
 async function loadDropdownData() {
     try {
+        // Projects come from /api/projects (canonical registry), not /api/personal/projects
+        // (which is historical — fine for read-only contexts but not for editing).
         const [vendorsRes, descriptionsRes, projectsRes] = await Promise.all([
             fetch('/api/personal/vendors'),
             fetch('/api/personal/descriptions'),
-            fetch('/api/personal/projects')
+            fetch('/api/projects')
         ]);
 
         const vendorsData = await vendorsRes.json();
@@ -52,7 +54,7 @@ async function loadDropdownData() {
 
         vendors = vendorsData.vendors || [];
         descriptions = descriptionsData.descriptions || [];
-        projects = projectsData.projects || [];
+        projects = (projectsData.projects || []).map(p => p.display);
 
         // Initial render of pills (hidden until input focus)
         renderPills('vendor', vendors);

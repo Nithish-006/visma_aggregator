@@ -393,13 +393,15 @@
     }
 
     async function loadProjects() {
+        // Canonical projects only — the personal tracker writes new project values into
+        // personal_transactions, so it must use the same registry as the rest of the app.
         try {
-            const response = await fetch('/api/personal/projects');
+            const response = await fetch('/api/projects');
             const data = await response.json();
-            projects = data.projects || ['General'];
+            projects = (data.projects || []).map(p => p.display);
         } catch (error) {
             console.error('Error loading projects:', error);
-            projects = ['General'];
+            projects = [];
         }
     }
 

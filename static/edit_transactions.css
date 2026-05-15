@@ -589,6 +589,58 @@
     font-weight: 400;
 }
 
+/* Legacy (non-canonical) project value indicator */
+.project-badge.legacy {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fca5a5;
+    border: 1px dashed rgba(239, 68, 68, 0.4);
+    cursor: pointer;
+}
+
+.project-badge .legacy-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #ef4444;
+    margin-right: 6px;
+    vertical-align: middle;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+/* Canonical-only project picker (inline cell <select>) */
+.project-select-wrapper {
+    width: 100%;
+}
+
+.project-select {
+    width: 100%;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-main, #e6e9f5);
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    outline: none;
+}
+
+.project-select:focus {
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.project-select option {
+    background: #1a2240;
+    color: var(--text-main, #e6e9f5);
+}
+
+.project-select option:disabled {
+    color: #fca5a5;
+    font-style: italic;
+}
+
 /* Checkbox styling - Dark Theme */
 input[type="checkbox"] {
     width: 18px;

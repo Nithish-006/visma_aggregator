@@ -4,7 +4,9 @@
 
 // State
 let storedBills = [];
-let allProjects = [];
+let allProjects = [];          // historical (from /api/bills/projects) — filter dropdown only
+let canonicalProjects = [];    // canonical (from /api/projects) — used by the per-row edit picker
+let canonicalProjectSet = new Set();
 let selectedProjects = [];
 let projectDropdownOpen = false;
 let currentAddedFilter = '';
@@ -39,6 +41,7 @@ document.addEventListener('DOMContentLoaded', init);
 function init() {
     // Load data on page load
     loadProjects();
+    loadCanonicalProjects();
     loadSummary();
     loadStoredBills();
 
@@ -136,6 +139,18 @@ async function loadProjects() {
         }
     } catch (error) {
         console.error('Error loading projects:', error);
+    }
+}
+
+async function loadCanonicalProjects() {
+    // Canonical list — only these are valid when EDITING a bill's project.
+    try {
+        const response = await fetch('/api/projects');
+        const data = await response.json();
+        canonicalProjects = (data.projects || []).map(p => p.display);
+        canonicalProjectSet = new Set(canonicalProjects.map(s => s.toLowerCase()));
+    } catch (error) {
+        console.error('Error loading canonical projects:', error);
     }
 }
 
@@ -758,13 +773,9 @@ function filterProjectSuggestions(billId) {
 
     const value = input.value.toLowerCase().trim();
 
-    // Filter projects that match
-    let filtered = allProjects.filter(p => p.toLowerCase().includes(value));
-
-    // If current value is not in suggestions and not empty, add it as "new" option
-    if (value && !allProjects.some(p => p.toLowerCase() === value)) {
-        filtered = [`${input.value} (new)`, ...filtered];
-    }
+    // Canonical-only: filter the canonical project registry. No "(new)" option —
+    // new projects are created on the Projects page.
+    const filtered = canonicalProjects.filter(p => p.toLowerCase().includes(value));
 
     if (filtered.length === 0) {
         suggestionsEl.style.display = 'none';
@@ -776,10 +787,7 @@ function filterProjectSuggestions(billId) {
     highlightedSuggestionIndex = -1;
 
     suggestionsEl.innerHTML = filtered.map(project => {
-        const isNew = project.endsWith(' (new)');
-        const displayText = isNew ? project : project;
-        const selectValue = isNew ? input.value : project;
-        return `<div class="project-suggestion" data-value="${escapeForAttr(selectValue)}">${escapeHtml(displayText)}</div>`;
+        return `<div class="project-suggestion" data-value="${escapeForAttr(project)}">${escapeHtml(project)}</div>`;
     }).join('');
 
     // Add click handlers to suggestions
@@ -871,6 +879,13 @@ function getNextProjectBillId(currentBillId) {
 
 async function saveProject(billId, project, moveToNext = false) {
     const trimmedProject = project.trim();
+
+    // Guard: reject non-canonical values client-side so the auditor gets immediate feedback
+    // instead of round-tripping for a 400.
+    if (trimmedProject && !canonicalProjectSet.has(trimmedProject.toLowerCase())) {
+        showToast(`"${trimmedProject}" is not a canonical project. Pick one from the dropdown or add it on the Projects page.`, 'error');
+        return;
+    }
 
     try {
         const response = await fetch(`/api/bills/stored/${billId}/project`, {
@@ -1686,14 +1701,11 @@ function renderEditProjectSuggestions() {
     if (!input || !suggestionsEl) return;
 
     const value = input.value.toLowerCase().trim();
-    let filtered = allProjects.filter(p => p.toLowerCase().includes(value));
-
-    if (value && !allProjects.some(p => p.toLowerCase() === value)) {
-        filtered = [`${input.value} (new)`, ...filtered];
-    }
+    // Canonical-only suggestions in the full-bill edit modal
+    let filtered = canonicalProjects.filter(p => p.toLowerCase().includes(value));
 
     if (filtered.length === 0 && !value) {
-        filtered = [...allProjects];
+        filtered = [...canonicalProjects];
     }
 
     if (filtered.length === 0) {
@@ -1702,10 +1714,8 @@ function renderEditProjectSuggestions() {
     }
 
     suggestionsEl.innerHTML = filtered.map((project, idx) => {
-        const isNew = project.endsWith(' (new)');
-        const selectValue = isNew ? input.value : project;
         const highlightClass = idx === editProjectHighlightIndex ? 'highlighted' : '';
-        return `<div class="project-suggestion ${highlightClass}" data-value="${escapeForAttr(selectValue)}">${escapeHtml(project)}</div>`;
+        return `<div class="project-suggestion ${highlightClass}" data-value="${escapeForAttr(project)}">${escapeHtml(project)}</div>`;
     }).join('');
 
     suggestionsEl.querySelectorAll('.project-suggestion').forEach(el => {

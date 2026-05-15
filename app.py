@@ -779,6 +779,184 @@ def index():
     return render_template('hub.html', bank_stats=bank_stats)
 
 
+# ============================================================================
+# PROJECTS MODULE (canonical project id + stem name registry)
+# ============================================================================
+
+PROJECTS_UPLOAD_ROOT = os.path.join(app.config['UPLOAD_FOLDER'], 'projects')
+os.makedirs(PROJECTS_UPLOAD_ROOT, exist_ok=True)
+
+PROJECT_PO_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'xlsx', 'xls', 'docx', 'doc'}
+
+
+def _project_po_allowed(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in PROJECT_PO_EXTENSIONS
+
+
+def _canonical_project_set():
+    """Return a case-insensitive map of display_form_lower -> canonical_display."""
+    try:
+        projects = db_manager.list_projects()
+    except Exception:
+        projects = []
+    return {p['display'].lower(): p['display'] for p in projects}
+
+
+def validate_project_value(raw_value):
+    """Normalize and validate a project value against the canonical registry.
+
+    Returns (ok, normalized_value, error_message).
+    - Empty / None  -> (True, '', None)
+    - Canonical hit -> (True, canonical_display, None)
+    - Anything else -> (False, raw_value, "<readable error>")
+    """
+    value = (raw_value or '').strip()
+    if not value:
+        return True, '', None
+    canonical = _canonical_project_set()
+    hit = canonical.get(value.lower())
+    if hit:
+        return True, hit, None
+    return False, value, (
+        f"Project '{value}' is not in the canonical registry. "
+        "Pick one from the Projects page (or leave blank)."
+    )
+
+
+@app.route('/projects')
+@login_required
+def projects_page():
+    return render_template('projects.html')
+
+
+@app.route('/api/projects', methods=['GET'])
+@login_required
+def api_list_projects():
+    db_manager.ensure_projects_table()
+    return jsonify({'projects': db_manager.list_projects()})
+
+
+@app.route('/api/projects', methods=['POST'])
+@login_required
+def api_create_project():
+    """Create a new canonical project. Multipart form with optional PO file.
+
+    Form fields:
+        id          (required, integer)
+        stem_name   (required, non-empty)
+        po_file     (optional)
+    """
+    db_manager.ensure_projects_table()
+
+    raw_id = (request.form.get('id') or '').strip()
+    stem = (request.form.get('stem_name') or '').strip()
+
+    if not raw_id or not stem:
+        return jsonify({'error': 'id and stem_name are required'}), 400
+    try:
+        project_id = int(raw_id)
+    except ValueError:
+        return jsonify({'error': 'id must be an integer'}), 400
+    if project_id <= 0:
+        return jsonify({'error': 'id must be positive'}), 400
+
+    existing = db_manager.get_project(project_id)
+    if existing:
+        return jsonify({
+            'error': 'duplicate_id',
+            'message': f"Project id {project_id} already exists as '{existing['display']}'",
+            'existing': existing,
+        }), 409
+    stem_clash = db_manager.find_project_by_stem(stem)
+    if stem_clash:
+        return jsonify({
+            'error': 'duplicate_stem',
+            'message': f"A project named '{stem_clash['stem_name']}' already exists with id {stem_clash['id']}",
+            'existing': stem_clash,
+        }), 409
+
+    po_filename = None
+    po_rel_path = None
+    po_save_path = None
+    file = request.files.get('po_file')
+    if file and file.filename:
+        if not _project_po_allowed(file.filename):
+            return jsonify({'error': 'Unsupported PO file type'}), 400
+        safe = secure_filename(file.filename)
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        po_filename = f"{ts}_{safe}"
+        proj_dir = os.path.join(PROJECTS_UPLOAD_ROOT, str(project_id))
+        os.makedirs(proj_dir, exist_ok=True)
+        po_save_path = os.path.join(proj_dir, po_filename)
+        po_rel_path = os.path.relpath(po_save_path, app.config['UPLOAD_FOLDER']).replace('\\', '/')
+        file.save(po_save_path)
+
+    ok, err = db_manager.create_project(project_id, stem, po_filename, po_rel_path)
+    if not ok:
+        if po_save_path and os.path.exists(po_save_path):
+            try:
+                os.remove(po_save_path)
+            except OSError:
+                pass
+        if err == 'duplicate_id':
+            return jsonify({'error': 'duplicate_id', 'message': 'Project id already exists'}), 409
+        if err == 'duplicate_stem':
+            return jsonify({'error': 'duplicate_stem', 'message': 'Project name already exists'}), 409
+        return jsonify({'error': 'create_failed', 'message': err}), 500
+
+    return jsonify({'success': True, 'project': db_manager.get_project(project_id)}), 201
+
+
+@app.route('/api/projects/<int:project_id>/upload-po', methods=['POST'])
+@login_required
+def api_upload_project_po(project_id):
+    """Attach a PO file to an existing project that has no PO yet."""
+    project = db_manager.get_project(project_id)
+    if not project:
+        return jsonify({'error': 'not_found'}), 404
+    if project['has_po']:
+        return jsonify({'error': 'po_already_attached',
+                        'message': 'This project already has a PO; editing is disabled.'}), 409
+
+    file = request.files.get('po_file')
+    if not file or not file.filename:
+        return jsonify({'error': 'No file provided'}), 400
+    if not _project_po_allowed(file.filename):
+        return jsonify({'error': 'Unsupported PO file type'}), 400
+
+    safe = secure_filename(file.filename)
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    po_filename = f"{ts}_{safe}"
+    proj_dir = os.path.join(PROJECTS_UPLOAD_ROOT, str(project_id))
+    os.makedirs(proj_dir, exist_ok=True)
+    po_save_path = os.path.join(proj_dir, po_filename)
+    po_rel_path = os.path.relpath(po_save_path, app.config['UPLOAD_FOLDER']).replace('\\', '/')
+    file.save(po_save_path)
+
+    ok, err = db_manager.attach_project_po(project_id, po_filename, po_rel_path)
+    if not ok:
+        if os.path.exists(po_save_path):
+            try:
+                os.remove(po_save_path)
+            except OSError:
+                pass
+        return jsonify({'error': err or 'attach_failed'}), 409
+
+    return jsonify({'success': True, 'project': db_manager.get_project(project_id)})
+
+
+@app.route('/api/projects/<int:project_id>/po', methods=['GET'])
+@login_required
+def api_download_project_po(project_id):
+    project = db_manager.get_project(project_id)
+    if not project or not project.get('po_path'):
+        return jsonify({'error': 'not_found'}), 404
+    abs_path = os.path.join(app.config['UPLOAD_FOLDER'], project['po_path'])
+    if not os.path.exists(abs_path):
+        return jsonify({'error': 'file_missing_on_disk'}), 410
+    return send_file(abs_path, as_attachment=False, download_name=project['po_filename'])
+
+
 @app.route('/dashboard/<bank_code>')
 @login_required
 def bank_dashboard(bank_code):
@@ -1580,7 +1758,9 @@ def update_bank_transaction(bank_code):
         category = (data.get('category') or 'Uncategorized').strip().upper()
         code = data.get('code')
         vendor = (data.get('vendor') or 'Unknown').strip()
-        project = (data.get('project') or '').strip().upper()
+        ok, project, perr = validate_project_value(data.get('project'))
+        if not ok:
+            return jsonify({'success': False, 'error': perr}), 400
 
         # Derive code from category if not provided
         category_codes = {
@@ -2002,7 +2182,10 @@ def add_personal_transaction():
     transaction_date = data.get('date')
     vendor = data.get('vendor', '').strip()
     description = data.get('description', '').strip()
-    project = data.get('project', 'General').strip() or 'General'
+    ok, project, perr = validate_project_value(data.get('project'))
+    if not ok:
+        return jsonify({'error': perr}), 400
+    project_db = project or None  # store NULL when empty
     amount = data.get('amount')
     transaction_type = data.get('transaction_type', 'expense').strip().lower()
     bank = data.get('bank')
@@ -2032,7 +2215,7 @@ def add_personal_transaction():
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor = conn.cursor()
-            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type, bank))
+            cursor.execute(query, (transaction_date, vendor, description, project_db, amount, transaction_type, bank))
             conn.commit()
             new_id = cursor.lastrowid
             cursor.close()
@@ -2058,7 +2241,10 @@ def update_personal_transaction(transaction_id):
     transaction_date = data.get('date')
     vendor = data.get('vendor', '').strip()
     description = data.get('description', '').strip()
-    project = data.get('project', 'General').strip() or 'General'
+    ok, project, perr = validate_project_value(data.get('project'))
+    if not ok:
+        return jsonify({'error': perr}), 400
+    project_db = project or None
     amount = data.get('amount')
     transaction_type = data.get('transaction_type', 'expense').strip().lower()
     bank = data.get('bank')
@@ -2090,7 +2276,7 @@ def update_personal_transaction(transaction_id):
             WHERE id = %s
             """
             cursor = conn.cursor()
-            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type, bank, transaction_id))
+            cursor.execute(query, (transaction_date, vendor, description, project_db, amount, transaction_type, bank, transaction_id))
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()
@@ -2698,7 +2884,9 @@ def update_bill_project(invoice_id):
     """Update the project field for a bill"""
     try:
         data = request.json
-        project = data.get('project', '').strip() if data else ''
+        ok, project, perr = validate_project_value((data or {}).get('project'))
+        if not ok:
+            return jsonify({'success': False, 'error': perr}), 400
 
         success = db_manager.update_bill_project(invoice_id, project)
 
@@ -2969,6 +3157,12 @@ def update_stored_bill(invoice_id):
         if not data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
 
+        if 'project' in data:
+            ok, normalized, perr = validate_project_value(data.get('project'))
+            if not ok:
+                return jsonify({'success': False, 'error': perr}), 400
+            data['project'] = normalized
+
         success, error = db_manager.update_bill(invoice_id, data)
 
         if success:
@@ -3059,9 +3253,11 @@ def process_sales_bill():
                     'is_duplicate': False
                 })
 
-                # Auto-assign project name from filename if bill was saved successfully
+                # Auto-assign project name from filename only if it maps to a canonical project
                 if success and invoice_id and project_name:
-                    db_manager.update_sales_bill_project(invoice_id, project_name)
+                    ok, normalized, _ = validate_project_value(project_name)
+                    if ok and normalized:
+                        db_manager.update_sales_bill_project(invoice_id, normalized)
             else:
                 db_results.append({'saved': False, 'invoice_id': None, 'db_error': 'Extraction failed', 'is_duplicate': False})
 
@@ -3196,7 +3392,9 @@ def update_sales_bill_project(invoice_id):
     """Update the project field for a sales bill"""
     try:
         data = request.json
-        project = data.get('project', '').strip() if data else ''
+        ok, project, perr = validate_project_value((data or {}).get('project'))
+        if not ok:
+            return jsonify({'success': False, 'error': perr}), 400
 
         success = db_manager.update_sales_bill_project(invoice_id, project)
 
@@ -3444,6 +3642,12 @@ def update_stored_sales_bill(invoice_id):
         data = request.json
         if not data:
             return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        if 'project' in data:
+            ok, normalized, perr = validate_project_value(data.get('project'))
+            if not ok:
+                return jsonify({'success': False, 'error': perr}), 400
+            data['project'] = normalized
 
         success, error = db_manager.update_sales_bill(invoice_id, data)
 
@@ -3818,7 +4022,9 @@ def update_transaction():
         category = (data.get('category') or 'Uncategorized').strip().upper()
         code = data.get('code')
         vendor = (data.get('vendor') or 'Unknown').strip()
-        project = (data.get('project') or '').strip().upper()
+        ok, project, perr = validate_project_value(data.get('project'))
+        if not ok:
+            return jsonify({'success': False, 'error': perr}), 400
 
         # Derive code from category if not provided
         category_codes = {
