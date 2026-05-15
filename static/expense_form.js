@@ -39,13 +39,12 @@ function initializeForm() {
 }
 
 async function loadDropdownData() {
+    // Expense Tracker uses its own historical project list — no canonical enforcement here.
     try {
-        // Projects come from /api/projects (canonical registry), not /api/personal/projects
-        // (which is historical — fine for read-only contexts but not for editing).
         const [vendorsRes, descriptionsRes, projectsRes] = await Promise.all([
             fetch('/api/personal/vendors'),
             fetch('/api/personal/descriptions'),
-            fetch('/api/projects')
+            fetch('/api/personal/projects')
         ]);
 
         const vendorsData = await vendorsRes.json();
@@ -54,7 +53,7 @@ async function loadDropdownData() {
 
         vendors = vendorsData.vendors || [];
         descriptions = descriptionsData.descriptions || [];
-        projects = (projectsData.projects || []).map(p => p.display);
+        projects = projectsData.projects || [];
 
         // Initial render of pills (hidden until input focus)
         renderPills('vendor', vendors);

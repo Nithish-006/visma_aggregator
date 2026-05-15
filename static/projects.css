@@ -1,18 +1,26 @@
 /* ============================================================================
-   Projects page — canonical project registry
+   Projects page — canonical project registry  (light theme)
    ============================================================================ */
 :root {
-    --proj-bg: #0b1020;
-    --proj-bg-soft: #121933;
-    --proj-card: rgba(255, 255, 255, 0.04);
-    --proj-card-border: rgba(255, 255, 255, 0.08);
-    --proj-text: #e6e9f5;
-    --proj-text-dim: #9ba3c2;
-    --proj-accent: #8b5cf6;
-    --proj-accent-2: #06b6d4;
-    --proj-success: #10b981;
-    --proj-danger: #ef4444;
-    --proj-warning: #f59e0b;
+    --proj-bg-grad-start: #f0f4f8;
+    --proj-bg-grad-end:   #d9e2ec;
+    --proj-surface:       #ffffff;
+    --proj-surface-soft:  #f8fafc;
+    --proj-border:        rgba(0, 0, 0, 0.08);
+    --proj-border-strong: rgba(0, 0, 0, 0.14);
+    --proj-text:          #1a1a2e;
+    --proj-text-dim:      #4a4a68;
+    --proj-text-muted:    #6b7280;
+    --proj-accent:        #4f46e5;      /* indigo — matches the hub Projects tile */
+    --proj-accent-strong: #4338ca;
+    --proj-accent-soft:   rgba(99, 102, 241, 0.12);
+    --proj-accent-2:      #0891b2;
+    --proj-success:       #047857;
+    --proj-success-soft:  rgba(16, 185, 129, 0.12);
+    --proj-danger:        #b91c1c;
+    --proj-danger-soft:   rgba(239, 68, 68, 0.10);
+    --proj-warning:       #b45309;
+    --proj-warning-soft:  rgba(245, 158, 11, 0.14);
 }
 
 * { box-sizing: border-box; }
@@ -22,11 +30,9 @@ html, body {
     padding: 0;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: var(--proj-text);
-    background:
-        radial-gradient(circle at 15% 20%, rgba(139, 92, 246, 0.18) 0%, transparent 40%),
-        radial-gradient(circle at 85% 80%, rgba(6, 182, 212, 0.16) 0%, transparent 40%),
-        linear-gradient(180deg, #050813 0%, #0b1020 100%);
+    background: linear-gradient(160deg, var(--proj-bg-grad-start) 0%, var(--proj-bg-grad-end) 100%);
     min-height: 100vh;
+    letter-spacing: -0.01em;
 }
 
 /* Header */
@@ -39,10 +45,10 @@ html, body {
     justify-content: space-between;
     gap: 1rem;
     padding: 1rem 2rem;
-    background: rgba(11, 16, 32, 0.85);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--proj-card-border);
+    border-bottom: 1px solid var(--proj-border);
 }
 
 .proj-header-left {
@@ -58,29 +64,29 @@ html, body {
     width: 38px;
     height: 38px;
     border-radius: 10px;
-    border: 1px solid var(--proj-card-border);
+    border: 1px solid var(--proj-border);
     color: var(--proj-text);
     text-decoration: none;
-    background: var(--proj-card);
+    background: var(--proj-surface);
     transition: all 0.2s ease;
 }
 
 .proj-back-btn:hover {
-    background: rgba(139, 92, 246, 0.15);
-    border-color: rgba(139, 92, 246, 0.4);
+    background: var(--proj-accent-soft);
+    border-color: var(--proj-accent);
+    color: var(--proj-accent-strong);
 }
 
-.proj-title { font-size: 1.6rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+.proj-title { font-size: 1.6rem; font-weight: 700; margin: 0; letter-spacing: -0.01em; color: var(--proj-text); }
 .proj-subtitle { font-size: 0.85rem; color: var(--proj-text-dim); }
-
 .proj-title-block { display: flex; flex-direction: column; gap: 2px; }
 
 .proj-primary-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    background: linear-gradient(135deg, var(--proj-accent) 0%, #6d28d9 100%);
-    color: #fff;
+    background: linear-gradient(135deg, #818cf8 0%, var(--proj-accent-strong) 100%);
+    color: #ffffff;
     border: none;
     padding: 0.65rem 1.1rem;
     border-radius: 10px;
@@ -88,14 +94,14 @@ html, body {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+    box-shadow: 0 4px 14px rgba(67, 56, 202, 0.25);
     font-family: inherit;
     text-decoration: none;
 }
 
 .proj-primary-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(139, 92, 246, 0.45);
+    box-shadow: 0 6px 18px rgba(67, 56, 202, 0.35);
 }
 
 .proj-primary-btn:disabled {
@@ -109,9 +115,9 @@ html, body {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    background: var(--proj-card);
+    background: var(--proj-surface);
     color: var(--proj-text);
-    border: 1px solid var(--proj-card-border);
+    border: 1px solid var(--proj-border-strong);
     padding: 0.55rem 1rem;
     border-radius: 10px;
     font-size: 0.88rem;
@@ -123,8 +129,9 @@ html, body {
 }
 
 .proj-secondary-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: var(--proj-surface-soft);
+    border-color: var(--proj-accent);
+    color: var(--proj-accent-strong);
 }
 
 /* Main + list */
@@ -144,8 +151,11 @@ html, body {
 .proj-empty {
     text-align: center;
     padding: 3rem 1rem;
-    color: var(--proj-text-dim);
+    color: var(--proj-text-muted);
     font-size: 0.95rem;
+    background: var(--proj-surface);
+    border: 1px dashed var(--proj-border-strong);
+    border-radius: 14px;
 }
 
 /* Project card */
@@ -155,8 +165,8 @@ html, body {
     justify-content: space-between;
     gap: 1.25rem;
     width: 100%;
-    background: linear-gradient(140deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
-    border: 1px solid var(--proj-card-border);
+    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid var(--proj-border);
     border-radius: 16px;
     padding: 1.75rem 2rem;
     cursor: pointer;
@@ -164,13 +174,14 @@ html, body {
     text-align: left;
     color: inherit;
     font: inherit;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .project-card:hover {
     transform: translateY(-2px);
-    border-color: rgba(139, 92, 246, 0.45);
-    background: linear-gradient(140deg, rgba(139, 92, 246, 0.1) 0%, rgba(6, 182, 212, 0.06) 100%);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    border-color: var(--proj-accent);
+    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+    box-shadow: 0 10px 30px rgba(67, 56, 202, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .project-card-main {
@@ -184,7 +195,7 @@ html, body {
     font-size: 2.5rem;
     font-weight: 800;
     line-height: 1;
-    background: linear-gradient(135deg, var(--proj-accent) 0%, var(--proj-accent-2) 100%);
+    background: linear-gradient(135deg, #818cf8 0%, var(--proj-accent-2) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -193,7 +204,7 @@ html, body {
 
 .project-card-dash {
     font-size: 2rem;
-    color: var(--proj-text-dim);
+    color: var(--proj-text-muted);
     font-weight: 300;
 }
 
@@ -224,20 +235,20 @@ html, body {
 }
 
 .project-po-badge.has-po {
-    background: rgba(16, 185, 129, 0.15);
+    background: var(--proj-success-soft);
     color: var(--proj-success);
     border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .project-po-badge.no-po {
-    background: rgba(245, 158, 11, 0.15);
+    background: var(--proj-warning-soft);
     color: var(--proj-warning);
     border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .project-created {
     font-size: 0.75rem;
-    color: var(--proj-text-dim);
+    color: var(--proj-text-muted);
 }
 
 /* Modal */
@@ -255,7 +266,7 @@ html, body {
 .proj-modal-backdrop {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(15, 23, 42, 0.45);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
 }
@@ -263,10 +274,10 @@ html, body {
 .proj-modal-card {
     position: relative;
     width: min(560px, 92vw);
-    background: linear-gradient(160deg, #1a2240 0%, #0f1530 100%);
-    border: 1px solid var(--proj-card-border);
+    background: linear-gradient(160deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid var(--proj-border);
     border-radius: 18px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
     overflow: hidden;
     max-height: 90vh;
     display: flex;
@@ -278,15 +289,15 @@ html, body {
     align-items: center;
     justify-content: space-between;
     padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid var(--proj-card-border);
+    border-bottom: 1px solid var(--proj-border);
 }
 
-.proj-modal-header h2 { font-size: 1.2rem; font-weight: 600; margin: 0; }
+.proj-modal-header h2 { font-size: 1.2rem; font-weight: 600; margin: 0; color: var(--proj-text); }
 
 .proj-modal-close {
     background: transparent;
     border: none;
-    color: var(--proj-text-dim);
+    color: var(--proj-text-muted);
     font-size: 1.6rem;
     line-height: 1;
     cursor: pointer;
@@ -298,7 +309,7 @@ html, body {
 }
 
 .proj-modal-close:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--proj-surface-soft);
     color: var(--proj-text);
 }
 
@@ -323,7 +334,7 @@ html, body {
 
 .proj-optional {
     font-size: 0.7rem;
-    color: var(--proj-text-dim);
+    color: var(--proj-text-muted);
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
@@ -336,8 +347,8 @@ html, body {
 }
 
 .proj-input {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid var(--proj-card-border);
+    background: var(--proj-surface);
+    border: 1px solid var(--proj-border-strong);
     border-radius: 10px;
     color: var(--proj-text);
     font-size: 1.1rem;
@@ -350,8 +361,8 @@ html, body {
 .proj-input:focus {
     outline: none;
     border-color: var(--proj-accent);
-    background: rgba(255, 255, 255, 0.09);
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+    background: #ffffff;
+    box-shadow: 0 0 0 3px var(--proj-accent-soft);
 }
 
 .proj-input-id {
@@ -374,7 +385,7 @@ html, body {
 
 .proj-split-dash {
     font-size: 1.8rem;
-    color: var(--proj-text-dim);
+    color: var(--proj-text-muted);
     font-weight: 300;
     user-select: none;
 }
@@ -383,8 +394,8 @@ html, body {
     display: block;
     width: 100%;
     padding: 0.65rem 0.85rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px dashed var(--proj-card-border);
+    background: var(--proj-surface-soft);
+    border: 1px dashed var(--proj-border-strong);
     border-radius: 10px;
     color: var(--proj-text-dim);
     font-size: 0.88rem;
@@ -393,9 +404,9 @@ html, body {
 }
 
 .proj-file-input::file-selector-button {
-    background: var(--proj-card);
+    background: var(--proj-surface);
     color: var(--proj-text);
-    border: 1px solid var(--proj-card-border);
+    border: 1px solid var(--proj-border-strong);
     padding: 0.4rem 0.75rem;
     border-radius: 8px;
     margin-right: 0.75rem;
@@ -414,7 +425,7 @@ html, body {
 .proj-collision {
     margin: 0.5rem 0 0;
     padding: 0.6rem 0.8rem;
-    background: rgba(245, 158, 11, 0.12);
+    background: var(--proj-warning-soft);
     border: 1px solid rgba(245, 158, 11, 0.3);
     border-radius: 8px;
     color: var(--proj-warning);
@@ -424,8 +435,8 @@ html, body {
 .proj-error {
     margin: 0.75rem 0 0;
     padding: 0.6rem 0.8rem;
-    background: rgba(239, 68, 68, 0.12);
-    border: 1px solid rgba(239, 68, 68, 0.35);
+    background: var(--proj-danger-soft);
+    border: 1px solid rgba(239, 68, 68, 0.3);
     border-radius: 8px;
     color: var(--proj-danger);
     font-size: 0.85rem;
@@ -434,7 +445,7 @@ html, body {
 .proj-note {
     margin: 0.85rem 0 0;
     font-size: 0.78rem;
-    color: var(--proj-text-dim);
+    color: var(--proj-text-muted);
     font-style: italic;
 }
 
@@ -444,7 +455,7 @@ html, body {
     justify-content: space-between;
     gap: 1rem;
     padding: 0.8rem 1rem;
-    background: rgba(16, 185, 129, 0.06);
+    background: var(--proj-success-soft);
     border: 1px solid rgba(16, 185, 129, 0.25);
     border-radius: 10px;
 }
@@ -466,17 +477,17 @@ html, body {
     transform: translateX(-50%);
     padding: 0.85rem 1.25rem;
     border-radius: 10px;
-    background: rgba(16, 185, 129, 0.95);
-    color: #fff;
+    background: #047857;
+    color: #ffffff;
     font-size: 0.9rem;
     font-weight: 500;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
     z-index: 300;
     transition: opacity 0.2s ease;
 }
 
 .proj-toast.error {
-    background: rgba(239, 68, 68, 0.95);
+    background: #b91c1c;
 }
 
 .proj-toast.hidden { opacity: 0; pointer-events: none; }

@@ -393,15 +393,14 @@
     }
 
     async function loadProjects() {
-        // Canonical projects only — the personal tracker writes new project values into
-        // personal_transactions, so it must use the same registry as the rest of the app.
+        // Expense Tracker keeps its own free-text project list (no canonical enforcement).
         try {
-            const response = await fetch('/api/projects');
+            const response = await fetch('/api/personal/projects');
             const data = await response.json();
-            projects = (data.projects || []).map(p => p.display);
+            projects = data.projects || ['General'];
         } catch (error) {
             console.error('Error loading projects:', error);
-            projects = [];
+            projects = ['General'];
         }
     }
 

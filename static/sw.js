@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visma-v5-projects';
+const CACHE_NAME = 'visma-v6-light';
 
 const PRECACHE_ASSETS = [
   '/static/logo.png'

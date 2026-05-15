@@ -589,11 +589,11 @@
     font-weight: 400;
 }
 
-/* Legacy (non-canonical) project value indicator */
+/* Legacy (non-canonical) project value indicator — light theme */
 .project-badge.legacy {
-    background: rgba(239, 68, 68, 0.12);
-    color: #fca5a5;
-    border: 1px dashed rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.10);
+    color: #b91c1c;
+    border: 1px dashed rgba(239, 68, 68, 0.45);
     cursor: pointer;
 }
 
@@ -605,10 +605,10 @@
     background: #ef4444;
     margin-right: 6px;
     vertical-align: middle;
-    box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.45);
 }
 
-/* Canonical-only project picker (inline cell <select>) */
+/* Canonical-only project picker (inline cell <select>) — light theme */
 .project-select-wrapper {
     width: 100%;
 }
@@ -616,28 +616,29 @@
 .project-select {
     width: 100%;
     padding: 6px 8px;
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--text-main, #e6e9f5);
-    border: 1px solid rgba(139, 92, 246, 0.5);
+    background: #ffffff;
+    color: #1a1a2e;
+    border: 1px solid #6366f1;
     border-radius: 6px;
     font-size: 0.85rem;
     font-family: inherit;
     cursor: pointer;
     outline: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .project-select:focus {
-    border-color: #a78bfa;
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+    border-color: #4338ca;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
 }
 
 .project-select option {
-    background: #1a2240;
-    color: var(--text-main, #e6e9f5);
+    background: #ffffff;
+    color: #1a1a2e;
 }
 
 .project-select option:disabled {
-    color: #fca5a5;
+    color: #b91c1c;
     font-style: italic;
 }
 

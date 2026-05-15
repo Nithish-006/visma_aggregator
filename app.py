@@ -945,6 +945,87 @@ def api_upload_project_po(project_id):
     return jsonify({'success': True, 'project': db_manager.get_project(project_id)})
 
 
+@app.route('/api/admin/normalize-projects', methods=['POST'])
+@login_required
+def api_admin_normalize_projects():
+    """One-shot bulk normalization: rewrite any project value matching a canonical
+    keyword to the canonical "<id> - <Stem>" form. Idempotent — safe to re-run.
+
+    Body / query: ?apply=1  to commit. Default is dry-run.
+    """
+    apply_changes = (
+        request.args.get('apply') == '1' or
+        (request.get_json(silent=True) or {}).get('apply') is True
+    )
+
+    mappings = [
+        ('663 - Siruvani',       ['siruvani']),
+        ('662 - Infinium',       ['infinium']),
+        ('659 - Jamuna',         ['jamuna']),
+        ('664 - Vetha Kuzhumam', ['vetha', 'kuzhum']),
+    ]
+    # Expense Tracker (personal_transactions) is intentionally excluded — that
+    # module keeps its free-text project field.
+    tables = ['axis_transactions', 'kvb_transactions', 'transactions',
+              'bill_invoices', 'sales_invoices']
+
+    report = {'apply': apply_changes, 'tables': {}, 'totals': {'preview': 0, 'applied': 0}}
+
+    try:
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("SHOW TABLES")
+            present = {r[0].lower() for r in cursor.fetchall()}
+
+            for tbl in tables:
+                if tbl.lower() not in present:
+                    continue
+
+                table_block = []
+                for canonical, keywords in mappings:
+                    like_clauses = " OR ".join(["project LIKE %s"] * len(keywords))
+                    like_params = [f"%{kw}%" for kw in keywords]
+
+                    cursor.execute(
+                        f"SELECT TRIM(project) AS p, COUNT(*) "
+                        f"FROM `{tbl}` "
+                        f"WHERE project IS NOT NULL AND ({like_clauses}) AND project <> %s "
+                        f"GROUP BY TRIM(project) ORDER BY 2 DESC",
+                        tuple(like_params + [canonical])
+                    )
+                    variants = [{'value': v, 'count': c} for v, c in cursor.fetchall()]
+                    if not variants:
+                        continue
+
+                    total = sum(v['count'] for v in variants)
+                    block = {'canonical': canonical, 'variants': variants, 'preview_rows': total}
+                    report['totals']['preview'] += total
+
+                    if apply_changes:
+                        cursor.execute(
+                            f"UPDATE `{tbl}` SET project = %s "
+                            f"WHERE project IS NOT NULL AND ({like_clauses}) AND project <> %s",
+                            tuple([canonical] + like_params + [canonical])
+                        )
+                        block['applied_rows'] = cursor.rowcount
+                        report['totals']['applied'] += cursor.rowcount
+
+                    table_block.append(block)
+
+                if table_block:
+                    report['tables'][tbl] = table_block
+
+            if apply_changes:
+                conn.commit()
+            cursor.close()
+        return jsonify(report)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/projects/<int:project_id>/po', methods=['GET'])
 @login_required
 def api_download_project_po(project_id):
@@ -2182,10 +2263,7 @@ def add_personal_transaction():
     transaction_date = data.get('date')
     vendor = data.get('vendor', '').strip()
     description = data.get('description', '').strip()
-    ok, project, perr = validate_project_value(data.get('project'))
-    if not ok:
-        return jsonify({'error': perr}), 400
-    project_db = project or None  # store NULL when empty
+    project = data.get('project', 'General').strip() or 'General'
     amount = data.get('amount')
     transaction_type = data.get('transaction_type', 'expense').strip().lower()
     bank = data.get('bank')
@@ -2215,7 +2293,7 @@ def add_personal_transaction():
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
             cursor = conn.cursor()
-            cursor.execute(query, (transaction_date, vendor, description, project_db, amount, transaction_type, bank))
+            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type, bank))
             conn.commit()
             new_id = cursor.lastrowid
             cursor.close()
@@ -2241,10 +2319,7 @@ def update_personal_transaction(transaction_id):
     transaction_date = data.get('date')
     vendor = data.get('vendor', '').strip()
     description = data.get('description', '').strip()
-    ok, project, perr = validate_project_value(data.get('project'))
-    if not ok:
-        return jsonify({'error': perr}), 400
-    project_db = project or None
+    project = data.get('project', 'General').strip() or 'General'
     amount = data.get('amount')
     transaction_type = data.get('transaction_type', 'expense').strip().lower()
     bank = data.get('bank')
@@ -2276,7 +2351,7 @@ def update_personal_transaction(transaction_id):
             WHERE id = %s
             """
             cursor = conn.cursor()
-            cursor.execute(query, (transaction_date, vendor, description, project_db, amount, transaction_type, bank, transaction_id))
+            cursor.execute(query, (transaction_date, vendor, description, project, amount, transaction_type, bank, transaction_id))
             conn.commit()
             affected_rows = cursor.rowcount
             cursor.close()
