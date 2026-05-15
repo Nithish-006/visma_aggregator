@@ -849,7 +849,7 @@ def api_create_project():
     db_manager.ensure_projects_table()
 
     raw_id = (request.form.get('id') or '').strip()
-    stem = (request.form.get('stem_name') or '').strip()
+    stem = (request.form.get('stem_name') or '').strip().upper()
 
     if not raw_id or not stem:
         return jsonify({'error': 'id and stem_name are required'}), 400
@@ -1019,6 +1019,82 @@ def api_admin_normalize_projects():
             if apply_changes:
                 conn.commit()
             cursor.close()
+        return jsonify(report)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/uppercase-canonical-stems', methods=['POST'])
+@login_required
+def api_admin_uppercase_stems():
+    """One-shot: uppercase every project stem in the registry and propagate
+    the change to every data table that references that canonical display.
+
+    ?apply=1 to commit. Default is dry-run. Idempotent.
+    """
+    apply_changes = (
+        request.args.get('apply') == '1' or
+        (request.get_json(silent=True) or {}).get('apply') is True
+    )
+    DATA_TABLES = ['axis_transactions', 'kvb_transactions', 'transactions',
+                   'bill_invoices', 'sales_invoices']
+
+    report = {'apply': apply_changes, 'projects': [], 'data_tables': {}}
+
+    try:
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor(dictionary=True)
+
+            cursor.execute("SHOW TABLES")
+            present = {list(r.values())[0].lower() for r in cursor.fetchall()}
+
+            cursor.execute("SELECT id, stem_name FROM projects ORDER BY id")
+            projects = cursor.fetchall()
+
+            cursor_write = conn.cursor()
+            for proj in projects:
+                old_stem = proj['stem_name']
+                new_stem = old_stem.upper()
+                if old_stem == new_stem:
+                    continue
+                pid = proj['id']
+                old_display = f"{pid} - {old_stem}"
+                new_display = f"{pid} - {new_stem}"
+                entry = {'id': pid, 'old': old_display, 'new': new_display}
+                report['projects'].append(entry)
+
+                # Preview / apply propagation into data tables
+                for tbl in DATA_TABLES:
+                    if tbl not in present:
+                        continue
+                    cursor_write.execute(
+                        f"SELECT COUNT(*) FROM `{tbl}` WHERE project = %s",
+                        (old_display,)
+                    )
+                    n = cursor_write.fetchone()[0]
+                    if n == 0:
+                        continue
+                    report['data_tables'].setdefault(tbl, []).append(
+                        {'old': old_display, 'new': new_display, 'preview_rows': n}
+                    )
+                    if apply_changes:
+                        cursor_write.execute(
+                            f"UPDATE `{tbl}` SET project = %s WHERE project = %s",
+                            (new_display, old_display)
+                        )
+
+                if apply_changes:
+                    cursor_write.execute(
+                        "UPDATE projects SET stem_name = %s WHERE id = %s",
+                        (new_stem, pid)
+                    )
+
+            if apply_changes:
+                conn.commit()
+            cursor.close()
+            cursor_write.close()
         return jsonify(report)
     except Exception as e:
         import traceback

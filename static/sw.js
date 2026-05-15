@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visma-v6-light';
+const CACHE_NAME = 'visma-v9-hub-reorder';
 
 const PRECACHE_ASSETS = [
   '/static/logo.png'
