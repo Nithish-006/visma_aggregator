@@ -6,6 +6,7 @@ Supports multiple banks with separate tables
 Uses per-request connection pattern for thread safety.
 """
 
+import re
 import mysql.connector
 from mysql.connector import Error
 import pandas as pd
@@ -14,6 +15,19 @@ from decimal import Decimal as DecimalType
 from typing import Dict, List, Tuple, Optional
 from contextlib import contextmanager
 from config import Config, BANK_CONFIG, get_bank_config, get_bank_table, VALID_BANK_CODES
+
+
+# Mirrors the MySQL `uk_txn_dedup` functional-index expression so that
+# duplicates are filtered in-process before INSERT IGNORE ever runs.
+_SPLIT_TAG_RE = re.compile(r'\[SPLIT\s*\d+\s*/\s*\d+\]')
+_NON_ALNUM_RE = re.compile(r'[^A-Za-z0-9]')
+
+
+def _txn_dedup_key(description) -> str:
+    s = '' if description is None else str(description)
+    norm_prefix = _NON_ALNUM_RE.sub('', s).upper()[:40]
+    split_tag = _SPLIT_TAG_RE.search(s)
+    return f"{norm_prefix}|{split_tag.group(0) if split_tag else ''}"
 
 
 class DatabaseConfig:
@@ -229,6 +243,20 @@ class DatabaseManager:
 
         table = self.get_table_name(bank_code)
 
+        # Defense-in-depth: collapse intra-file duplicates before they hit MySQL,
+        # using the same key shape as the DB-level `uk_txn_dedup` functional index.
+        # Without this, a single Excel containing the same row twice would silently
+        # be swallowed by INSERT IGNORE and never surface in the upload report.
+        intra_dupes = 0
+        if len(df) > 1:
+            pre = len(df)
+            df = df.assign(_dedup_key=df['Transaction Description'].map(_txn_dedup_key))
+            df = df.drop_duplicates(subset=['Date', 'DR Amount', 'CR Amount', '_dedup_key'])
+            df = df.drop(columns=['_dedup_key'])
+            intra_dupes = pre - len(df)
+            if intra_dupes:
+                print(f"[*] Filtered {intra_dupes} intra-file duplicate(s) before insert")
+
         # Use INSERT IGNORE to skip duplicates silently
         query_template = f"""
         INSERT IGNORE INTO {table} (
@@ -289,7 +317,8 @@ class DatabaseManager:
                 # Calculate results
                 # INSERT IGNORE returns rowcount = number of actually inserted rows
                 results['inserted'] = total_affected
-                results['duplicates'] = len(rows_to_insert) - total_affected - results['errors']
+                db_dupes = len(rows_to_insert) - total_affected - results['errors']
+                results['duplicates'] = intra_dupes + db_dupes
 
                 print(f"[+] Bulk insert complete: {results['inserted']} inserted, {results['duplicates']} duplicates, {results['errors']} errors")
 

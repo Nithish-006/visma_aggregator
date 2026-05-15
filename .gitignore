@@ -58,3 +58,7 @@ uploads/
 # Database
 *.db
 *.sqlite
+
+# Local one-off ops scripts and prod data backups (contain hard-coded
+# prod credentials and exported row snapshots — never commit)
+_local_ops/

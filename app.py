@@ -4637,26 +4637,16 @@ def get_project_summary_sales_bills():
 @app.route('/api/project-summary/date-range')
 @login_required
 def get_project_summary_date_range():
-    """Get min/max date range across all banks"""
-    min_date = None
-    max_date = None
+    """Get the default date range for the project-summary page.
 
-    for bank_code in VALID_BANK_CODES:
-        df = get_bank_df(bank_code)
-        if df.empty:
-            continue
-
-        bank_min = df['date'].min()
-        bank_max = df['date'].max()
-
-        if min_date is None or bank_min < min_date:
-            min_date = bank_min
-        if max_date is None or bank_max > max_date:
-            max_date = bank_max
-
+    Always returns 2026-01-01 .. today, regardless of what dates the bank
+    dataframes contain. This is the post-cutover default; users can still
+    pick narrower or earlier ranges manually.
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
     return jsonify({
-        'min_date': min_date.strftime('%Y-%m-%d') if min_date else None,
-        'max_date': max_date.strftime('%Y-%m-%d') if max_date else None
+        'min_date': '2026-01-01',
+        'max_date': today,
     })
 
 

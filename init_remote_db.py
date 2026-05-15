@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS axis_transactions (
     INDEX idx_code (code),
     INDEX idx_project (project),
     INDEX idx_filter_combo (category, transaction_date, project),
-    UNIQUE KEY unique_transaction (transaction_date, transaction_description(500), dr_amount, cr_amount)
+    UNIQUE KEY uk_txn_dedup ((CAST(CONCAT_WS('|', DATE_FORMAT(transaction_date,'%Y-%m-%d'), CAST(dr_amount AS CHAR), CAST(cr_amount AS CHAR), LEFT(UPPER(REGEXP_REPLACE(CAST(transaction_description AS CHAR(500)),'[^A-Za-z0-9]','')),40), IFNULL(REGEXP_SUBSTR(CAST(transaction_description AS CHAR(500)),'\\\\[SPLIT[[:space:]]*[0-9]+[[:space:]]*/[[:space:]]*[0-9]+\\\\]'),'')) AS CHAR(255)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- KVB TRANSACTIONS TABLE
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS kvb_transactions (
     INDEX idx_code (code),
     INDEX idx_project (project),
     INDEX idx_filter_combo (category, transaction_date, project),
-    UNIQUE KEY unique_transaction (transaction_date, transaction_description(500), dr_amount, cr_amount)
+    UNIQUE KEY uk_txn_dedup ((CAST(CONCAT_WS('|', DATE_FORMAT(transaction_date,'%Y-%m-%d'), CAST(dr_amount AS CHAR), CAST(cr_amount AS CHAR), LEFT(UPPER(REGEXP_REPLACE(CAST(transaction_description AS CHAR(500)),'[^A-Za-z0-9]','')),40), IFNULL(REGEXP_SUBSTR(CAST(transaction_description AS CHAR(500)),'\\\\[SPLIT[[:space:]]*[0-9]+[[:space:]]*/[[:space:]]*[0-9]+\\\\]'),'')) AS CHAR(255)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- BANK UPLOAD HISTORY
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     INDEX idx_client_vendor (client_vendor),
     INDEX idx_code (code),
     INDEX idx_project (project),
-    UNIQUE KEY unique_transaction (transaction_date, transaction_description(500), dr_amount, cr_amount)
+    UNIQUE KEY uk_txn_dedup ((CAST(CONCAT_WS('|', DATE_FORMAT(transaction_date,'%Y-%m-%d'), CAST(dr_amount AS CHAR), CAST(cr_amount AS CHAR), LEFT(UPPER(REGEXP_REPLACE(CAST(transaction_description AS CHAR(500)),'[^A-Za-z0-9]','')),40), IFNULL(REGEXP_SUBSTR(CAST(transaction_description AS CHAR(500)),'\\\\[SPLIT[[:space:]]*[0-9]+[[:space:]]*/[[:space:]]*[0-9]+\\\\]'),'')) AS CHAR(255)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Legacy upload history table
