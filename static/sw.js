@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visma-v4';
+const CACHE_NAME = 'visma-v5-projects';
 
 const PRECACHE_ASSETS = [
   '/static/logo.png'
@@ -25,19 +25,26 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: network-first for everything, cache as offline fallback only
+// Fetch: network-first for everything, cache as offline fallback only.
+// HTML page navigations bypass the SW entirely so stale UI cannot persist
+// after a deploy.
 self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip API calls - let the browser handle them normally
   const url = new URL(event.request.url);
+
+  // Skip API calls - let the browser handle them normally
   if (url.pathname.startsWith('/api/')) return;
+
+  // Skip HTML navigations - always fetch fresh, never serve from SW cache
+  if (event.request.mode === 'navigate' ||
+      (event.request.headers.get('accept') || '').includes('text/html')) {
+    return;
+  }
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cache successful responses for offline fallback
         if (response.status === 200) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
