@@ -136,19 +136,20 @@ html, body {
 
 /* Main + list */
 .proj-main {
-    max-width: 880px;
+    max-width: 1320px;
     margin: 0 auto;
     padding: 2rem 1.25rem 4rem;
 }
 
 .projects-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.1rem;
 }
 
 .proj-loading,
 .proj-empty {
+    grid-column: 1 / -1;
     text-align: center;
     padding: 3rem 1rem;
     color: var(--proj-text-muted);
@@ -158,17 +159,19 @@ html, body {
     border-radius: 14px;
 }
 
-/* Project card */
+/* Project card — grid tile */
 .project-card {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     justify-content: space-between;
-    gap: 1.25rem;
+    gap: 1rem;
     width: 100%;
+    min-height: 158px;
     background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
     border: 1px solid var(--proj-border);
     border-radius: 16px;
-    padding: 1.75rem 2rem;
+    padding: 1.4rem 1.4rem;
     cursor: pointer;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     text-align: left;
@@ -186,40 +189,56 @@ html, body {
 
 .project-card-main {
     display: flex;
-    align-items: baseline;
-    gap: 0.75rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.55rem;
 }
 
+/* ID as a compact accent pill above the name */
 .project-card-id {
-    font-size: 2.5rem;
-    font-weight: 800;
+    align-self: flex-start;
+    font-size: 0.78rem;
+    font-weight: 700;
     line-height: 1;
-    background: linear-gradient(135deg, #818cf8 0%, var(--proj-accent-2) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    letter-spacing: 0.03em;
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+    -webkit-text-fill-color: currentColor;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
     font-variant-numeric: tabular-nums;
 }
 
-.project-card-dash {
-    font-size: 2rem;
-    color: var(--proj-text-muted);
-    font-weight: 300;
+.project-card-id::before {
+    content: "#";
+    opacity: 0.55;
+    margin-right: 1px;
 }
 
+/* dash is only meaningful in the old inline layout */
+.project-card-dash {
+    display: none;
+}
+
+/* Project name — the clear focal point of each tile */
 .project-card-stem {
-    font-size: 2rem;
+    font-size: 1.3rem;
     font-weight: 700;
+    line-height: 1.25;
     color: var(--proj-text);
     letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
 }
 
 .project-card-meta {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.4rem;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .project-po-badge {
@@ -497,14 +516,20 @@ html, body {
 
 .proj-toast.hidden { opacity: 0; pointer-events: none; }
 
+/* Responsive grid: 4 -> 3 -> 2 -> 1 columns */
+@media (max-width: 1140px) {
+    .projects-list { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 860px) {
+    .projects-list { grid-template-columns: repeat(2, 1fr); }
+}
+
 @media (max-width: 640px) {
     .proj-header { padding: 0.85rem 1rem; }
     .proj-title { font-size: 1.3rem; }
     .proj-subtitle { display: none; }
     .proj-main { padding: 1.25rem 1rem 4rem; }
-    .project-card { padding: 1.25rem 1.25rem; flex-direction: column; align-items: flex-start; }
-    .project-card-meta { align-items: flex-start; }
-    .project-card-id { font-size: 2rem; }
-    .project-card-stem { font-size: 1.4rem; }
-    .project-card-dash { font-size: 1.4rem; }
+    .projects-list { grid-template-columns: 1fr; gap: 0.85rem; }
+    .project-card { min-height: 0; padding: 1.25rem; }
 }
