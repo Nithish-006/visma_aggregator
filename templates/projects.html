@@ -84,7 +84,46 @@
                         <span id="detail-po-filename" class="proj-po-filename"></span>
                         <a id="detail-po-link" class="proj-secondary-btn" href="#" target="_blank" rel="noopener">View</a>
                     </div>
-                    <p class="proj-note">Editing is disabled to keep project naming consistent across the system.</p>
+
+                    <!-- Extracted PO gist -->
+                    <div id="detail-po-gist" class="proj-po-gist">
+                        <div class="proj-gist-loading">Loading PO details…</div>
+                    </div>
+
+                    <!-- Inline edit form (hidden until Edit clicked) -->
+                    <form id="detail-po-edit-form" class="proj-po-edit hidden">
+                        <div class="proj-gist-grid">
+                            <label>Total project value (₹)
+                                <input name="total_value" type="number" step="0.01" min="0" class="proj-input">
+                            </label>
+                            <label>PO number
+                                <input name="po_number" type="text" class="proj-input">
+                            </label>
+                            <label>PO date
+                                <input name="po_date" type="text" placeholder="DD-MMM-YYYY" class="proj-input">
+                            </label>
+                            <label>Client
+                                <input name="client_name" type="text" class="proj-input">
+                            </label>
+                            <label>Taxable value (₹)
+                                <input name="taxable_value" type="number" step="0.01" min="0" class="proj-input">
+                            </label>
+                            <label>Total tax (₹)
+                                <input name="total_tax" type="number" step="0.01" min="0" class="proj-input">
+                            </label>
+                        </div>
+                        <div class="proj-modal-footer">
+                            <button type="button" id="detail-po-edit-cancel" class="proj-secondary-btn">Cancel</button>
+                            <button type="submit" class="proj-primary-btn">Save changes</button>
+                        </div>
+                        <p id="detail-po-edit-error" class="proj-error hidden"></p>
+                    </form>
+
+                    <div id="detail-po-actions" class="proj-modal-footer proj-po-actions">
+                        <button type="button" id="detail-po-reprocess" class="proj-secondary-btn">Reprocess</button>
+                        <button type="button" id="detail-po-edit-btn" class="proj-primary-btn">Edit values</button>
+                    </div>
+                    <p class="proj-note">PO file is locked to keep naming consistent. You can reprocess the file or correct the extracted values.</p>
                 </div>
                 <div id="detail-po-upload">
                     <p class="proj-field-label" id="detail-upload-label">Upload PO document</p>

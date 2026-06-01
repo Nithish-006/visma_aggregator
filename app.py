@@ -13,6 +13,7 @@ from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank
 from database import DatabaseManager
 from bank_statement_processor import process_bank_statement
 from bill_processor import process_bill_file, generate_excel, format_extracted_data_for_display
+import po_processor
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -823,6 +824,52 @@ def validate_project_value(raw_value):
     )
 
 
+def _po_summary_for_response(project_id):
+    """Compact PO gist for inclusion in JSON responses (or None)."""
+    po = db_manager.get_project_po(project_id)
+    if not po:
+        return None
+    po['total_value_formatted'] = format_indian_number(po.get('total_value') or 0)
+    return po
+
+
+def _run_po_extraction(project_id, abs_path, filename, *, force=False):
+    """Extract a PO's gist and upsert into project_pos.
+
+    Never raises: a failed/unavailable extraction is recorded as status
+    'failed' so the uploaded file is still kept and the user can reprocess
+    or enter the value by hand. Returns the stored PO gist dict (or None).
+    """
+    db_manager.ensure_project_pos_table()
+    try:
+        result = po_processor.extract_po(abs_path, filename)
+    except Exception as e:
+        result = {'success': False, 'error': f'extraction crashed: {e}'}
+
+    if result.get('success'):
+        data = result.get('data', {})
+        db_manager.upsert_project_po(
+            project_id, data,
+            model=result.get('model'),
+            status='success',
+            error=None,
+            raw_json=json.dumps(data, ensure_ascii=False),
+            source_filename=filename,
+            force=force,
+        )
+    else:
+        db_manager.upsert_project_po(
+            project_id, {},
+            model=None,
+            status='failed',
+            error=result.get('error', 'extraction failed'),
+            raw_json=None,
+            source_filename=filename,
+            force=force,
+        )
+    return _po_summary_for_response(project_id)
+
+
 @app.route('/projects')
 @login_required
 def projects_page():
@@ -904,7 +951,15 @@ def api_create_project():
             return jsonify({'error': 'duplicate_stem', 'message': 'Project name already exists'}), 409
         return jsonify({'error': 'create_failed', 'message': err}), 500
 
-    return jsonify({'success': True, 'project': db_manager.get_project(project_id)}), 201
+    po_summary = None
+    if po_save_path:
+        po_summary = _run_po_extraction(project_id, po_save_path, po_filename, force=True)
+
+    return jsonify({
+        'success': True,
+        'project': db_manager.get_project(project_id),
+        'po': po_summary,
+    }), 201
 
 
 @app.route('/api/projects/<int:project_id>/upload-po', methods=['POST'])
@@ -942,7 +997,13 @@ def api_upload_project_po(project_id):
                 pass
         return jsonify({'error': err or 'attach_failed'}), 409
 
-    return jsonify({'success': True, 'project': db_manager.get_project(project_id)})
+    po_summary = _run_po_extraction(project_id, po_save_path, po_filename, force=True)
+
+    return jsonify({
+        'success': True,
+        'project': db_manager.get_project(project_id),
+        'po': po_summary,
+    })
 
 
 @app.route('/api/admin/normalize-projects', methods=['POST'])
@@ -1112,6 +1173,60 @@ def api_download_project_po(project_id):
     if not os.path.exists(abs_path):
         return jsonify({'error': 'file_missing_on_disk'}), 410
     return send_file(abs_path, as_attachment=False, download_name=project['po_filename'])
+
+
+@app.route('/api/projects/<int:project_id>/po-data', methods=['GET'])
+@login_required
+def api_get_project_po_data(project_id):
+    """Return the extracted PO gist for a project (for the detail view)."""
+    project = db_manager.get_project(project_id)
+    if not project:
+        return jsonify({'error': 'not_found'}), 404
+    po = _po_summary_for_response(project_id)
+    return jsonify({'project_id': project_id, 'po': po})
+
+
+@app.route('/api/projects/<int:project_id>/process-po', methods=['POST'])
+@login_required
+def api_process_project_po(project_id):
+    """(Re)run AI extraction on a project's already-attached PO file."""
+    project = db_manager.get_project(project_id)
+    if not project:
+        return jsonify({'error': 'not_found'}), 404
+    if not project.get('po_path'):
+        return jsonify({'error': 'no_po', 'message': 'No PO file is attached to this project.'}), 400
+
+    abs_path = os.path.join(app.config['UPLOAD_FOLDER'], project['po_path'])
+    if not os.path.exists(abs_path):
+        return jsonify({'error': 'file_missing_on_disk'}), 410
+
+    po_summary = _run_po_extraction(
+        project_id, abs_path, project.get('po_filename') or os.path.basename(abs_path),
+        force=True,
+    )
+    failed = po_summary and po_summary.get('extraction_status') == 'failed'
+    return jsonify({
+        'success': not failed,
+        'po': po_summary,
+        'message': (po_summary or {}).get('extraction_error') if failed else None,
+    })
+
+
+@app.route('/api/projects/<int:project_id>/po-data', methods=['PUT'])
+@login_required
+def api_update_project_po_data(project_id):
+    """Save user-corrected PO gist fields (flips status to 'manual')."""
+    project = db_manager.get_project(project_id)
+    if not project:
+        return jsonify({'error': 'not_found'}), 404
+
+    fields = request.get_json(silent=True) or {}
+    ok, err = db_manager.update_project_po_fields(project_id, fields)
+    if not ok:
+        if err == 'no_editable_fields':
+            return jsonify({'error': err, 'message': 'No editable fields supplied.'}), 400
+        return jsonify({'error': 'update_failed', 'message': err}), 400
+    return jsonify({'success': True, 'po': _po_summary_for_response(project_id)})
 
 
 @app.route('/dashboard/<bank_code>')

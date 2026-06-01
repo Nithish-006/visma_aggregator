@@ -516,6 +516,102 @@ html, body {
 
 .proj-toast.hidden { opacity: 0; pointer-events: none; }
 
+/* ── Card total-value chip ───────────────────────────── */
+.project-value-chip {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--proj-success);
+    background: var(--proj-success-soft);
+    white-space: nowrap;
+}
+.project-value-chip.pending {
+    color: var(--proj-warning);
+    background: var(--proj-warning-soft);
+    font-weight: 600;
+}
+
+/* ── PO gist (detail modal) ──────────────────────────── */
+.proj-po-gist { margin: 0.85rem 0 0.25rem; }
+.proj-gist-loading,
+.proj-gist-empty,
+.proj-gist-failed {
+    font-size: 0.88rem;
+    color: var(--proj-text-muted);
+    padding: 0.6rem 0;
+}
+.proj-gist-failed {
+    color: var(--proj-warning);
+    background: var(--proj-warning-soft);
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+}
+.proj-gist-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+.proj-gist-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+}
+.proj-gist-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+.proj-gist-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--proj-border);
+    font-size: 0.9rem;
+}
+.proj-gist-row:last-child { border-bottom: none; }
+.proj-gist-k { color: var(--proj-text-muted); }
+.proj-gist-v { color: var(--proj-text); font-weight: 500; text-align: right; }
+.proj-gist-row.headline {
+    padding: 0.55rem 0.7rem;
+    margin-bottom: 0.3rem;
+    background: var(--proj-success-soft);
+    border-radius: 8px;
+    border-bottom: none;
+}
+.proj-gist-row.headline .proj-gist-k { color: var(--proj-success); font-weight: 600; }
+.proj-gist-row.headline .proj-gist-v {
+    color: var(--proj-success);
+    font-weight: 800;
+    font-size: 1.05rem;
+}
+
+/* ── PO edit form ────────────────────────────────────── */
+.proj-po-edit { margin-top: 0.85rem; }
+.proj-gist-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.7rem 0.9rem;
+}
+.proj-gist-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.78rem;
+    color: var(--proj-text-muted);
+    font-weight: 500;
+}
+.proj-po-actions { margin-top: 0.6rem; }
+
+@media (max-width: 640px) {
+    .proj-gist-grid { grid-template-columns: 1fr; }
+}
+
 /* Responsive grid: 4 -> 3 -> 2 -> 1 columns */
 @media (max-width: 1140px) {
     .projects-list { grid-template-columns: repeat(3, 1fr); }

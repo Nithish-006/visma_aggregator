@@ -1959,28 +1959,77 @@ class DatabaseManager:
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
                 cursor.close()
-                return True
+            # The PO gist table is joined by list/get; keep it alongside.
+            self.ensure_project_pos_table()
+            return True
         except Exception as e:
             print(f"[!] Error ensuring projects table: {e}")
             return False
 
+    def ensure_project_pos_table(self):
+        """Create the project_pos table (PO gist, 1:1 with projects)."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS project_pos (
+                        project_id        INT PRIMARY KEY,
+                        po_number         VARCHAR(100) DEFAULT NULL,
+                        po_date           DATE DEFAULT NULL,
+                        client_name       VARCHAR(255) DEFAULT NULL,
+                        currency          VARCHAR(8) DEFAULT 'INR',
+                        taxable_value     DECIMAL(15, 2) DEFAULT 0,
+                        total_tax         DECIMAL(15, 2) DEFAULT 0,
+                        total_value       DECIMAL(15, 2) DEFAULT 0,
+                        amount_in_words   TEXT DEFAULT NULL,
+                        line_item_count   INT DEFAULT 0,
+                        payment_terms     TEXT DEFAULT NULL,
+                        source_filename   VARCHAR(255) DEFAULT NULL,
+                        extracted_model   VARCHAR(100) DEFAULT NULL,
+                        extraction_status ENUM('success', 'failed', 'manual') DEFAULT 'success',
+                        extraction_error  TEXT DEFAULT NULL,
+                        raw_json          LONGTEXT DEFAULT NULL,
+                        created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        CONSTRAINT fk_projectpo_project FOREIGN KEY (project_id)
+                            REFERENCES projects(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring project_pos table: {e}")
+            return False
+
+    # SELECT that augments each project row with a compact PO summary (the
+    # gist columns the cards/detail need) via a LEFT JOIN on project_pos.
+    _PROJECT_SELECT = (
+        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.created_at, "
+        "       pp.po_number AS po_number, pp.total_value AS po_total_value, "
+        "       pp.extraction_status AS po_extraction_status "
+        "FROM projects p LEFT JOIN project_pos pp ON pp.project_id = p.id"
+    )
+
+    @staticmethod
+    def _decorate_project_row(r: Dict) -> Dict:
+        r['display'] = f"{r['id']} - {r['stem_name']}"
+        r['has_po'] = bool(r['po_filename'])
+        if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
+            r['created_at'] = r['created_at'].isoformat()
+        # Coerce DECIMAL -> float for JSON
+        if r.get('po_total_value') is not None:
+            r['po_total_value'] = float(r['po_total_value'])
+        return r
+
     def list_projects(self) -> List[Dict]:
-        """Return all canonical projects ordered by id."""
+        """Return all canonical projects ordered by id, with PO gist summary."""
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute(
-                    "SELECT id, stem_name, po_filename, po_path, description, created_at "
-                    "FROM projects ORDER BY id"
-                )
+                cursor.execute(self._PROJECT_SELECT + " ORDER BY p.id")
                 rows = cursor.fetchall()
                 cursor.close()
-                for r in rows:
-                    r['display'] = f"{r['id']} - {r['stem_name']}"
-                    r['has_po'] = bool(r['po_filename'])
-                    if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
-                        r['created_at'] = r['created_at'].isoformat()
-                return rows
+                return [self._decorate_project_row(r) for r in rows]
         except Exception as e:
             print(f"[!] Error listing projects: {e}")
             return []
@@ -1989,18 +2038,11 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute(
-                    "SELECT id, stem_name, po_filename, po_path, description, created_at "
-                    "FROM projects WHERE id = %s",
-                    (project_id,)
-                )
+                cursor.execute(self._PROJECT_SELECT + " WHERE p.id = %s", (project_id,))
                 row = cursor.fetchone()
                 cursor.close()
                 if row:
-                    row['display'] = f"{row['id']} - {row['stem_name']}"
-                    row['has_po'] = bool(row['po_filename'])
-                    if row.get('created_at') and hasattr(row['created_at'], 'isoformat'):
-                        row['created_at'] = row['created_at'].isoformat()
+                    self._decorate_project_row(row)
                 return row
         except Exception as e:
             print(f"[!] Error fetching project {project_id}: {e}")
@@ -2061,6 +2103,179 @@ class DatabaseManager:
                 cursor.close()
                 if affected == 0:
                     return False, 'po_already_attached_or_missing_project'
+                return True, None
+        except Exception as e:
+            return False, str(e)
+
+    # ── Project PO gist (project_pos) ────────────────────────
+
+    @staticmethod
+    def _parse_po_date(value):
+        """Accept 'DD-MMM-YYYY' (or a few common forms) -> date / None."""
+        if not value:
+            return None
+        s = str(value).strip()
+        for fmt in ('%d-%b-%Y', '%d-%B-%Y', '%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
+            try:
+                return datetime.strptime(s, fmt).date()
+            except ValueError:
+                continue
+        return None
+
+    def upsert_project_po(self, project_id: int, data: dict, *,
+                          model: Optional[str] = None,
+                          status: str = 'success',
+                          error: Optional[str] = None,
+                          raw_json: Optional[str] = None,
+                          source_filename: Optional[str] = None,
+                          force: bool = False) -> Tuple[bool, Optional[str]]:
+        """Insert or update the PO gist for a project.
+
+        A row previously edited by hand (extraction_status='manual') is left
+        untouched unless force=True, so a reprocess can't silently clobber a
+        manual correction.
+        """
+        self.ensure_project_pos_table()
+        data = data or {}
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+
+                if not force:
+                    cursor.execute(
+                        "SELECT extraction_status FROM project_pos WHERE project_id = %s",
+                        (project_id,)
+                    )
+                    existing = cursor.fetchone()
+                    if existing and existing[0] == 'manual':
+                        cursor.close()
+                        return False, 'manual_locked'
+
+                cursor.execute(
+                    """
+                    INSERT INTO project_pos
+                        (project_id, po_number, po_date, client_name, currency,
+                         taxable_value, total_tax, total_value, amount_in_words,
+                         line_item_count, payment_terms, source_filename,
+                         extracted_model, extraction_status, extraction_error, raw_json)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        po_number = VALUES(po_number),
+                        po_date = VALUES(po_date),
+                        client_name = VALUES(client_name),
+                        currency = VALUES(currency),
+                        taxable_value = VALUES(taxable_value),
+                        total_tax = VALUES(total_tax),
+                        total_value = VALUES(total_value),
+                        amount_in_words = VALUES(amount_in_words),
+                        line_item_count = VALUES(line_item_count),
+                        payment_terms = VALUES(payment_terms),
+                        source_filename = VALUES(source_filename),
+                        extracted_model = VALUES(extracted_model),
+                        extraction_status = VALUES(extraction_status),
+                        extraction_error = VALUES(extraction_error),
+                        raw_json = VALUES(raw_json)
+                    """,
+                    (
+                        project_id,
+                        data.get('po_number') or None,
+                        self._parse_po_date(data.get('po_date')),
+                        data.get('client_name') or None,
+                        data.get('currency') or 'INR',
+                        data.get('taxable_value') or 0,
+                        data.get('total_tax') or 0,
+                        data.get('total_value') or 0,
+                        data.get('amount_in_words') or None,
+                        int(data.get('line_item_count') or 0),
+                        data.get('payment_terms') or None,
+                        source_filename,
+                        model,
+                        status,
+                        error,
+                        raw_json,
+                    )
+                )
+                conn.commit()
+                cursor.close()
+                return True, None
+        except Exception as e:
+            return False, str(e)
+
+    def get_project_po(self, project_id: int) -> Optional[Dict]:
+        """Return the full PO gist row for a project (or None)."""
+        self.ensure_project_pos_table()
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT project_id, po_number, po_date, client_name, currency, "
+                    "       taxable_value, total_tax, total_value, amount_in_words, "
+                    "       line_item_count, payment_terms, source_filename, "
+                    "       extracted_model, extraction_status, extraction_error, "
+                    "       created_at, updated_at "
+                    "FROM project_pos WHERE project_id = %s",
+                    (project_id,)
+                )
+                row = cursor.fetchone()
+                cursor.close()
+                if not row:
+                    return None
+                for k in ('taxable_value', 'total_tax', 'total_value'):
+                    if row.get(k) is not None:
+                        row[k] = float(row[k])
+                for k in ('po_date', 'created_at', 'updated_at'):
+                    if row.get(k) is not None and hasattr(row[k], 'isoformat'):
+                        row[k] = row[k].isoformat()
+                return row
+        except Exception as e:
+            print(f"[!] Error fetching project PO {project_id}: {e}")
+            return None
+
+    def update_project_po_fields(self, project_id: int, fields: dict) -> Tuple[bool, Optional[str]]:
+        """Apply user-corrected gist fields; flips extraction_status to 'manual'.
+
+        Only a whitelist of gist columns is writable.
+        """
+        self.ensure_project_pos_table()
+        allowed = {
+            'po_number': lambda v: (str(v).strip() or None),
+            'po_date': self._parse_po_date,
+            'client_name': lambda v: (str(v).strip() or None),
+            'currency': lambda v: (str(v).strip() or 'INR'),
+            'taxable_value': lambda v: float(v or 0),
+            'total_tax': lambda v: float(v or 0),
+            'total_value': lambda v: float(v or 0),
+            'amount_in_words': lambda v: (str(v).strip() or None),
+            'line_item_count': lambda v: int(v or 0),
+            'payment_terms': lambda v: (str(v).strip() or None),
+        }
+        sets, params = [], []
+        for key, coerce in allowed.items():
+            if key in fields:
+                try:
+                    params.append(coerce(fields[key]))
+                except (ValueError, TypeError):
+                    return False, f'invalid value for {key}'
+                sets.append(f"{key} = %s")
+        if not sets:
+            return False, 'no_editable_fields'
+        sets.append("extraction_status = 'manual'")
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                # Ensure a row exists (e.g. extraction never produced one).
+                cursor.execute(
+                    "INSERT IGNORE INTO project_pos (project_id, extraction_status) "
+                    "VALUES (%s, 'manual')",
+                    (project_id,)
+                )
+                cursor.execute(
+                    f"UPDATE project_pos SET {', '.join(sets)} WHERE project_id = %s",
+                    tuple(params) + (project_id,)
+                )
+                conn.commit()
+                cursor.close()
                 return True, None
         except Exception as e:
             return False, str(e)

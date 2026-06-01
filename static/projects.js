@@ -23,6 +23,15 @@
     const detailPoInput = document.getElementById('detail-po-input');
     const detailUploadError = document.getElementById('detail-upload-error');
 
+    // PO gist / edit / reprocess
+    const gistEl = document.getElementById('detail-po-gist');
+    const poActions = document.getElementById('detail-po-actions');
+    const reprocessBtn = document.getElementById('detail-po-reprocess');
+    const editBtn = document.getElementById('detail-po-edit-btn');
+    const editForm = document.getElementById('detail-po-edit-form');
+    const editCancel = document.getElementById('detail-po-edit-cancel');
+    const editError = document.getElementById('detail-po-edit-error');
+
     const toast = document.getElementById('proj-toast');
 
     let projects = [];
@@ -55,6 +64,11 @@
             const badge = p.has_po
                 ? `<span class="project-po-badge has-po">PO uploaded</span>`
                 : `<span class="project-po-badge no-po">No PO yet</span>`;
+            const valueChip = (p.po_total_value != null && p.po_total_value > 0)
+                ? `<span class="project-value-chip" title="Total project value">${formatINR(p.po_total_value)}</span>`
+                : (p.po_extraction_status === 'failed'
+                    ? `<span class="project-value-chip pending" title="Auto-read failed — open to enter manually">value pending</span>`
+                    : '');
             card.innerHTML = `
                 <div class="project-card-main">
                     <span class="project-card-id">${p.id}</span>
@@ -63,6 +77,7 @@
                 </div>
                 <div class="project-card-meta">
                     ${badge}
+                    ${valueChip}
                     ${created ? `<span class="project-created">Added ${created}</span>` : ''}
                 </div>
             `;
@@ -75,6 +90,12 @@
         return String(s ?? '')
             .replace(/&/g, '&amp;').replace(/</g, '&lt;')
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // Indian-format a number with a ₹ prefix (e.g. 2325190 -> ₹23,25,190).
+    function formatINR(value) {
+        const n = Number(value) || 0;
+        return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
     }
 
     // ── Load ───────────────────────────────────────────
@@ -222,6 +243,10 @@
             detailUploadBlock.classList.add('hidden');
             detailPoFilename.textContent = p.po_filename;
             detailPoLink.href = `/api/projects/${p.id}/po`;
+            editForm.classList.add('hidden');
+            editError.classList.add('hidden');
+            poActions.classList.remove('hidden');
+            loadPoGist(p.id);
         } else {
             detailPoExisting.classList.add('hidden');
             detailUploadBlock.classList.remove('hidden');
@@ -229,6 +254,155 @@
         }
         openModal(detailModal);
     }
+
+    let currentPo = null;
+
+    // ── Render the extracted PO gist ───────────────────
+    function loadPoGist(projectId) {
+        currentPo = null;
+        gistEl.innerHTML = `<div class="proj-gist-loading">Loading PO details…</div>`;
+        fetch(`/api/projects/${projectId}/po-data`, { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (projectId !== activeProjectId) return; // modal changed
+                currentPo = data.po || null;
+                renderPoGist(currentPo);
+            })
+            .catch(() => {
+                gistEl.innerHTML = `<div class="proj-gist-empty">Couldn't load PO details.</div>`;
+            });
+    }
+
+    function renderPoGist(po) {
+        if (!po) {
+            gistEl.innerHTML = `<div class="proj-gist-empty">Not processed yet. Click <strong>Reprocess</strong> to extract the PO values.</div>`;
+            return;
+        }
+        if (po.extraction_status === 'failed') {
+            gistEl.innerHTML = `<div class="proj-gist-failed">
+                Couldn't auto-read this PO${po.extraction_error ? ` (${escapeHtml(po.extraction_error)})` : ''}.
+                Use <strong>Edit values</strong> to enter the total manually, or try <strong>Reprocess</strong>.
+            </div>`;
+            return;
+        }
+        const rows = [
+            ['Total project value', formatINR(po.total_value), 'headline'],
+            ['PO number', po.po_number ? escapeHtml(po.po_number) : '—'],
+            ['PO date', po.po_date ? escapeHtml(po.po_date) : '—'],
+            ['Client', po.client_name ? escapeHtml(po.client_name) : '—'],
+            ['Taxable value', formatINR(po.taxable_value)],
+            ['Total tax', formatINR(po.total_tax)],
+            ['Scope items', po.line_item_count != null ? po.line_item_count : '—'],
+        ];
+        if (po.payment_terms) rows.push(['Payment terms', escapeHtml(po.payment_terms)]);
+        if (po.amount_in_words) rows.push(['In words', escapeHtml(po.amount_in_words)]);
+
+        const manualTag = po.extraction_status === 'manual'
+            ? `<span class="proj-gist-tag">manually edited</span>` : '';
+
+        gistEl.innerHTML = `
+            <div class="proj-gist-header">
+                <span class="proj-field-label">Extracted PO gist</span>${manualTag}
+            </div>
+            <div class="proj-gist-rows">
+                ${rows.map(([k, v, cls]) => `
+                    <div class="proj-gist-row ${cls === 'headline' ? 'headline' : ''}">
+                        <span class="proj-gist-k">${k}</span>
+                        <span class="proj-gist-v">${v}</span>
+                    </div>`).join('')}
+            </div>`;
+    }
+
+    // ── Reprocess ──────────────────────────────────────
+    reprocessBtn.addEventListener('click', async () => {
+        if (!activeProjectId) return;
+        reprocessBtn.disabled = true;
+        const orig = reprocessBtn.textContent;
+        reprocessBtn.textContent = 'Reprocessing…';
+        gistEl.innerHTML = `<div class="proj-gist-loading">Re-reading the PO with AI…</div>`;
+        try {
+            const res = await fetch(`/api/projects/${activeProjectId}/process-po`, {
+                method: 'POST', credentials: 'same-origin',
+            });
+            const data = await res.json().catch(() => ({}));
+            currentPo = data.po || null;
+            renderPoGist(currentPo);
+            showToast(data.success ? 'PO reprocessed.' : (data.message || 'Extraction failed — enter the value manually.'),
+                data.success ? 'success' : 'error');
+            loadProjects(); // refresh card chips
+        } catch (err) {
+            showToast(`Network error: ${err.message}`, 'error');
+            renderPoGist(currentPo);
+        } finally {
+            reprocessBtn.disabled = false;
+            reprocessBtn.textContent = orig;
+        }
+    });
+
+    // ── Edit values ────────────────────────────────────
+    editBtn.addEventListener('click', () => {
+        const po = currentPo || {};
+        editForm.total_value.value = po.total_value ?? '';
+        editForm.po_number.value = po.po_number ?? '';
+        editForm.po_date.value = po.po_date ?? '';
+        editForm.client_name.value = po.client_name ?? '';
+        editForm.taxable_value.value = po.taxable_value ?? '';
+        editForm.total_tax.value = po.total_tax ?? '';
+        editError.classList.add('hidden');
+        editForm.classList.remove('hidden');
+        poActions.classList.add('hidden');
+        gistEl.classList.add('hidden');
+    });
+
+    editCancel.addEventListener('click', () => {
+        editForm.classList.add('hidden');
+        poActions.classList.remove('hidden');
+        gistEl.classList.remove('hidden');
+    });
+
+    editForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!activeProjectId) return;
+        editError.classList.add('hidden');
+        const payload = {
+            total_value: editForm.total_value.value,
+            po_number: editForm.po_number.value,
+            po_date: editForm.po_date.value,
+            client_name: editForm.client_name.value,
+            taxable_value: editForm.taxable_value.value,
+            total_tax: editForm.total_tax.value,
+        };
+        const btn = editForm.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+            const res = await fetch(`/api/projects/${activeProjectId}/po-data`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                editError.textContent = data.message || data.error || `Failed (HTTP ${res.status})`;
+                editError.classList.remove('hidden');
+                return;
+            }
+            currentPo = data.po || null;
+            renderPoGist(currentPo);
+            editForm.classList.add('hidden');
+            poActions.classList.remove('hidden');
+            gistEl.classList.remove('hidden');
+            showToast('PO values updated.');
+            loadProjects();
+        } catch (err) {
+            editError.textContent = `Network error: ${err.message}`;
+            editError.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save changes';
+        }
+    });
 
     detailUploadForm.addEventListener('submit', async (e) => {
         e.preventDefault();
