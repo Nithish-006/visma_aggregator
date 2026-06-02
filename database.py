@@ -7,6 +7,7 @@ Uses per-request connection pattern for thread safety.
 """
 
 import re
+import json
 import mysql.connector
 from mysql.connector import Error
 import pandas as pd
@@ -1983,6 +1984,7 @@ class DatabaseManager:
                         total_value       DECIMAL(15, 2) DEFAULT 0,
                         amount_in_words   TEXT DEFAULT NULL,
                         line_item_count   INT DEFAULT 0,
+                        line_items        LONGTEXT DEFAULT NULL,
                         payment_terms     TEXT DEFAULT NULL,
                         source_filename   VARCHAR(255) DEFAULT NULL,
                         extracted_model   VARCHAR(100) DEFAULT NULL,
@@ -1995,6 +1997,18 @@ class DatabaseManager:
                             REFERENCES projects(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
+                # Additive migration: add line_items to tables created before it
+                # existed (e.g. the local table from the backfill).
+                cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'project_pos' "
+                    "AND COLUMN_NAME = 'line_items'"
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute(
+                        "ALTER TABLE project_pos "
+                        "ADD COLUMN line_items LONGTEXT DEFAULT NULL AFTER line_item_count"
+                    )
                 cursor.close()
                 return True
         except Exception as e:
@@ -2156,9 +2170,9 @@ class DatabaseManager:
                     INSERT INTO project_pos
                         (project_id, po_number, po_date, client_name, currency,
                          taxable_value, total_tax, total_value, amount_in_words,
-                         line_item_count, payment_terms, source_filename,
+                         line_item_count, line_items, payment_terms, source_filename,
                          extracted_model, extraction_status, extraction_error, raw_json)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         po_number = VALUES(po_number),
                         po_date = VALUES(po_date),
@@ -2169,6 +2183,7 @@ class DatabaseManager:
                         total_value = VALUES(total_value),
                         amount_in_words = VALUES(amount_in_words),
                         line_item_count = VALUES(line_item_count),
+                        line_items = VALUES(line_items),
                         payment_terms = VALUES(payment_terms),
                         source_filename = VALUES(source_filename),
                         extracted_model = VALUES(extracted_model),
@@ -2187,6 +2202,8 @@ class DatabaseManager:
                         data.get('total_value') or 0,
                         data.get('amount_in_words') or None,
                         int(data.get('line_item_count') or 0),
+                        (json.dumps(data.get('line_items'), ensure_ascii=False)
+                         if data.get('line_items') else None),
                         data.get('payment_terms') or None,
                         source_filename,
                         model,
@@ -2210,7 +2227,7 @@ class DatabaseManager:
                 cursor.execute(
                     "SELECT project_id, po_number, po_date, client_name, currency, "
                     "       taxable_value, total_tax, total_value, amount_in_words, "
-                    "       line_item_count, payment_terms, source_filename, "
+                    "       line_item_count, line_items, payment_terms, source_filename, "
                     "       extracted_model, extraction_status, extraction_error, "
                     "       created_at, updated_at "
                     "FROM project_pos WHERE project_id = %s",
@@ -2226,6 +2243,14 @@ class DatabaseManager:
                 for k in ('po_date', 'created_at', 'updated_at'):
                     if row.get(k) is not None and hasattr(row[k], 'isoformat'):
                         row[k] = row[k].isoformat()
+                # line_items is stored as a JSON string -> hand back a list.
+                if row.get('line_items'):
+                    try:
+                        row['line_items'] = json.loads(row['line_items'])
+                    except (ValueError, TypeError):
+                        row['line_items'] = []
+                else:
+                    row['line_items'] = []
                 return row
         except Exception as e:
             print(f"[!] Error fetching project PO {project_id}: {e}")

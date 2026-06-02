@@ -591,6 +591,40 @@ html, body {
     font-size: 1.05rem;
 }
 
+/* ── PO line-item breakdown ──────────────────────────── */
+.proj-gist-items { margin-top: 0.9rem; }
+.proj-gist-items .proj-field-label { margin-bottom: 0.35rem; }
+.proj-li-scroll {
+    max-height: 240px;
+    overflow: auto;
+    border: 1px solid var(--proj-border);
+    border-radius: 8px;
+}
+.proj-li-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+}
+.proj-li-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--proj-accent-soft);
+    color: var(--proj-text-muted);
+    font-weight: 600;
+    text-align: left;
+    padding: 0.45rem 0.6rem;
+    white-space: nowrap;
+}
+.proj-li-table tbody td {
+    padding: 0.42rem 0.6rem;
+    border-top: 1px solid var(--proj-border);
+    color: var(--proj-text);
+    vertical-align: top;
+}
+.proj-li-table .proj-li-num { text-align: right; white-space: nowrap; }
+.proj-li-desc { width: 50%; }
+.proj-li-unit { color: var(--proj-text-muted); white-space: nowrap; }
+
 /* ── PO edit form ────────────────────────────────────── */
 .proj-po-edit { margin-top: 0.85rem; }
 .proj-gist-grid {

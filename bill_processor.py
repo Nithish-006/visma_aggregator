@@ -10,25 +10,22 @@ import json
 import re
 from io import BytesIO
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from google import genai
 from google.genai import types
 from PIL import Image
 from PyPDF2 import PdfReader
 
-# Model configuration - Gemini models via direct API (in priority order)
+# Model configuration - Gemini models via direct API (in priority order).
+# All Flash-tier: fast, cheap, and strong at invoice OCR + table extraction.
+# gemini-3-pro is intentionally excluded — it's a reasoning model (slow + costly)
+# with no accuracy edge on this OCR/extraction task, and falling through to it on
+# every free-tier throttle was the main source of latency.
 GEMINI_MODELS = [
-    # 1. Primary: Current flagship fast model
-    "gemini-3-flash",
-
-    # 2. Deep reasoning for complex tables
-    "gemini-3-pro",
-
-    # 3. Stable production model
-    "gemini-2.5-flash",
-
-    # 4. Fast/cheap fallback
-    "gemini-2.5-flash-lite",
+    "gemini-3-flash",        # primary: best vision quality at flash speed
+    "gemini-2.5-flash",      # fallback: proven on GST tables
+    "gemini-2.5-flash-lite", # last resort: cheap/fast, lower accuracy
 ]
 
 # Extraction prompt
@@ -336,11 +333,28 @@ def process_bill_file(file_path, filename):
             if page_count == 0:
                 return [{'success': False, 'error': 'Could not read PDF file', 'filename': filename}]
 
-            for page_num in range(page_count):
-                result = extract_from_pdf_page(file_path, page_num)
-                result['filename'] = filename
-                result['page'] = page_num + 1
-                results.append(result)
+            # Each page is an independent Gemini call, so run them concurrently
+            # instead of one-after-another. Wall-time drops from ~N calls to ~1.
+            # Cap workers so a huge PDF doesn't blow past Gemini rate limits.
+            page_results = [None] * page_count
+            max_workers = min(page_count, 6)
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                future_to_page = {
+                    pool.submit(extract_from_pdf_page, file_path, page_num): page_num
+                    for page_num in range(page_count)
+                }
+                for future in as_completed(future_to_page):
+                    page_num = future_to_page[future]
+                    try:
+                        result = future.result()
+                    except Exception as e:
+                        result = {'success': False, 'error': str(e)}
+                    result['filename'] = filename
+                    result['page'] = page_num + 1
+                    page_results[page_num] = result
+
+            # Preserve original page order in the returned list.
+            results.extend(page_results)
         else:
             return [{'success': False, 'error': f'Unsupported file type: {ext}', 'filename': filename}]
 

@@ -310,6 +310,42 @@
                         <span class="proj-gist-k">${k}</span>
                         <span class="proj-gist-v">${v}</span>
                     </div>`).join('')}
+            </div>
+            ${renderPoLineItems(po.line_items)}`;
+    }
+
+    // ── Core line-item breakdown (description / qty / unit / rate / amount) ──
+    function renderPoLineItems(items) {
+        if (!Array.isArray(items) || items.length === 0) return '';
+        const num = (v) => (v ? formatINR(v) : '—');
+        const qty = (v) => {
+            if (!v) return '—';
+            // trim trailing zeros: 12.00 -> 12, 12.50 -> 12.5
+            return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 });
+        };
+        const body = items.map(it => `
+            <tr>
+                <td class="proj-li-desc">${it.description ? escapeHtml(it.description) : '—'}</td>
+                <td class="proj-li-num">${qty(it.quantity)}</td>
+                <td class="proj-li-unit">${it.unit ? escapeHtml(it.unit) : '—'}</td>
+                <td class="proj-li-num">${num(it.rate)}</td>
+                <td class="proj-li-num">${num(it.amount)}</td>
+            </tr>`).join('');
+        return `
+            <div class="proj-gist-items">
+                <div class="proj-field-label">Line items (${items.length})</div>
+                <div class="proj-li-scroll">
+                    <table class="proj-li-table">
+                        <thead>
+                            <tr>
+                                <th>Description</th><th class="proj-li-num">Qty</th>
+                                <th>Unit</th><th class="proj-li-num">Rate</th>
+                                <th class="proj-li-num">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>${body}</tbody>
+                    </table>
+                </div>
             </div>`;
     }
 

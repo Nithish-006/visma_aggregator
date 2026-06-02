@@ -19,12 +19,15 @@ from google import genai
 from google.genai import types
 from PIL import Image
 
-# Reuse the exact model-fallback chain pattern from bill_processor.py
+# Model-fallback chain (same as bill_processor.py). Ordered for document OCR:
+# all Flash-tier — fast + cheap + strong at reading invoices/POs. gemini-3-pro
+# is intentionally NOT here: it's a reasoning model (slow + costly) with no
+# quality edge on straightforward field/table extraction, and was the main
+# cause of latency when the primary throttled to it on the free tier.
 GEMINI_MODELS = [
-    "gemini-3-flash",
-    "gemini-3-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-3-flash",        # primary: best vision quality at flash speed
+    "gemini-2.5-flash",      # fallback: proven on GST/PO tables
+    "gemini-2.5-flash-lite", # last resort: cheap/fast, lower accuracy
 ]
 
 _MODEL_DISPLAY_NAMES = {
@@ -59,11 +62,23 @@ GRAND TOTAL (most important):
     * taxable_value = the sum of taxable amounts BEFORE tax (subtotal).
     * total_tax     = total of CGST + SGST + IGST (= total_value - taxable_value).
 
+LINE ITEMS (capture the core breakdown — keep it lean):
+- Return one entry per distinct scope/goods row the PO lists, in "line_items".
+- For each row capture ONLY these core fields: description, quantity, unit, rate, amount.
+- description: a SHORT core name of the item/scope (e.g. "MS Channel 75x40",
+  "Fabrication & erection of steel structure"). Do NOT copy long specifications,
+  HSN codes, dimensions tables, or multi-line notes — just enough to identify the
+  row. Trim to a concise phrase to save space.
+- quantity / rate / amount: plain numbers (strip commas & symbols). 0 if absent.
+- unit: short unit string (e.g. "MT", "Kg", "Nos", "Sqft", "Lot"), "" if absent.
+- If the PO has no itemised table (e.g. a lump-sum scope), return a single row
+  summarising the scope with its amount, or an empty list if truly none.
+
 RULES:
 1. Numbers: strip commas and currency symbols, return plain numbers
    (23,25,190.00 -> 2325190.00). Use 0 if genuinely absent.
 2. po_date: format as DD-MMM-YYYY (e.g. 16-Mar-2026). Empty string if absent.
-3. line_item_count: how many distinct goods/scope rows the PO lists (just the count).
+3. line_item_count: the number of rows in line_items.
 4. payment_terms: a short single-line summary of the payment schedule if present
    (e.g. "50% with PO, 45% for erection, 5% after completion"), else "".
 5. Text fields absent -> "".  Numeric fields absent -> 0.
@@ -81,7 +96,10 @@ Return ONLY valid JSON in EXACTLY this structure (no markdown, no commentary):
   "total_value": 0,
   "amount_in_words": "",
   "line_item_count": 0,
-  "payment_terms": ""
+  "payment_terms": "",
+  "line_items": [
+    {"description": "", "quantity": 0, "unit": "", "rate": 0, "amount": 0}
+  ]
 }
 """
 
@@ -122,6 +140,25 @@ def _normalize_po_data(data):
     def text(v):
         return (str(v).strip() if v is not None else '')
 
+    # Core line-item breakdown — keep only the 5 fields we surface, drop noise.
+    items = []
+    raw_items = data.get('line_items')
+    if isinstance(raw_items, list):
+        for it in raw_items:
+            if not isinstance(it, dict):
+                continue
+            desc = text(it.get('description'))
+            row = {
+                'description': desc,
+                'quantity': num(it.get('quantity')),
+                'unit': text(it.get('unit')),
+                'rate': num(it.get('rate')),
+                'amount': num(it.get('amount')),
+            }
+            # Skip empty placeholder rows (no description and no amount).
+            if desc or row['amount']:
+                items.append(row)
+
     return {
         'po_number': text(data.get('po_number')),
         'po_date': text(data.get('po_date')),
@@ -131,8 +168,10 @@ def _normalize_po_data(data):
         'total_tax': num(data.get('total_tax')),
         'total_value': num(data.get('total_value')),
         'amount_in_words': text(data.get('amount_in_words')),
-        'line_item_count': int(num(data.get('line_item_count'))),
+        # Count reflects the rows we actually captured.
+        'line_item_count': len(items) or int(num(data.get('line_item_count'))),
         'payment_terms': text(data.get('payment_terms')),
+        'line_items': items,
     }
 
 
