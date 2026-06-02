@@ -1,0 +1,6 @@
+[build]
+# Force the Nixpacks builder. Railway's newer default (Railpack) installs Python
+# via mise, which fails on this service: mise now requires GitHub artifact
+# attestations for python@3.11.7 and none exist, so "mise install" exits 1 in <2s.
+# Nixpacks installs Python from Nix (python311 in nixpacks.toml), bypassing mise.
+builder = "NIXPACKS"
