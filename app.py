@@ -900,6 +900,16 @@ def api_create_project():
 
     if not raw_id or not stem:
         return jsonify({'error': 'id and stem_name are required'}), 400
+
+    # Type must be chosen explicitly — we never default a new entry to "project".
+    raw_type = (request.form.get('is_project') or '').strip().lower()
+    if raw_type in ('1', 'true', 'yes', 'project'):
+        is_project = True
+    elif raw_type in ('0', 'false', 'no', 'other'):
+        is_project = False
+    else:
+        return jsonify({'error': 'type_required',
+                        'message': 'Choose a type: Project or Other (internal).'}), 400
     try:
         project_id = int(raw_id)
     except ValueError:
@@ -938,7 +948,7 @@ def api_create_project():
         po_rel_path = os.path.relpath(po_save_path, app.config['UPLOAD_FOLDER']).replace('\\', '/')
         file.save(po_save_path)
 
-    ok, err = db_manager.create_project(project_id, stem, po_filename, po_rel_path)
+    ok, err = db_manager.create_project(project_id, stem, po_filename, po_rel_path, is_project)
     if not ok:
         if po_save_path and os.path.exists(po_save_path):
             try:
@@ -960,6 +970,33 @@ def api_create_project():
         'project': db_manager.get_project(project_id),
         'po': po_summary,
     }), 201
+
+
+@app.route('/api/projects/<int:project_id>', methods=['PATCH'])
+@login_required
+def api_update_project(project_id):
+    """Update an existing registry entry. Currently supports flipping the type
+    between a real project and an internal "other" via the is_project flag.
+
+    JSON body: { "is_project": true|false }
+    """
+    project = db_manager.get_project(project_id)
+    if not project:
+        return jsonify({'error': 'not_found'}), 404
+
+    data = request.get_json(silent=True) or {}
+    if 'is_project' not in data:
+        return jsonify({'error': 'nothing_to_update',
+                        'message': 'No supported fields provided'}), 400
+
+    is_project = bool(data['is_project'])
+    ok, err = db_manager.set_project_type(project_id, is_project)
+    if not ok:
+        if err == 'not_found':
+            return jsonify({'error': 'not_found'}), 404
+        return jsonify({'error': 'update_failed', 'message': err}), 500
+
+    return jsonify({'success': True, 'project': db_manager.get_project(project_id)})
 
 
 @app.route('/api/projects/<int:project_id>/upload-po', methods=['POST'])

@@ -141,10 +141,75 @@ html, body {
     padding: 2rem 1.25rem 4rem;
 }
 
+/* Top-level list is now a vertical stack of sections (Projects / Others).
+   The card grid lives on .proj-section-grid below. */
 .projects-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.proj-section-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 1.1rem;
+}
+
+.proj-section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--proj-border);
+}
+
+.proj-section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--proj-text);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.proj-section-count {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+    padding: 0.12rem 0.55rem;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+}
+
+.proj-section-sub {
+    font-size: 0.82rem;
+    color: var(--proj-text-muted);
+}
+
+/* "Others" section reads as non-project at a glance: amber accent + tinted
+   header rule, plus a distinct id pill / hover on its cards. */
+.proj-section--others .proj-section-head {
+    border-bottom-color: rgba(245, 158, 11, 0.35);
+}
+.proj-section--others .proj-section-count {
+    color: var(--proj-warning);
+    background: var(--proj-warning-soft);
+}
+.proj-section--others .project-card {
+    background: linear-gradient(145deg, #ffffff 0%, #fdf6ec 100%);
+    border-color: rgba(245, 158, 11, 0.28);
+}
+.proj-section--others .project-card:hover {
+    border-color: var(--proj-warning);
+    background: linear-gradient(145deg, #fffaf0 0%, #fdecd2 100%);
+    box-shadow: 0 10px 30px rgba(245, 158, 11, 0.18), 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.proj-section--others .project-card-id {
+    color: var(--proj-warning);
+    background: var(--proj-warning-soft);
 }
 
 .proj-loading,
@@ -648,11 +713,11 @@ html, body {
 
 /* Responsive grid: 4 -> 3 -> 2 -> 1 columns */
 @media (max-width: 1140px) {
-    .projects-list { grid-template-columns: repeat(3, 1fr); }
+    .proj-section-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 860px) {
-    .projects-list { grid-template-columns: repeat(2, 1fr); }
+    .proj-section-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 640px) {
@@ -660,6 +725,82 @@ html, body {
     .proj-title { font-size: 1.3rem; }
     .proj-subtitle { display: none; }
     .proj-main { padding: 1.25rem 1rem 4rem; }
-    .projects-list { grid-template-columns: 1fr; gap: 0.85rem; }
+    .proj-section-grid { grid-template-columns: 1fr; gap: 0.85rem; }
     .project-card { min-height: 0; padding: 1.25rem; }
+}
+
+/* ── Type toggle (project ↔ other) ──────────────────── */
+.proj-type-toggle {
+    display: inline-flex;
+    gap: 0.4rem;
+    background: var(--proj-surface-soft);
+    border: 1px solid var(--proj-border-strong);
+    border-radius: 10px;
+    padding: 0.25rem;
+}
+
+.proj-type-option {
+    position: relative;
+    cursor: pointer;
+}
+
+.proj-type-option input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.proj-type-option span {
+    display: inline-block;
+    padding: 0.4rem 0.9rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--proj-text-dim);
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.proj-type-option input:checked + span {
+    background: linear-gradient(135deg, #818cf8 0%, var(--proj-accent-strong) 100%);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(67, 56, 202, 0.25);
+}
+
+.proj-type-option input:focus-visible + span {
+    outline: 2px solid var(--proj-accent);
+    outline-offset: 1px;
+}
+
+.proj-type-hint {
+    margin: 0.5rem 0 0;
+    font-size: 0.76rem;
+    color: var(--proj-text-muted);
+}
+
+/* Detail-modal type row */
+.proj-detail-type {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem 0.85rem;
+    padding-bottom: 1.1rem;
+    margin-bottom: 1.1rem;
+    border-bottom: 1px solid var(--proj-border);
+}
+
+.proj-detail-type .proj-field-label {
+    margin: 0;
+}
+
+.proj-type-status {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--proj-success);
+}
+
+.proj-type-status.error {
+    color: var(--proj-danger);
 }

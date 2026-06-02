@@ -34,6 +34,9 @@
 
     const toast = document.getElementById('proj-toast');
 
+    const detailTypeStatus = document.getElementById('detail-type-status');
+    const detailTypeRadios = () => Array.from(detailModal.querySelectorAll('input[name="detail_is_project"]'));
+
     let projects = [];
     let activeProjectId = null;
 
@@ -48,42 +51,69 @@
     }
 
     // ── Render ─────────────────────────────────────────
+    function buildCard(p) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'project-card';
+        card.dataset.id = p.id;
+        const created = p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+        const badge = p.has_po
+            ? `<span class="project-po-badge has-po">PO uploaded</span>`
+            : `<span class="project-po-badge no-po">No PO yet</span>`;
+        const valueChip = (p.po_total_value != null && p.po_total_value > 0)
+            ? `<span class="project-value-chip" title="Total project value">${formatINR(p.po_total_value)}</span>`
+            : (p.po_extraction_status === 'failed'
+                ? `<span class="project-value-chip pending" title="Auto-read failed — open to enter manually">value pending</span>`
+                : '');
+        card.innerHTML = `
+            <div class="project-card-main">
+                <span class="project-card-id">${p.id}</span>
+                <span class="project-card-dash">−</span>
+                <span class="project-card-stem">${escapeHtml(p.stem_name)}</span>
+            </div>
+            <div class="project-card-meta">
+                ${badge}
+                ${valueChip}
+                ${created ? `<span class="project-created">Added ${created}</span>` : ''}
+            </div>
+        `;
+        card.addEventListener('click', () => openDetail(p.id));
+        return card;
+    }
+
+    function renderSection(title, subtitle, items, variant) {
+        const section = document.createElement('section');
+        section.className = 'proj-section' + (variant ? ` proj-section--${variant}` : '');
+        const head = document.createElement('div');
+        head.className = 'proj-section-head';
+        head.innerHTML = `
+            <h2 class="proj-section-title">${title} <span class="proj-section-count">${items.length}</span></h2>
+            ${subtitle ? `<span class="proj-section-sub">${subtitle}</span>` : ''}
+        `;
+        section.appendChild(head);
+        const grid = document.createElement('div');
+        grid.className = 'proj-section-grid';
+        items.forEach(p => grid.appendChild(buildCard(p)));
+        section.appendChild(grid);
+        return section;
+    }
+
     function renderList() {
         if (!projects.length) {
             listEl.innerHTML = `<div class="proj-empty">No projects yet. Click <strong>+ New Project</strong> to create the first one.</div>`;
             return;
         }
 
+        const realProjects = projects.filter(p => p.is_project !== false);
+        const others = projects.filter(p => p.is_project === false);
+
         listEl.innerHTML = '';
-        projects.forEach(p => {
-            const card = document.createElement('button');
-            card.type = 'button';
-            card.className = 'project-card';
-            card.dataset.id = p.id;
-            const created = p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
-            const badge = p.has_po
-                ? `<span class="project-po-badge has-po">PO uploaded</span>`
-                : `<span class="project-po-badge no-po">No PO yet</span>`;
-            const valueChip = (p.po_total_value != null && p.po_total_value > 0)
-                ? `<span class="project-value-chip" title="Total project value">${formatINR(p.po_total_value)}</span>`
-                : (p.po_extraction_status === 'failed'
-                    ? `<span class="project-value-chip pending" title="Auto-read failed — open to enter manually">value pending</span>`
-                    : '');
-            card.innerHTML = `
-                <div class="project-card-main">
-                    <span class="project-card-id">${p.id}</span>
-                    <span class="project-card-dash">−</span>
-                    <span class="project-card-stem">${escapeHtml(p.stem_name)}</span>
-                </div>
-                <div class="project-card-meta">
-                    ${badge}
-                    ${valueChip}
-                    ${created ? `<span class="project-created">Added ${created}</span>` : ''}
-                </div>
-            `;
-            card.addEventListener('click', () => openDetail(p.id));
-            listEl.appendChild(card);
-        });
+        if (realProjects.length) {
+            listEl.appendChild(renderSection('Projects', 'Valid client / site projects', realProjects, 'projects'));
+        }
+        if (others.length) {
+            listEl.appendChild(renderSection('Others', 'Internal heads (office, factory, KVB, sridhar…)', others, 'others'));
+        }
     }
 
     function escapeHtml(s) {
@@ -195,9 +225,17 @@
             return;
         }
 
+        const typeEl = newForm.querySelector('input[name="is_project"]:checked');
+        if (!typeEl) {
+            errorEl.textContent = 'Please choose a type — Project or Other (internal).';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
         const fd = new FormData();
         fd.append('id', String(idNum));
         fd.append('stem_name', stemVal);
+        fd.append('is_project', typeEl.value);
         if (poInput.files && poInput.files[0]) fd.append('po_file', poInput.files[0]);
 
         submitBtn.disabled = true;
@@ -234,6 +272,11 @@
         if (!p) return;
         activeProjectId = projectId;
         detailTitle.textContent = `${p.id} − ${p.stem_name}`;
+        // Reflect current type in the toggle
+        const wantVal = (p.is_project === false) ? '0' : '1';
+        detailTypeRadios().forEach(r => { r.checked = (r.value === wantVal); });
+        detailTypeStatus.textContent = '';
+        detailTypeStatus.classList.remove('error');
         detailUploadError.classList.add('hidden');
         detailUploadError.textContent = '';
         detailUploadForm.reset();
@@ -348,6 +391,39 @@
                 </div>
             </div>`;
     }
+
+    // ── Type toggle (project ↔ other) ──────────────────
+    detailTypeRadios().forEach(radio => {
+        radio.addEventListener('change', async () => {
+            if (!activeProjectId || !radio.checked) return;
+            const isProject = radio.value === '1';
+            detailTypeStatus.classList.remove('error');
+            detailTypeStatus.textContent = 'Saving…';
+            try {
+                const res = await fetch(`/api/projects/${activeProjectId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ is_project: isProject }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    detailTypeStatus.textContent = data.message || data.error || `Failed (HTTP ${res.status})`;
+                    detailTypeStatus.classList.add('error');
+                    return;
+                }
+                // Sync cached list so the sections regroup on close/reopen
+                const cached = projects.find(x => x.id === activeProjectId);
+                if (cached) cached.is_project = isProject;
+                detailTypeStatus.textContent = 'Saved';
+                showToast(isProject ? 'Marked as a project.' : 'Marked as an internal “other”.');
+                loadProjects();
+            } catch (err) {
+                detailTypeStatus.textContent = `Network error: ${err.message}`;
+                detailTypeStatus.classList.add('error');
+            }
+        });
+    });
 
     // ── Reprocess ──────────────────────────────────────
     reprocessBtn.addEventListener('click', async () => {

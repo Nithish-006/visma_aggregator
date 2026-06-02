@@ -1955,10 +1955,31 @@ class DatabaseManager:
                         po_filename  VARCHAR(255) DEFAULT NULL,
                         po_path      VARCHAR(500) DEFAULT NULL,
                         description  TEXT DEFAULT NULL,
+                        is_project   TINYINT(1) NOT NULL DEFAULT 1,
                         created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE KEY uk_stem_ci (stem_name)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
+                # Additive migration: add is_project to tables created before the
+                # column existed. is_project = 1 -> a real project, 0 -> an internal
+                # expense head / "other" (office, factory, KVB, sridhar, ...).
+                cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'projects' "
+                    "AND COLUMN_NAME = 'is_project'"
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute(
+                        "ALTER TABLE projects "
+                        "ADD COLUMN is_project TINYINT(1) NOT NULL DEFAULT 1 AFTER description"
+                    )
+                    # Seed the known internal "others" by name (case-insensitive).
+                    # GHEE FACTORY etc. stay projects because we match exact stems.
+                    cursor.execute(
+                        "UPDATE projects SET is_project = 0 "
+                        "WHERE UPPER(TRIM(stem_name)) IN "
+                        "('OFFICE EXPENSE', 'FACTORY EXPENSE', 'KVB', 'SRIDHAR')"
+                    )
                 cursor.close()
             # The PO gist table is joined by list/get; keep it alongside.
             self.ensure_project_pos_table()
@@ -2018,7 +2039,7 @@ class DatabaseManager:
     # SELECT that augments each project row with a compact PO summary (the
     # gist columns the cards/detail need) via a LEFT JOIN on project_pos.
     _PROJECT_SELECT = (
-        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.created_at, "
+        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.is_project, p.created_at, "
         "       pp.po_number AS po_number, pp.total_value AS po_total_value, "
         "       pp.extraction_status AS po_extraction_status "
         "FROM projects p LEFT JOIN project_pos pp ON pp.project_id = p.id"
@@ -2028,6 +2049,7 @@ class DatabaseManager:
     def _decorate_project_row(r: Dict) -> Dict:
         r['display'] = f"{r['id']} - {r['stem_name']}"
         r['has_po'] = bool(r['po_filename'])
+        r['is_project'] = bool(r.get('is_project', 1))
         if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
             r['created_at'] = r['created_at'].isoformat()
         # Coerce DECIMAL -> float for JSON
@@ -2079,15 +2101,20 @@ class DatabaseManager:
             return None
 
     def create_project(self, project_id: int, stem_name: str,
-                       po_filename: str = None, po_path: str = None) -> Tuple[bool, Optional[str]]:
-        """Insert a new project. Returns (ok, error_message)."""
+                       po_filename: str = None, po_path: str = None,
+                       is_project: bool = True) -> Tuple[bool, Optional[str]]:
+        """Insert a new project. Returns (ok, error_message).
+
+        is_project=True marks a real project; False marks an internal
+        "other" (expense head like office/factory/KVB/sridhar).
+        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO projects (id, stem_name, po_filename, po_path) "
-                    "VALUES (%s, %s, %s, %s)",
-                    (project_id, stem_name, po_filename, po_path)
+                    "INSERT INTO projects (id, stem_name, po_filename, po_path, is_project) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (project_id, stem_name, po_filename, po_path, 1 if is_project else 0)
                 )
                 conn.commit()
                 cursor.close()
@@ -2099,6 +2126,24 @@ class DatabaseManager:
             if 'uk_stem_ci' in msg or 'stem_name' in msg:
                 return False, 'duplicate_stem'
             return False, msg
+        except Exception as e:
+            return False, str(e)
+
+    def set_project_type(self, project_id: int, is_project: bool) -> Tuple[bool, Optional[str]]:
+        """Flip a registry entry between real project / internal "other"."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE projects SET is_project = %s WHERE id = %s",
+                    (1 if is_project else 0, project_id)
+                )
+                conn.commit()
+                affected = cursor.rowcount
+                cursor.close()
+                if affected == 0:
+                    return False, 'not_found'
+                return True, None
         except Exception as e:
             return False, str(e)
 

@@ -57,6 +57,19 @@
                 </div>
                 <p id="new-project-collision" class="proj-collision hidden"></p>
 
+                <label class="proj-field-label">Type <span class="proj-optional">(choose one)</span></label>
+                <div class="proj-type-toggle" role="radiogroup" aria-label="Entry type">
+                    <label class="proj-type-option">
+                        <input type="radio" name="is_project" value="1">
+                        <span>Project</span>
+                    </label>
+                    <label class="proj-type-option">
+                        <input type="radio" name="is_project" value="0">
+                        <span>Other (internal)</span>
+                    </label>
+                </div>
+                <p class="proj-type-hint">“Other” is for internal heads like office / factory expense, KVB or sridhar — not a real project.</p>
+
                 <label class="proj-field-label" for="new-project-po">PO document <span class="proj-optional">(optional — can upload later)</span></label>
                 <input id="new-project-po" name="po_file" class="proj-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.docx,.doc">
 
@@ -78,6 +91,21 @@
                 <button class="proj-modal-close" data-close="project-detail-modal" aria-label="Close">×</button>
             </div>
             <div class="proj-modal-body">
+                <div class="proj-detail-type">
+                    <span class="proj-field-label">Type</span>
+                    <div class="proj-type-toggle" role="radiogroup" aria-label="Entry type">
+                        <label class="proj-type-option">
+                            <input type="radio" name="detail_is_project" value="1">
+                            <span>Project</span>
+                        </label>
+                        <label class="proj-type-option">
+                            <input type="radio" name="detail_is_project" value="0">
+                            <span>Other (internal)</span>
+                        </label>
+                    </div>
+                    <span id="detail-type-status" class="proj-type-status"></span>
+                </div>
+
                 <div id="detail-po-existing" class="hidden">
                     <p class="proj-field-label">Purchase Order</p>
                     <div class="proj-po-row">
