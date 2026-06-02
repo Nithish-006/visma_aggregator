@@ -1,8 +1,14 @@
 [phases.setup]
 nixPkgs = ["python311"]
 
+# Nix's python311 exposes `python3` but no bare `pip` on PATH — pip only exists
+# inside a venv. Create one at /opt/venv, install into it, and launch from it.
 [phases.install]
-cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
+cmds = [
+    "python -m venv /opt/venv",
+    "/opt/venv/bin/pip install --upgrade pip",
+    "/opt/venv/bin/pip install -r requirements.txt",
+]
 
 [start]
-cmd = "gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+cmd = "/opt/venv/bin/gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
