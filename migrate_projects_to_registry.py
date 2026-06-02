@@ -118,6 +118,17 @@ MAPPING = {
     'OFFICE/TEKLA':                     '1 - OFFICE EXPENSE',
     'OFFICE (SCHOOL FEES)':             '1 - OFFICE EXPENSE',
     'OFFICE RENT':                      '1 - OFFICE EXPENSE',
+
+    # --- id-prefixed formatting drift (id matches registry, just mis-spaced) ---
+    '2-FACTORY':                        '2 - FACTORY EXPENSE',
+    '659-JAMUNA':                       '659 - JAMUNA',
+    '662 INFINIUM':                     '662 - INFINIUM',
+    '663-SIRUVANI':                     '663 - SIRUVANI',
+    '665-TITAN PAINTS':                 '665 - TITAN PAINTS',
+
+    # --- ambiguous bare names collapsed to canonical (user-approved 2026-06-02) ---
+    'KVB':                              '4 - KVB',
+    'SRIDHAR SIR':                      '5 - SRIDHAR',
 }
 
 

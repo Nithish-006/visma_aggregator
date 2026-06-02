@@ -1800,6 +1800,23 @@
                 `<option value="${cat}">`
             ).join('');
 
+            // Build canonical-only project <select> options. No free-text — the project
+            // for every split must be chosen from the registered (canonical) projects,
+            // matching the inline edit picker (renderCanonicalProjectSelect).
+            const currentProj = row.project || '';
+            const currentProjLower = currentProj.toLowerCase();
+            const isProjCanonical = !currentProj || canonicalProjectSet.has(currentProjLower);
+            let projectOptions = '<option value="">(none)</option>';
+            // If the inherited value is legacy free-text, surface it as a disabled option
+            // so the user sees what was there but is forced to pick a canonical project.
+            if (currentProj && !isProjCanonical) {
+                projectOptions += `<option value="${escapeHtml(currentProj)}" disabled selected>${escapeHtml(currentProj)} — legacy, pick canonical</option>`;
+            }
+            projectOptions += canonicalProjects.map(disp => {
+                const sel = (isProjCanonical && disp.toLowerCase() === currentProjLower) ? ' selected' : '';
+                return `<option value="${escapeHtml(disp)}"${sel}>${escapeHtml(disp)}</option>`;
+            }).join('');
+
             rowCard.innerHTML = `
                 <div class="split-row-header">
                     <span class="split-row-number">Split ${index + 1}</span>
@@ -1821,7 +1838,7 @@
                     </div>
                     <div class="split-field">
                         <label>Project</label>
-                        <input type="text" class="split-project-input" data-index="${index}" value="${escapeHtml(row.project)}" placeholder="Project name">
+                        <select class="split-project-input project-select" data-index="${index}">${projectOptions}</select>
                     </div>
                     <div class="split-field full-width">
                         <label>Notes</label>
@@ -1842,8 +1859,13 @@
             input.addEventListener('input', handleSplitFieldChange);
         });
 
-        document.querySelectorAll('.split-vendor-input, .split-project-input, .split-notes-input').forEach(input => {
+        document.querySelectorAll('.split-vendor-input, .split-notes-input').forEach(input => {
             input.addEventListener('input', handleSplitFieldChange);
+        });
+
+        // Project is a canonical-only <select> — listen for change.
+        document.querySelectorAll('.split-project-input').forEach(select => {
+            select.addEventListener('change', handleSplitFieldChange);
         });
 
         document.querySelectorAll('.split-row-remove').forEach(btn => {
