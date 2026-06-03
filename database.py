@@ -31,6 +31,19 @@ def _txn_dedup_key(description) -> str:
     return f"{norm_prefix}|{split_tag.group(0) if split_tag else ''}"
 
 
+def _split_parent_key(description) -> str:
+    """Normalized signature of a transaction's *base* description (split tag removed).
+
+    A split child is stored as ``"<original description> [SPLIT n/m]"``. Stripping the
+    tag and normalizing yields the same value as the original (untagged) description,
+    so this key lets us recognize when an incoming upload row is the parent of an
+    already-existing split group. Returns '' for blank descriptions.
+    """
+    s = '' if description is None else str(description)
+    base = _SPLIT_TAG_RE.sub('', s)
+    return _NON_ALNUM_RE.sub('', base).upper()
+
+
 class DatabaseConfig:
     """Database configuration - uses settings from config.py"""
     HOST = Config.DB_HOST
@@ -258,6 +271,46 @@ class DatabaseManager:
             if intra_dupes:
                 print(f"[*] Filtered {intra_dupes} intra-file duplicate(s) before insert")
 
+        # Guard against resurrecting already-split originals.
+        # When a transaction is split, the original row is deleted and replaced by
+        # child rows tagged "[SPLIT n/m]" (with smaller amounts). The dedup key
+        # (uk_txn_dedup) intentionally distinguishes those children from the original,
+        # so a later re-upload of the same statement would re-insert the untagged
+        # original and create a double entry. Detect incoming untagged rows that match
+        # an existing split group (same date + base description) and drop them.
+        resurrected = 0
+        try:
+            split_parents = set()
+            with self.get_connection() as conn:
+                pc = conn.cursor()
+                pc.execute(
+                    f"SELECT transaction_date, transaction_description FROM {table} "
+                    f"WHERE transaction_description LIKE %s",
+                    ('%[SPLIT%',))
+                for pdate, pdesc in pc.fetchall():
+                    split_parents.add((str(pdate), _split_parent_key(pdesc)))
+                pc.close()
+
+            if split_parents and len(df) > 0:
+                def _is_resurrected_original(row):
+                    desc = row['Transaction Description']
+                    desc_s = '' if desc is None else str(desc)
+                    if _SPLIT_TAG_RE.search(desc_s):
+                        return False  # this row is itself a split child, leave it
+                    rdate = row['Date']
+                    rdate = rdate.date() if hasattr(rdate, 'date') else rdate
+                    return (str(rdate), _split_parent_key(desc_s)) in split_parents
+
+                pre = len(df)
+                mask = df.apply(_is_resurrected_original, axis=1)
+                resurrected = int(mask.sum())
+                if resurrected:
+                    df = df[~mask]
+                    print(f"[*] Skipped {resurrected} already-split original(s) to prevent double entries")
+        except Exception as e:
+            # Never let the guard block a legitimate upload; just log and continue.
+            print(f"[!] Split-parent guard skipped due to error: {e}")
+
         # Use INSERT IGNORE to skip duplicates silently
         query_template = f"""
         INSERT IGNORE INTO {table} (
@@ -319,7 +372,7 @@ class DatabaseManager:
                 # INSERT IGNORE returns rowcount = number of actually inserted rows
                 results['inserted'] = total_affected
                 db_dupes = len(rows_to_insert) - total_affected - results['errors']
-                results['duplicates'] = intra_dupes + db_dupes
+                results['duplicates'] = intra_dupes + db_dupes + resurrected
 
                 print(f"[+] Bulk insert complete: {results['inserted']} inserted, {results['duplicates']} duplicates, {results['errors']} errors")
 
