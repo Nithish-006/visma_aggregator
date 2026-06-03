@@ -869,13 +869,20 @@ body {
 }
 
 /* Column specific styling - Project */
+/* Show the full project name: allow the cell (and its pill) to wrap instead
+   of clipping with an ellipsis. */
 .transactions-table th:nth-child(5),
 .transactions-table td:nth-child(5) {
-    min-width: 100px;
-    max-width: 140px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 120px;
+    max-width: 240px;
+    white-space: normal;
+    overflow: visible;
+    word-break: break-word;
+}
+
+.transactions-table td:nth-child(5) .project-pill {
+    white-space: normal;
+    word-break: break-word;
 }
 
 /* Amount columns - Debit */
