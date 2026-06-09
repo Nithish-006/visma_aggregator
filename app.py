@@ -880,10 +880,11 @@ def _attach_client_payments(projects):
     """Enrich each canonical project with `received_total` — the sum of
     incoming client payments (KVB credits) that belong to it.
 
-    KVB credit rows carry a free-text `project` string; we bucket their totals
-    by normalized stem (first token, alias-normalized) and assign each canonical
-    project the bucket matching its own stem. This mirrors the stem-based
-    matching used everywhere else in the app (see robust_filter_by_project).
+    Client-payment credit rows are tagged with the canonical project in the same
+    "<id> - NAME" form shown in the project registry (e.g. "647 - POLSONS"). The
+    id is the unique key, so matching is an exact id match: a credit counts for a
+    project only when its id prefix equals that project's id. No fuzzy/stem
+    matching — a credit that is untagged (no id prefix) is left unassigned.
     """
     try:
         rows = db_manager.get_kvb_credit_by_project()
@@ -891,18 +892,16 @@ def _attach_client_payments(projects):
         print(f"[!] Could not load client payments: {e}")
         rows = []
 
-    received_by_stem = {}
+    received_by_id = {}
     for proj_str, amount in rows:
-        stems = get_project_stems(proj_str)
-        if not stems:
-            continue
-        stem = normalize_project_stem(stems[0])
-        received_by_stem[stem] = received_by_stem.get(stem, 0.0) + float(amount or 0)
+        m = re.match(r'^\s*(\d+)\s*-', proj_str or '')
+        if not m:
+            continue  # untagged credit — not tied to a canonical project id
+        pid = int(m.group(1))
+        received_by_id[pid] = received_by_id.get(pid, 0.0) + float(amount or 0)
 
     for p in projects:
-        stems = get_project_stems(p.get('stem_name', ''))
-        stem = normalize_project_stem(stems[0]) if stems else ''
-        p['received_total'] = received_by_stem.get(stem, 0.0)
+        p['received_total'] = received_by_id.get(p.get('id'), 0.0)
     return projects
 
 
