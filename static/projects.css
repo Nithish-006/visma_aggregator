@@ -609,12 +609,14 @@ html, body {
 }
 
 .proj-fin-v {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 700;
     line-height: 1.15;
     color: var(--proj-text);
     font-variant-numeric: tabular-nums;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .proj-fin-v.received { color: var(--proj-accent-strong); }
 .proj-fin-v.due      { color: var(--proj-danger); }

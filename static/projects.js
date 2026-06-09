@@ -78,19 +78,22 @@
         // instead of cramped abbreviated pills that wrapped onto each other.
         const cells = [];
         if (hasPoValue) {
-            cells.push(financeCell('PO Value', formatINR(poValue), '', 'Total purchase-order value'));
+            cells.push(financeCell('PO Value', formatINRCompact(poValue), '',
+                `Total purchase-order value: ${formatINR(poValue)}`));
         } else if (p.po_extraction_status === 'failed') {
             cells.push(financeCell('PO Value', 'Pending', 'pending', 'Auto-read failed — open to enter manually'));
         }
         if (received > 0 || hasPoValue) {
-            cells.push(financeCell('Received', received > 0 ? formatINR(received) : '—',
-                received > 0 ? 'received' : 'muted', 'Client payments received'));
+            cells.push(financeCell('Received', received > 0 ? formatINRCompact(received) : '—',
+                received > 0 ? 'received' : 'muted',
+                received > 0 ? `Client payments received: ${formatINR(received)}` : 'Client payments received'));
         }
         if (hasPoValue) {
             const bal = poValue - received;
             const settled = bal <= 0.5;
-            cells.push(financeCell('Balance', settled ? 'Settled' : formatINR(bal),
-                settled ? 'settled' : 'due', settled ? 'Fully received' : 'Balance due (PO value − received)'));
+            cells.push(financeCell('Balance', settled ? 'Settled' : formatINRCompact(bal),
+                settled ? 'settled' : 'due',
+                settled ? 'Fully received' : `Balance due (PO value − received): ${formatINR(bal)}`));
         }
         const financeBlock = cells.length ? `<div class="project-finance">${cells.join('')}</div>` : '';
 
@@ -156,6 +159,17 @@
     function formatINR(value) {
         const n = Number(value) || 0;
         return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    }
+
+    // Compact Indian-format for the card finance strip so values stay on a
+    // single line (e.g. 22165179 -> ₹2.22 Cr, 6640450 -> ₹66.40 L).
+    function formatINRCompact(value) {
+        const n = Number(value) || 0;
+        const sign = n < 0 ? '-' : '';
+        const abs = Math.abs(n);
+        if (abs >= 1e7) return `${sign}₹${(abs / 1e7).toFixed(2)} Cr`;
+        if (abs >= 1e5) return `${sign}₹${(abs / 1e5).toFixed(2)} L`;
+        return sign + '₹' + abs.toLocaleString('en-IN', { maximumFractionDigits: 0 });
     }
 
     // ── Load ───────────────────────────────────────────
