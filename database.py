@@ -2123,6 +2123,31 @@ class DatabaseManager:
             print(f"[!] Error listing projects: {e}")
             return []
 
+    def get_kvb_credit_by_project(self) -> List[Tuple[str, float]]:
+        """Sum incoming client payments (KVB credit amounts) grouped by the
+        raw project string on each transaction.
+
+        Returns [(project_string, total_credit), ...]. The caller maps these
+        free-text project strings onto canonical projects by stem. Only credit
+        (cr_amount > 0) rows count — those are money received from clients.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT TRIM(project) AS project, COALESCE(SUM(cr_amount), 0) AS received "
+                    "FROM kvb_transactions "
+                    "WHERE cr_amount IS NOT NULL AND cr_amount > 0 "
+                    "  AND project IS NOT NULL AND TRIM(project) != '' "
+                    "GROUP BY TRIM(project)"
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return [(r[0], float(r[1] or 0)) for r in rows]
+        except Exception as e:
+            print(f"[!] Error fetching KVB credit by project: {e}")
+            return []
+
     def get_project(self, project_id: int) -> Optional[Dict]:
         try:
             with self.get_connection() as conn:

@@ -876,11 +876,42 @@ def projects_page():
     return render_template('projects.html')
 
 
+def _attach_client_payments(projects):
+    """Enrich each canonical project with `received_total` — the sum of
+    incoming client payments (KVB credits) that belong to it.
+
+    KVB credit rows carry a free-text `project` string; we bucket their totals
+    by normalized stem (first token, alias-normalized) and assign each canonical
+    project the bucket matching its own stem. This mirrors the stem-based
+    matching used everywhere else in the app (see robust_filter_by_project).
+    """
+    try:
+        rows = db_manager.get_kvb_credit_by_project()
+    except Exception as e:
+        print(f"[!] Could not load client payments: {e}")
+        rows = []
+
+    received_by_stem = {}
+    for proj_str, amount in rows:
+        stems = get_project_stems(proj_str)
+        if not stems:
+            continue
+        stem = normalize_project_stem(stems[0])
+        received_by_stem[stem] = received_by_stem.get(stem, 0.0) + float(amount or 0)
+
+    for p in projects:
+        stems = get_project_stems(p.get('stem_name', ''))
+        stem = normalize_project_stem(stems[0]) if stems else ''
+        p['received_total'] = received_by_stem.get(stem, 0.0)
+    return projects
+
+
 @app.route('/api/projects', methods=['GET'])
 @login_required
 def api_list_projects():
     db_manager.ensure_projects_table()
-    return jsonify({'projects': db_manager.list_projects()})
+    projects = _attach_client_payments(db_manager.list_projects())
+    return jsonify({'projects': projects})
 
 
 @app.route('/api/projects', methods=['POST'])

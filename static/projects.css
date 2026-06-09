@@ -597,6 +597,101 @@ html, body {
     font-weight: 600;
 }
 
+/* Group of money chips on a card (PO / Received / Balance) */
+.project-finance {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+/* Client payments received */
+.project-received-chip {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+    white-space: nowrap;
+}
+
+/* Outstanding balance against the PO */
+.project-balance-chip {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--proj-danger);
+    background: var(--proj-danger-soft);
+    white-space: nowrap;
+}
+.project-balance-chip.settled {
+    color: var(--proj-success);
+    background: var(--proj-success-soft);
+}
+
+/* ── Payments vs PO (detail modal) ───────────────────── */
+.proj-payments {
+    margin: 0.85rem 0 0.5rem;
+    padding: 0.85rem 0.95rem;
+    background: var(--proj-surface-soft);
+    border: 1px solid var(--proj-border);
+    border-radius: 10px;
+}
+.proj-pay-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+.proj-pay-pct {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+    padding: 0.12rem 0.5rem;
+    border-radius: 999px;
+}
+.proj-pay-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+}
+.proj-pay-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.proj-pay-k {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--proj-text-muted);
+}
+.proj-pay-v {
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--proj-text);
+}
+.proj-pay-v.received { color: var(--proj-accent-strong); }
+.proj-pay-v.due { color: var(--proj-danger); }
+.proj-pay-v.settled { color: var(--proj-success); }
+.proj-pay-bar {
+    margin-top: 0.7rem;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--proj-border);
+    overflow: hidden;
+}
+.proj-pay-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--proj-accent);
+    transition: width 0.3s ease;
+}
+
 /* ── PO gist (detail modal) ──────────────────────────── */
 .proj-po-gist { margin: 0.85rem 0 0.25rem; }
 .proj-gist-loading,

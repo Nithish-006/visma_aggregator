@@ -34,6 +34,8 @@
 
     const toast = document.getElementById('proj-toast');
 
+    const detailPayments = document.getElementById('detail-payments');
+
     const detailTypeStatus = document.getElementById('detail-type-status');
     const detailTypeRadios = () => Array.from(detailModal.querySelectorAll('input[name="detail_is_project"]'));
 
@@ -60,11 +62,25 @@
         const badge = p.has_po
             ? `<span class="project-po-badge has-po">PO uploaded</span>`
             : `<span class="project-po-badge no-po">No PO yet</span>`;
+        const poValue = Number(p.po_total_value) || 0;
+        const received = Number(p.received_total) || 0;
         const valueChip = (p.po_total_value != null && p.po_total_value > 0)
-            ? `<span class="project-value-chip" title="Total project value">${formatINR(p.po_total_value)}</span>`
+            ? `<span class="project-value-chip" title="Total PO value">PO ${formatINR(p.po_total_value)}</span>`
             : (p.po_extraction_status === 'failed'
                 ? `<span class="project-value-chip pending" title="Auto-read failed — open to enter manually">value pending</span>`
                 : '');
+        const receivedChip = received > 0
+            ? `<span class="project-received-chip" title="Client payments received (KVB credits)">Recd ${formatINR(received)}</span>`
+            : '';
+        // Balance only makes sense when we know the PO value to measure against.
+        let balanceChip = '';
+        if (poValue > 0) {
+            const bal = poValue - received;
+            balanceChip = bal > 0.5
+                ? `<span class="project-balance-chip" title="Balance due (PO value − received)">Bal ${formatINR(bal)}</span>`
+                : `<span class="project-balance-chip settled" title="Fully received">Fully received</span>`;
+        }
+        const financeChips = `${valueChip}${receivedChip}${balanceChip}`;
         card.innerHTML = `
             <div class="project-card-main">
                 <span class="project-card-id">${p.id}</span>
@@ -73,7 +89,7 @@
             </div>
             <div class="project-card-meta">
                 ${badge}
-                ${valueChip}
+                ${financeChips ? `<span class="project-finance">${financeChips}</span>` : ''}
                 ${created ? `<span class="project-created">Added ${created}</span>` : ''}
             </div>
         `;
@@ -272,6 +288,7 @@
         if (!p) return;
         activeProjectId = projectId;
         detailTitle.textContent = `${p.id} − ${p.stem_name}`;
+        renderPayments(p);
         // Reflect current type in the toggle
         const wantVal = (p.is_project === false) ? '0' : '1';
         detailTypeRadios().forEach(r => { r.checked = (r.value === wantVal); });
@@ -296,6 +313,42 @@
             detailUploadLabel.textContent = `Upload PO document for "${p.stem_name}"`;
         }
         openModal(detailModal);
+    }
+
+    // ── PO value vs client payments received ──────────
+    function renderPayments(p) {
+        const po = Number(p.po_total_value) || 0;
+        const rec = Number(p.received_total) || 0;
+        if (po <= 0 && rec <= 0) {
+            detailPayments.classList.add('hidden');
+            detailPayments.innerHTML = '';
+            return;
+        }
+        const bal = po - rec;
+        const pct = po > 0 ? Math.min(100, Math.round((rec / po) * 100)) : null;
+        const balLabel = bal < -0.5 ? 'Excess' : 'Balance';
+        const balCls = bal > 0.5 ? 'due' : 'settled';
+        detailPayments.innerHTML = `
+            <div class="proj-pay-head">
+                <span class="proj-field-label">Payments vs PO</span>
+                ${pct != null ? `<span class="proj-pay-pct">${pct}% received</span>` : ''}
+            </div>
+            <div class="proj-pay-grid">
+                <div class="proj-pay-cell">
+                    <span class="proj-pay-k">PO value</span>
+                    <span class="proj-pay-v">${po > 0 ? formatINR(po) : '—'}</span>
+                </div>
+                <div class="proj-pay-cell">
+                    <span class="proj-pay-k">Received</span>
+                    <span class="proj-pay-v received">${formatINR(rec)}</span>
+                </div>
+                <div class="proj-pay-cell">
+                    <span class="proj-pay-k">${balLabel}</span>
+                    <span class="proj-pay-v ${balCls}">${po > 0 ? formatINR(Math.abs(bal)) : '—'}</span>
+                </div>
+            </div>
+            ${pct != null ? `<div class="proj-pay-bar"><div class="proj-pay-bar-fill" style="width:${pct}%"></div></div>` : ''}`;
+        detailPayments.classList.remove('hidden');
     }
 
     let currentPo = null;
