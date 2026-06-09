@@ -282,11 +282,6 @@ html, body {
     margin-right: 1px;
 }
 
-/* dash is only meaningful in the old inline layout */
-.project-card-dash {
-    display: none;
-}
-
 /* Project name — the clear focal point of each tile */
 .project-card-stem {
     font-size: 1.3rem;
@@ -581,55 +576,51 @@ html, body {
 
 .proj-toast.hidden { opacity: 0; pointer-events: none; }
 
-/* ── Card total-value chip ───────────────────────────── */
-.project-value-chip {
-    padding: 0.18rem 0.6rem;
-    border-radius: 999px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--proj-success);
-    background: var(--proj-success-soft);
-    white-space: nowrap;
-}
-.project-value-chip.pending {
-    color: var(--proj-warning);
-    background: var(--proj-warning-soft);
-    font-weight: 600;
+/* ── Card finance strip (PO Value / Received / Balance) ──
+   A clean, aligned row of labelled stats. Replaces the old cramped pills
+   that wrapped onto each other and used cryptic abbreviations ("Recd"). */
+.project-card-foot {
+    display: flex;
+    flex-direction: column;
 }
 
-/* Group of money chips on a card (PO / Received / Balance) */
 .project-finance {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex-wrap: wrap;
+    display: flex;
+    gap: 0.65rem;
+    margin-top: 0.85rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--proj-border);
 }
 
-/* Client payments received */
-.project-received-chip {
-    padding: 0.18rem 0.6rem;
-    border-radius: 999px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: var(--proj-accent-strong);
-    background: var(--proj-accent-soft);
-    white-space: nowrap;
+.proj-fin-cell {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
-/* Outstanding balance against the PO */
-.project-balance-chip {
-    padding: 0.18rem 0.6rem;
-    border-radius: 999px;
-    font-size: 0.82rem;
+.proj-fin-k {
+    font-size: 0.64rem;
     font-weight: 700;
-    color: var(--proj-danger);
-    background: var(--proj-danger-soft);
-    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--proj-text-muted);
 }
-.project-balance-chip.settled {
-    color: var(--proj-success);
-    background: var(--proj-success-soft);
+
+.proj-fin-v {
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--proj-text);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
 }
+.proj-fin-v.received { color: var(--proj-accent-strong); }
+.proj-fin-v.due      { color: var(--proj-danger); }
+.proj-fin-v.settled  { color: var(--proj-success); }
+.proj-fin-v.pending  { color: var(--proj-warning); font-weight: 600; }
+.proj-fin-v.muted    { color: var(--proj-text-muted); font-weight: 600; }
 
 /* ── Payments vs PO (detail modal) ───────────────────── */
 .proj-payments {

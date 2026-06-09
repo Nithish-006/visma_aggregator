@@ -53,6 +53,14 @@
     }
 
     // ── Render ─────────────────────────────────────────
+    // One labelled stat in a card's finance strip.
+    function financeCell(label, value, cls, title) {
+        return `<div class="proj-fin-cell"${title ? ` title="${escapeHtml(title)}"` : ''}>
+            <span class="proj-fin-k">${label}</span>
+            <span class="proj-fin-v ${cls}">${value}</span>
+        </div>`;
+    }
+
     function buildCard(p) {
         const card = document.createElement('button');
         card.type = 'button';
@@ -64,33 +72,39 @@
             : `<span class="project-po-badge no-po">No PO yet</span>`;
         const poValue = Number(p.po_total_value) || 0;
         const received = Number(p.received_total) || 0;
-        const valueChip = (p.po_total_value != null && p.po_total_value > 0)
-            ? `<span class="project-value-chip" title="Total PO value">PO ${formatINR(p.po_total_value)}</span>`
-            : (p.po_extraction_status === 'failed'
-                ? `<span class="project-value-chip pending" title="Auto-read failed — open to enter manually">value pending</span>`
-                : '');
-        const receivedChip = received > 0
-            ? `<span class="project-received-chip" title="Client payments received (KVB credits)">Recd ${formatINR(received)}</span>`
-            : '';
-        // Balance only makes sense when we know the PO value to measure against.
-        let balanceChip = '';
-        if (poValue > 0) {
-            const bal = poValue - received;
-            balanceChip = bal > 0.5
-                ? `<span class="project-balance-chip" title="Balance due (PO value − received)">Bal ${formatINR(bal)}</span>`
-                : `<span class="project-balance-chip settled" title="Fully received">Fully received</span>`;
+        const hasPoValue = p.po_total_value != null && poValue > 0;
+
+        // A clean, aligned finance strip — one labelled stat per column —
+        // instead of cramped abbreviated pills that wrapped onto each other.
+        const cells = [];
+        if (hasPoValue) {
+            cells.push(financeCell('PO Value', formatINR(poValue), '', 'Total purchase-order value'));
+        } else if (p.po_extraction_status === 'failed') {
+            cells.push(financeCell('PO Value', 'Pending', 'pending', 'Auto-read failed — open to enter manually'));
         }
-        const financeChips = `${valueChip}${receivedChip}${balanceChip}`;
+        if (received > 0 || hasPoValue) {
+            cells.push(financeCell('Received', received > 0 ? formatINR(received) : '—',
+                received > 0 ? 'received' : 'muted', 'Client payments received'));
+        }
+        if (hasPoValue) {
+            const bal = poValue - received;
+            const settled = bal <= 0.5;
+            cells.push(financeCell('Balance', settled ? 'Settled' : formatINR(bal),
+                settled ? 'settled' : 'due', settled ? 'Fully received' : 'Balance due (PO value − received)'));
+        }
+        const financeBlock = cells.length ? `<div class="project-finance">${cells.join('')}</div>` : '';
+
         card.innerHTML = `
             <div class="project-card-main">
                 <span class="project-card-id">${p.id}</span>
-                <span class="project-card-dash">−</span>
                 <span class="project-card-stem">${escapeHtml(p.stem_name)}</span>
             </div>
-            <div class="project-card-meta">
-                ${badge}
-                ${financeChips ? `<span class="project-finance">${financeChips}</span>` : ''}
-                ${created ? `<span class="project-created">Added ${created}</span>` : ''}
+            <div class="project-card-foot">
+                <div class="project-card-meta">
+                    ${badge}
+                    ${created ? `<span class="project-created">Added ${created}</span>` : ''}
+                </div>
+                ${financeBlock}
             </div>
         `;
         card.addEventListener('click', () => openDetail(p.id));
