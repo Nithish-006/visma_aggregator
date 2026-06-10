@@ -947,14 +947,17 @@ def api_create_project():
         return jsonify({'error': 'id and stem_name are required'}), 400
 
     # Type must be chosen explicitly — we never default a new entry to "project".
-    raw_type = (request.form.get('is_project') or '').strip().lower()
-    if raw_type in ('1', 'true', 'yes', 'project'):
-        is_project = True
-    elif raw_type in ('0', 'false', 'no', 'other'):
-        is_project = False
-    else:
+    # Accept the new project_type field, with a fallback to the legacy is_project.
+    raw_type = (request.form.get('project_type') or request.form.get('is_project') or '').strip().lower()
+    type_aliases = {
+        '1': 'project', 'true': 'project', 'yes': 'project', 'project': 'project',
+        'design': 'design', 'designs': 'design',
+        '0': 'other', 'false': 'other', 'no': 'other', 'other': 'other',
+    }
+    project_type = type_aliases.get(raw_type)
+    if project_type is None:
         return jsonify({'error': 'type_required',
-                        'message': 'Choose a type: Project or Other (internal).'}), 400
+                        'message': 'Choose a type: Project, Design or Other (internal).'}), 400
     try:
         project_id = int(raw_id)
     except ValueError:
@@ -993,7 +996,7 @@ def api_create_project():
         po_rel_path = os.path.relpath(po_save_path, app.config['UPLOAD_FOLDER']).replace('\\', '/')
         file.save(po_save_path)
 
-    ok, err = db_manager.create_project(project_id, stem, po_filename, po_rel_path, is_project)
+    ok, err = db_manager.create_project(project_id, stem, po_filename, po_rel_path, project_type)
     if not ok:
         if po_save_path and os.path.exists(po_save_path):
             try:
@@ -1020,22 +1023,30 @@ def api_create_project():
 @app.route('/api/projects/<int:project_id>', methods=['PATCH'])
 @login_required
 def api_update_project(project_id):
-    """Update an existing registry entry. Currently supports flipping the type
-    between a real project and an internal "other" via the is_project flag.
+    """Update an existing registry entry. Supports changing the type between
+    'project', 'design' and 'other'.
 
-    JSON body: { "is_project": true|false }
+    JSON body: { "project_type": "project"|"design"|"other" }
+    (legacy: { "is_project": true|false } is still accepted)
     """
     project = db_manager.get_project(project_id)
     if not project:
         return jsonify({'error': 'not_found'}), 404
 
     data = request.get_json(silent=True) or {}
-    if 'is_project' not in data:
+    if 'project_type' in data:
+        project_type = str(data['project_type']).strip().lower()
+    elif 'is_project' in data:
+        project_type = 'project' if bool(data['is_project']) else 'other'
+    else:
         return jsonify({'error': 'nothing_to_update',
                         'message': 'No supported fields provided'}), 400
 
-    is_project = bool(data['is_project'])
-    ok, err = db_manager.set_project_type(project_id, is_project)
+    if project_type not in db_manager.VALID_PROJECT_TYPES:
+        return jsonify({'error': 'invalid_type',
+                        'message': 'Type must be project, design or other.'}), 400
+
+    ok, err = db_manager.set_project_type(project_id, project_type)
     if not ok:
         if err == 'not_found':
             return jsonify({'error': 'not_found'}), 404

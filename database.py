@@ -2009,6 +2009,7 @@ class DatabaseManager:
                         po_path      VARCHAR(500) DEFAULT NULL,
                         description  TEXT DEFAULT NULL,
                         is_project   TINYINT(1) NOT NULL DEFAULT 1,
+                        project_type VARCHAR(16) NOT NULL DEFAULT 'project',
                         created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE KEY uk_stem_ci (stem_name)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -2033,6 +2034,21 @@ class DatabaseManager:
                         "WHERE UPPER(TRIM(stem_name)) IN "
                         "('OFFICE EXPENSE', 'FACTORY EXPENSE', 'KVB', 'SRIDHAR')"
                     )
+                # Additive migration: project_type supersedes the is_project boolean
+                # with a third option ("design"). is_project is kept in sync (1 only
+                # for real projects) so any older reader still works.
+                cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'projects' "
+                    "AND COLUMN_NAME = 'project_type'"
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute(
+                        "ALTER TABLE projects "
+                        "ADD COLUMN project_type VARCHAR(16) NOT NULL DEFAULT 'project' AFTER is_project"
+                    )
+                    cursor.execute("UPDATE projects SET project_type = 'project' WHERE is_project = 1")
+                    cursor.execute("UPDATE projects SET project_type = 'other' WHERE is_project = 0")
                 cursor.close()
             # The PO gist table is joined by list/get; keep it alongside.
             self.ensure_project_pos_table()
@@ -2125,17 +2141,28 @@ class DatabaseManager:
     # SELECT that augments each project row with a compact PO summary (the
     # gist columns the cards/detail need) via a LEFT JOIN on project_pos.
     _PROJECT_SELECT = (
-        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.is_project, p.created_at, "
+        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.is_project, p.project_type, p.created_at, "
         "       pp.po_number AS po_number, pp.total_value AS po_total_value, "
         "       pp.extraction_status AS po_extraction_status "
         "FROM projects p LEFT JOIN project_pos pp ON pp.project_id = p.id"
     )
 
+    # The three registry buckets. is_project is kept for backward compatibility
+    # and is true only for the canonical "project" type.
+    VALID_PROJECT_TYPES = ('project', 'design', 'other')
+
     @staticmethod
     def _decorate_project_row(r: Dict) -> Dict:
         r['display'] = f"{r['id']} - {r['stem_name']}"
         r['has_po'] = bool(r['po_filename'])
-        r['is_project'] = bool(r.get('is_project', 1))
+        # project_type is the source of truth; fall back to the legacy boolean
+        # for any row that predates the column.
+        ptype = (r.get('project_type') or
+                 ('project' if r.get('is_project', 1) else 'other'))
+        if ptype not in DatabaseManager.VALID_PROJECT_TYPES:
+            ptype = 'project'
+        r['project_type'] = ptype
+        r['is_project'] = (ptype == 'project')
         if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
             r['created_at'] = r['created_at'].isoformat()
         # Coerce DECIMAL -> float for JSON
@@ -2297,19 +2324,24 @@ class DatabaseManager:
 
     def create_project(self, project_id: int, stem_name: str,
                        po_filename: str = None, po_path: str = None,
-                       is_project: bool = True) -> Tuple[bool, Optional[str]]:
+                       project_type: str = 'project') -> Tuple[bool, Optional[str]]:
         """Insert a new project. Returns (ok, error_message).
 
-        is_project=True marks a real project; False marks an internal
-        "other" (expense head like office/factory/KVB/sridhar).
+        project_type is one of 'project' (a real client/site project),
+        'design' (design-only work), or 'other' (internal expense head like
+        office/factory/KVB/sridhar). is_project is stored in sync (1 only for
+        'project') for backward compatibility.
         """
+        if project_type not in self.VALID_PROJECT_TYPES:
+            project_type = 'project'
+        is_project = 1 if project_type == 'project' else 0
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO projects (id, stem_name, po_filename, po_path, is_project) "
-                    "VALUES (%s, %s, %s, %s, %s)",
-                    (project_id, stem_name, po_filename, po_path, 1 if is_project else 0)
+                    "INSERT INTO projects (id, stem_name, po_filename, po_path, is_project, project_type) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (project_id, stem_name, po_filename, po_path, is_project, project_type)
                 )
                 conn.commit()
                 cursor.close()
@@ -2324,14 +2356,18 @@ class DatabaseManager:
         except Exception as e:
             return False, str(e)
 
-    def set_project_type(self, project_id: int, is_project: bool) -> Tuple[bool, Optional[str]]:
-        """Flip a registry entry between real project / internal "other"."""
+    def set_project_type(self, project_id: int, project_type: str) -> Tuple[bool, Optional[str]]:
+        """Change a registry entry's type to 'project', 'design' or 'other'.
+        Keeps the legacy is_project boolean in sync (1 only for 'project')."""
+        if project_type not in self.VALID_PROJECT_TYPES:
+            return False, 'invalid_type'
+        is_project = 1 if project_type == 'project' else 0
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "UPDATE projects SET is_project = %s WHERE id = %s",
-                    (1 if is_project else 0, project_id)
+                    "UPDATE projects SET project_type = %s, is_project = %s WHERE id = %s",
+                    (project_type, is_project, project_id)
                 )
                 conn.commit()
                 affected = cursor.rowcount

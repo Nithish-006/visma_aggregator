@@ -15,6 +15,9 @@
     --proj-accent-strong: #4338ca;
     --proj-accent-soft:   rgba(99, 102, 241, 0.12);
     --proj-accent-2:      #0891b2;
+    --proj-design:        #0e7490;      /* teal — Designs */
+    --proj-design-strong: #155e75;
+    --proj-design-soft:   rgba(8, 145, 178, 0.14);
     --proj-success:       #047857;
     --proj-success-soft:  rgba(16, 185, 129, 0.12);
     --proj-danger:        #b91c1c;
@@ -210,6 +213,39 @@ html, body {
 .proj-section--others .project-card-id {
     color: var(--proj-warning);
     background: var(--proj-warning-soft);
+}
+
+/* "Projects" — subtle indigo tint so the bucket reads as the primary type. */
+.proj-section--projects .project-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f3f4ff 100%);
+    border-color: rgba(99, 102, 241, 0.20);
+}
+.proj-section--projects .project-card:hover {
+    border-color: var(--proj-accent);
+    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+    box-shadow: 0 10px 30px rgba(67, 56, 202, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* "Designs" — teal accent + tinted header rule and cards. */
+.proj-section--designs .proj-section-head {
+    border-bottom-color: rgba(8, 145, 178, 0.35);
+}
+.proj-section--designs .proj-section-count {
+    color: var(--proj-design);
+    background: var(--proj-design-soft);
+}
+.proj-section--designs .project-card {
+    background: linear-gradient(145deg, #ffffff 0%, #ecfdff 100%);
+    border-color: rgba(8, 145, 178, 0.26);
+}
+.proj-section--designs .project-card:hover {
+    border-color: var(--proj-design);
+    background: linear-gradient(145deg, #f0fdff 0%, #cffafe 100%);
+    box-shadow: 0 10px 30px rgba(8, 145, 178, 0.18), 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.proj-section--designs .project-card-id {
+    color: var(--proj-design);
+    background: var(--proj-design-soft);
 }
 
 .proj-loading,
@@ -965,7 +1001,11 @@ html, body {
     color: var(--proj-text-muted);
     font-weight: 500;
 }
-.proj-po-actions { margin-top: 0.6rem; }
+.proj-po-actions {
+    display: flex;
+    gap: 0.6rem;
+}
+.proj-po-actions button { flex: 1; }
 
 @media (max-width: 640px) {
     .proj-gist-grid { grid-template-columns: 1fr; }
@@ -991,7 +1031,8 @@ html, body {
 
 /* ── Type toggle (project ↔ other) ──────────────────── */
 .proj-type-toggle {
-    display: inline-flex;
+    display: flex;
+    width: 100%;
     gap: 0.4rem;
     background: var(--proj-surface-soft);
     border: 1px solid var(--proj-border-strong);
@@ -1002,6 +1043,7 @@ html, body {
 .proj-type-option {
     position: relative;
     cursor: pointer;
+    flex: 1;
 }
 
 .proj-type-option input {
@@ -1013,8 +1055,9 @@ html, body {
 }
 
 .proj-type-option span {
-    display: inline-block;
-    padding: 0.4rem 0.9rem;
+    display: block;
+    text-align: center;
+    padding: 0.45rem 0.6rem;
     border-radius: 8px;
     font-size: 0.85rem;
     font-weight: 600;
@@ -1023,10 +1066,19 @@ html, body {
     user-select: none;
 }
 
+/* Selected segment — colour echoes the section it maps to. */
 .proj-type-option input:checked + span {
     background: linear-gradient(135deg, #818cf8 0%, var(--proj-accent-strong) 100%);
     color: #ffffff;
     box-shadow: 0 2px 8px rgba(67, 56, 202, 0.25);
+}
+.proj-type-option input[value="design"]:checked + span {
+    background: linear-gradient(135deg, #22d3ee 0%, var(--proj-design) 100%);
+    box-shadow: 0 2px 8px rgba(8, 145, 178, 0.25);
+}
+.proj-type-option input[value="other"]:checked + span {
+    background: linear-gradient(135deg, #fbbf24 0%, var(--proj-warning) 100%);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
 }
 
 .proj-type-option input:focus-visible + span {
@@ -1042,22 +1094,36 @@ html, body {
 
 /* Detail-modal type row */
 /* Edit panel — hidden until the header "Edit" button is pressed. A dashed
-   frame visually sets the editing controls apart from the read-only summary. */
+   frame visually sets the editing controls apart from the read-only summary.
+   Inside, each control is its own labelled row so Type and PO actions line up
+   symmetrically. */
 .proj-edit-panel {
     margin-top: 1rem;
-    padding: 0.95rem 1rem;
+    padding: 1rem 1.1rem;
     border: 1px dashed var(--proj-accent);
     border-radius: 10px;
     background: var(--proj-accent-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
 }
-.proj-po-admin { margin-top: 0.9rem; }
-
-.proj-detail-type {
+.proj-edit-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+.proj-edit-row + .proj-edit-row {
+    padding-top: 1rem;
+    border-top: 1px solid var(--proj-border);
+}
+.proj-edit-row > .proj-field-label { margin: 0; }
+.proj-edit-row-head {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 0.6rem 0.85rem;
+    justify-content: space-between;
+    gap: 0.5rem;
 }
+.proj-edit-row-head .proj-field-label { margin: 0; }
 
 .proj-detail-type .proj-field-label {
     margin: 0;

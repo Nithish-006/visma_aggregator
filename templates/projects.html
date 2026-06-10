@@ -60,15 +60,19 @@
                 <label class="proj-field-label">Type <span class="proj-optional">(choose one)</span></label>
                 <div class="proj-type-toggle" role="radiogroup" aria-label="Entry type">
                     <label class="proj-type-option">
-                        <input type="radio" name="is_project" value="1">
+                        <input type="radio" name="project_type" value="project">
                         <span>Project</span>
                     </label>
                     <label class="proj-type-option">
-                        <input type="radio" name="is_project" value="0">
-                        <span>Other (internal)</span>
+                        <input type="radio" name="project_type" value="design">
+                        <span>Design</span>
+                    </label>
+                    <label class="proj-type-option">
+                        <input type="radio" name="project_type" value="other">
+                        <span>Other</span>
                     </label>
                 </div>
-                <p class="proj-type-hint">“Other” is for internal heads like office / factory expense, KVB or sridhar — not a real project.</p>
+                <p class="proj-type-hint">“Design” is for design-only work. “Other” is for internal heads like office / factory expense, KVB or sridhar — not a real project.</p>
 
                 <label class="proj-field-label" for="new-project-po">PO document <span class="proj-optional">(optional — can upload later)</span></label>
                 <input id="new-project-po" name="po_file" class="proj-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.docx,.doc">
@@ -140,23 +144,30 @@
 
                 <!-- ==== Edit panel (hidden until "Edit" clicked) ==== -->
                 <div id="detail-edit-panel" class="proj-edit-panel hidden">
-                    <div class="proj-detail-type">
-                        <span class="proj-field-label">Type</span>
-                        <div class="proj-type-toggle" role="radiogroup" aria-label="Entry type">
+                    <div class="proj-edit-row">
+                        <div class="proj-edit-row-head">
+                            <span class="proj-field-label">Type</span>
+                            <span id="detail-type-status" class="proj-type-status"></span>
+                        </div>
+                        <div class="proj-type-toggle proj-type-toggle--full" role="radiogroup" aria-label="Entry type">
                             <label class="proj-type-option">
-                                <input type="radio" name="detail_is_project" value="1">
+                                <input type="radio" name="detail_project_type" value="project">
                                 <span>Project</span>
                             </label>
                             <label class="proj-type-option">
-                                <input type="radio" name="detail_is_project" value="0">
-                                <span>Other (internal)</span>
+                                <input type="radio" name="detail_project_type" value="design">
+                                <span>Design</span>
+                            </label>
+                            <label class="proj-type-option">
+                                <input type="radio" name="detail_project_type" value="other">
+                                <span>Other</span>
                             </label>
                         </div>
-                        <span id="detail-type-status" class="proj-type-status"></span>
                     </div>
 
                     <!-- PO admin (only when a PO exists) -->
-                    <div id="detail-po-admin" class="proj-po-admin hidden">
+                    <div id="detail-po-admin" class="proj-edit-row proj-po-admin hidden">
+                        <span class="proj-field-label">Purchase order</span>
                         <!-- Inline edit form (hidden until "Edit values" clicked) -->
                         <form id="detail-po-edit-form" class="proj-po-edit hidden">
                             <div class="proj-gist-grid">
@@ -186,7 +197,7 @@
                             <p id="detail-po-edit-error" class="proj-error hidden"></p>
                         </form>
 
-                        <div id="detail-po-actions" class="proj-modal-footer proj-po-actions">
+                        <div id="detail-po-actions" class="proj-po-actions">
                             <button type="button" id="detail-po-reprocess" class="proj-secondary-btn">Reprocess PO</button>
                             <button type="button" id="detail-po-edit-btn" class="proj-primary-btn">Edit PO values</button>
                         </div>

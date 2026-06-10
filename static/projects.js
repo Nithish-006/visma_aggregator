@@ -55,7 +55,16 @@
     const cashListEl = document.getElementById('detail-cash-list');
 
     const detailTypeStatus = document.getElementById('detail-type-status');
-    const detailTypeRadios = () => Array.from(detailModal.querySelectorAll('input[name="detail_is_project"]'));
+    const detailTypeRadios = () => Array.from(detailModal.querySelectorAll('input[name="detail_project_type"]'));
+
+    // The three registry buckets, in display order. A row's bucket comes from
+    // project_type, falling back to the legacy is_project boolean.
+    const TYPE_SECTIONS = [
+        { key: 'project', title: 'Projects', sub: 'Valid client / site projects', variant: 'projects' },
+        { key: 'design', title: 'Designs', sub: 'Design-only work', variant: 'designs' },
+        { key: 'other', title: 'Others', sub: 'Internal heads (office, factory, KVB, sridhar…)', variant: 'others' },
+    ];
+    const projectTypeOf = (p) => p.project_type || (p.is_project === false ? 'other' : 'project');
 
     let projects = [];
     let activeProjectId = null;
@@ -161,16 +170,13 @@
             return;
         }
 
-        const realProjects = projects.filter(p => p.is_project !== false);
-        const others = projects.filter(p => p.is_project === false);
-
         listEl.innerHTML = '';
-        if (realProjects.length) {
-            listEl.appendChild(renderSection('Projects', 'Valid client / site projects', realProjects, 'projects'));
-        }
-        if (others.length) {
-            listEl.appendChild(renderSection('Others', 'Internal heads (office, factory, KVB, sridhar…)', others, 'others'));
-        }
+        TYPE_SECTIONS.forEach(sec => {
+            const items = projects.filter(p => projectTypeOf(p) === sec.key);
+            if (items.length) {
+                listEl.appendChild(renderSection(sec.title, sec.sub, items, sec.variant));
+            }
+        });
     }
 
     function escapeHtml(s) {
@@ -293,9 +299,9 @@
             return;
         }
 
-        const typeEl = newForm.querySelector('input[name="is_project"]:checked');
+        const typeEl = newForm.querySelector('input[name="project_type"]:checked');
         if (!typeEl) {
-            errorEl.textContent = 'Please choose a type — Project or Other (internal).';
+            errorEl.textContent = 'Please choose a type — Project, Design or Other.';
             errorEl.classList.remove('hidden');
             return;
         }
@@ -303,7 +309,7 @@
         const fd = new FormData();
         fd.append('id', String(idNum));
         fd.append('stem_name', stemVal);
-        fd.append('is_project', typeEl.value);
+        fd.append('project_type', typeEl.value);
         if (poInput.files && poInput.files[0]) fd.append('po_file', poInput.files[0]);
 
         submitBtn.disabled = true;
@@ -350,7 +356,7 @@
         cashError.textContent = '';
         loadCashPayments(p.id);
         // Reflect current type in the toggle
-        const wantVal = (p.is_project === false) ? '0' : '1';
+        const wantVal = projectTypeOf(p);
         detailTypeRadios().forEach(r => { r.checked = (r.value === wantVal); });
         detailTypeStatus.textContent = '';
         detailTypeStatus.classList.remove('error');
@@ -671,11 +677,12 @@
             </div>`;
     }
 
-    // ── Type toggle (project ↔ other) ──────────────────
+    // ── Type toggle (project / design / other) ─────────
+    const TYPE_LABELS = { project: 'a project', design: 'a design', other: 'an internal “other”' };
     detailTypeRadios().forEach(radio => {
         radio.addEventListener('change', async () => {
             if (!activeProjectId || !radio.checked) return;
-            const isProject = radio.value === '1';
+            const projectType = radio.value;
             detailTypeStatus.classList.remove('error');
             detailTypeStatus.textContent = 'Saving…';
             try {
@@ -683,7 +690,7 @@
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
-                    body: JSON.stringify({ is_project: isProject }),
+                    body: JSON.stringify({ project_type: projectType }),
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok) {
@@ -693,9 +700,12 @@
                 }
                 // Sync cached list so the sections regroup on close/reopen
                 const cached = projects.find(x => x.id === activeProjectId);
-                if (cached) cached.is_project = isProject;
+                if (cached) {
+                    cached.project_type = projectType;
+                    cached.is_project = (projectType === 'project');
+                }
                 detailTypeStatus.textContent = 'Saved';
-                showToast(isProject ? 'Marked as a project.' : 'Marked as an internal “other”.');
+                showToast(`Marked as ${TYPE_LABELS[projectType] || 'updated'}.`);
                 loadProjects();
             } catch (err) {
                 detailTypeStatus.textContent = `Network error: ${err.message}`;
