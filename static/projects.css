@@ -392,6 +392,37 @@ html, body {
     color: var(--proj-text);
 }
 
+.proj-modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Header "Edit" toggle — reveals the edit panel (type / reprocess / PO values) */
+.proj-edit-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: transparent;
+    border: 1px solid var(--proj-border);
+    color: var(--proj-text-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.34rem 0.65rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.proj-edit-toggle:hover {
+    color: var(--proj-text);
+    background: var(--proj-surface-soft);
+}
+.proj-edit-toggle.active {
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+    border-color: var(--proj-accent);
+}
+
 .proj-modal-body {
     padding: 1.5rem;
     overflow-y: auto;
@@ -701,20 +732,50 @@ html, body {
 .proj-cash-head {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.6rem;
 }
+.proj-cash-head .proj-field-label { margin: 0; }
 .proj-cash-total {
     font-size: 0.92rem;
     font-weight: 700;
     color: var(--proj-accent-strong);
+    margin-left: auto;
+}
+/* "+ Add" reveal button — sits at the far right of the cash header. */
+.proj-cash-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border: 1px solid var(--proj-border);
+    background: var(--proj-surface);
+    color: var(--proj-accent-strong);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.32rem 0.6rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.proj-cash-add-btn:hover { background: var(--proj-accent-soft); }
+.proj-cash-add-btn.active {
+    background: var(--proj-accent-soft);
+    border-color: var(--proj-accent);
+}
+.proj-cash-add-icon { font-size: 1rem; line-height: 1; font-weight: 700; }
+.proj-cash-add-btn.active .proj-cash-add-icon { transform: rotate(45deg); }
+
+.proj-cash-form {
+    margin-top: 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
 }
 .proj-cash-hint {
-    margin: 0.3rem 0 0.7rem;
+    margin: 0;
     font-size: 0.76rem;
     color: var(--proj-text-muted);
 }
-.proj-cash-form {
+.proj-cash-form-row {
     display: grid;
     grid-template-columns: 1.1fr 1fr auto;
     grid-template-areas:
@@ -726,7 +787,7 @@ html, body {
 .proj-cash-amount { grid-area: amount; }
 .proj-cash-date   { grid-area: date; }
 .proj-cash-note   { grid-area: note; }
-.proj-cash-form .proj-primary-btn {
+.proj-cash-form-row .proj-primary-btn {
     grid-area: add;
     align-self: stretch;
     white-space: nowrap;
@@ -980,14 +1041,22 @@ html, body {
 }
 
 /* Detail-modal type row */
+/* Edit panel — hidden until the header "Edit" button is pressed. A dashed
+   frame visually sets the editing controls apart from the read-only summary. */
+.proj-edit-panel {
+    margin-top: 1rem;
+    padding: 0.95rem 1rem;
+    border: 1px dashed var(--proj-accent);
+    border-radius: 10px;
+    background: var(--proj-accent-soft);
+}
+.proj-po-admin { margin-top: 0.9rem; }
+
 .proj-detail-type {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 0.6rem 0.85rem;
-    padding-bottom: 1.1rem;
-    margin-bottom: 1.1rem;
-    border-bottom: 1px solid var(--proj-border);
 }
 
 .proj-detail-type .proj-field-label {

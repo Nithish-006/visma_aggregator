@@ -36,9 +36,17 @@
 
     const detailPayments = document.getElementById('detail-payments');
 
+    // Edit panel (type / reprocess / PO values, behind the header Edit button)
+    const editToggleBtn = document.getElementById('detail-edit-toggle');
+    const editToggleLabel = document.getElementById('detail-edit-toggle-label');
+    const editPanel = document.getElementById('detail-edit-panel');
+    const poAdmin = document.getElementById('detail-po-admin');
+
     // Cash client payments
     const cashTotalEl = document.getElementById('detail-cash-total');
     const cashForm = document.getElementById('detail-cash-form');
+    const cashToggleBtn = document.getElementById('detail-cash-toggle');
+    const cashToggleLabel = document.getElementById('detail-cash-toggle-label');
     const cashAmount = document.getElementById('detail-cash-amount');
     const cashDate = document.getElementById('detail-cash-date');
     const cashNote = document.getElementById('detail-cash-note');
@@ -333,7 +341,10 @@
         activeProjectId = projectId;
         detailTitle.textContent = `${p.id} − ${p.stem_name}`;
         renderPayments(p);
-        // Cash client payments ledger
+        // Start in read-only view; editing is opt-in via the header Edit button.
+        setEditMode(false);
+        // Cash client payments ledger — form is collapsed until "+ Add".
+        setCashFormOpen(false);
         cashForm.reset();
         cashError.classList.add('hidden');
         cashError.textContent = '';
@@ -352,17 +363,47 @@
             detailUploadBlock.classList.add('hidden');
             detailPoFilename.textContent = p.po_filename;
             detailPoLink.href = `/api/projects/${p.id}/po`;
-            editForm.classList.add('hidden');
-            editError.classList.add('hidden');
-            poActions.classList.remove('hidden');
+            poAdmin.classList.remove('hidden');
+            exitPoEditForm();
             loadPoGist(p.id);
         } else {
             detailPoExisting.classList.add('hidden');
             detailUploadBlock.classList.remove('hidden');
+            poAdmin.classList.add('hidden');
             detailUploadLabel.textContent = `Upload PO document for "${p.stem_name}"`;
         }
         openModal(detailModal);
     }
+
+    // ── Edit mode (header Edit button reveals the edit panel) ──
+    function setEditMode(on) {
+        editPanel.classList.toggle('hidden', !on);
+        editToggleBtn.classList.toggle('active', on);
+        editToggleLabel.textContent = on ? 'Done' : 'Edit';
+        if (!on) exitPoEditForm(); // collapse any open PO-values form on exit
+    }
+    editToggleBtn.addEventListener('click', () => {
+        setEditMode(editPanel.classList.contains('hidden'));
+    });
+
+    // Revert the inline PO-values form back to the read-only gist.
+    function exitPoEditForm() {
+        editForm.classList.add('hidden');
+        editError.classList.add('hidden');
+        poActions.classList.remove('hidden');
+        gistEl.classList.remove('hidden');
+    }
+
+    // ── Cash form reveal (+ Add) ───────────────────────
+    function setCashFormOpen(on) {
+        cashForm.classList.toggle('hidden', !on);
+        cashToggleBtn.classList.toggle('active', on);
+        cashToggleLabel.textContent = on ? 'Close' : 'Add';
+        if (on) setTimeout(() => cashAmount.focus(), 50);
+    }
+    cashToggleBtn.addEventListener('click', () => {
+        setCashFormOpen(cashForm.classList.contains('hidden'));
+    });
 
     // ── PO value vs client payments received ──────────
     function renderPayments(p) {
@@ -498,6 +539,7 @@
                 return;
             }
             cashForm.reset();
+            setCashFormOpen(false);
             applyPaymentSummary(data);
             showToast(`Cash payment of ${formatINR(amount)} added.`);
         } catch (err) {
@@ -561,7 +603,7 @@
         if (po.extraction_status === 'failed') {
             gistEl.innerHTML = `<div class="proj-gist-failed">
                 Couldn't auto-read this PO${po.extraction_error ? ` (${escapeHtml(po.extraction_error)})` : ''}.
-                Use <strong>Edit values</strong> to enter the total manually, or try <strong>Reprocess</strong>.
+                Click <strong>Edit</strong> (top right) to enter the total manually or reprocess the file.
             </div>`;
             return;
         }
@@ -703,11 +745,7 @@
         gistEl.classList.add('hidden');
     });
 
-    editCancel.addEventListener('click', () => {
-        editForm.classList.add('hidden');
-        poActions.classList.remove('hidden');
-        gistEl.classList.remove('hidden');
-    });
+    editCancel.addEventListener('click', exitPoEditForm);
 
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -739,9 +777,7 @@
             }
             currentPo = data.po || null;
             renderPoGist(currentPo);
-            editForm.classList.add('hidden');
-            poActions.classList.remove('hidden');
-            gistEl.classList.remove('hidden');
+            exitPoEditForm();
             showToast('PO values updated.');
             loadProjects();
         } catch (err) {

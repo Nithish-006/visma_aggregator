@@ -88,24 +88,18 @@
         <div class="proj-modal-card">
             <div class="proj-modal-header">
                 <h2 id="detail-title">Project</h2>
-                <button class="proj-modal-close" data-close="project-detail-modal" aria-label="Close">×</button>
+                <div class="proj-modal-header-actions">
+                    <button id="detail-edit-toggle" class="proj-edit-toggle" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 20h9"></path>
+                            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+                        </svg>
+                        <span id="detail-edit-toggle-label">Edit</span>
+                    </button>
+                    <button class="proj-modal-close" data-close="project-detail-modal" aria-label="Close">×</button>
+                </div>
             </div>
             <div class="proj-modal-body">
-                <div class="proj-detail-type">
-                    <span class="proj-field-label">Type</span>
-                    <div class="proj-type-toggle" role="radiogroup" aria-label="Entry type">
-                        <label class="proj-type-option">
-                            <input type="radio" name="detail_is_project" value="1">
-                            <span>Project</span>
-                        </label>
-                        <label class="proj-type-option">
-                            <input type="radio" name="detail_is_project" value="0">
-                            <span>Other (internal)</span>
-                        </label>
-                    </div>
-                    <span id="detail-type-status" class="proj-type-status"></span>
-                </div>
-
                 <!-- PO value vs client payments received -->
                 <div id="detail-payments" class="proj-payments hidden"></div>
 
@@ -114,15 +108,20 @@
                     <div class="proj-cash-head">
                         <span class="proj-field-label">Cash payments received</span>
                         <span id="detail-cash-total" class="proj-cash-total"></span>
+                        <button id="detail-cash-toggle" type="button" class="proj-cash-add-btn" title="Add a cash payment">
+                            <span class="proj-cash-add-icon">+</span><span id="detail-cash-toggle-label">Add</span>
+                        </button>
                     </div>
-                    <p class="proj-cash-hint">Money the client paid in cash — not in the KVB statement. Added to the received total.</p>
-                    <form id="detail-cash-form" class="proj-cash-form">
-                        <input id="detail-cash-amount" class="proj-input proj-cash-amount" type="number" step="0.01" min="0" placeholder="Amount (₹)" autocomplete="off" required>
-                        <input id="detail-cash-date" class="proj-input proj-cash-date" type="date" autocomplete="off" title="Date received (optional)">
-                        <input id="detail-cash-note" class="proj-input proj-cash-note" type="text" placeholder="Note (optional)" autocomplete="off">
-                        <button type="submit" id="detail-cash-add" class="proj-primary-btn">Add</button>
+                    <form id="detail-cash-form" class="proj-cash-form hidden">
+                        <p class="proj-cash-hint">Money the client paid in cash — not in the KVB statement. Added to the received total.</p>
+                        <div class="proj-cash-form-row">
+                            <input id="detail-cash-amount" class="proj-input proj-cash-amount" type="number" step="0.01" min="0" placeholder="Amount (₹)" autocomplete="off">
+                            <input id="detail-cash-date" class="proj-input proj-cash-date" type="date" autocomplete="off" title="Date received (optional)">
+                            <input id="detail-cash-note" class="proj-input proj-cash-note" type="text" placeholder="Note (optional)" autocomplete="off">
+                            <button type="submit" id="detail-cash-add" class="proj-primary-btn">Add</button>
+                        </div>
+                        <p id="detail-cash-error" class="proj-error hidden"></p>
                     </form>
-                    <p id="detail-cash-error" class="proj-error hidden"></p>
                     <div id="detail-cash-list" class="proj-cash-list"></div>
                 </div>
 
@@ -137,42 +136,64 @@
                     <div id="detail-po-gist" class="proj-po-gist">
                         <div class="proj-gist-loading">Loading PO details…</div>
                     </div>
-
-                    <!-- Inline edit form (hidden until Edit clicked) -->
-                    <form id="detail-po-edit-form" class="proj-po-edit hidden">
-                        <div class="proj-gist-grid">
-                            <label>Total project value (₹)
-                                <input name="total_value" type="number" step="0.01" min="0" class="proj-input">
-                            </label>
-                            <label>PO number
-                                <input name="po_number" type="text" class="proj-input">
-                            </label>
-                            <label>PO date
-                                <input name="po_date" type="text" placeholder="DD-MMM-YYYY" class="proj-input">
-                            </label>
-                            <label>Client
-                                <input name="client_name" type="text" class="proj-input">
-                            </label>
-                            <label>Taxable value (₹)
-                                <input name="taxable_value" type="number" step="0.01" min="0" class="proj-input">
-                            </label>
-                            <label>Total tax (₹)
-                                <input name="total_tax" type="number" step="0.01" min="0" class="proj-input">
-                            </label>
-                        </div>
-                        <div class="proj-modal-footer">
-                            <button type="button" id="detail-po-edit-cancel" class="proj-secondary-btn">Cancel</button>
-                            <button type="submit" class="proj-primary-btn">Save changes</button>
-                        </div>
-                        <p id="detail-po-edit-error" class="proj-error hidden"></p>
-                    </form>
-
-                    <div id="detail-po-actions" class="proj-modal-footer proj-po-actions">
-                        <button type="button" id="detail-po-reprocess" class="proj-secondary-btn">Reprocess</button>
-                        <button type="button" id="detail-po-edit-btn" class="proj-primary-btn">Edit values</button>
-                    </div>
-                    <p class="proj-note">PO file is locked to keep naming consistent. You can reprocess the file or correct the extracted values.</p>
                 </div>
+
+                <!-- ==== Edit panel (hidden until "Edit" clicked) ==== -->
+                <div id="detail-edit-panel" class="proj-edit-panel hidden">
+                    <div class="proj-detail-type">
+                        <span class="proj-field-label">Type</span>
+                        <div class="proj-type-toggle" role="radiogroup" aria-label="Entry type">
+                            <label class="proj-type-option">
+                                <input type="radio" name="detail_is_project" value="1">
+                                <span>Project</span>
+                            </label>
+                            <label class="proj-type-option">
+                                <input type="radio" name="detail_is_project" value="0">
+                                <span>Other (internal)</span>
+                            </label>
+                        </div>
+                        <span id="detail-type-status" class="proj-type-status"></span>
+                    </div>
+
+                    <!-- PO admin (only when a PO exists) -->
+                    <div id="detail-po-admin" class="proj-po-admin hidden">
+                        <!-- Inline edit form (hidden until "Edit values" clicked) -->
+                        <form id="detail-po-edit-form" class="proj-po-edit hidden">
+                            <div class="proj-gist-grid">
+                                <label>Total project value (₹)
+                                    <input name="total_value" type="number" step="0.01" min="0" class="proj-input">
+                                </label>
+                                <label>PO number
+                                    <input name="po_number" type="text" class="proj-input">
+                                </label>
+                                <label>PO date
+                                    <input name="po_date" type="text" placeholder="DD-MMM-YYYY" class="proj-input">
+                                </label>
+                                <label>Client
+                                    <input name="client_name" type="text" class="proj-input">
+                                </label>
+                                <label>Taxable value (₹)
+                                    <input name="taxable_value" type="number" step="0.01" min="0" class="proj-input">
+                                </label>
+                                <label>Total tax (₹)
+                                    <input name="total_tax" type="number" step="0.01" min="0" class="proj-input">
+                                </label>
+                            </div>
+                            <div class="proj-modal-footer">
+                                <button type="button" id="detail-po-edit-cancel" class="proj-secondary-btn">Cancel</button>
+                                <button type="submit" class="proj-primary-btn">Save changes</button>
+                            </div>
+                            <p id="detail-po-edit-error" class="proj-error hidden"></p>
+                        </form>
+
+                        <div id="detail-po-actions" class="proj-modal-footer proj-po-actions">
+                            <button type="button" id="detail-po-reprocess" class="proj-secondary-btn">Reprocess PO</button>
+                            <button type="button" id="detail-po-edit-btn" class="proj-primary-btn">Edit PO values</button>
+                        </div>
+                        <p class="proj-note">PO file is locked to keep naming consistent. You can reprocess the file or correct the extracted values.</p>
+                    </div>
+                </div>
+
                 <div id="detail-po-upload">
                     <p class="proj-field-label" id="detail-upload-label">Upload PO document</p>
                     <form id="detail-upload-form">

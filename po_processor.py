@@ -54,16 +54,38 @@ WHO IS WHO (important):
 - "Supplier (Bill from)" is the contractor receiving the order (usually VISMA
   ASSOCIATES). Do NOT use the supplier as the client.
 
-GRAND TOTAL (most important):
-- The PO may have per-page subtotals. You must return the FINAL CONSOLIDATED
-  figures for the whole document, taken from the last/summary page:
-    * total_value  = the grand total INCLUDING all taxes (CGST + SGST + IGST).
-                     This is the total project value. Use the "Total ₹ ..." figure.
-    * taxable_value = the sum of taxable amounts BEFORE tax (subtotal).
-    * total_tax     = total of CGST + SGST + IGST (= total_value - taxable_value).
+WHICH TABLE DEFINES THE PROJECT VALUE (critical — read carefully):
+- A single PO often contains MORE THAN ONE table. You must tell two kinds apart:
+    1. The ORDER / WORK ORDER table — lists the actual scope of work or goods being
+       ordered (Design/Supply/Fabrication/Roofing rows, etc.) and ends in a
+       "Total Amount" / "Grand Total". THIS table defines the project value.
+    2. A PAYMENT SCHEDULE / PAYMENT PLAN table — describes only HOW the amount will
+       be settled (instalments, or just the part routed through the bank). Its
+       total is often LOWER than the order total because a portion is paid
+       separately (e.g. in cash) and is intentionally left out of the schedule.
+- ALWAYS take total_value, taxable_value, total_tax and line_items from the
+  ORDER / WORK ORDER table. NEVER take any of them from a payment schedule.
+- If two tables exist and their totals differ, the ORDER table's (higher,
+  full-scope) total is the correct project value. Do NOT pick the smaller
+  payment-schedule figure — that understates the project.
+
+GRAND TOTAL (from the ORDER / WORK ORDER table only):
+- The PO may have per-page subtotals. Return the FINAL CONSOLIDATED figure of the
+  ORDER table (typically its "Total Amount" / "Grand Total" line):
+    * total_value = the full ordered value from the ORDER table.
+        - If that table's grand total already INCLUDES taxes (CGST/SGST/IGST),
+          use that tax-inclusive figure.
+        - If taxes are shown as "extra"/separate (e.g. a note like "18% Tax
+          Extra") and NO tax-inclusive grand total is printed, use the table's
+          stated "Total Amount" as total_value as-is (do NOT gross it up, and do
+          NOT fall back to a lower payment-schedule total).
+    * taxable_value = the sum of taxable amounts BEFORE tax in the ORDER table.
+    * total_tax     = total of CGST + SGST + IGST shown on the ORDER table
+                      (0 if tax is only noted as a "% extra" with no figure).
 
 LINE ITEMS (capture the core breakdown — keep it lean):
-- Return one entry per distinct scope/goods row the PO lists, in "line_items".
+- Return one entry per distinct scope/goods row in the ORDER / WORK ORDER table
+  (NEVER rows from a payment schedule), in "line_items".
 - For each row capture ONLY these core fields: description, quantity, unit, rate, amount.
 - description: a SHORT core name of the item/scope (e.g. "MS Channel 75x40",
   "Fabrication & erection of steel structure"). Do NOT copy long specifications,
@@ -79,8 +101,11 @@ RULES:
    (23,25,190.00 -> 2325190.00). Use 0 if genuinely absent.
 2. po_date: format as DD-MMM-YYYY (e.g. 16-Mar-2026). Empty string if absent.
 3. line_item_count: the number of rows in line_items.
-4. payment_terms: a short single-line summary of the payment schedule if present
-   (e.g. "50% with PO, 45% for erection, 5% after completion"), else "".
+4. payment_terms: a short single-line summary of the payment terms / schedule if
+   present (e.g. "60% with PO, 35% for erection, 5% after completion"). If the PO
+   indicates part of the value is settled outside the bank / in cash, you may note
+   that here (e.g. "bank ~23L per schedule, balance in cash") — but this does NOT
+   change total_value, which stays the full ORDER-table total. Else "".
 5. Text fields absent -> "".  Numeric fields absent -> 0.
 6. currency: the ISO-ish code, default "INR".
 
