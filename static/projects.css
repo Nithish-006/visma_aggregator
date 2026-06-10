@@ -971,7 +971,12 @@ html, body {
 .proj-li-table thead th {
     position: sticky;
     top: 0;
-    background: var(--proj-accent-soft);
+    z-index: 2;
+    /* Solid colour (accent-soft flattened onto white): a translucent sticky
+       header lets scrolled rows bleed through the column titles. */
+    background: #ecedfd;
+    /* border-collapse drops sticky cell borders — draw the rule as a shadow */
+    box-shadow: 0 1px 0 var(--proj-border-strong);
     color: var(--proj-text-muted);
     font-weight: 600;
     text-align: left;

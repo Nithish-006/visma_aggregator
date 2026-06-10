@@ -425,7 +425,16 @@
     }
     tabsBar.addEventListener('click', (e) => {
         const btn = e.target.closest('.proj-tab');
-        if (btn) switchTab(btn.dataset.tab);
+        if (!btn) return;
+        switchTab(btn.dataset.tab);
+        // Nothing recorded yet? Surface the cash entry form right away so the
+        // input is visible without hunting for the "+ Add cash" button.
+        if (btn.dataset.tab === 'payments'
+            && cashForm.classList.contains('hidden')
+            && !cashPayments.length
+            && (!insights || !insights.payments.bank.length)) {
+            setCashFormOpen(true);
+        }
     });
 
     function setTabCount(key, value) {
@@ -461,7 +470,12 @@
         cashForm.classList.toggle('hidden', !on);
         cashToggleBtn.classList.toggle('active', on);
         cashToggleLabel.textContent = on ? 'Close' : 'Add cash';
-        if (on) setTimeout(() => cashAmount.focus(), 50);
+        if (on) setTimeout(() => {
+            // The modal body scrolls — on short screens the freshly revealed
+            // form can sit below the fold, so bring it into view first.
+            cashForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            cashAmount.focus({ preventScroll: true });
+        }, 60);
     }
     cashToggleBtn.addEventListener('click', () => {
         setCashFormOpen(cashForm.classList.contains('hidden'));
