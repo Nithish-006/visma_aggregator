@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -9,23 +9,23 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <title>Project Summary | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=9">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=11">
 </head>
 
 <body>
     <!-- Header -->
     <header class="ps-header">
         <div class="ps-header-left">
-            <a href="/" class="ps-back-btn" title="Back to Hub">
+            <a href="/" class="ps-back-btn" id="ps-back-btn" title="Back to Hub">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
             </a>
-            <h1 class="ps-title">Project Summary</h1>
+            <h1 class="ps-title" id="ps-title">Project Summary</h1>
         </div>
         <div class="ps-header-right">
-            <button class="ps-export-btn" id="export-btn" title="Export Report">
+            <button class="ps-export-btn hidden" id="export-btn" title="Export Report">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -53,6 +53,16 @@
         </div>
     </header>
 
+    <!-- ==== Landing: registry-fed project cards ==== -->
+    <div id="ps-landing" class="ps-landing">
+        <div id="ps-cards" class="ps-cards">
+            <div class="ps-empty">Loading projects…</div>
+        </div>
+    </div>
+
+    <!-- ==== Detail: one project's full breakdown ==== -->
+    <div id="ps-detail" class="hidden">
+
     <!-- Filter Bar -->
     <div class="ps-filter-bar">
         <div class="ps-filters">
@@ -63,10 +73,6 @@
             <div class="ps-filter-group">
                 <label>To</label>
                 <input type="date" id="filter-end-date">
-            </div>
-            <div class="ps-filter-group ps-filter-dropdown">
-                <label>Project</label>
-                <div class="ps-custom-dropdown" id="dropdown-project"></div>
             </div>
             <div class="ps-filter-group ps-filter-dropdown">
                 <label>Category</label>
@@ -290,6 +296,8 @@
         </div>
     </div>
 
+    </div><!-- /ps-detail -->
+
     <!-- Bill Detail Modal -->
     <div id="bill-detail-modal" class="hidden"></div>
 
@@ -299,7 +307,7 @@
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=9"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=11"></script>
 <script>
 function hardRefresh() {
     if ('caches' in window) {

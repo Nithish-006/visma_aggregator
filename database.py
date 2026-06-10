@@ -18,6 +18,37 @@ from contextlib import contextmanager
 from config import Config, BANK_CONFIG, get_bank_config, get_bank_table, VALID_BANK_CODES
 
 
+def build_project_filter_sql(column, project, params):
+    """SQL condition for a comma-separated project selection.
+
+    Canonical selections ("659 - JAMUNA") match STRICTLY on the "<id> -"
+    tag prefix; free-text selections keep stem-prefix matching (tested on
+    the raw value and on the segment after " - "). Bind values are appended
+    to `params`; returns the condition string, or None when the selection
+    is empty.
+    """
+    conds = []
+    for p in (project or '').split(','):
+        p = p.strip()
+        if not p or p == 'All':
+            continue
+        m = re.match(r'^(\d+)\s*-', p)
+        if m:
+            pid = m.group(1)
+            conds.append(f"(TRIM({column}) LIKE %s OR TRIM({column}) LIKE %s)")
+            params.append(f"{pid} -%")
+            params.append(f"{pid}-%")
+        else:
+            tokens = p.split()
+            stem = tokens[0].lower() if tokens else p.lower()
+            conds.append(
+                f"(LOWER(TRIM({column})) LIKE %s "
+                f"OR LOWER(TRIM(SUBSTRING_INDEX({column}, ' - ', -1))) LIKE %s)")
+            params.append(f"{stem}%")
+            params.append(f"{stem}%")
+    return f"({' OR '.join(conds)})" if conds else None
+
+
 # Mirrors the MySQL `uk_txn_dedup` functional-index expression so that
 # duplicates are filtered in-process before INSERT IGNORE ever runs.
 _SPLIT_TAG_RE = re.compile(r'\[SPLIT\s*\d+\s*/\s*\d+\]')
@@ -1069,21 +1100,12 @@ class DatabaseManager:
             conditions.append("bi.invoice_date <= %s")
             params.append(end_date)
 
-        # Robust project matching: stem-based, case-insensitive prefix
+        # Project matching: strict "<id> -" prefix for canonical selections,
+        # stem prefix for legacy free-text ones.
         if project:
-            stems = []
-            for p in project.split(','):
-                p = p.strip()
-                if p:
-                    tokens = p.split()
-                    first_token = tokens[0].lower() if tokens else p.lower()
-                    stems.append(first_token)
-            if stems:
-                stem_conditions = []
-                for stem in stems:
-                    stem_conditions.append("LOWER(bi.project) LIKE %s")
-                    params.append(f"{stem}%")
-                conditions.append(f"({' OR '.join(stem_conditions)})")
+            proj_cond = build_project_filter_sql('bi.project', project, params)
+            if proj_cond:
+                conditions.append(proj_cond)
 
         # Vendor filter: case-insensitive contains
         if vendor:
@@ -1172,21 +1194,12 @@ class DatabaseManager:
             conditions.append("si.invoice_date <= %s")
             params.append(end_date)
 
-        # Robust project matching: stem-based, case-insensitive prefix
+        # Project matching: strict "<id> -" prefix for canonical selections,
+        # stem prefix for legacy free-text ones.
         if project:
-            stems = []
-            for p in project.split(','):
-                p = p.strip()
-                if p:
-                    tokens = p.split()
-                    first_token = tokens[0].lower() if tokens else p.lower()
-                    stems.append(first_token)
-            if stems:
-                stem_conditions = []
-                for stem in stems:
-                    stem_conditions.append("LOWER(si.project) LIKE %s")
-                    params.append(f"{stem}%")
-                conditions.append(f"({' OR '.join(stem_conditions)})")
+            proj_cond = build_project_filter_sql('si.project', project, params)
+            if proj_cond:
+                conditions.append(proj_cond)
 
         # Vendor/buyer filter: case-insensitive contains
         if vendor:

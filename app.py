@@ -10,7 +10,7 @@ import re
 
 # Import our modules
 from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank_config, get_bank_table
-from database import DatabaseManager
+from database import DatabaseManager, build_project_filter_sql
 from bank_statement_processor import process_bank_statement
 from bill_processor import process_bill_file, generate_excel, format_extracted_data_for_display
 import po_processor
@@ -525,9 +525,59 @@ def match_labour_to_project_groups(labour_costs, stem_groups):
     return result
 
 
+_CANONICAL_PROJECT_RE = re.compile(r'^\s*(\d+)\s*-')
+
+
+def parse_project_selection(project_str):
+    """Parse a comma-separated project filter into strict and fuzzy terms.
+
+    Canonical selections ("659 - JAMUNA") are matched STRICTLY by their id
+    prefix — the registry-fed UI always sends this form. Free-text
+    selections (legacy callers) keep stem-prefix matching.
+
+    Returns (ids, stems).
+    """
+    ids, stems = [], []
+    for p in (project_str or '').split(','):
+        p = p.strip()
+        if not p or p == 'All':
+            continue
+        m = _CANONICAL_PROJECT_RE.match(p)
+        if m:
+            ids.append(int(m.group(1)))
+        else:
+            tokens = p.split()
+            stems.append(normalize_project_stem(tokens[0].lower()) if tokens else p.lower())
+    return ids, stems
+
+
+def project_value_matches_selection(value, selection):
+    """True when a project tag matches the parsed selection (ids, stems).
+
+    Canonical ids match strictly on the "<id> -" tag prefix. Stems do a
+    prefix test on the raw value and on the segment after " - "."""
+    ids, stems = selection
+    v = str(value or '').strip()
+    if not v:
+        return False
+    m = _CANONICAL_PROJECT_RE.match(v)
+    if ids and m and int(m.group(1)) in ids:
+        return True
+    if stems:
+        low = v.lower()
+        after_dash = low.split(' - ', 1)[-1].strip()
+        for s in stems:
+            if low.startswith(s) or after_dash.startswith(s):
+                return True
+    return False
+
+
 def robust_filter_by_project(df, project=None):
-    """Filter dataframe by project using stem-based prefix matching.
-    Extracts first word from each selected project and matches case-insensitively."""
+    """Filter dataframe by the selected project(s).
+
+    Canonical selections ("659 - JAMUNA") match rows strictly by the
+    "<id> -" tag prefix; free-text selections keep the legacy stem-prefix
+    behaviour (also testing the segment after " - ")."""
     if not project or project == 'All':
         return df
 
@@ -535,14 +585,19 @@ def robust_filter_by_project(df, project=None):
     if project_col not in df.columns:
         return df
 
-    stems = get_project_stems(project)
-    if not stems:
+    ids, stems = parse_project_selection(project)
+    if not ids and not stems:
         return df
 
-    lower_col = df[project_col].astype(str).str.lower().str.strip()
+    s = df[project_col].astype(str).str.strip()
     mask = pd.Series(False, index=df.index)
-    for stem in stems:
-        mask = mask | lower_col.str.startswith(stem)
+    for pid in ids:
+        mask = mask | s.str.match(rf'^{pid}\s*-')
+    if stems:
+        lower_col = s.str.lower()
+        after_dash = lower_col.str.split(' - ', n=1).str[-1].str.strip()
+        for stem in stems:
+            mask = mask | lower_col.str.startswith(stem) | after_dash.str.startswith(stem)
     return df[mask]
 
 
@@ -2704,13 +2759,11 @@ def get_personal_transactions():
         params = []
 
         if project and project != 'All':
-            stems = get_project_stems(project)
-            if stems:
-                stem_conditions = []
-                for stem in stems:
-                    stem_conditions.append("LOWER(project) LIKE %s")
-                    params.append(f"{stem}%")
-                query += f" AND ({' OR '.join(stem_conditions)})"
+            # Strict "<id> -" prefix for canonical selections, stem prefix
+            # for free-text ones (the tracker keeps a free-text project field).
+            proj_cond = build_project_filter_sql('project', project, params)
+            if proj_cond:
+                query += f" AND {proj_cond}"
 
         if transaction_type and transaction_type != 'All':
             query += " AND COALESCE(transaction_type, 'expense') = %s"
@@ -4947,13 +5000,12 @@ def get_project_summary_combined():
         except:
             api_bills = []
 
-        # Filter bills by project stems when a project filter is active
+        # Filter bills by the project selection when a filter is active
         if project and project != 'All':
-            proj_stems = get_project_stems(project)
-            if proj_stems:
+            proj_sel = parse_project_selection(project)
+            if proj_sel[0] or proj_sel[1]:
                 api_bills = [b for b in api_bills
-                             if any(str(b.get('project', '')).lower().strip().startswith(s)
-                                    for s in proj_stems)]
+                             if project_value_matches_selection(b.get('project'), proj_sel)]
 
         bill_proj_names = [str(b.get('project', '')) for b in api_bills
                            if str(b.get('project', '')).strip() and str(b.get('project', '')).lower() != 'nan']
@@ -4966,12 +5018,12 @@ def get_project_summary_combined():
         try:
             api_labour_raw = DatabaseManager.get_labour_costs_by_project(
                 start_date=start_date, end_date=end_date)
-            # Filter labour by project stems when a project filter is active
+            # Filter labour by the project selection when a filter is active
             if project and project != 'All':
-                proj_stems = get_project_stems(project)
-                if proj_stems:
+                proj_sel = parse_project_selection(project)
+                if proj_sel[0] or proj_sel[1]:
                     api_labour_raw = {k: v for k, v in api_labour_raw.items()
-                                      if any(k.lower().strip().startswith(s) for s in proj_stems)}
+                                      if project_value_matches_selection(k, proj_sel)}
             api_labour_by_stem = match_labour_to_project_groups(api_labour_raw, api_stem_groups)
         except:
             api_labour_by_stem = {}
@@ -5236,6 +5288,58 @@ def get_project_summary_vendors():
         'per_page': per_page,
         'total_pages': total_pages
     })
+
+
+@app.route('/api/project-summary/project-cards')
+@login_required
+def get_project_summary_project_cards():
+    """Registry-fed landing cards for the project-summary page.
+
+    One card per canonical registry entry, with its bank totals matched
+    STRICTLY by the "<id> -" project tag (no stem fuzz, no aggregation of
+    free-text variants). Income = credits, expense = debits, across banks.
+    """
+    db_manager.ensure_projects_table()
+    registry = db_manager.list_projects()
+
+    totals = {}  # project id -> {'income', 'expense', 'count'}
+    for bank_code in VALID_BANK_CODES:
+        df = get_bank_df(bank_code)
+        if df.empty:
+            continue
+        col = 'Project' if 'Project' in df.columns else 'project'
+        if col not in df.columns:
+            continue
+        tag_ids = df[col].astype(str).str.strip().str.extract(r'^(\d+)\s*-', expand=False)
+        sub = df[tag_ids.notna()]
+        if sub.empty:
+            continue
+        grouped = sub.groupby(tag_ids[tag_ids.notna()].astype(int)).agg(
+            income=('CR Amount', 'sum'),
+            expense=('DR Amount', 'sum'),
+            count=('DR Amount', 'size'),
+        )
+        for pid, row in grouped.iterrows():
+            t = totals.setdefault(int(pid), {'income': 0.0, 'expense': 0.0, 'count': 0})
+            t['income'] += float(row['income'])
+            t['expense'] += float(row['expense'])
+            t['count'] += int(row['count'])
+
+    cards = []
+    for p in registry:
+        t = totals.get(p['id'], {'income': 0.0, 'expense': 0.0, 'count': 0})
+        cards.append({
+            'id': p['id'],
+            'stem_name': p['stem_name'],
+            'display': p['display'],
+            'project_type': p.get('project_type', 'project'),
+            'income': t['income'],
+            'income_formatted': format_indian_number(t['income']),
+            'expense': t['expense'],
+            'expense_formatted': format_indian_number(t['expense']),
+            'txn_count': t['count'],
+        })
+    return jsonify({'projects': cards})
 
 
 @app.route('/api/project-summary/projects')
@@ -6145,13 +6249,12 @@ def export_project_summary():
             print(f"[!] Error fetching bills with line items: {e}")
             export_bills = []
 
-        # Filter export_bills by project stems (same as combined API)
+        # Filter export_bills by the project selection (same as combined API)
         if project:
-            pb_proj_stems = get_project_stems(project)
-            if pb_proj_stems:
+            pb_proj_sel = parse_project_selection(project)
+            if pb_proj_sel[0] or pb_proj_sel[1]:
                 export_bills = [b for b in export_bills
-                                if any(str(b.get('project', '')).lower().strip().startswith(s)
-                                       for s in pb_proj_stems)]
+                                if project_value_matches_selection(b.get('project'), pb_proj_sel)]
 
         # Collect project names from bank txns and bills
         bank_projects = []
@@ -6171,10 +6274,10 @@ def export_project_summary():
                 start_date=start_date, end_date=end_date
             )
             if project:
-                pb_proj_stems = get_project_stems(project)
-                if pb_proj_stems:
+                pb_proj_sel = parse_project_selection(project)
+                if pb_proj_sel[0] or pb_proj_sel[1]:
                     labour_costs_raw = {k: v for k, v in labour_costs_raw.items()
-                                        if any(k.lower().strip().startswith(s) for s in pb_proj_stems)}
+                                        if project_value_matches_selection(k, pb_proj_sel)}
             labour_by_stem = match_labour_to_project_groups(labour_costs_raw, stem_groups)
         except Exception as e:
             print(f"[!] Error matching labour costs: {e}")
@@ -6419,13 +6522,12 @@ def export_project_summary():
                 labour_project_breakdown = month_data['project_breakdown']
                 labour_daily_headcount = month_data['daily_headcount']
                 if project:
-                    labour_stems = get_project_stems(project)
+                    labour_sel = parse_project_selection(project)
 
                     # Step 1: Filter attendance to ONLY records on the selected project
                     project_attendance = [
                         a for a in month_data['attendance']
-                        if any(str(a.get('project', '') or '').lower().strip().startswith(s)
-                               for s in labour_stems)
+                        if project_value_matches_selection(a.get('project'), labour_sel)
                     ]
 
                     # Step 2: Get worker IDs from project-filtered attendance
@@ -6464,8 +6566,7 @@ def export_project_summary():
 
                         labour_project_breakdown = [
                             p for p in month_data['project_breakdown']
-                            if any(str(p.get('name', '')).lower().startswith(s)
-                                   for s in labour_stems)
+                            if project_value_matches_selection(p.get('name'), labour_sel)
                         ]
 
                         # Rebuild att_map for filtered attendance only

@@ -7,6 +7,11 @@
 
     // ── State ──────────────────────────────────────────────────────────
     const state = {
+        // The page is project-scoped: the landing shows registry-fed cards
+        // and every detail view is pinned to one canonical project.
+        currentProject: null,      // canonical display, e.g. "659 - JAMUNA"
+        registryCards: [],
+        defaultDates: { min: '', max: '' },
         filters: { startDate: '', endDate: '', project: [], category: [], vendor: [] },
         pagination: {
             projectBreakdown: { page: 1, perPage: 15 },
@@ -29,6 +34,13 @@
 
     // ── Dropdown instances ───────────────────────────────────────────
     const dropdowns = {};
+
+    // Monotonic token for in-flight refreshes: every filter change bumps it,
+    // and any response carrying an older token is dropped. Without this,
+    // overlapping requests (slow combined endpoint + rapid filter clicks)
+    // resolve out of order and a stale unfiltered payload overwrites the
+    // filtered numbers on screen.
+    let refreshSeq = 0;
 
     // ── DOM Refs ───────────────────────────────────────────────────────
     const $ = (sel) => document.querySelector(sel);
@@ -82,7 +94,8 @@
         const p = new URLSearchParams();
         if (state.filters.startDate) p.set('start_date', state.filters.startDate);
         if (state.filters.endDate) p.set('end_date', state.filters.endDate);
-        if (state.filters.project.length > 0) p.set('project', state.filters.project.join(','));
+        // Canonical "<id> - NAME" — the backend matches it strictly by id.
+        if (state.currentProject) p.set('project', state.currentProject);
         if (state.filters.category.length > 0) p.set('category', state.filters.category.join(','));
         if (state.filters.vendor.length > 0) p.set('vendor', state.filters.vendor.join(','));
         return p;
@@ -214,21 +227,16 @@
         }
 
         setOptions(items) {
-            this.options = items;
-            // Auto-cleanup: remove selections no longer in the options list
-            const itemSet = new Set(items);
-            let changed = false;
+            // Keep current selections in the list even when the refreshed
+            // option set no longer contains them (e.g. the other filters or
+            // the date range exclude every matching row) — otherwise a user's
+            // filter silently un-applies itself mid-session.
+            const merged = [...items];
             for (const val of this.selectedValues) {
-                if (!itemSet.has(val)) {
-                    this.selectedValues.delete(val);
-                    changed = true;
-                }
+                if (!merged.includes(val)) merged.unshift(val);
             }
-            if (changed) {
-                this.updateTriggerText();
-                this.syncFilters();
-            }
-            this.renderOptions(items);
+            this.options = merged;
+            this.renderOptions(merged);
         }
 
         renderOptions(items) {
@@ -445,39 +453,117 @@
         }
     }
 
-    // ── Init ───────────────────────────────────────────────────────────
-    async function init() {
+    // ── Landing: registry-fed project cards ───────────────────────────
+    // Mirrors the registry page's grouping so the two pages feel like one.
+    const TYPE_SECTIONS = [
+        { key: 'project', title: 'Projects', sub: 'Valid client / site projects', variant: 'projects' },
+        { key: 'design', title: 'Designs', sub: 'Design-only work', variant: 'designs' },
+        { key: 'other', title: 'Others', sub: 'Internal heads (office, factory, KVB…)', variant: 'others' },
+    ];
+
+    function renderLanding() {
+        const wrap = document.getElementById('ps-cards');
+        if (!state.registryCards.length) {
+            wrap.innerHTML = '<div class="ps-empty">No projects in the registry yet. Add them on the Projects page first.</div>';
+            return;
+        }
+        wrap.innerHTML = TYPE_SECTIONS.map(sec => {
+            const items = state.registryCards.filter(c => (c.project_type || 'project') === sec.key);
+            if (!items.length) return '';
+            return `<section class="ps-proj-section ps-proj-section--${sec.variant}">
+                <div class="ps-proj-section-head">
+                    <h2 class="ps-proj-section-title">${sec.title} <span class="ps-proj-count">${items.length}</span></h2>
+                    <span class="ps-proj-sub">${sec.sub}</span>
+                </div>
+                <div class="ps-proj-grid">
+                    ${items.map(c => `
+                    <button type="button" class="ps-proj-card" data-display="${escapeHtml(c.display)}"
+                            data-title="${c.id} − ${escapeHtml(c.stem_name)}">
+                        <div class="ps-proj-card-main">
+                            <span class="ps-proj-card-id">${c.id}</span>
+                            <span class="ps-proj-card-name">${escapeHtml(c.stem_name)}</span>
+                        </div>
+                        <div class="ps-proj-fin">
+                            <div class="ps-proj-fin-cell"><span class="k">Income</span><span class="v income">${c.income_formatted}</span></div>
+                            <div class="ps-proj-fin-cell"><span class="k">Expense</span><span class="v expense">${c.expense_formatted}</span></div>
+                            <div class="ps-proj-fin-cell"><span class="k">Txns</span><span class="v">${(c.txn_count || 0).toLocaleString()}</span></div>
+                        </div>
+                    </button>`).join('')}
+                </div>
+            </section>`;
+        }).join('');
+    }
+
+    function bindLandingEvents() {
+        document.getElementById('ps-cards').addEventListener('click', (e) => {
+            const card = e.target.closest('.ps-proj-card');
+            if (card) openProject(card.dataset.display, card.dataset.title);
+        });
+        // Header back: from a project detail return to the cards; from the
+        // landing it keeps its normal link behaviour (back to the hub).
+        document.getElementById('ps-back-btn').addEventListener('click', (e) => {
+            if (!document.getElementById('ps-detail').classList.contains('hidden')) {
+                e.preventDefault();
+                showLanding();
+            }
+        });
+    }
+
+    function showLanding() {
+        state.currentProject = null;
+        refreshSeq++; // drop any in-flight detail responses
+        document.getElementById('ps-detail').classList.add('hidden');
+        document.getElementById('ps-landing').classList.remove('hidden');
+        document.getElementById('export-btn').classList.add('hidden');
+        document.getElementById('ps-title').textContent = 'Project Summary';
+        window.scrollTo(0, 0);
+    }
+
+    async function openProject(display, title) {
+        state.currentProject = display;
+        document.getElementById('ps-title').textContent = title || display;
+        document.getElementById('ps-landing').classList.add('hidden');
+        document.getElementById('ps-detail').classList.remove('hidden');
+        document.getElementById('export-btn').classList.remove('hidden');
+        // Fresh secondary filters for every project
+        state.filters.startDate = state.defaultDates.min;
+        state.filters.endDate = state.defaultDates.max;
+        $('#filter-start-date').value = state.filters.startDate;
+        $('#filter-end-date').value = state.filters.endDate;
+        Object.values(dropdowns).forEach(d => d.clear());
+        state.filters.category = [];
+        state.filters.vendor = [];
+        window.scrollTo(0, 0);
         showLoading();
         try {
-            // Create dropdown instances
-            const ddProject = new PSDropdown('dropdown-project', 'All Projects', 'project');
-            const ddCategory = new PSDropdown('dropdown-category', 'All Categories', 'category');
-            const ddVendor = new PSDropdown('dropdown-vendor', 'All Vendors', 'vendor');
-
-            const [dateRange, filterOptions] = await Promise.all([
-                fetchJSON('/api/project-summary/date-range'),
-                fetchJSON('/api/project-summary/projects')
-            ]);
-
-            if (dateRange.min_date) {
-                $('#filter-start-date').value = dateRange.min_date;
-                state.filters.startDate = dateRange.min_date;
-            }
-            if (dateRange.max_date) {
-                $('#filter-end-date').value = dateRange.max_date;
-                state.filters.endDate = dateRange.max_date;
-            }
-
-            ddProject.setOptions(filterOptions.projects || []);
-            ddCategory.setOptions(filterOptions.categories || []);
-            ddVendor.setOptions(filterOptions.vendors || []);
-
-            bindFilterEvents();
             await refreshAll();
-        } catch (err) {
-            console.error('Init error:', err);
         } finally {
             hideLoading();
+        }
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────
+    async function init() {
+        try {
+            new PSDropdown('dropdown-category', 'All Categories', 'category');
+            new PSDropdown('dropdown-vendor', 'All Vendors', 'vendor');
+
+            const [dateRange, cards] = await Promise.all([
+                fetchJSON('/api/project-summary/date-range'),
+                fetchJSON('/api/project-summary/project-cards')
+            ]);
+            state.defaultDates.min = dateRange.min_date || '';
+            state.defaultDates.max = dateRange.max_date || '';
+            state.registryCards = cards.projects || [];
+
+            bindFilterEvents();
+            bindLandingEvents();
+            renderLanding();
+            showLanding();
+        } catch (err) {
+            console.error('Init error:', err);
+            document.getElementById('ps-cards').innerHTML =
+                '<div class="ps-empty">Failed to load projects. Refresh to retry.</div>';
         }
     }
 
@@ -493,24 +579,14 @@
             debouncedRefresh();
         });
 
-        // Reset button
-        $('#reset-filters').addEventListener('click', async () => {
-            try {
-                const dateRange = await fetchJSON('/api/project-summary/date-range');
-                state.filters.startDate = dateRange.min_date || '';
-                state.filters.endDate = dateRange.max_date || '';
-                $('#filter-start-date').value = state.filters.startDate;
-                $('#filter-end-date').value = state.filters.endDate;
-            } catch (e) {
-                state.filters.startDate = '';
-                state.filters.endDate = '';
-                $('#filter-start-date').value = '';
-                $('#filter-end-date').value = '';
-            }
-
-            // Clear all dropdowns
+        // Reset button — restores default dates and clears category/vendor;
+        // the project itself stays pinned (leave via the back button).
+        $('#reset-filters').addEventListener('click', () => {
+            state.filters.startDate = state.defaultDates.min;
+            state.filters.endDate = state.defaultDates.max;
+            $('#filter-start-date').value = state.filters.startDate;
+            $('#filter-end-date').value = state.filters.endDate;
             Object.values(dropdowns).forEach(d => d.clear());
-            state.filters.project = [];
             state.filters.category = [];
             state.filters.vendor = [];
             refreshAll();
@@ -556,6 +632,8 @@
 
     // ── Refresh All ────────────────────────────────────────────────────
     async function refreshAll() {
+        if (!state.currentProject) return; // landing view — nothing to refresh
+        const seq = ++refreshSeq;
         state.pagination.projectBreakdown.page = 1;
         state.pagination.vendorBreakdown.page = 1;
         state.pagination.axisTransactions.page = 1;
@@ -571,13 +649,13 @@
                 fetchJSON('/api/personal/transactions?' + params.toString()),
                 fetchJSON('/api/project-summary/filter-options?' + params.toString())
             ]);
+            if (seq !== refreshSeq) return; // superseded by a newer filter change
 
             state.data.combined = combined;
             state.data.personalTxns = personalTxns.transactions || [];
 
-            // Update dropdown options dynamically
+            // Update dropdown options dynamically (scoped to this project)
             if (filterOpts) {
-                dropdowns['dropdown-project']?.setOptions(filterOpts.projects || []);
                 dropdowns['dropdown-category']?.setOptions(filterOpts.categories || []);
                 dropdowns['dropdown-vendor']?.setOptions(filterOpts.vendors || []);
             }
@@ -757,12 +835,14 @@
     }
 
     async function fetchVendorPage(page) {
+        const seq = refreshSeq;
         const params = buildQueryParams();
         params.set('page', page);
         params.set('per_page', state.pagination.vendorBreakdown.perPage);
 
         try {
             const result = await fetchJSON('/api/project-summary/vendors?' + params.toString());
+            if (seq !== refreshSeq) return; // filters changed while in flight
             const tbody = document.getElementById('vendor-table-body');
             if (!result.vendors || result.vendors.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" class="ps-empty">No vendor data</td></tr>';
@@ -797,6 +877,7 @@
 
     // ── Render: Bank Transactions (server-side pagination) ─────────────
     async function fetchBankTransactions(bankCode, page) {
+        const seq = refreshSeq;
         const params = buildQueryParams();
         params.set('bank_code', bankCode);
         params.set('page', page);
@@ -804,6 +885,7 @@
 
         try {
             const result = await fetchJSON('/api/project-summary/bank-transactions?' + params.toString());
+            if (seq !== refreshSeq) return; // filters changed while in flight
             const tbody = document.getElementById('bank-txn-body');
 
             if (!result.transactions || result.transactions.length === 0) {
@@ -925,12 +1007,14 @@
 
     // ── Render: Bills Table (server-side pagination) ────────────────────
     async function fetchBills(page) {
+        const seq = refreshSeq;
         const params = buildQueryParams();
         params.set('page', page);
         params.set('per_page', state.pagination.bills.perPage);
 
         try {
             const result = await fetchJSON('/api/project-summary/bills?' + params.toString());
+            if (seq !== refreshSeq) return; // filters changed while in flight
             state.data.bills = result;
             state.pagination.bills.page = result.page;
             renderBillsTable();
@@ -991,12 +1075,14 @@
 
     // ── Render: Sales Bills Table (server-side pagination) ──────────────
     async function fetchSalesBills(page) {
+        const seq = refreshSeq;
         const params = buildQueryParams();
         params.set('page', page);
         params.set('per_page', state.pagination.salesBills.perPage);
 
         try {
             const result = await fetchJSON('/api/project-summary/sales-bills?' + params.toString());
+            if (seq !== refreshSeq) return; // filters changed while in flight
             state.data.salesBills = result;
             state.pagination.salesBills.page = result.page;
             renderSalesBillsTable();
