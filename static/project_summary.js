@@ -75,6 +75,17 @@
         }).format(amount);
     }
 
+    // Compact Indian format for tight card cells (same as the registry page):
+    // 22165179 -> ₹2.22 Cr, 6640450 -> ₹66.40 L. Full value goes in a tooltip.
+    function formatINRCompact(value) {
+        const n = Number(value) || 0;
+        const sign = n < 0 ? '-' : '';
+        const abs = Math.abs(n);
+        if (abs >= 1e7) return `${sign}₹${(abs / 1e7).toFixed(2)} Cr`;
+        if (abs >= 1e5) return `${sign}₹${(abs / 1e5).toFixed(2)} L`;
+        return sign + '₹' + abs.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    }
+
     function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -484,8 +495,8 @@
                             <span class="ps-proj-card-name">${escapeHtml(c.stem_name)}</span>
                         </div>
                         <div class="ps-proj-fin">
-                            <div class="ps-proj-fin-cell"><span class="k">Income</span><span class="v income">${c.income_formatted}</span></div>
-                            <div class="ps-proj-fin-cell"><span class="k">Expense</span><span class="v expense">${c.expense_formatted}</span></div>
+                            <div class="ps-proj-fin-cell"><span class="k">Income</span><span class="v income" title="${escapeHtml(c.income_formatted)}">${formatINRCompact(c.income)}</span></div>
+                            <div class="ps-proj-fin-cell"><span class="k">Expense</span><span class="v expense" title="${escapeHtml(c.expense_formatted)}">${formatINRCompact(c.expense)}</span></div>
                             <div class="ps-proj-fin-cell"><span class="k">Txns</span><span class="v">${(c.txn_count || 0).toLocaleString()}</span></div>
                         </div>
                     </button>`).join('')}

@@ -481,15 +481,13 @@
         setCashFormOpen(cashForm.classList.contains('hidden'));
     });
 
-    // ── Project overview strip: PO value vs received vs spent ──
+    // ── Project overview strip: PO value vs received ──
     function renderPayments(p) {
         const po = Number(p.po_total_value) || 0;
         const rec = Number(p.received_total) || 0;
         const bank = Number(p.received_bank) || 0;
         const cash = Number(p.received_cash) || 0;
-        const s = insights && insights.summary ? insights.summary : null;
-        const spent = s ? (Number(s.spend_total) || 0) : 0;
-        if (po <= 0 && rec <= 0 && spent <= 0) {
+        if (po <= 0 && rec <= 0) {
             detailPayments.classList.add('hidden');
             detailPayments.innerHTML = '';
             return;
@@ -503,13 +501,6 @@
         const splitNote = cash > 0
             ? `<span class="proj-pay-split" title="Bank transfers: ${escapeHtml(formatINR(bank))} · Cash: ${escapeHtml(formatINR(cash))}">${formatINRCompact(bank)} bank + ${formatINRCompact(cash)} cash</span>`
             : '';
-        // "Spent" appears once the insights payload is in: purchase bills +
-        // other project-tagged bank expenses + labour from the attendance DB.
-        const spentCell = s ? `
-                <div class="proj-pay-cell">
-                    <span class="proj-pay-k">Spent</span>
-                    <span class="proj-pay-v spent" title="Purchase bills ${escapeHtml(formatINR(s.material_total))} + other expenses ${escapeHtml(formatINR(s.other_expense_total))} + labour ${escapeHtml(formatINR(s.labour_total))}">${spent > 0 ? formatINR(spent) : '—'}</span>
-                </div>` : '';
         detailPayments.innerHTML = `
             <div class="proj-pay-head">
                 <span class="proj-field-label">Project at a glance</span>
@@ -525,7 +516,6 @@
                     <span class="proj-pay-v received">${formatINR(rec)}</span>
                     ${splitNote}
                 </div>
-                ${spentCell}
                 <div class="proj-pay-cell">
                     <span class="proj-pay-k">${balLabel}</span>
                     <span class="proj-pay-v ${balCls}">${po > 0 ? formatINR(Math.abs(bal)) : '—'}</span>
@@ -745,8 +735,6 @@
             if (!cashPayments.length && data.payments.cash.length) {
                 cashPayments = data.payments.cash;
             }
-            const cached = projects.find(x => x.id === projectId);
-            if (cached) renderPayments(cached); // adds the "Spent" cell
             renderPayModes();
             renderPaymentHistory();
             renderExpensesTab();

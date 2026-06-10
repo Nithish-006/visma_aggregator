@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from config import Config, BANK_CONFIG, get_bank_config, get_bank_table, VALID_BANK_CODES
 
 
-def build_project_filter_sql(column, project, params):
+def build_project_filter_sql(column, project, params, fuzzy=False):
     """SQL condition for a comma-separated project selection.
 
     Canonical selections ("659 - JAMUNA") match STRICTLY on the "<id> -"
@@ -26,6 +26,11 @@ def build_project_filter_sql(column, project, params):
     the raw value and on the segment after " - "). Bind values are appended
     to `params`; returns the condition string, or None when the selection
     is empty.
+
+    fuzzy=True relaxes canonical selections to ALSO stem-match the name
+    part ("659 - JAMUNA" additionally matches "jamuna lunch"). Meant for
+    free-hand columns like the personal expense tracker, where entries are
+    typed by hand and rarely carry the canonical tag.
     """
     conds = []
     for p in (project or '').split(','):
@@ -33,19 +38,27 @@ def build_project_filter_sql(column, project, params):
         if not p or p == 'All':
             continue
         m = re.match(r'^(\d+)\s*-', p)
+        stem = None
         if m:
             pid = m.group(1)
-            conds.append(f"(TRIM({column}) LIKE %s OR TRIM({column}) LIKE %s)")
+            sub_conds = [f"TRIM({column}) LIKE %s", f"TRIM({column}) LIKE %s"]
             params.append(f"{pid} -%")
             params.append(f"{pid}-%")
+            if fuzzy:
+                # stem of the name part after the canonical "<id> - " prefix
+                name_tokens = p[m.end():].strip().split()
+                stem = name_tokens[0].lower() if name_tokens else None
         else:
+            sub_conds = []
             tokens = p.split()
             stem = tokens[0].lower() if tokens else p.lower()
-            conds.append(
-                f"(LOWER(TRIM({column})) LIKE %s "
-                f"OR LOWER(TRIM(SUBSTRING_INDEX({column}, ' - ', -1))) LIKE %s)")
+        if stem:
+            sub_conds.append(f"LOWER(TRIM({column})) LIKE %s")
             params.append(f"{stem}%")
+            sub_conds.append(f"LOWER(TRIM(SUBSTRING_INDEX({column}, ' - ', -1))) LIKE %s")
             params.append(f"{stem}%")
+        if sub_conds:
+            conds.append(f"({' OR '.join(sub_conds)})")
     return f"({' OR '.join(conds)})" if conds else None
 
 

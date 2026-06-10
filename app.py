@@ -2759,9 +2759,10 @@ def get_personal_transactions():
         params = []
 
         if project and project != 'All':
-            # Strict "<id> -" prefix for canonical selections, stem prefix
-            # for free-text ones (the tracker keeps a free-text project field).
-            proj_cond = build_project_filter_sql('project', project, params)
+            # fuzzy=True: tracker entries are typed free-hand ("jamuna lunch"),
+            # so a canonical selection also stem-matches the project name part.
+            # This is the ONLY project filter that stays fuzzy by design.
+            proj_cond = build_project_filter_sql('project', project, params, fuzzy=True)
             if proj_cond:
                 query += f" AND {proj_cond}"
 

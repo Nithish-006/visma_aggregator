@@ -739,7 +739,6 @@ html, body {
 .proj-pay-v.received { color: var(--proj-accent-strong); }
 .proj-pay-v.due { color: var(--proj-danger); }
 .proj-pay-v.settled { color: var(--proj-success); }
-.proj-pay-v.spent { color: var(--proj-warning); }
 .proj-pay-bar {
     margin-top: 0.7rem;
     height: 7px;
