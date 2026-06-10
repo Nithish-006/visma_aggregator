@@ -1131,6 +1131,151 @@ def api_delete_cash_payment(project_id, payment_id):
     return jsonify(summary)
 
 
+@app.route('/api/projects/<int:project_id>/insights', methods=['GET'])
+@login_required
+def api_project_insights(project_id):
+    """One-shot project picture for the registry detail modal tabs.
+
+    Assembles, for a single canonical project:
+      * client payments — KVB bank credits tagged with the project (with
+        dates and statement context) plus the manual cash ledger;
+      * expenses — debit transactions tagged with the project across banks;
+      * purchase / sales bills — invoices whose free-text project matches;
+      * labour — monthly charges pulled from the linked attendance app DB.
+
+    All sections match strictly by the canonical "<id> -" prefix (the
+    module's tagging contract — data is ingested in "<id> - <Stem>" form).
+    """
+    db_manager.ensure_projects_table()
+    project = db_manager.get_project(project_id)
+    if not project:
+        return jsonify({'error': 'not_found'}), 404
+
+    def project_mask(df):
+        """Rows whose Project tag is this project's canonical "<id> -" form."""
+        col = 'Project' if 'Project' in df.columns else 'project'
+        if col not in df.columns:
+            return pd.Series(False, index=df.index)
+        s = df[col].astype(str).str.strip()
+        return s.str.match(rf'^{project_id}\s*-')
+
+    def row_description(r):
+        for col in ('Description', 'Transaction Description', 'transaction_description'):
+            val = r.get(col)
+            if val is not None and pd.notna(val) and str(val).strip():
+                return str(val).strip()
+        return ''
+
+    # ── Client payments: KVB credits tagged with this project + cash ledger ──
+    bank_payments = []
+    bank_total = 0.0
+    kvb_df = get_bank_df('kvb')
+    if not kvb_df.empty and 'CR Amount' in kvb_df.columns:
+        credit_rows = kvb_df[project_mask(kvb_df) & (kvb_df['CR Amount'] > 0)]
+        credit_rows = credit_rows.sort_values('date', ascending=False)
+        for _, r in credit_rows.iterrows():
+            amount = float(r.get('CR Amount', 0))
+            bank_total += amount
+            bank_payments.append({
+                'date': r['date'].strftime('%Y-%m-%d') if pd.notna(r['date']) else '',
+                'description': row_description(r),
+                'vendor': str(r.get('Client/Vendor', '') or ''),
+                'amount': amount,
+            })
+
+    cash_payments = db_manager.list_cash_payments(project_id)
+    cash_total = sum(float(c.get('amount') or 0) for c in cash_payments)
+    received_total = bank_total + cash_total
+
+    # ── Expenses: debit transactions tagged with this project, all banks ──
+    LABOUR_CATS = {'LABOUR PAYMENT', 'LABOR PAYMENT', 'LABOUR', 'LABOR'}
+    OTHER_EXCLUDE_CATS = {'MATERIAL PURCHASE', 'AMOUNT RECEIVED', 'SALARY AC',
+                          'BANK CHARGES', 'DUTIES & TAX'}
+    expense_rows = []
+    expense_total = 0.0
+    other_expense_total = 0.0
+    cat_totals = {}
+    for bank_code in VALID_BANK_CODES:
+        df = get_bank_df(bank_code)
+        if df.empty or 'DR Amount' not in df.columns:
+            continue
+        sub = df[project_mask(df) & (df['DR Amount'] > 0)]
+        for _, r in sub.iterrows():
+            amount = float(r.get('DR Amount', 0))
+            category = str(r.get('Category', 'Uncategorized') or 'Uncategorized')
+            expense_total += amount
+            bucket = cat_totals.setdefault(category, {'amount': 0.0, 'count': 0})
+            bucket['amount'] += amount
+            bucket['count'] += 1
+            cat_upper = category.upper().strip()
+            if cat_upper not in OTHER_EXCLUDE_CATS and cat_upper not in LABOUR_CATS:
+                other_expense_total += amount
+            expense_rows.append({
+                'date': r['date'].strftime('%Y-%m-%d') if pd.notna(r['date']) else '',
+                'bank': bank_code,
+                'description': row_description(r),
+                'vendor': str(r.get('Client/Vendor', '') or ''),
+                'category': category,
+                'amount': amount,
+            })
+    expense_count = len(expense_rows)
+    expense_rows.sort(key=lambda x: x['date'], reverse=True)
+    expense_rows = expense_rows[:500]
+    by_category = [
+        {'category': c, 'amount': v['amount'], 'count': v['count']}
+        for c, v in sorted(cat_totals.items(), key=lambda kv: kv[1]['amount'], reverse=True)
+    ]
+
+    # ── Purchase / sales bills ──
+    purchase_bills, purchase_summary = db_manager.get_bills_for_canonical_project(
+        project_id, kind='purchase')
+    sales_bills, sales_summary = db_manager.get_bills_for_canonical_project(
+        project_id, kind='sales')
+
+    # ── Labour from the attendance app DB ──
+    labour = DatabaseManager.get_labour_summary_for_project(project_id)
+
+    po_value = float(project.get('po_total_value') or 0)
+    labour_total = float(labour.get('total_cost') or 0)
+    # Same composition as the project-summary page: material from purchase
+    # bills, "other" bank debits (excluding material/labour/internal heads so
+    # bills and the attendance DB aren't double counted), labour from
+    # attendance. Bank-debit material/labour rows are still visible in the
+    # Expenses tab — they just don't add into this headline twice.
+    spend_total = purchase_summary['total_amount'] + other_expense_total + labour_total
+
+    return jsonify({
+        'project': project,
+        'summary': {
+            'po_value': po_value,
+            'received_bank': bank_total,
+            'received_cash': cash_total,
+            'received_total': received_total,
+            'balance': po_value - received_total,
+            'material_total': purchase_summary['total_amount'],
+            'other_expense_total': other_expense_total,
+            'labour_total': labour_total,
+            'spend_total': spend_total,
+        },
+        'payments': {
+            'bank': bank_payments,
+            'cash': cash_payments,
+            'bank_total': bank_total,
+            'cash_total': cash_total,
+            'total': received_total,
+        },
+        'expenses': {
+            'transactions': expense_rows,
+            'total': expense_total,
+            'count': expense_count,
+            'by_category': by_category,
+        },
+        'purchase_bills': {'bills': purchase_bills, **purchase_summary},
+        'sales_bills': {'bills': sales_bills, **sales_summary},
+        'labour': labour,
+    })
+
+
 @app.route('/api/projects/<int:project_id>/upload-po', methods=['POST'])
 @login_required
 def api_upload_project_po(project_id):

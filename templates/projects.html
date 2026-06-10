@@ -86,10 +86,10 @@
         </div>
     </div>
 
-    <!-- ==== Project detail / upload modal ==== -->
+    <!-- ==== Project detail / insights modal ==== -->
     <div id="project-detail-modal" class="proj-modal hidden" role="dialog" aria-modal="true">
         <div class="proj-modal-backdrop" data-close="project-detail-modal"></div>
-        <div class="proj-modal-card">
+        <div class="proj-modal-card proj-modal-card--detail">
             <div class="proj-modal-header">
                 <h2 id="detail-title">Project</h2>
                 <div class="proj-modal-header-actions">
@@ -104,31 +104,74 @@
                 </div>
             </div>
             <div class="proj-modal-body">
-                <!-- PO value vs client payments received -->
+                <!-- Always-visible overview: PO value / received / spent / balance -->
                 <div id="detail-payments" class="proj-payments hidden"></div>
 
-                <!-- Cash client payments (not captured in the bank statement) -->
-                <div id="detail-cash" class="proj-cash">
-                    <div class="proj-cash-head">
-                        <span class="proj-field-label">Cash payments received</span>
-                        <span id="detail-cash-total" class="proj-cash-total"></span>
-                        <button id="detail-cash-toggle" type="button" class="proj-cash-add-btn" title="Add a cash payment">
-                            <span class="proj-cash-add-icon">+</span><span id="detail-cash-toggle-label">Add</span>
-                        </button>
-                    </div>
-                    <form id="detail-cash-form" class="proj-cash-form hidden">
-                        <p class="proj-cash-hint">Money the client paid in cash — not in the KVB statement. Added to the received total.</p>
-                        <div class="proj-cash-form-row">
-                            <input id="detail-cash-amount" class="proj-input proj-cash-amount" type="number" step="0.01" min="0" placeholder="Amount (₹)" autocomplete="off">
-                            <input id="detail-cash-date" class="proj-input proj-cash-date" type="date" autocomplete="off" title="Date received (optional)">
-                            <input id="detail-cash-note" class="proj-input proj-cash-note" type="text" placeholder="Note (optional)" autocomplete="off">
-                            <button type="submit" id="detail-cash-add" class="proj-primary-btn">Add</button>
-                        </div>
-                        <p id="detail-cash-error" class="proj-error hidden"></p>
-                    </form>
-                    <div id="detail-cash-list" class="proj-cash-list"></div>
-                </div>
+                <!-- Tab bar -->
+                <nav id="detail-tabs" class="proj-tabs" role="tablist" aria-label="Project insights">
+                    <button type="button" class="proj-tab active" data-tab="po" role="tab">PO</button>
+                    <button type="button" class="proj-tab" data-tab="payments" role="tab">Client Payments<span class="proj-tab-count hidden" data-tab-count="payments"></span></button>
+                    <button type="button" class="proj-tab" data-tab="expenses" role="tab">Expenses<span class="proj-tab-count hidden" data-tab-count="expenses"></span></button>
+                    <button type="button" class="proj-tab" data-tab="purchase" role="tab">Purchase Bills<span class="proj-tab-count hidden" data-tab-count="purchase"></span></button>
+                    <button type="button" class="proj-tab" data-tab="sales" role="tab">Sales Bills<span class="proj-tab-count hidden" data-tab-count="sales"></span></button>
+                    <button type="button" class="proj-tab" data-tab="labour" role="tab">Labour<span class="proj-tab-count hidden" data-tab-count="labour"></span></button>
+                </nav>
 
+                <!-- ===== Tab: Client payments (bank credits + cash ledger) ===== -->
+                <section class="proj-tab-panel hidden" data-tab-panel="payments">
+                    <div id="detail-pay-modes" class="proj-pay-modes"></div>
+                    <div id="detail-cash" class="proj-cash">
+                        <div class="proj-cash-head">
+                            <span class="proj-field-label">Payment history</span>
+                            <span id="detail-cash-total" class="proj-cash-total"></span>
+                            <button id="detail-cash-toggle" type="button" class="proj-cash-add-btn" title="Record a cash payment">
+                                <span class="proj-cash-add-icon">+</span><span id="detail-cash-toggle-label">Add cash</span>
+                            </button>
+                        </div>
+                        <form id="detail-cash-form" class="proj-cash-form hidden">
+                            <p class="proj-cash-hint">Money the client paid in cash — not in the KVB statement. Added to the received total.</p>
+                            <div class="proj-cash-form-row">
+                                <input id="detail-cash-amount" class="proj-input proj-cash-amount" type="number" step="0.01" min="0" placeholder="Amount (₹)" autocomplete="off">
+                                <input id="detail-cash-date" class="proj-input proj-cash-date" type="date" autocomplete="off" title="Date received (optional)">
+                                <input id="detail-cash-note" class="proj-input proj-cash-note" type="text" placeholder="Note (optional)" autocomplete="off">
+                                <button type="submit" id="detail-cash-add" class="proj-primary-btn">Add</button>
+                            </div>
+                            <p id="detail-cash-error" class="proj-error hidden"></p>
+                        </form>
+                        <div id="detail-cash-list" class="proj-cash-list"></div>
+                    </div>
+                </section>
+
+                <!-- ===== Tab: Expenses (bank debits tagged to this project) ===== -->
+                <section class="proj-tab-panel hidden" data-tab-panel="expenses">
+                    <div id="detail-expenses" class="proj-tab-content">
+                        <p class="proj-tab-loading">Loading…</p>
+                    </div>
+                </section>
+
+                <!-- ===== Tab: Purchase bills ===== -->
+                <section class="proj-tab-panel hidden" data-tab-panel="purchase">
+                    <div id="detail-purchase-bills" class="proj-tab-content">
+                        <p class="proj-tab-loading">Loading…</p>
+                    </div>
+                </section>
+
+                <!-- ===== Tab: Sales bills ===== -->
+                <section class="proj-tab-panel hidden" data-tab-panel="sales">
+                    <div id="detail-sales-bills" class="proj-tab-content">
+                        <p class="proj-tab-loading">Loading…</p>
+                    </div>
+                </section>
+
+                <!-- ===== Tab: Labour (attendance app DB) ===== -->
+                <section class="proj-tab-panel hidden" data-tab-panel="labour">
+                    <div id="detail-labour" class="proj-tab-content">
+                        <p class="proj-tab-loading">Loading…</p>
+                    </div>
+                </section>
+
+                <!-- ===== Tab: PO (default) ===== -->
+                <section class="proj-tab-panel" data-tab-panel="po">
                 <div id="detail-po-existing" class="hidden">
                     <p class="proj-field-label">Purchase Order</p>
                     <div class="proj-po-row">
@@ -216,6 +259,7 @@
                         <p id="detail-upload-error" class="proj-error hidden"></p>
                     </form>
                 </div>
+                </section>
             </div>
         </div>
     </div>

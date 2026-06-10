@@ -1260,6 +1260,74 @@ class DatabaseManager:
             print(f"[!] Error fetching sales bills for project summary: {e}")
             return [], 0, {'total_amount': 0, 'total_gst': 0}
 
+    def get_bills_for_canonical_project(self, project_id: int,
+                                        kind: str = 'purchase', limit: int = 300):
+        """Bills tagged with one canonical registry project.
+
+        Strict match on the canonical "<id> - <Stem>" form (what
+        normalize-projects writes / proper ingestion uses).
+
+        kind: 'purchase' (bill_invoices) or 'sales' (sales_invoices).
+        Returns (rows, {'count', 'total_amount', 'total_gst'}).
+        """
+        if kind == 'sales':
+            table, items_table = 'sales_invoices', 'sales_line_items'
+        else:
+            table, items_table = 'bill_invoices', 'bill_line_items'
+
+        conds = ["TRIM(b.project) LIKE %s", "TRIM(b.project) LIKE %s"]
+        params = [f"{project_id} -%", f"{project_id}-%"]
+        where_clause = " OR ".join(conds)
+
+        empty_summary = {'count': 0, 'total_amount': 0.0, 'total_gst': 0.0}
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+
+                cursor.execute(
+                    f"SELECT COUNT(*) AS cnt, "
+                    f"COALESCE(SUM(b.total_amount), 0) AS total_amount, "
+                    f"COALESCE(SUM(COALESCE(b.total_cgst, 0) + COALESCE(b.total_sgst, 0) + COALESCE(b.total_igst, 0)), 0) AS total_gst "
+                    f"FROM {table} b WHERE {where_clause}",
+                    tuple(params)
+                )
+                agg = cursor.fetchone() or {}
+                summary = {
+                    'count': int(agg.get('cnt') or 0),
+                    'total_amount': float(agg.get('total_amount') or 0),
+                    'total_gst': float(agg.get('total_gst') or 0),
+                }
+
+                cursor.execute(
+                    f"""
+                    SELECT b.id, b.invoice_number, b.invoice_date,
+                           b.vendor_name, b.buyer_name,
+                           b.subtotal, b.total_cgst, b.total_sgst, b.total_igst,
+                           b.total_amount, b.project,
+                           COUNT(li.id) AS line_item_count
+                    FROM {table} b
+                    LEFT JOIN {items_table} li ON b.id = li.invoice_id
+                    WHERE {where_clause}
+                    GROUP BY b.id
+                    ORDER BY b.invoice_date DESC, b.id DESC
+                    LIMIT %s
+                    """,
+                    tuple(params + [limit])
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+
+                for row in rows:
+                    if row.get('invoice_date'):
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                    for key, val in row.items():
+                        if isinstance(val, DecimalType):
+                            row[key] = float(val)
+                return rows, summary
+        except Exception as e:
+            print(f"[!] Error fetching {kind} bills for project {project_id}: {e}")
+            return [], empty_summary
+
     def get_bills_with_line_items_for_export(self, start_date=None, end_date=None):
         """Fetch all bills with their nested line items for Excel export.
 
@@ -2658,6 +2726,89 @@ class DatabaseManager:
         except Exception as e:
             print(f"[!] Error fetching labour costs from salary DB: {e}")
             return {}
+
+    @staticmethod
+    def get_labour_summary_for_project(project_id):
+        """Monthly labour charges for one canonical project from the linked
+        attendance app database.
+
+        Attendance rows are matched strictly by the canonical
+        "<id> - <Stem>" project tag. Cost formula mirrors
+        get_labour_costs_by_project: base_salary_per_day per present
+        day + (base_salary_per_day / 8) per OT hour, using each worker's
+        latest salary record.
+
+        Returns {'available', 'monthly', 'total_cost', 'total_days',
+                 'total_ot_hours', 'project_names'} — available=False with an
+        'error' key when the attendance DB can't be reached.
+        """
+        import calendar as cal
+
+        proj_conds = ["TRIM(a.project) LIKE %s", "TRIM(a.project) LIKE %s"]
+        params = [f"{project_id} -%", f"{project_id}-%"]
+
+        query = f"""
+        SELECT
+            YEAR(a.date) AS yr, MONTH(a.date) AS mn, a.project,
+            COUNT(*) AS days_present,
+            COUNT(DISTINCT a.worker_id) AS workers,
+            COALESCE(SUM(a.ot_hours), 0) AS ot_hours,
+            SUM(s.base_salary_per_day) AS base_cost,
+            SUM((s.base_salary_per_day / 8) * a.ot_hours) AS ot_cost
+        FROM attendance a
+        JOIN (
+            SELECT s1.* FROM salary s1
+            INNER JOIN (
+                SELECT worker_id, MAX(year * 100 + month) AS max_period
+                FROM salary GROUP BY worker_id
+            ) s2 ON s1.worker_id = s2.worker_id
+                AND (s1.year * 100 + s1.month) = s2.max_period
+        ) s ON a.worker_id = s.worker_id
+        WHERE a.status = 'P' AND ({' OR '.join(proj_conds)})
+        GROUP BY YEAR(a.date), MONTH(a.date), a.project
+        ORDER BY yr DESC, mn DESC
+        """
+
+        try:
+            conn = DatabaseManager._get_salary_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(query, tuple(params))
+            rows = cursor.fetchall()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"[!] Error fetching labour summary for project {project_id}: {e}")
+            return {'available': False, 'error': str(e), 'monthly': [],
+                    'total_cost': 0.0, 'total_days': 0, 'total_ot_hours': 0.0,
+                    'project_names': []}
+
+        # Merge per-(year, month) across the attendance project-name variants.
+        monthly_map = {}
+        names = set()
+        for r in rows:
+            cost = float(r['base_cost'] or 0) + float(r['ot_cost'] or 0)
+            key = (int(r['yr']), int(r['mn']))
+            entry = monthly_map.setdefault(key, {
+                'year': key[0], 'month': key[1],
+                'label': f"{cal.month_abbr[key[1]]} {key[0]}",
+                'days': 0, 'workers': 0, 'ot_hours': 0.0, 'cost': 0.0,
+            })
+            entry['days'] += int(r['days_present'] or 0)
+            entry['workers'] += int(r['workers'] or 0)
+            entry['ot_hours'] += float(r['ot_hours'] or 0)
+            entry['cost'] += round(cost, 2)
+            if r.get('project'):
+                names.add(str(r['project']).strip())
+
+        monthly = [monthly_map[k] for k in sorted(monthly_map.keys(), reverse=True)]
+        return {
+            'available': True,
+            'monthly': monthly,
+            'total_cost': round(sum(m['cost'] for m in monthly), 2),
+            'total_days': sum(m['days'] for m in monthly),
+            'total_ot_hours': round(sum(m['ot_hours'] for m in monthly), 1),
+            'project_names': sorted(names),
+        }
 
     @staticmethod
     def get_monthly_salary_and_attendance(start_date=None, end_date=None):

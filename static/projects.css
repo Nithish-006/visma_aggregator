@@ -716,7 +716,8 @@ html, body {
 }
 .proj-pay-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    /* auto-fit: 3 cells before insights load, 4 once "Spent" appears */
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 0.6rem;
 }
 .proj-pay-cell {
@@ -738,6 +739,7 @@ html, body {
 .proj-pay-v.received { color: var(--proj-accent-strong); }
 .proj-pay-v.due { color: var(--proj-danger); }
 .proj-pay-v.settled { color: var(--proj-success); }
+.proj-pay-v.spent { color: var(--proj-warning); }
 .proj-pay-bar {
     margin-top: 0.7rem;
     height: 7px;
@@ -1137,4 +1139,166 @@ html, body {
 
 .proj-type-status.error {
     color: var(--proj-danger);
+}
+
+/* ============================================================================
+   Project detail modal — insight tabs (PO / payments / expenses / bills /
+   labour). The detail modal is wider than the create modal because the tabs
+   hold tables.
+   ============================================================================ */
+.proj-modal-card--detail {
+    width: min(880px, 94vw);
+}
+
+.proj-tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 1.1rem;
+    border-bottom: 1px solid var(--proj-border-strong);
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.proj-tab {
+    appearance: none;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: 0.55rem 0.8rem;
+    font-family: inherit;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--proj-text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.proj-tab:hover { color: var(--proj-text); }
+
+.proj-tab.active {
+    color: var(--proj-accent-strong);
+    border-bottom-color: var(--proj-accent);
+}
+
+.proj-tab-count {
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: var(--proj-accent-soft);
+    color: var(--proj-accent-strong);
+    border-radius: 999px;
+    padding: 0.08rem 0.45rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.proj-tab-panel { padding-top: 1rem; }
+
+.proj-tab-loading,
+.proj-tab-empty {
+    font-size: 0.88rem;
+    color: var(--proj-text-muted);
+    padding: 0.8rem 0.2rem;
+    margin: 0;
+}
+
+.proj-tab-note {
+    margin: 0.6rem 0 0;
+    font-size: 0.76rem;
+    color: var(--proj-text-muted);
+}
+
+/* Labelled stat chips at the top of a tab (totals, counts) */
+.proj-pay-modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 0.9rem;
+}
+.proj-pay-modes:empty { display: none; }
+
+.proj-chip {
+    flex: 1 1 150px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--proj-surface-soft);
+    border: 1px solid var(--proj-border);
+    border-radius: 10px;
+}
+
+.proj-chip.accent {
+    background: var(--proj-accent-soft);
+    border-color: rgba(99, 102, 241, 0.35);
+}
+
+.proj-chip-k {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--proj-text-muted);
+}
+
+.proj-chip-v {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--proj-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.proj-chip.accent .proj-chip-v { color: var(--proj-accent-strong); }
+
+.proj-chip-sub {
+    font-size: 0.72rem;
+    color: var(--proj-text-muted);
+}
+
+/* Bank / Cash badge on payment history rows */
+.proj-mode-badge {
+    display: inline-block;
+    vertical-align: 2px;
+    margin-left: 0.35rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+}
+.proj-mode-badge.bank {
+    background: var(--proj-accent-soft);
+    color: var(--proj-accent-strong);
+}
+.proj-mode-badge.cash {
+    background: var(--proj-success-soft);
+    color: var(--proj-success);
+}
+
+/* Category pill in the expenses table */
+.proj-cat-chip {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--proj-text-dim);
+    background: var(--proj-surface-soft);
+    border: 1px solid var(--proj-border);
+    border-radius: 999px;
+    padding: 0.1rem 0.5rem;
+    white-space: nowrap;
+}
+
+/* Taller scroll area for the insight tables */
+.proj-li-scroll--tall { max-height: 340px; }
+
+@media (max-width: 640px) {
+    .proj-tab { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
 }

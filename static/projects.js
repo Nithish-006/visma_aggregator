@@ -36,6 +36,16 @@
 
     const detailPayments = document.getElementById('detail-payments');
 
+    // Insight tabs (PO / payments / expenses / bills / labour)
+    const tabsBar = document.getElementById('detail-tabs');
+    const tabButtons = () => Array.from(tabsBar.querySelectorAll('.proj-tab'));
+    const tabPanels = () => Array.from(detailModal.querySelectorAll('[data-tab-panel]'));
+    const payModesEl = document.getElementById('detail-pay-modes');
+    const expensesEl = document.getElementById('detail-expenses');
+    const purchaseBillsEl = document.getElementById('detail-purchase-bills');
+    const salesBillsEl = document.getElementById('detail-sales-bills');
+    const labourEl = document.getElementById('detail-labour');
+
     // Edit panel (type / reprocess / PO values, behind the header Edit button)
     const editToggleBtn = document.getElementById('detail-edit-toggle');
     const editToggleLabel = document.getElementById('detail-edit-toggle-label');
@@ -68,6 +78,8 @@
 
     let projects = [];
     let activeProjectId = null;
+    let insights = null;        // /insights payload for the open project
+    let cashPayments = [];      // live cash ledger for the open project
 
     // ── Toast ──────────────────────────────────────────
     let toastTimer = null;
@@ -346,6 +358,17 @@
         if (!p) return;
         activeProjectId = projectId;
         detailTitle.textContent = `${p.id} − ${p.stem_name}`;
+        // Fresh insight state: PO tab first, counts cleared, panels in loading state.
+        insights = null;
+        cashPayments = [];
+        switchTab('po');
+        ['payments', 'expenses', 'purchase', 'sales', 'labour'].forEach(k => setTabCount(k, null));
+        payModesEl.innerHTML = '';
+        const loading = `<p class="proj-tab-loading">Loading…</p>`;
+        expensesEl.innerHTML = loading;
+        purchaseBillsEl.innerHTML = loading;
+        salesBillsEl.innerHTML = loading;
+        labourEl.innerHTML = loading;
         renderPayments(p);
         // Start in read-only view; editing is opt-in via the header Edit button.
         setEditMode(false);
@@ -355,6 +378,7 @@
         cashError.classList.add('hidden');
         cashError.textContent = '';
         loadCashPayments(p.id);
+        loadInsights(p.id);
         // Reflect current type in the toggle
         const wantVal = projectTypeOf(p);
         detailTypeRadios().forEach(r => { r.checked = (r.value === wantVal); });
@@ -389,8 +413,40 @@
         if (!on) exitPoEditForm(); // collapse any open PO-values form on exit
     }
     editToggleBtn.addEventListener('click', () => {
-        setEditMode(editPanel.classList.contains('hidden'));
+        const turningOn = editPanel.classList.contains('hidden');
+        if (turningOn) switchTab('po'); // the edit panel lives on the PO tab
+        setEditMode(turningOn);
     });
+
+    // ── Insight tabs ───────────────────────────────────
+    function switchTab(key) {
+        tabButtons().forEach(b => b.classList.toggle('active', b.dataset.tab === key));
+        tabPanels().forEach(pn => pn.classList.toggle('hidden', pn.dataset.tabPanel !== key));
+    }
+    tabsBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('.proj-tab');
+        if (btn) switchTab(btn.dataset.tab);
+    });
+
+    function setTabCount(key, value) {
+        const el = tabsBar.querySelector(`[data-tab-count="${key}"]`);
+        if (!el) return;
+        if (!value) {
+            el.classList.add('hidden');
+            el.textContent = '';
+        } else {
+            el.textContent = value;
+            el.classList.remove('hidden');
+        }
+    }
+
+    function fmtDate(s) {
+        if (!s) return '—';
+        const d = new Date(s);
+        return Number.isNaN(d.getTime())
+            ? String(s)
+            : d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
 
     // Revert the inline PO-values form back to the read-only gist.
     function exitPoEditForm() {
@@ -404,20 +460,22 @@
     function setCashFormOpen(on) {
         cashForm.classList.toggle('hidden', !on);
         cashToggleBtn.classList.toggle('active', on);
-        cashToggleLabel.textContent = on ? 'Close' : 'Add';
+        cashToggleLabel.textContent = on ? 'Close' : 'Add cash';
         if (on) setTimeout(() => cashAmount.focus(), 50);
     }
     cashToggleBtn.addEventListener('click', () => {
         setCashFormOpen(cashForm.classList.contains('hidden'));
     });
 
-    // ── PO value vs client payments received ──────────
+    // ── Project overview strip: PO value vs received vs spent ──
     function renderPayments(p) {
         const po = Number(p.po_total_value) || 0;
         const rec = Number(p.received_total) || 0;
         const bank = Number(p.received_bank) || 0;
         const cash = Number(p.received_cash) || 0;
-        if (po <= 0 && rec <= 0) {
+        const s = insights && insights.summary ? insights.summary : null;
+        const spent = s ? (Number(s.spend_total) || 0) : 0;
+        if (po <= 0 && rec <= 0 && spent <= 0) {
             detailPayments.classList.add('hidden');
             detailPayments.innerHTML = '';
             return;
@@ -431,9 +489,16 @@
         const splitNote = cash > 0
             ? `<span class="proj-pay-split" title="Bank transfers: ${escapeHtml(formatINR(bank))} · Cash: ${escapeHtml(formatINR(cash))}">${formatINRCompact(bank)} bank + ${formatINRCompact(cash)} cash</span>`
             : '';
+        // "Spent" appears once the insights payload is in: purchase bills +
+        // other project-tagged bank expenses + labour from the attendance DB.
+        const spentCell = s ? `
+                <div class="proj-pay-cell">
+                    <span class="proj-pay-k">Spent</span>
+                    <span class="proj-pay-v spent" title="Purchase bills ${escapeHtml(formatINR(s.material_total))} + other expenses ${escapeHtml(formatINR(s.other_expense_total))} + labour ${escapeHtml(formatINR(s.labour_total))}">${spent > 0 ? formatINR(spent) : '—'}</span>
+                </div>` : '';
         detailPayments.innerHTML = `
             <div class="proj-pay-head">
-                <span class="proj-field-label">Payments vs PO</span>
+                <span class="proj-field-label">Project at a glance</span>
                 ${pct != null ? `<span class="proj-pay-pct">${pct}% received</span>` : ''}
             </div>
             <div class="proj-pay-grid">
@@ -446,6 +511,7 @@
                     <span class="proj-pay-v received">${formatINR(rec)}</span>
                     ${splitNote}
                 </div>
+                ${spentCell}
                 <div class="proj-pay-cell">
                     <span class="proj-pay-k">${balLabel}</span>
                     <span class="proj-pay-v ${balCls}">${po > 0 ? formatINR(Math.abs(bal)) : '—'}</span>
@@ -467,29 +533,98 @@
             renderPayments(cached);
             renderList(); // keep the registry card's "Received" in sync
         }
+        if (insights && insights.summary) {
+            insights.summary.received_cash = summary.received_cash;
+            insights.summary.received_total = summary.received_total;
+            insights.payments.cash_total = summary.received_cash;
+            insights.payments.total = summary.received_total;
+        }
         renderCashList(summary.payments || []);
     }
 
     function renderCashList(payments) {
-        const total = payments.reduce((s, c) => s + (Number(c.amount) || 0), 0);
-        cashTotalEl.textContent = payments.length ? formatINR(total) : '';
-        if (!payments.length) {
-            cashListEl.innerHTML = `<p class="proj-cash-empty">No cash payments recorded yet.</p>`;
+        cashPayments = payments || [];
+        renderPaymentHistory();
+        renderPayModes();
+        if (insights) {
+            setTabCount('payments', insights.payments.bank.length + cashPayments.length);
+        }
+    }
+
+    // Bank (KVB) total / cash total / total received chips at the top of the
+    // Client Payments tab. Cash figures come from the live ledger so an
+    // add/delete updates them instantly.
+    function renderPayModes() {
+        if (!insights) { payModesEl.innerHTML = ''; return; }
+        const bank = insights.payments.bank;
+        const bankTotal = Number(insights.payments.bank_total) || 0;
+        const cashTotal = cashPayments.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        payModesEl.innerHTML = `
+            <div class="proj-chip">
+                <span class="proj-chip-k">Bank (KVB)</span>
+                <span class="proj-chip-v">${formatINR(bankTotal)}</span>
+                <span class="proj-chip-sub">${bank.length} credit${bank.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="proj-chip">
+                <span class="proj-chip-k">Cash</span>
+                <span class="proj-chip-v">${formatINR(cashTotal)}</span>
+                <span class="proj-chip-sub">${cashPayments.length} entr${cashPayments.length === 1 ? 'y' : 'ies'}</span>
+            </div>
+            <div class="proj-chip accent">
+                <span class="proj-chip-k">Total received</span>
+                <span class="proj-chip-v">${formatINR(bankTotal + cashTotal)}</span>
+            </div>`;
+    }
+
+    // One chronological history mixing KVB statement credits (read-only, with
+    // their statement context) and manual cash entries (deletable).
+    function renderPaymentHistory() {
+        const bank = (insights && insights.payments && insights.payments.bank) || [];
+        const cashTotal = cashPayments.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        cashTotalEl.textContent = cashPayments.length ? `${formatINR(cashTotal)} in cash` : '';
+
+        const entries = [];
+        bank.forEach(b => entries.push({
+            mode: 'bank',
+            date: b.date || '',
+            amount: Number(b.amount) || 0,
+            context: (b.vendor && b.vendor !== 'Unknown') ? b.vendor : (b.description || ''),
+            title: b.description || '',
+        }));
+        cashPayments.forEach(c => entries.push({
+            mode: 'cash',
+            id: c.id,
+            date: c.payment_date || (c.created_at ? String(c.created_at).slice(0, 10) : ''),
+            amount: Number(c.amount) || 0,
+            context: c.note || '',
+            title: c.note || '',
+        }));
+
+        if (!entries.length) {
+            cashListEl.innerHTML = insights
+                ? `<p class="proj-cash-empty">No client payments recorded for this project yet.</p>`
+                : `<p class="proj-cash-empty">Loading payments…</p>`;
             return;
         }
-        cashListEl.innerHTML = payments.map(c => {
-            const when = c.payment_date
-                ? new Date(c.payment_date).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
-                : (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+
+        entries.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        cashListEl.innerHTML = entries.map(en => {
+            const when = en.date ? fmtDate(en.date) : '';
+            const badge = en.mode === 'bank'
+                ? `<span class="proj-mode-badge bank" title="From the KVB bank statement">Bank</span>`
+                : `<span class="proj-mode-badge cash" title="Cash handed over — recorded manually">Cash</span>`;
+            const del = en.mode === 'cash'
+                ? `<button type="button" class="proj-cash-del" data-id="${en.id}" title="Remove this payment" aria-label="Remove this payment">×</button>`
+                : '';
             return `
-                <div class="proj-cash-item" data-id="${c.id}">
+                <div class="proj-cash-item">
                     <div class="proj-cash-item-main">
-                        <span class="proj-cash-item-amt">${formatINR(c.amount)}</span>
-                        ${c.note ? `<span class="proj-cash-item-note">${escapeHtml(c.note)}</span>` : ''}
+                        <span class="proj-cash-item-amt">${formatINR(en.amount)} ${badge}</span>
+                        ${en.context ? `<span class="proj-cash-item-note" title="${escapeHtml(en.title)}">${escapeHtml(en.context)}</span>` : ''}
                     </div>
                     <div class="proj-cash-item-side">
                         ${when ? `<span class="proj-cash-item-date">${when}</span>` : ''}
-                        <button type="button" class="proj-cash-del" data-id="${c.id}" title="Remove this payment" aria-label="Remove this payment">×</button>
+                        ${del}
                     </div>
                 </div>`;
         }).join('');
@@ -582,6 +717,166 @@
             btn.disabled = false;
         }
     });
+
+    // ── Project insights (payments / expenses / bills / labour tabs) ──
+    async function loadInsights(projectId) {
+        try {
+            const res = await fetch(`/api/projects/${projectId}/insights`, { credentials: 'same-origin' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (projectId !== activeProjectId) return; // modal changed
+            insights = data;
+            // If the cash ledger fetch hasn't landed yet, seed it from insights
+            // so the merged history doesn't briefly miss the cash rows.
+            if (!cashPayments.length && data.payments.cash.length) {
+                cashPayments = data.payments.cash;
+            }
+            const cached = projects.find(x => x.id === projectId);
+            if (cached) renderPayments(cached); // adds the "Spent" cell
+            renderPayModes();
+            renderPaymentHistory();
+            renderExpensesTab();
+            renderBillsTab('purchase');
+            renderBillsTab('sales');
+            renderLabourTab();
+            setTabCount('payments', data.payments.bank.length + cashPayments.length);
+            setTabCount('expenses', data.expenses.count);
+            setTabCount('purchase', data.purchase_bills.count);
+            setTabCount('sales', data.sales_bills.count);
+            setTabCount('labour', data.labour && data.labour.monthly ? data.labour.monthly.length : 0);
+        } catch (e) {
+            console.error('Failed to load project insights', e);
+            if (projectId !== activeProjectId) return;
+            const fail = `<p class="proj-tab-empty">Couldn't load this section. Close and reopen the project to retry.</p>`;
+            expensesEl.innerHTML = fail;
+            purchaseBillsEl.innerHTML = fail;
+            salesBillsEl.innerHTML = fail;
+            labourEl.innerHTML = fail;
+            payModesEl.innerHTML = '';
+            renderPaymentHistory();
+        }
+    }
+
+    function renderExpensesTab() {
+        const ex = insights.expenses;
+        if (!ex || !ex.count) {
+            expensesEl.innerHTML = `<p class="proj-tab-empty">No expenses tagged to this project in the bank statements yet.</p>`;
+            return;
+        }
+        const chips = `
+            <div class="proj-pay-modes">
+                <div class="proj-chip accent">
+                    <span class="proj-chip-k">Total spent</span>
+                    <span class="proj-chip-v">${formatINR(ex.total)}</span>
+                    <span class="proj-chip-sub">${ex.count} transaction${ex.count === 1 ? '' : 's'}</span>
+                </div>
+                ${ex.by_category.slice(0, 3).map(c => `
+                <div class="proj-chip">
+                    <span class="proj-chip-k">${escapeHtml(c.category)}</span>
+                    <span class="proj-chip-v">${formatINRCompact(c.amount)}</span>
+                    <span class="proj-chip-sub">${c.count}×</span>
+                </div>`).join('')}
+            </div>`;
+        const rows = ex.transactions.map(t => `
+            <tr>
+                <td class="proj-li-unit">${fmtDate(t.date)}</td>
+                <td class="proj-li-desc" title="${escapeHtml(t.description)}">${escapeHtml((t.vendor && t.vendor !== 'Unknown') ? t.vendor : t.description)}</td>
+                <td><span class="proj-cat-chip">${escapeHtml(t.category)}</span></td>
+                <td class="proj-li-unit">${escapeHtml(String(t.bank || '').toUpperCase())}</td>
+                <td class="proj-li-num">${formatINR(t.amount)}</td>
+            </tr>`).join('');
+        const truncNote = ex.count > ex.transactions.length
+            ? `<p class="proj-tab-note">Showing the latest ${ex.transactions.length} of ${ex.count} transactions.</p>` : '';
+        expensesEl.innerHTML = `${chips}
+            <div class="proj-li-scroll proj-li-scroll--tall">
+                <table class="proj-li-table">
+                    <thead><tr><th>Date</th><th>Paid to</th><th>Category</th><th>Bank</th><th class="proj-li-num">Amount</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>${truncNote}`;
+    }
+
+    function renderBillsTab(kind) {
+        const isPurchase = kind === 'purchase';
+        const el = isPurchase ? purchaseBillsEl : salesBillsEl;
+        const data = isPurchase ? insights.purchase_bills : insights.sales_bills;
+        if (!data || !data.count) {
+            el.innerHTML = `<p class="proj-tab-empty">No ${isPurchase ? 'purchase' : 'sales'} bills found for this project.</p>`;
+            return;
+        }
+        const chips = `
+            <div class="proj-pay-modes">
+                <div class="proj-chip accent">
+                    <span class="proj-chip-k">Total billed</span>
+                    <span class="proj-chip-v">${formatINR(data.total_amount)}</span>
+                    <span class="proj-chip-sub">${data.count} bill${data.count === 1 ? '' : 's'}</span>
+                </div>
+                <div class="proj-chip">
+                    <span class="proj-chip-k">GST included</span>
+                    <span class="proj-chip-v">${formatINR(data.total_gst)}</span>
+                </div>
+            </div>`;
+        const rows = data.bills.map(b => `
+            <tr>
+                <td class="proj-li-unit">${b.invoice_date ? escapeHtml(b.invoice_date) : '—'}</td>
+                <td class="proj-li-unit">${b.invoice_number ? escapeHtml(b.invoice_number) : '—'}</td>
+                <td class="proj-li-desc">${escapeHtml((isPurchase ? b.vendor_name : b.buyer_name) || '—')}</td>
+                <td class="proj-li-num">${b.line_item_count != null ? b.line_item_count : '—'}</td>
+                <td class="proj-li-num">${formatINR(b.total_amount)}</td>
+            </tr>`).join('');
+        el.innerHTML = `${chips}
+            <div class="proj-li-scroll proj-li-scroll--tall">
+                <table class="proj-li-table">
+                    <thead><tr><th>Date</th><th>Invoice #</th><th>${isPurchase ? 'Vendor' : 'Buyer'}</th><th class="proj-li-num">Items</th><th class="proj-li-num">Amount</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>`;
+    }
+
+    function renderLabourTab() {
+        const lab = insights.labour;
+        if (!lab || lab.available === false) {
+            labourEl.innerHTML = `<p class="proj-tab-empty">Couldn't reach the attendance app database right now — labour charges are unavailable. Try again later.</p>`;
+            return;
+        }
+        if (!lab.monthly || !lab.monthly.length) {
+            labourEl.innerHTML = `<p class="proj-tab-empty">No attendance recorded against this project yet.</p>`;
+            return;
+        }
+        const chips = `
+            <div class="proj-pay-modes">
+                <div class="proj-chip accent">
+                    <span class="proj-chip-k">Labour charges</span>
+                    <span class="proj-chip-v">${formatINR(lab.total_cost)}</span>
+                    <span class="proj-chip-sub">from the attendance app</span>
+                </div>
+                <div class="proj-chip">
+                    <span class="proj-chip-k">Man-days</span>
+                    <span class="proj-chip-v">${Number(lab.total_days).toLocaleString('en-IN')}</span>
+                </div>
+                <div class="proj-chip">
+                    <span class="proj-chip-k">OT hours</span>
+                    <span class="proj-chip-v">${Number(lab.total_ot_hours).toLocaleString('en-IN')}</span>
+                </div>
+            </div>`;
+        const rows = lab.monthly.map(m => `
+            <tr>
+                <td>${escapeHtml(m.label)}</td>
+                <td class="proj-li-num">${Number(m.days).toLocaleString('en-IN')}</td>
+                <td class="proj-li-num">${Number(m.ot_hours).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</td>
+                <td class="proj-li-num">${formatINR(m.cost)}</td>
+            </tr>`).join('');
+        const namesNote = lab.project_names && lab.project_names.length
+            ? `<p class="proj-tab-note">Matched attendance project${lab.project_names.length === 1 ? '' : 's'}: ${lab.project_names.map(escapeHtml).join(', ')}</p>`
+            : '';
+        labourEl.innerHTML = `${chips}
+            <div class="proj-li-scroll proj-li-scroll--tall">
+                <table class="proj-li-table">
+                    <thead><tr><th>Month</th><th class="proj-li-num">Man-days</th><th class="proj-li-num">OT hours</th><th class="proj-li-num">Cost</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>${namesNote}`;
+    }
 
     let currentPo = null;
 
