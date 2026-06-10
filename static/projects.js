@@ -36,6 +36,16 @@
 
     const detailPayments = document.getElementById('detail-payments');
 
+    // Cash client payments
+    const cashTotalEl = document.getElementById('detail-cash-total');
+    const cashForm = document.getElementById('detail-cash-form');
+    const cashAmount = document.getElementById('detail-cash-amount');
+    const cashDate = document.getElementById('detail-cash-date');
+    const cashNote = document.getElementById('detail-cash-note');
+    const cashAddBtn = document.getElementById('detail-cash-add');
+    const cashError = document.getElementById('detail-cash-error');
+    const cashListEl = document.getElementById('detail-cash-list');
+
     const detailTypeStatus = document.getElementById('detail-type-status');
     const detailTypeRadios = () => Array.from(detailModal.querySelectorAll('input[name="detail_is_project"]'));
 
@@ -53,9 +63,14 @@
     }
 
     // ── Render ─────────────────────────────────────────
-    // One labelled stat in a card's finance strip.
-    function financeCell(label, value, cls, title) {
-        return `<div class="proj-fin-cell"${title ? ` title="${escapeHtml(title)}"` : ''}>
+    // One labelled stat in a card's finance strip. When `fullValue` is given,
+    // the tooltip is enriched with the full-precision amount (the cell itself
+    // shows the compact form), so callers don't repeat `: ${formatINR(x)}`.
+    function financeCell(label, value, cls, title, fullValue) {
+        const tip = fullValue != null
+            ? (title ? `${title}: ${formatINR(fullValue)}` : formatINR(fullValue))
+            : title;
+        return `<div class="proj-fin-cell"${tip ? ` title="${escapeHtml(tip)}"` : ''}>
             <span class="proj-fin-k">${label}</span>
             <span class="proj-fin-v ${cls}">${value}</span>
         </div>`;
@@ -79,21 +94,22 @@
         const cells = [];
         if (hasPoValue) {
             cells.push(financeCell('PO Value', formatINRCompact(poValue), '',
-                `Total purchase-order value: ${formatINR(poValue)}`));
+                'Total purchase-order value', poValue));
         } else if (p.po_extraction_status === 'failed') {
             cells.push(financeCell('PO Value', 'Pending', 'pending', 'Auto-read failed — open to enter manually'));
         }
-        if (received > 0 || hasPoValue) {
-            cells.push(financeCell('Received', received > 0 ? formatINRCompact(received) : '—',
-                received > 0 ? 'received' : 'muted',
-                received > 0 ? `Client payments received: ${formatINR(received)}` : 'Client payments received'));
+        const hasReceived = received > 0;
+        if (hasReceived || hasPoValue) {
+            cells.push(financeCell('Received', hasReceived ? formatINRCompact(received) : '—',
+                hasReceived ? 'received' : 'muted',
+                'Client payments received', hasReceived ? received : null));
         }
         if (hasPoValue) {
             const bal = poValue - received;
             const settled = bal <= 0.5;
             cells.push(financeCell('Balance', settled ? 'Settled' : formatINRCompact(bal),
                 settled ? 'settled' : 'due',
-                settled ? 'Fully received' : `Balance due (PO value − received): ${formatINR(bal)}`));
+                settled ? 'Fully received' : 'Balance due (PO value − received)', settled ? null : bal));
         }
         const financeBlock = cells.length ? `<div class="project-finance">${cells.join('')}</div>` : '';
 
@@ -317,6 +333,11 @@
         activeProjectId = projectId;
         detailTitle.textContent = `${p.id} − ${p.stem_name}`;
         renderPayments(p);
+        // Cash client payments ledger
+        cashForm.reset();
+        cashError.classList.add('hidden');
+        cashError.textContent = '';
+        loadCashPayments(p.id);
         // Reflect current type in the toggle
         const wantVal = (p.is_project === false) ? '0' : '1';
         detailTypeRadios().forEach(r => { r.checked = (r.value === wantVal); });
@@ -347,6 +368,8 @@
     function renderPayments(p) {
         const po = Number(p.po_total_value) || 0;
         const rec = Number(p.received_total) || 0;
+        const bank = Number(p.received_bank) || 0;
+        const cash = Number(p.received_cash) || 0;
         if (po <= 0 && rec <= 0) {
             detailPayments.classList.add('hidden');
             detailPayments.innerHTML = '';
@@ -356,6 +379,11 @@
         const pct = po > 0 ? Math.min(100, Math.round((rec / po) * 100)) : null;
         const balLabel = bal < -0.5 ? 'Excess' : 'Balance';
         const balCls = bal > 0.5 ? 'due' : 'settled';
+        // Only show the bank/cash split once cash is actually in play — otherwise
+        // "Received" alone is clearer.
+        const splitNote = cash > 0
+            ? `<span class="proj-pay-split" title="Bank transfers: ${escapeHtml(formatINR(bank))} · Cash: ${escapeHtml(formatINR(cash))}">${formatINRCompact(bank)} bank + ${formatINRCompact(cash)} cash</span>`
+            : '';
         detailPayments.innerHTML = `
             <div class="proj-pay-head">
                 <span class="proj-field-label">Payments vs PO</span>
@@ -369,6 +397,7 @@
                 <div class="proj-pay-cell">
                     <span class="proj-pay-k">Received</span>
                     <span class="proj-pay-v received">${formatINR(rec)}</span>
+                    ${splitNote}
                 </div>
                 <div class="proj-pay-cell">
                     <span class="proj-pay-k">${balLabel}</span>
@@ -378,6 +407,133 @@
             ${pct != null ? `<div class="proj-pay-bar"><div class="proj-pay-bar-fill" style="width:${pct}%"></div></div>` : ''}`;
         detailPayments.classList.remove('hidden');
     }
+
+    // ── Cash client payments ───────────────────────────
+    function applyPaymentSummary(summary) {
+        // Push fresh totals into the cached project so the card + payments view
+        // reflect the change without a full reload.
+        const cached = projects.find(x => x.id === activeProjectId);
+        if (cached) {
+            cached.received_bank = summary.received_bank;
+            cached.received_cash = summary.received_cash;
+            cached.received_total = summary.received_total;
+            renderPayments(cached);
+            renderList(); // keep the registry card's "Received" in sync
+        }
+        renderCashList(summary.payments || []);
+    }
+
+    function renderCashList(payments) {
+        const total = payments.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        cashTotalEl.textContent = payments.length ? formatINR(total) : '';
+        if (!payments.length) {
+            cashListEl.innerHTML = `<p class="proj-cash-empty">No cash payments recorded yet.</p>`;
+            return;
+        }
+        cashListEl.innerHTML = payments.map(c => {
+            const when = c.payment_date
+                ? new Date(c.payment_date).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
+                : (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '');
+            return `
+                <div class="proj-cash-item" data-id="${c.id}">
+                    <div class="proj-cash-item-main">
+                        <span class="proj-cash-item-amt">${formatINR(c.amount)}</span>
+                        ${c.note ? `<span class="proj-cash-item-note">${escapeHtml(c.note)}</span>` : ''}
+                    </div>
+                    <div class="proj-cash-item-side">
+                        ${when ? `<span class="proj-cash-item-date">${when}</span>` : ''}
+                        <button type="button" class="proj-cash-del" data-id="${c.id}" title="Remove this payment" aria-label="Remove this payment">×</button>
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    function loadCashPayments(projectId) {
+        cashError.classList.add('hidden');
+        cashError.textContent = '';
+        cashListEl.innerHTML = `<p class="proj-cash-empty">Loading…</p>`;
+        cashTotalEl.textContent = '';
+        fetch(`/api/projects/${projectId}/cash-payments`, { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                if (projectId !== activeProjectId) return; // modal changed
+                renderCashList(data.payments || []);
+            })
+            .catch(() => {
+                if (projectId !== activeProjectId) return;
+                cashListEl.innerHTML = `<p class="proj-cash-empty">Couldn't load cash payments.</p>`;
+            });
+    }
+
+    cashForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!activeProjectId) return;
+        cashError.classList.add('hidden');
+        cashError.textContent = '';
+
+        const amount = parseFloat(cashAmount.value);
+        if (Number.isNaN(amount) || amount <= 0) {
+            cashError.textContent = 'Enter an amount greater than zero.';
+            cashError.classList.remove('hidden');
+            return;
+        }
+        const payload = {
+            amount,
+            payment_date: cashDate.value || null,
+            note: cashNote.value.trim() || null,
+        };
+        cashAddBtn.disabled = true;
+        cashAddBtn.textContent = 'Adding…';
+        try {
+            const res = await fetch(`/api/projects/${activeProjectId}/cash-payments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                cashError.textContent = data.message || data.error || `Failed (HTTP ${res.status})`;
+                cashError.classList.remove('hidden');
+                return;
+            }
+            cashForm.reset();
+            applyPaymentSummary(data);
+            showToast(`Cash payment of ${formatINR(amount)} added.`);
+        } catch (err) {
+            cashError.textContent = `Network error: ${err.message}`;
+            cashError.classList.remove('hidden');
+        } finally {
+            cashAddBtn.disabled = false;
+            cashAddBtn.textContent = 'Add';
+        }
+    });
+
+    cashListEl.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.proj-cash-del');
+        if (!btn || !activeProjectId) return;
+        const id = btn.dataset.id;
+        if (!id) return;
+        if (!confirm('Remove this cash payment?')) return;
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/api/projects/${activeProjectId}/cash-payments/${id}`, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(data.message || data.error || 'Could not remove payment.', 'error');
+                btn.disabled = false;
+                return;
+            }
+            applyPaymentSummary(data);
+            showToast('Cash payment removed.');
+        } catch (err) {
+            showToast(`Network error: ${err.message}`, 'error');
+            btn.disabled = false;
+        }
+    });
 
     let currentPo = null;
 

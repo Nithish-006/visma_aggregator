@@ -877,14 +877,18 @@ def projects_page():
 
 
 def _attach_client_payments(projects):
-    """Enrich each canonical project with `received_total` — the sum of
-    incoming client payments (KVB credits) that belong to it.
+    """Enrich each canonical project with its client-payment totals.
 
-    Client-payment credit rows are tagged with the canonical project in the same
-    "<id> - NAME" form shown in the project registry (e.g. "647 - POLSONS"). The
-    id is the unique key, so matching is an exact id match: a credit counts for a
-    project only when its id prefix equals that project's id. No fuzzy/stem
-    matching — a credit that is untagged (no id prefix) is left unassigned.
+    Money comes in two ways:
+      * `received_bank` — KVB credits captured from the bank statement. Credit
+        rows are tagged with the canonical project in the same "<id> - NAME"
+        form shown in the registry (e.g. "647 - POLSONS"); the id is the unique
+        key, so matching is an exact id match. Untagged credits are unassigned.
+      * `received_cash` — cash handed over outside the bank, recorded manually
+        in the project_cash_payments ledger and keyed directly by project id.
+
+    `received_total` is the sum of the two, which is what the cards and the
+    payments-vs-PO view use.
     """
     try:
         rows = db_manager.get_kvb_credit_by_project()
@@ -892,16 +896,27 @@ def _attach_client_payments(projects):
         print(f"[!] Could not load client payments: {e}")
         rows = []
 
-    received_by_id = {}
+    bank_by_id = {}
     for proj_str, amount in rows:
         m = re.match(r'^\s*(\d+)\s*-', proj_str or '')
         if not m:
             continue  # untagged credit — not tied to a canonical project id
         pid = int(m.group(1))
-        received_by_id[pid] = received_by_id.get(pid, 0.0) + float(amount or 0)
+        bank_by_id[pid] = bank_by_id.get(pid, 0.0) + float(amount or 0)
+
+    try:
+        cash_by_id = db_manager.get_cash_total_by_project()
+    except Exception as e:
+        print(f"[!] Could not load cash payments: {e}")
+        cash_by_id = {}
 
     for p in projects:
-        p['received_total'] = received_by_id.get(p.get('id'), 0.0)
+        pid = p.get('id')
+        bank = bank_by_id.get(pid, 0.0)
+        cash = cash_by_id.get(pid, 0.0)
+        p['received_bank'] = bank
+        p['received_cash'] = cash
+        p['received_total'] = bank + cash
     return projects
 
 
@@ -1027,6 +1042,82 @@ def api_update_project(project_id):
         return jsonify({'error': 'update_failed', 'message': err}), 500
 
     return jsonify({'success': True, 'project': db_manager.get_project(project_id)})
+
+
+def _cash_payment_summary(project_id):
+    """Return the cash ledger plus the refreshed payment totals for a project,
+    so the client can update the registry card without a full reload."""
+    payments = db_manager.list_cash_payments(project_id)
+    enriched = _attach_client_payments([db_manager.get_project(project_id)])[0]
+    return {
+        'payments': payments,
+        'received_bank': enriched.get('received_bank', 0.0),
+        'received_cash': enriched.get('received_cash', 0.0),
+        'received_total': enriched.get('received_total', 0.0),
+    }
+
+
+@app.route('/api/projects/<int:project_id>/cash-payments', methods=['GET'])
+@login_required
+def api_list_cash_payments(project_id):
+    """List the cash client payments recorded against a project."""
+    db_manager.ensure_projects_table()
+    if not db_manager.get_project(project_id):
+        return jsonify({'error': 'not_found'}), 404
+    return jsonify(_cash_payment_summary(project_id))
+
+
+@app.route('/api/projects/<int:project_id>/cash-payments', methods=['POST'])
+@login_required
+def api_add_cash_payment(project_id):
+    """Record a cash payment received from the client for this project.
+
+    JSON body: { "amount": number (required, > 0),
+                 "payment_date": "DD-MMM-YYYY" (optional),
+                 "note": str (optional) }
+    """
+    db_manager.ensure_projects_table()
+    if not db_manager.get_project(project_id):
+        return jsonify({'error': 'not_found'}), 404
+
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = float(data.get('amount'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'invalid_amount',
+                        'message': 'Amount must be a number.'}), 400
+    if not (amount > 0):
+        return jsonify({'error': 'invalid_amount',
+                        'message': 'Amount must be greater than zero.'}), 400
+
+    note = (data.get('note') or '').strip() or None
+    payment_date = (data.get('payment_date') or '').strip() or None
+
+    ok, err, new_id = db_manager.add_cash_payment(project_id, amount, payment_date, note)
+    if not ok:
+        if err == 'project_not_found':
+            return jsonify({'error': 'not_found'}), 404
+        return jsonify({'error': 'create_failed', 'message': err}), 500
+
+    summary = _cash_payment_summary(project_id)
+    summary['success'] = True
+    summary['id'] = new_id
+    return jsonify(summary), 201
+
+
+@app.route('/api/projects/<int:project_id>/cash-payments/<int:payment_id>', methods=['DELETE'])
+@login_required
+def api_delete_cash_payment(project_id, payment_id):
+    """Remove a single recorded cash payment."""
+    ok, err = db_manager.delete_cash_payment(project_id, payment_id)
+    if not ok:
+        if err == 'not_found':
+            return jsonify({'error': 'not_found'}), 404
+        return jsonify({'error': 'delete_failed', 'message': err}), 500
+
+    summary = _cash_payment_summary(project_id)
+    summary['success'] = True
+    return jsonify(summary)
 
 
 @app.route('/api/projects/<int:project_id>/upload-po', methods=['POST'])

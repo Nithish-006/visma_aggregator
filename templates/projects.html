@@ -109,6 +109,23 @@
                 <!-- PO value vs client payments received -->
                 <div id="detail-payments" class="proj-payments hidden"></div>
 
+                <!-- Cash client payments (not captured in the bank statement) -->
+                <div id="detail-cash" class="proj-cash">
+                    <div class="proj-cash-head">
+                        <span class="proj-field-label">Cash payments received</span>
+                        <span id="detail-cash-total" class="proj-cash-total"></span>
+                    </div>
+                    <p class="proj-cash-hint">Money the client paid in cash — not in the KVB statement. Added to the received total.</p>
+                    <form id="detail-cash-form" class="proj-cash-form">
+                        <input id="detail-cash-amount" class="proj-input proj-cash-amount" type="number" step="0.01" min="0" placeholder="Amount (₹)" autocomplete="off" required>
+                        <input id="detail-cash-date" class="proj-input proj-cash-date" type="date" autocomplete="off" title="Date received (optional)">
+                        <input id="detail-cash-note" class="proj-input proj-cash-note" type="text" placeholder="Note (optional)" autocomplete="off">
+                        <button type="submit" id="detail-cash-add" class="proj-primary-btn">Add</button>
+                    </form>
+                    <p id="detail-cash-error" class="proj-error hidden"></p>
+                    <div id="detail-cash-list" class="proj-cash-list"></div>
+                </div>
+
                 <div id="detail-po-existing" class="hidden">
                     <p class="proj-field-label">Purchase Order</p>
                     <div class="proj-po-row">

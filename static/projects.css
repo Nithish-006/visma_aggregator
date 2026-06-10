@@ -684,6 +684,117 @@ html, body {
     background: var(--proj-accent);
     transition: width 0.3s ease;
 }
+.proj-pay-split {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--proj-text-muted);
+}
+
+/* ── Cash client payments (detail modal) ─────────────── */
+.proj-cash {
+    margin: 0.5rem 0 0.5rem;
+    padding: 0.85rem 0.95rem;
+    background: var(--proj-surface-soft);
+    border: 1px solid var(--proj-border);
+    border-radius: 10px;
+}
+.proj-cash-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.proj-cash-total {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--proj-accent-strong);
+}
+.proj-cash-hint {
+    margin: 0.3rem 0 0.7rem;
+    font-size: 0.76rem;
+    color: var(--proj-text-muted);
+}
+.proj-cash-form {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr auto;
+    grid-template-areas:
+        "amount date add"
+        "note   note add";
+    gap: 0.5rem;
+    align-items: stretch;
+}
+.proj-cash-amount { grid-area: amount; }
+.proj-cash-date   { grid-area: date; }
+.proj-cash-note   { grid-area: note; }
+.proj-cash-form .proj-primary-btn {
+    grid-area: add;
+    align-self: stretch;
+    white-space: nowrap;
+}
+.proj-cash-list {
+    margin-top: 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.proj-cash-empty {
+    font-size: 0.84rem;
+    color: var(--proj-text-muted);
+    margin: 0.2rem 0;
+}
+.proj-cash-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.5rem 0.65rem;
+    background: var(--proj-surface);
+    border: 1px solid var(--proj-border);
+    border-radius: 8px;
+}
+.proj-cash-item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+.proj-cash-item-amt {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--proj-text);
+}
+.proj-cash-item-note {
+    font-size: 0.78rem;
+    color: var(--proj-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.proj-cash-item-side {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-shrink: 0;
+}
+.proj-cash-item-date {
+    font-size: 0.76rem;
+    color: var(--proj-text-muted);
+}
+.proj-cash-del {
+    border: none;
+    background: transparent;
+    color: var(--proj-text-muted);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.2rem;
+    border-radius: 6px;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+.proj-cash-del:hover {
+    color: var(--proj-danger);
+    background: var(--proj-danger-soft, rgba(220, 38, 38, 0.12));
+}
 
 /* ── PO gist (detail modal) ──────────────────────────── */
 .proj-po-gist { margin: 0.85rem 0 0.25rem; }

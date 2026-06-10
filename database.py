@@ -2036,6 +2036,8 @@ class DatabaseManager:
                 cursor.close()
             # The PO gist table is joined by list/get; keep it alongside.
             self.ensure_project_pos_table()
+            # Cash client payments live in their own ledger table.
+            self.ensure_project_cash_table()
             return True
         except Exception as e:
             print(f"[!] Error ensuring projects table: {e}")
@@ -2087,6 +2089,37 @@ class DatabaseManager:
                 return True
         except Exception as e:
             print(f"[!] Error ensuring project_pos table: {e}")
+            return False
+
+    def ensure_project_cash_table(self):
+        """Create the project_cash_payments ledger (N:1 with projects).
+
+        Client money arrives two ways: bank transfers to KVB (captured from the
+        statement and summed in get_kvb_credit_by_project) and cash handed over
+        outside the bank. Cash never shows up in a statement, so we record each
+        cash receipt here as its own row; the project's received total is the
+        bank credits plus the sum of these rows.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS project_cash_payments (
+                        id           INT AUTO_INCREMENT PRIMARY KEY,
+                        project_id   INT NOT NULL,
+                        amount       DECIMAL(15, 2) NOT NULL,
+                        payment_date DATE DEFAULT NULL,
+                        note         VARCHAR(500) DEFAULT NULL,
+                        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_pcp_project (project_id),
+                        CONSTRAINT fk_pcp_project FOREIGN KEY (project_id)
+                            REFERENCES projects(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring project_cash_payments table: {e}")
             return False
 
     # SELECT that augments each project row with a compact PO summary (the
@@ -2147,6 +2180,90 @@ class DatabaseManager:
         except Exception as e:
             print(f"[!] Error fetching KVB credit by project: {e}")
             return []
+
+    def get_cash_total_by_project(self) -> Dict[int, float]:
+        """Sum recorded cash client payments grouped by project id.
+
+        Returns {project_id: total_cash}. Mirrors get_kvb_credit_by_project but
+        keyed directly by the canonical project id (no string parsing needed —
+        cash rows are tagged with the project id at entry time).
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT project_id, COALESCE(SUM(amount), 0) "
+                    "FROM project_cash_payments GROUP BY project_id"
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return {int(r[0]): float(r[1] or 0) for r in rows}
+        except Exception as e:
+            print(f"[!] Error fetching cash totals by project: {e}")
+            return {}
+
+    def list_cash_payments(self, project_id: int) -> List[Dict]:
+        """Return individual cash payment rows for a project, newest first."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT id, project_id, amount, payment_date, note, created_at "
+                    "FROM project_cash_payments WHERE project_id = %s "
+                    "ORDER BY COALESCE(payment_date, DATE(created_at)) DESC, id DESC",
+                    (project_id,)
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                for r in rows:
+                    r['amount'] = float(r['amount'] or 0)
+                    if r.get('payment_date') and hasattr(r['payment_date'], 'isoformat'):
+                        r['payment_date'] = r['payment_date'].isoformat()
+                    if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
+                        r['created_at'] = r['created_at'].isoformat()
+                return rows
+        except Exception as e:
+            print(f"[!] Error listing cash payments for {project_id}: {e}")
+            return []
+
+    def add_cash_payment(self, project_id: int, amount: float,
+                         payment_date=None, note: str = None) -> Tuple[bool, Optional[str], Optional[int]]:
+        """Record one cash client payment. Returns (ok, error, new_id)."""
+        try:
+            pay_date = self._parse_po_date(payment_date) if payment_date else None
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO project_cash_payments (project_id, amount, payment_date, note) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (project_id, amount, pay_date, note)
+                )
+                conn.commit()
+                new_id = cursor.lastrowid
+                cursor.close()
+                return True, None, new_id
+        except mysql.connector.errors.IntegrityError:
+            return False, 'project_not_found', None
+        except Exception as e:
+            return False, str(e), None
+
+    def delete_cash_payment(self, project_id: int, payment_id: int) -> Tuple[bool, Optional[str]]:
+        """Delete a single cash payment row, scoped to its project."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM project_cash_payments WHERE id = %s AND project_id = %s",
+                    (payment_id, project_id)
+                )
+                conn.commit()
+                affected = cursor.rowcount
+                cursor.close()
+                if affected == 0:
+                    return False, 'not_found'
+                return True, None
+        except Exception as e:
+            return False, str(e)
 
     def get_project(self, project_id: int) -> Optional[Dict]:
         try:
