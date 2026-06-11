@@ -1145,6 +1145,79 @@ html, body {
     color: var(--proj-danger);
 }
 
+/* ── Closed / active status toggle (edit panel) ─────── */
+.proj-status-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    cursor: pointer;
+    user-select: none;
+}
+.proj-status-toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.proj-status-switch {
+    position: relative;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--proj-border-strong);
+    transition: background 0.18s ease;
+}
+.proj-status-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    transition: transform 0.18s ease;
+}
+.proj-status-toggle input:checked + .proj-status-switch {
+    background: var(--proj-warning);
+}
+.proj-status-toggle input:checked + .proj-status-switch::after {
+    transform: translateX(18px);
+}
+.proj-status-toggle input:focus-visible + .proj-status-switch {
+    outline: 2px solid var(--proj-accent);
+    outline-offset: 2px;
+}
+.proj-status-text {
+    font-size: 0.85rem;
+    color: var(--proj-text-dim);
+}
+
+/* ── "Closed" registry section + dimmed cards ───────── */
+.proj-section--closed .proj-section-head {
+    border-bottom-color: rgba(107, 114, 128, 0.35);
+}
+.proj-section--closed .proj-section-count {
+    color: var(--proj-text-muted);
+    background: rgba(107, 114, 128, 0.12);
+}
+.project-card.is-closed {
+    opacity: 0.62;
+    background: linear-gradient(145deg, #fafafa 0%, #f1f1f3 100%);
+    border-color: rgba(107, 114, 128, 0.28);
+}
+.project-card.is-closed:hover {
+    opacity: 0.85;
+    border-color: var(--proj-text-muted);
+}
+.project-po-badge.closed {
+    background: rgba(107, 114, 128, 0.14);
+    color: var(--proj-text-muted);
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
 /* ============================================================================
    Project detail modal — insight tabs (PO / payments / expenses / bills /
    labour). The detail modal is wider than the create modal because the tabs

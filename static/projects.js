@@ -67,6 +67,9 @@
     const detailTypeStatus = document.getElementById('detail-type-status');
     const detailTypeRadios = () => Array.from(detailModal.querySelectorAll('input[name="detail_project_type"]'));
 
+    const detailStatusStatus = document.getElementById('detail-status-status');
+    const detailInactiveToggle = document.getElementById('detail-is-inactive');
+
     // The three registry buckets, in display order. A row's bucket comes from
     // project_type, falling back to the legacy is_project boolean.
     const TYPE_SECTIONS = [
@@ -75,6 +78,7 @@
         { key: 'other', title: 'Others', sub: 'Internal heads (office, factory, KVB, sridhar…)', variant: 'others' },
     ];
     const projectTypeOf = (p) => p.project_type || (p.is_project === false ? 'other' : 'project');
+    const isClosed = (p) => p.is_inactive === true || p.is_inactive === 1;
 
     let projects = [];
     let activeProjectId = null;
@@ -108,9 +112,10 @@
     function buildCard(p) {
         const card = document.createElement('button');
         card.type = 'button';
-        card.className = 'project-card';
+        card.className = 'project-card' + (isClosed(p) ? ' is-closed' : '');
         card.dataset.id = p.id;
         const created = p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+        const closedBadge = isClosed(p) ? `<span class="project-po-badge closed">Closed</span>` : '';
         const badge = p.has_po
             ? `<span class="project-po-badge has-po">PO uploaded</span>`
             : `<span class="project-po-badge no-po">No PO yet</span>`;
@@ -149,6 +154,7 @@
             </div>
             <div class="project-card-foot">
                 <div class="project-card-meta">
+                    ${closedBadge}
                     ${badge}
                     ${created ? `<span class="project-created">Added ${created}</span>` : ''}
                 </div>
@@ -183,12 +189,20 @@
         }
 
         listEl.innerHTML = '';
+        // Active entries first, grouped by type bucket…
         TYPE_SECTIONS.forEach(sec => {
-            const items = projects.filter(p => projectTypeOf(p) === sec.key);
+            const items = projects.filter(p => !isClosed(p) && projectTypeOf(p) === sec.key);
             if (items.length) {
                 listEl.appendChild(renderSection(sec.title, sec.sub, items, sec.variant));
             }
         });
+        // …then a single "Closed" section at the very bottom for every inactive
+        // entry, regardless of its type bucket.
+        const closed = projects.filter(isClosed);
+        if (closed.length) {
+            listEl.appendChild(renderSection(
+                'Closed', 'Inactive / completed — kept for reference', closed, 'closed'));
+        }
     }
 
     function escapeHtml(s) {
@@ -384,6 +398,10 @@
         detailTypeRadios().forEach(r => { r.checked = (r.value === wantVal); });
         detailTypeStatus.textContent = '';
         detailTypeStatus.classList.remove('error');
+        // Reflect closed/active status
+        detailInactiveToggle.checked = isClosed(p);
+        detailStatusStatus.textContent = '';
+        detailStatusStatus.classList.remove('error');
         detailUploadError.classList.add('hidden');
         detailUploadError.textContent = '';
         detailUploadForm.reset();
@@ -1009,6 +1027,38 @@
                 detailTypeStatus.classList.add('error');
             }
         });
+    });
+
+    // ── Closed / active toggle ─────────────────────────
+    detailInactiveToggle.addEventListener('change', async () => {
+        if (!activeProjectId) return;
+        const makeInactive = detailInactiveToggle.checked;
+        detailStatusStatus.classList.remove('error');
+        detailStatusStatus.textContent = 'Saving…';
+        try {
+            const res = await fetch(`/api/projects/${activeProjectId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ is_inactive: makeInactive }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                detailStatusStatus.textContent = data.message || data.error || `Failed (HTTP ${res.status})`;
+                detailStatusStatus.classList.add('error');
+                detailInactiveToggle.checked = !makeInactive; // revert
+                return;
+            }
+            const cached = projects.find(x => x.id === activeProjectId);
+            if (cached) cached.is_inactive = makeInactive;
+            detailStatusStatus.textContent = 'Saved';
+            showToast(makeInactive ? 'Project marked closed.' : 'Project reopened.');
+            loadProjects();
+        } catch (err) {
+            detailStatusStatus.textContent = `Network error: ${err.message}`;
+            detailStatusStatus.classList.add('error');
+            detailInactiveToggle.checked = !makeInactive; // revert
+        }
     });
 
     // ── Reprocess ──────────────────────────────────────

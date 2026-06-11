@@ -1079,9 +1079,10 @@ def api_create_project():
 @login_required
 def api_update_project(project_id):
     """Update an existing registry entry. Supports changing the type between
-    'project', 'design' and 'other'.
+    'project', 'design' and 'other', and toggling the closed (inactive) flag.
 
     JSON body: { "project_type": "project"|"design"|"other" }
+            or: { "is_inactive": true|false }
     (legacy: { "is_project": true|false } is still accepted)
     """
     project = db_manager.get_project(project_id)
@@ -1089,6 +1090,16 @@ def api_update_project(project_id):
         return jsonify({'error': 'not_found'}), 404
 
     data = request.get_json(silent=True) or {}
+
+    # Closed/active toggle is independent of the type buckets.
+    if 'is_inactive' in data:
+        ok, err = db_manager.set_project_inactive(project_id, bool(data['is_inactive']))
+        if not ok:
+            if err == 'not_found':
+                return jsonify({'error': 'not_found'}), 404
+            return jsonify({'error': 'update_failed', 'message': err}), 500
+        return jsonify({'success': True, 'project': db_manager.get_project(project_id)})
+
     if 'project_type' in data:
         project_type = str(data['project_type']).strip().lower()
     elif 'is_project' in data:

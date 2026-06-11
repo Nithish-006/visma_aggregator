@@ -2114,6 +2114,7 @@ class DatabaseManager:
                         description  TEXT DEFAULT NULL,
                         is_project   TINYINT(1) NOT NULL DEFAULT 1,
                         project_type VARCHAR(16) NOT NULL DEFAULT 'project',
+                        is_inactive  TINYINT(1) NOT NULL DEFAULT 0,
                         created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE KEY uk_stem_ci (stem_name)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -2153,6 +2154,19 @@ class DatabaseManager:
                     )
                     cursor.execute("UPDATE projects SET project_type = 'project' WHERE is_project = 1")
                     cursor.execute("UPDATE projects SET project_type = 'other' WHERE is_project = 0")
+                # Additive migration: is_inactive marks a closed project. Closed
+                # entries keep their type but are grouped into a separate "Closed"
+                # section at the bottom of the registry.
+                cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'projects' "
+                    "AND COLUMN_NAME = 'is_inactive'"
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute(
+                        "ALTER TABLE projects "
+                        "ADD COLUMN is_inactive TINYINT(1) NOT NULL DEFAULT 0 AFTER project_type"
+                    )
                 cursor.close()
             # The PO gist table is joined by list/get; keep it alongside.
             self.ensure_project_pos_table()
@@ -2245,7 +2259,7 @@ class DatabaseManager:
     # SELECT that augments each project row with a compact PO summary (the
     # gist columns the cards/detail need) via a LEFT JOIN on project_pos.
     _PROJECT_SELECT = (
-        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.is_project, p.project_type, p.created_at, "
+        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.is_project, p.project_type, p.is_inactive, p.created_at, "
         "       pp.po_number AS po_number, pp.total_value AS po_total_value, "
         "       pp.extraction_status AS po_extraction_status "
         "FROM projects p LEFT JOIN project_pos pp ON pp.project_id = p.id"
@@ -2267,6 +2281,7 @@ class DatabaseManager:
             ptype = 'project'
         r['project_type'] = ptype
         r['is_project'] = (ptype == 'project')
+        r['is_inactive'] = bool(r.get('is_inactive', 0))
         if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
             r['created_at'] = r['created_at'].isoformat()
         # Coerce DECIMAL -> float for JSON
@@ -2279,7 +2294,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute(self._PROJECT_SELECT + " ORDER BY p.id")
+                cursor.execute(self._PROJECT_SELECT + " ORDER BY p.is_inactive, p.id")
                 rows = cursor.fetchall()
                 cursor.close()
                 return [self._decorate_project_row(r) for r in rows]
@@ -2472,6 +2487,25 @@ class DatabaseManager:
                 cursor.execute(
                     "UPDATE projects SET project_type = %s, is_project = %s WHERE id = %s",
                     (project_type, is_project, project_id)
+                )
+                conn.commit()
+                affected = cursor.rowcount
+                cursor.close()
+                if affected == 0:
+                    return False, 'not_found'
+                return True, None
+        except Exception as e:
+            return False, str(e)
+
+    def set_project_inactive(self, project_id: int, is_inactive: bool) -> Tuple[bool, Optional[str]]:
+        """Mark a registry entry closed (inactive) or reopen it. Closed entries
+        keep their type but sink into the registry's "Closed" section."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE projects SET is_inactive = %s WHERE id = %s",
+                    (1 if is_inactive else 0, project_id)
                 )
                 conn.commit()
                 affected = cursor.rowcount
