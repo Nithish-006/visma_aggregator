@@ -62,8 +62,12 @@ def build_project_filter_sql(column, project, params, fuzzy=False):
     return f"({' OR '.join(conds)})" if conds else None
 
 
-# Mirrors the MySQL `uk_txn_dedup` functional-index expression so that
-# duplicates are filtered in-process before INSERT IGNORE ever runs.
+# In-process pre-filter for intra-file duplicates, run before INSERT IGNORE.
+# The DB-level unique key is `unique_transaction`
+# (transaction_date, transaction_description(500), dr_amount, cr_amount) on a
+# DATETIME column, so genuine same-day/same-amount rows stay distinct by their
+# time-of-day. This key normalizes the description more aggressively (40-char
+# alnum prefix + SPLIT tag) purely to catch obvious in-file repeats early.
 _SPLIT_TAG_RE = re.compile(r'\[SPLIT\s*\d+\s*/\s*\d+\]')
 _NON_ALNUM_RE = re.compile(r'[^A-Za-z0-9]')
 
@@ -248,10 +252,11 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
 
-                # Convert pandas Timestamp to Python datetime.date
+                # Preserve full datetime (incl. time-of-day) so same-day,
+                # same-amount, same-description transactions stay distinct.
                 trans_date = transaction['Date']
-                if hasattr(trans_date, 'date'):
-                    trans_date = trans_date.date()
+                if hasattr(trans_date, 'to_pydatetime'):
+                    trans_date = trans_date.to_pydatetime()
 
                 cursor.execute(query, (
                     trans_date,
@@ -301,10 +306,11 @@ class DatabaseManager:
 
         table = self.get_table_name(bank_code)
 
-        # Defense-in-depth: collapse intra-file duplicates before they hit MySQL,
-        # using the same key shape as the DB-level `uk_txn_dedup` functional index.
-        # Without this, a single Excel containing the same row twice would silently
-        # be swallowed by INSERT IGNORE and never surface in the upload report.
+        # Defense-in-depth: collapse intra-file duplicates before they hit MySQL.
+        # Keyed on (Date incl. time, DR, CR, normalized-description) so that genuine
+        # same-day/same-amount transactions with different timestamps are KEPT, while
+        # a single Excel containing a truly identical row twice is caught here instead
+        # of being silently swallowed by INSERT IGNORE and missing from the report.
         intra_dupes = 0
         if len(df) > 1:
             pre = len(df)
@@ -332,7 +338,10 @@ class DatabaseManager:
                     f"WHERE transaction_description LIKE %s",
                     ('%[SPLIT%',))
                 for pdate, pdesc in pc.fetchall():
-                    split_parents.add((str(pdate), _split_parent_key(pdesc)))
+                    # Compare at DATE granularity: split children may have been
+                    # created date-only, while a re-uploaded original now carries time.
+                    pdate_d = pdate.date() if hasattr(pdate, 'date') else pdate
+                    split_parents.add((str(pdate_d), _split_parent_key(pdesc)))
                 pc.close()
 
             if split_parents and len(df) > 0:
@@ -372,10 +381,11 @@ class DatabaseManager:
                 rows_to_insert = []
                 for idx, row in df.iterrows():
                     try:
-                        # Convert pandas Timestamp to Python datetime.date
+                        # Preserve full datetime (incl. time-of-day) so same-day,
+                        # same-amount, same-description transactions stay distinct.
                         trans_date = row['Date']
-                        if hasattr(trans_date, 'date'):
-                            trans_date = trans_date.date()
+                        if hasattr(trans_date, 'to_pydatetime'):
+                            trans_date = trans_date.to_pydatetime()
 
                         rows_to_insert.append((
                             trans_date,

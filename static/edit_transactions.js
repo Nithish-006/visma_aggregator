@@ -1324,8 +1324,11 @@
      */
     async function saveTransaction(txn) {
         try {
-            // Build request data - handle both old and new field name formats
+            // Build request data - handle both old and new field name formats.
+            // id lets the backend match the exact row (unambiguous even when several
+            // transactions share the same date, description and amount).
             const requestData = {
+                id: txn.id,
                 date: txn.date_raw || txn.Date,
                 description: txn.description || txn['Transaction Description'],
                 debit: parseFloat(txn.dr_amount || txn['DR Amount'] || 0),

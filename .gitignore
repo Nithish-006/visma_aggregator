@@ -59,6 +59,9 @@ uploads/
 *.db
 *.sqlite
 
+# Prod data backups (contain exported financial rows — never commit)
+backup_txn_tables_*.sql
+
 # Local one-off ops scripts and prod data backups (contain hard-coded
 # prod credentials and exported row snapshots — never commit)
 _local_ops/

@@ -2387,6 +2387,7 @@ def update_bank_transaction(bank_code):
         data = request.json
         table = get_bank_table(bank_code)
 
+        transaction_id = data.get('id')
         transaction_date = data.get('date')
         description = data.get('description')
         # Support both field names - use proper fallback for zero values
@@ -2421,32 +2422,42 @@ def update_bank_transaction(bank_code):
 
         if app.config['USE_DATABASE']:
             with db_manager.get_connection() as conn:
-                query = f"""
-                UPDATE {table}
-                SET
-                    category = %s,
-                    code = %s,
-                    client_vendor = %s,
-                    project = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE transaction_date = %s
-                  AND transaction_description = %s
-                  AND dr_amount = %s
-                  AND cr_amount = %s
-                LIMIT 1
-                """
-
                 cursor = conn.cursor()
-                cursor.execute(query, (
-                    category,
-                    code,
-                    vendor,
-                    project,
-                    transaction_date,
-                    description,
-                    dr_amount,
-                    cr_amount
-                ))
+                # Prefer matching by primary key id (unambiguous, and robust to the
+                # DATETIME transaction_date column). Fall back to the legacy value
+                # match only when no id is supplied.
+                if transaction_id is not None:
+                    query = f"""
+                    UPDATE {table}
+                    SET
+                        category = %s,
+                        code = %s,
+                        client_vendor = %s,
+                        project = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    LIMIT 1
+                    """
+                    cursor.execute(query, (category, code, vendor, project, transaction_id))
+                else:
+                    query = f"""
+                    UPDATE {table}
+                    SET
+                        category = %s,
+                        code = %s,
+                        client_vendor = %s,
+                        project = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE DATE(transaction_date) = %s
+                      AND transaction_description = %s
+                      AND dr_amount = %s
+                      AND cr_amount = %s
+                    LIMIT 1
+                    """
+                    cursor.execute(query, (
+                        category, code, vendor, project,
+                        transaction_date, description, dr_amount, cr_amount
+                    ))
                 conn.commit()
                 affected_rows = cursor.rowcount
                 cursor.close()
@@ -4642,6 +4653,7 @@ def update_transaction():
         data = request.json
 
         # Required fields
+        transaction_id = data.get('id')
         transaction_date = data.get('date')
         description = data.get('description')
 
@@ -4681,32 +4693,42 @@ def update_transaction():
         # Update in database
         if app.config['USE_DATABASE']:
             with db_manager.get_connection() as conn:
-                query = """
-                UPDATE transactions
-                SET
-                    category = %s,
-                    code = %s,
-                    client_vendor = %s,
-                    project = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE transaction_date = %s
-                  AND transaction_description = %s
-                  AND dr_amount = %s
-                  AND cr_amount = %s
-                LIMIT 1
-                """
-
                 cursor = conn.cursor()
-                cursor.execute(query, (
-                    category,
-                    code,
-                    vendor,
-                    project,
-                    transaction_date,
-                    description,
-                    dr_amount,
-                    cr_amount
-                ))
+                # Prefer matching by primary key id (unambiguous, and robust to the
+                # DATETIME transaction_date column). Fall back to the legacy value
+                # match only when no id is supplied.
+                if transaction_id is not None:
+                    query = """
+                    UPDATE transactions
+                    SET
+                        category = %s,
+                        code = %s,
+                        client_vendor = %s,
+                        project = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    LIMIT 1
+                    """
+                    cursor.execute(query, (category, code, vendor, project, transaction_id))
+                else:
+                    query = """
+                    UPDATE transactions
+                    SET
+                        category = %s,
+                        code = %s,
+                        client_vendor = %s,
+                        project = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE DATE(transaction_date) = %s
+                      AND transaction_description = %s
+                      AND dr_amount = %s
+                      AND cr_amount = %s
+                    LIMIT 1
+                    """
+                    cursor.execute(query, (
+                        category, code, vendor, project,
+                        transaction_date, description, dr_amount, cr_amount
+                    ))
                 conn.commit()
                 affected_rows = cursor.rowcount
                 cursor.close()
