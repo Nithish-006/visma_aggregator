@@ -3,10 +3,34 @@ Configuration file for VISMA Financial App
 """
 
 import os
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+
+
+# ============================================================================
+# TIMEZONE — always operate in Indian Standard Time (IST, UTC+05:30)
+# ============================================================================
+# The app may be deployed (e.g. on Railway) on hosts whose system clock is UTC.
+# Anything user-facing (filenames, "generated on" stamps, and the DB session
+# time_zone used for created_at defaults) must read IST, not the host TZ. Use
+# now_ist() everywhere instead of datetime.now() so a server-side TZ never leaks
+# a wrong date/time to the user.
+IST = timezone(timedelta(hours=5, minutes=30))
+
+# MySQL session offset string for `SET time_zone` (makes CURRENT_TIMESTAMP IST).
+IST_MYSQL_OFFSET = '+05:30'
+
+
+def now_ist():
+    """Current wall-clock time in IST, as a naive datetime (tzinfo stripped).
+
+    Naive so it slots into existing strftime() calls and DB columns exactly
+    like the old datetime.now() did, but with IST values regardless of host TZ.
+    """
+    return datetime.now(IST).replace(tzinfo=None)
 
 
 # ============================================================================

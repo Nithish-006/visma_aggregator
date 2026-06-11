@@ -15,7 +15,10 @@ from datetime import datetime
 from decimal import Decimal as DecimalType
 from typing import Dict, List, Tuple, Optional
 from contextlib import contextmanager
-from config import Config, BANK_CONFIG, get_bank_config, get_bank_table, VALID_BANK_CODES
+from config import (
+    Config, BANK_CONFIG, get_bank_config, get_bank_table, VALID_BANK_CODES,
+    IST_MYSQL_OFFSET,
+)
 
 
 def build_project_filter_sql(column, project, params, fuzzy=False):
@@ -124,6 +127,18 @@ class DatabaseManager:
                 connection_timeout=30,
                 use_pure=True
             )
+            # Force every connection's session timezone to IST so that
+            # `created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP` columns (the
+            # "date added" the user sees) are stamped in Indian time, no matter
+            # what timezone the deployment host / MySQL server runs in.
+            try:
+                cur = conn.cursor()
+                cur.execute("SET time_zone = %s", (IST_MYSQL_OFFSET,))
+                cur.close()
+            except Error as tz_err:
+                # Numeric offsets don't need the TZ tables loaded, so this should
+                # always work; if it somehow fails, keep the connection usable.
+                print(f"[!] Could not set IST session time_zone: {tz_err}")
             return conn
         except Error as e:
             print(f"[!] MySQL connection error: {e}")

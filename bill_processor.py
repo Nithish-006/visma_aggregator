@@ -10,7 +10,6 @@ import json
 import re
 from io import BytesIO
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from google import genai
 from google.genai import types
@@ -30,7 +29,7 @@ GEMINI_MODELS = [
 
 # Extraction prompt
 EXTRACTION_PROMPT = """
-You are an expert invoice data extractor. Analyze this GST invoice image and extract ALL information.
+You are an expert invoice data extractor. Analyze this GST invoice and extract ALL information.
 
 CRITICAL TASK - LINE ITEMS EXTRACTION:
 The invoice has a table with columns like "Description of Goods", "HSN/SAC", "Quantity", "Rate", "Amount" etc.
@@ -41,8 +40,62 @@ Example items you might see:
 - Paint products: "Apcomin QD Grey Primer 20L", "NC Thinner", "Enamel Paint"
 - Construction materials with specifications
 
-INSTRUCTIONS:
-1. Extract ALL line items - do NOT skip any row from the goods table
+═══════════════════════════════════════════════════════════════════════
+RULE 1 — INVOICE DATE (capture it correctly, EVERY time):
+═══════════════════════════════════════════════════════════════════════
+- "invoice_date" is the date the INVOICE itself was raised. It is printed near
+  the invoice number, usually labelled "Invoice Date", "Date", "Dated",
+  "Bill Date", "Inv Date", or "Invoice Dt".
+- DO NOT confuse it with any other date on the bill. These are DIFFERENT dates
+  and must NOT be used as invoice_date:
+    * E-Way Bill date  -> eway_bill_date
+    * Acknowledgement (Ack) date -> ack_date
+    * Due date / payment due date -> ignore
+    * LR date / transport / dispatch date -> transport.lr_date
+    * Delivery note date, PO/order date, challan date -> ignore for invoice_date
+- The invoice ALWAYS has an invoice date. Look carefully (top-right, header box,
+  or beside the invoice number). NEVER leave invoice_date blank if any invoice/bill
+  date is visible anywhere on the document.
+- Output format: DD-MMM-YYYY (e.g. 30-Dec-2025). Convert any input format
+  (30/12/2025, 2025-12-30, 30.12.25) to this. Day-first when ambiguous (Indian invoices).
+
+═══════════════════════════════════════════════════════════════════════
+RULE 2 — TAXES vs OTHER CHARGES (freight / shipping / packing must NOT pollute GST):
+═══════════════════════════════════════════════════════════════════════
+- total_cgst, total_sgst, total_igst must contain ONLY genuine GST tax amounts
+  (the CGST / SGST / IGST tax lines). Nothing else.
+- Freight, Shipping, Transport, Packing, Forwarding, Loading/Unloading, Handling,
+  Insurance, Courier, P&F, and similar service/logistics charges are NOT taxes.
+  Some invoices sloppily print these charges INSIDE or BESIDE the CGST/SGST/IGST
+  block (in the tax area, between the tax rows, or in a tax column). IGNORE their
+  placement — they are charges, never tax.
+    * Put EVERY such charge as its own entry in "other_charges"
+      (description = the charge name as printed, amount = its value, hsn_code if shown).
+    * These amounts must be EXCLUDED from total_cgst / total_sgst / total_igst.
+- So: read the tax block carefully. If a "CGST" or "IGST" figure is actually the
+  tax ON freight, keep that tax in the tax totals, but the freight BASE goes to
+  other_charges. Real GST tax -> tax totals. Charge values -> other_charges.
+- Sanity check before you answer: total_amount should ≈ taxable_amount
+  + total_cgst + total_sgst + total_igst + (sum of other_charges) + round_off.
+  If your CGST/IGST looks inflated, you probably swept a freight/shipping charge
+  into it by mistake — move it to other_charges and recompute.
+
+═══════════════════════════════════════════════════════════════════════
+RULE 3 — MULTI-PAGE INVOICES (read the WHOLE document, consolidate to ONE invoice):
+═══════════════════════════════════════════════════════════════════════
+- This document may span 2, 3 or more pages but is ONE single invoice.
+- Read and combine ALL pages — do NOT stop at the first page.
+- line_items: merge the rows from EVERY page into one continuous list, in order.
+  Continuation pages often repeat the column header and the invoice header — do
+  not duplicate header rows, but DO capture every distinct goods row across pages.
+- The FINAL CONSOLIDATED totals (taxable_amount, total_cgst/sgst/igst, round_off,
+  total_amount, amount_in_words) are usually on the LAST page. Use those final
+  figures — never the per-page subtotal of page 1 alone.
+- Header fields (invoice number, date, vendor, buyer) come from where they appear
+  (usually page 1). Return a SINGLE consolidated invoice object, not one per page.
+
+GENERAL INSTRUCTIONS:
+1. Extract ALL line items - do NOT skip any row from the goods table (across all pages)
 2. For numeric values: remove commas, convert to numbers (47,542.20 -> 47542.20)
 3. Dates: use DD-MMM-YYYY format (30-Dec-2025)
 4. Empty/missing fields: use "" for text, 0 for numbers
@@ -248,12 +301,18 @@ def extract_from_image(image_path):
     return {'success': False, 'error': last_error or 'All models failed'}
 
 
-def extract_from_pdf_page(pdf_path, page_num):
+def extract_from_pdf(pdf_path, page_count=None):
     """
-    Extract invoice data from a specific PDF page using Gemini models.
-    Tries each model in priority order until one succeeds.
+    Extract invoice data from an ENTIRE PDF in a single Gemini call.
+
+    A multi-page PDF is treated as ONE invoice: the model reads every page,
+    merges all line items, and returns the final consolidated totals (which
+    typically appear on the last page). This avoids the old per-page approach
+    that mistook continuation pages for separate invoices and read only page-1
+    subtotals. Tries each model in priority order until one succeeds.
     """
-    print(f"\n[*] Processing PDF page {page_num + 1}")
+    pages_note = f" ({page_count} pages)" if page_count else ""
+    print(f"\n[*] Processing PDF as a single consolidated invoice{pages_note}")
 
     try:
         client = get_gemini_client()
@@ -278,7 +337,12 @@ def extract_from_pdf_page(pdf_path, page_num):
                         data=pdf_bytes,
                         mime_type='application/pdf'
                     ),
-                    EXTRACTION_PROMPT + f"\n\nExtract data from page {page_num + 1} of this PDF."
+                    EXTRACTION_PROMPT + (
+                        "\n\nThis PDF is ONE invoice spanning "
+                        f"{page_count or 'multiple'} page(s). Read EVERY page, merge all "
+                        "line items into a single list, and return the FINAL consolidated "
+                        "totals (usually printed on the last page). Return ONE invoice object."
+                    )
                 ]
             )
 
@@ -286,7 +350,7 @@ def extract_from_pdf_page(pdf_path, page_num):
             data = json.loads(response_text)
 
             line_items = data.get('line_items', [])
-            print(f"[+] {model_name} extracted {len(line_items)} line items from PDF page {page_num + 1}")
+            print(f"[+] {model_name} extracted {len(line_items)} consolidated line items from PDF")
 
             return {'success': True, 'data': data, 'model': model_name}
 
@@ -327,34 +391,20 @@ def process_bill_file(file_path, filename):
             results.append(result)
 
         elif ext == '.pdf':
-            # Process PDF - each page as separate bill
+            # A multi-page PDF is treated as ONE invoice: read every page in a
+            # single call and consolidate (merge line items, use final totals).
+            # GST invoices commonly run 2-3 pages with totals only on the last
+            # page, so per-page extraction produced partial/duplicate records.
             page_count = get_pdf_page_count(file_path)
 
             if page_count == 0:
                 return [{'success': False, 'error': 'Could not read PDF file', 'filename': filename}]
 
-            # Each page is an independent Gemini call, so run them concurrently
-            # instead of one-after-another. Wall-time drops from ~N calls to ~1.
-            # Cap workers so a huge PDF doesn't blow past Gemini rate limits.
-            page_results = [None] * page_count
-            max_workers = min(page_count, 6)
-            with ThreadPoolExecutor(max_workers=max_workers) as pool:
-                future_to_page = {
-                    pool.submit(extract_from_pdf_page, file_path, page_num): page_num
-                    for page_num in range(page_count)
-                }
-                for future in as_completed(future_to_page):
-                    page_num = future_to_page[future]
-                    try:
-                        result = future.result()
-                    except Exception as e:
-                        result = {'success': False, 'error': str(e)}
-                    result['filename'] = filename
-                    result['page'] = page_num + 1
-                    page_results[page_num] = result
-
-            # Preserve original page order in the returned list.
-            results.extend(page_results)
+            result = extract_from_pdf(file_path, page_count)
+            result['filename'] = filename
+            result['page'] = 1
+            result['page_count'] = page_count
+            results.append(result)
         else:
             return [{'success': False, 'error': f'Unsupported file type: {ext}', 'filename': filename}]
 
@@ -403,12 +453,14 @@ def generate_excel(bill_data_list):
             'Buyer Name': buyer.get('name', ''),
             'Buyer GSTIN': buyer.get('gstin', ''),
             'Subtotal': taxes.get('subtotal', 0) or taxes.get('taxable_amount', 0),
-            'CGST': taxes.get('cgst_amount', 0),
-            'SGST': taxes.get('sgst_amount', 0),
-            'IGST': taxes.get('igst_amount', 0),
-            'Other Charges': (taxes.get('loading_charges', 0) or 0) +
-                            (taxes.get('freight_charges', 0) or 0) +
-                            (taxes.get('other_charges', 0) or 0),
+            'CGST': taxes.get('total_cgst', 0) or taxes.get('cgst_amount', 0),
+            'SGST': taxes.get('total_sgst', 0) or taxes.get('sgst_amount', 0),
+            'IGST': taxes.get('total_igst', 0) or taxes.get('igst_amount', 0),
+            # Freight/shipping/packing etc. are kept out of GST and collected here.
+            'Other Charges': sum(
+                (c.get('amount', 0) or 0)
+                for c in data.get('other_charges', []) if c.get('description')
+            ),
             'Round Off': taxes.get('round_off', 0),
             'Total Amount': taxes.get('total_amount', 0),
             'Project': data.get('project', ''),
@@ -572,9 +624,9 @@ def format_extracted_data_for_display(bill_data_list):
             'buyer_name': buyer.get('name', ''),
             'buyer_gstin': buyer.get('gstin', ''),
             'total_amount': taxes.get('total_amount', 0),
-            'cgst': taxes.get('cgst_amount', 0),
-            'sgst': taxes.get('sgst_amount', 0),
-            'igst': taxes.get('igst_amount', 0),
+            'cgst': taxes.get('total_cgst', 0) or taxes.get('cgst_amount', 0),
+            'sgst': taxes.get('total_sgst', 0) or taxes.get('sgst_amount', 0),
+            'igst': taxes.get('total_igst', 0) or taxes.get('igst_amount', 0),
             'subtotal': taxes.get('subtotal', 0) or taxes.get('taxable_amount', 0),
             'item_count': len(items),
             'vehicle_number': transport.get('vehicle_number', ''),

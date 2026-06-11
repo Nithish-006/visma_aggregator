@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 import re
 
 # Import our modules
-from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank_config, get_bank_table
+from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank_config, get_bank_table, now_ist
 from database import DatabaseManager, build_project_filter_sql
 from bank_statement_processor import process_bank_statement
 from bill_processor import process_bill_file, generate_excel, format_extracted_data_for_display
@@ -666,7 +666,7 @@ def upload_statement():
 
         # Secure the filename
         filename = secure_filename(file.filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = now_ist().strftime('%Y%m%d_%H%M%S')
         filename = f"{timestamp}_{filename}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
@@ -1043,7 +1043,7 @@ def api_create_project():
         if not _project_po_allowed(file.filename):
             return jsonify({'error': 'Unsupported PO file type'}), 400
         safe = secure_filename(file.filename)
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        ts = now_ist().strftime('%Y%m%d_%H%M%S')
         po_filename = f"{ts}_{safe}"
         proj_dir = os.path.join(PROJECTS_UPLOAD_ROOT, str(project_id))
         os.makedirs(proj_dir, exist_ok=True)
@@ -1360,7 +1360,7 @@ def api_upload_project_po(project_id):
         return jsonify({'error': 'Unsupported PO file type'}), 400
 
     safe = secure_filename(file.filename)
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    ts = now_ist().strftime('%Y%m%d_%H%M%S')
     po_filename = f"{ts}_{safe}"
     proj_dir = os.path.join(PROJECTS_UPLOAD_ROOT, str(project_id))
     os.makedirs(proj_dir, exist_ok=True)
@@ -2308,7 +2308,7 @@ def upload_bank_statement(bank_code):
         password = request.form.get('password', None)
 
         filename = secure_filename(file.filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = now_ist().strftime('%Y%m%d_%H%M%S')
         filename = f"{bank_code}_{timestamp}_{filename}"
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
 
@@ -2685,7 +2685,7 @@ def download_bank_transactions(bank_code):
         output.seek(0)
 
         bank_name = BANK_CONFIG[bank_code]['name'].replace(' ', '_')
-        filename = f"{bank_name}_transactions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"{bank_name}_transactions_{now_ist().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return send_file(
             output,
@@ -3126,7 +3126,7 @@ def export_personal_transactions():
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        filename = f"Expense_Tracker_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"Expense_Tracker_{now_ist().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return send_file(
             output,
@@ -3358,7 +3358,7 @@ def process_bill():
 
         # Save file temporarily
         filename = secure_filename(file.filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = now_ist().strftime('%Y%m%d_%H%M%S')
         temp_filename = f"bill_{timestamp}_{filename}"
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
 
@@ -3443,7 +3443,7 @@ def download_bills_excel():
         excel_buffer = generate_excel(results)
 
         # Create filename with timestamp
-        filename = f"bills_extracted_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"bills_extracted_{now_ist().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return send_file(
             excel_buffer,
@@ -3870,7 +3870,7 @@ def process_sales_bill():
 
         # Save file with sales_ prefix
         filename = secure_filename(file.filename)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = now_ist().strftime('%Y%m%d_%H%M%S')
         temp_filename = f"sales_{timestamp}_{filename}"
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
 
@@ -3957,7 +3957,7 @@ def download_sales_excel():
             return jsonify({'error': 'No data to download'}), 400
 
         excel_buffer = generate_excel(results)
-        filename = f"sales_extracted_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"sales_extracted_{now_ist().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         return send_file(
             excel_buffer,
@@ -4831,7 +4831,7 @@ def download_transactions():
 
     output.seek(0)
 
-    filename = f"transactions_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"transactions_{now_ist().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     return send_file(
         output,
@@ -5567,7 +5567,7 @@ def get_project_summary_date_range():
     dataframes contain. This is the post-cutover default; users can still
     pick narrower or earlier ranges manually.
     """
-    today = datetime.now().strftime('%Y-%m-%d')
+    today = now_ist().strftime('%Y-%m-%d')
     return jsonify({
         'min_date': '2026-01-01',
         'max_date': today,
@@ -5670,7 +5670,7 @@ def export_project_summary():
             ['VISMA Financial - Project Summary Report'],
             [''],
             ['Report Period', date_label],
-            ['Generated On', datetime.now().strftime('%d-%b-%Y %H:%M')],
+            ['Generated On', now_ist().strftime('%d-%b-%Y %H:%M')],
             [''],
             ['KEY PERFORMANCE INDICATORS'],
             [''],
@@ -6857,7 +6857,7 @@ def export_project_summary():
             wb._sheets = [wb[s] for s in desired_order]
 
     output.seek(0)
-    filename = f"Project_Summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"Project_Summary_{now_ist().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     return send_file(
         output,
