@@ -16,6 +16,8 @@ from google.genai import types
 from PIL import Image
 from PyPDF2 import PdfReader
 
+from extraction_validator import validate_extraction
+
 # Model configuration - Gemini models via direct API (in priority order).
 # All Flash-tier: fast, cheap, and strong at invoice OCR + table extraction.
 # gemini-3-pro is intentionally excluded — it's a reasoning model (slow + costly)
@@ -301,6 +303,37 @@ def extract_from_image(image_path):
     return {'success': False, 'error': last_error or 'All models failed'}
 
 
+def rasterize_pdf_pages(pdf_path, dpi=200):
+    """
+    Render every page of a PDF to a PNG image, in page order, using PyMuPDF.
+
+    Passing an ordered image sequence (instead of raw PDF bytes) makes page
+    boundaries explicit to the model, which fixes the multi-page bug where it
+    read a page-1 subtotal as the final total. PyMuPDF is pip-only (no poppler
+    / system libraries), so this works on Railway.
+
+    Returns a list of PNG byte strings, one per page, or None if rasterization
+    is unavailable (PyMuPDF not installed / file unreadable) so the caller can
+    fall back to sending the raw PDF.
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        print("[!] PyMuPDF not available — falling back to raw PDF bytes")
+        return None
+
+    try:
+        images = []
+        with fitz.open(pdf_path) as doc:
+            for page in doc:
+                pix = page.get_pixmap(dpi=dpi)
+                images.append(pix.tobytes("png"))
+        return images if images else None
+    except Exception as e:
+        print(f"[!] PDF rasterization failed ({e}) — falling back to raw PDF bytes")
+        return None
+
+
 def extract_from_pdf(pdf_path, page_count=None):
     """
     Extract invoice data from an ENTIRE PDF in a single Gemini call.
@@ -310,6 +343,10 @@ def extract_from_pdf(pdf_path, page_count=None):
     typically appear on the last page). This avoids the old per-page approach
     that mistook continuation pages for separate invoices and read only page-1
     subtotals. Tries each model in priority order until one succeeds.
+
+    Pages are rasterized to an ordered image sequence (PyMuPDF) so the model
+    sees explicit page boundaries; if rasterization is unavailable we fall back
+    to sending the raw PDF bytes.
     """
     pages_note = f" ({page_count} pages)" if page_count else ""
     print(f"\n[*] Processing PDF as a single consolidated invoice{pages_note}")
@@ -319,9 +356,42 @@ def extract_from_pdf(pdf_path, page_count=None):
     except ValueError as e:
         return {'success': False, 'error': str(e)}
 
-    # Read PDF bytes
-    with open(pdf_path, 'rb') as f:
-        pdf_bytes = f.read()
+    # Prefer an ordered page-image sequence; fall back to raw PDF bytes.
+    page_images = rasterize_pdf_pages(pdf_path)
+
+    if page_images:
+        n = len(page_images)
+        print(f"[*] Rasterized PDF into {n} page image(s) at 200 DPI")
+        # Build ordered image parts, each tagged with its page position so the
+        # model knows where the document ends and which page holds the totals.
+        content_parts = []
+        for i, png_bytes in enumerate(page_images, 1):
+            content_parts.append(f"--- PAGE {i} of {n} ---")
+            content_parts.append(
+                types.Part.from_bytes(data=png_bytes, mime_type='image/png')
+            )
+        content_parts.append(
+            EXTRACTION_PROMPT + (
+                f"\n\nThe {n} image(s) above are the pages of ONE invoice, in order "
+                f"(PAGE 1 of {n} ... PAGE {n} of {n}). Read EVERY page, merge all "
+                "line items into a single list in page order, and take the FINAL "
+                f"consolidated totals from the LAST page (PAGE {n}) — never a "
+                "per-page subtotal from an earlier page. Return ONE invoice object."
+            )
+        )
+    else:
+        # Fallback: hand Gemini the raw PDF (previous behaviour).
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+        content_parts = [
+            types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf'),
+            EXTRACTION_PROMPT + (
+                "\n\nThis PDF is ONE invoice spanning "
+                f"{page_count or 'multiple'} page(s). Read EVERY page, merge all "
+                "line items into a single list, and return the FINAL consolidated "
+                "totals (usually printed on the last page). Return ONE invoice object."
+            )
+        ]
 
     last_error = None
 
@@ -332,18 +402,7 @@ def extract_from_pdf(pdf_path, page_count=None):
 
             response = client.models.generate_content(
                 model=model,
-                contents=[
-                    types.Part.from_bytes(
-                        data=pdf_bytes,
-                        mime_type='application/pdf'
-                    ),
-                    EXTRACTION_PROMPT + (
-                        "\n\nThis PDF is ONE invoice spanning "
-                        f"{page_count or 'multiple'} page(s). Read EVERY page, merge all "
-                        "line items into a single list, and return the FINAL consolidated "
-                        "totals (usually printed on the last page). Return ONE invoice object."
-                    )
-                ]
+                contents=content_parts
             )
 
             response_text = clean_json_response(response.text)
@@ -413,6 +472,16 @@ def process_bill_file(file_path, filename):
         import traceback
         traceback.print_exc()
         return [{'success': False, 'error': str(e), 'filename': filename}]
+
+    # Reconcile each extraction's numbers (header identity, line-item sums,
+    # per-line GST-rate math). Computed once here so the DB save, the display
+    # response and the review-queue UI all share the same verdict.
+    for result in results:
+        if result.get('success') and result.get('data'):
+            try:
+                result['validation'] = validate_extraction(result['data'])
+            except Exception as e:
+                print(f"[!] Validation error for {filename}: {e}")
 
     return results
 
@@ -631,6 +700,7 @@ def format_extracted_data_for_display(bill_data_list):
             'item_count': len(items),
             'vehicle_number': transport.get('vehicle_number', ''),
             'eway_bill': header.get('eway_bill_number', ''),
+            'validation': bill.get('validation'),  # reconciliation verdict (A1)
             'raw_data': data  # Include raw data for detailed view
         })
 

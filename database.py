@@ -19,6 +19,7 @@ from config import (
     Config, BANK_CONFIG, get_bank_config, get_bank_table, VALID_BANK_CODES,
     IST_MYSQL_OFFSET,
 )
+from extraction_validator import validate_extraction, validate_db_row, notes_from_result
 
 
 def build_project_filter_sql(column, project, params, fuzzy=False):
@@ -811,7 +812,8 @@ class DatabaseManager:
                     buyer_name, buyer_gstin, buyer_address, buyer_state,
                     ship_to_name, ship_to_address,
                     subtotal, total_cgst, total_sgst, total_igst, other_charges, round_off, total_amount, amount_in_words,
-                    vehicle_number, transporter_name
+                    vehicle_number, transporter_name,
+                    validation_status, validation_diff, validation_notes
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s,
@@ -819,9 +821,16 @@ class DatabaseManager:
                     %s, %s, %s, %s,
                     %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s
+                    %s, %s,
+                    %s, %s, %s
                 )
                 """
+
+                # Reconcile the extracted numbers against each other before save.
+                # Internally inconsistent bills (freight-in-GST, wrong totals) are
+                # flagged 'review' so the UI can surface only the bad minority.
+                # Reuse the verdict computed during extraction when present.
+                validation = bill_data.get('validation') or validate_extraction(data)
 
                 # Calculate other charges total
                 other_charges_total = sum(c.get('amount', 0) or 0 for c in other_charges if c.get('description'))
@@ -858,7 +867,10 @@ class DatabaseManager:
                     float(taxes.get('total_amount', 0) or 0),
                     taxes.get('amount_in_words', ''),
                     transport.get('vehicle_number', ''),
-                    transport.get('transporter_name', '')
+                    transport.get('transporter_name', ''),
+                    validation['status'],
+                    validation['diff'],
+                    notes_from_result(validation)
                 ))
 
                 invoice_id = cursor.lastrowid
@@ -923,6 +935,7 @@ class DatabaseManager:
             bi.subtotal, bi.total_cgst, bi.total_sgst, bi.total_igst,
             bi.total_amount, bi.vehicle_number, bi.eway_bill_number, bi.irn,
             bi.project, bi.created_at,
+            bi.validation_status, bi.validation_diff, bi.validation_notes,
             COUNT(bli.id) as line_item_count
         FROM bill_invoices bi
         LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
@@ -1648,6 +1661,92 @@ class DatabaseManager:
             print(f"[!] Error ensuring sales tables: {e}")
             return False
 
+    def ensure_validation_columns(self):
+        """Additive migration: add the reconciliation/validation columns to
+        bill_invoices and sales_invoices. Safe on existing rows — they default
+        to 'review' until re-checked by the validator or the C1 batch script.
+
+        - validation_status ENUM('ok','review')  whether the numbers reconcile
+        - validation_diff   DECIMAL(12,2)         signed header-identity gap (INR)
+        - validation_notes  TEXT                  human-readable failure list
+        """
+        specs = [
+            ("validation_status",
+             "ALTER TABLE {t} ADD COLUMN validation_status "
+             "ENUM('ok','review') DEFAULT 'review' AFTER total_amount"),
+            ("validation_diff",
+             "ALTER TABLE {t} ADD COLUMN validation_diff "
+             "DECIMAL(12,2) DEFAULT 0 AFTER validation_status"),
+            ("validation_notes",
+             "ALTER TABLE {t} ADD COLUMN validation_notes "
+             "TEXT AFTER validation_diff"),
+        ]
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for table in ('bill_invoices', 'sales_invoices'):
+                    for column, alter_sql in specs:
+                        cursor.execute(
+                            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s "
+                            "AND COLUMN_NAME = %s",
+                            (table, column)
+                        )
+                        if cursor.fetchone()[0] == 0:
+                            cursor.execute(alter_sql.format(t=table))
+                cursor.close()
+                print("[+] Validation columns ensured")
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring validation columns: {e}")
+            return False
+
+    def revalidate_existing_bills(self) -> Dict:
+        """Server-side Tier-1 re-check: run the reconciliation over every stored
+        bill (purchase + sales) and write the verdict back into the validation
+        columns. The in-app equivalent of validate_existing_bills.py, so the
+        review queue can be populated without any external script.
+
+        Returns a summary dict: {purchase: {total, review}, sales: {...}}.
+        """
+        self.ensure_validation_columns()
+        summary = {}
+        for kind, inv_t, li_t in (
+            ('purchase', 'bill_invoices', 'bill_line_items'),
+            ('sales', 'sales_invoices', 'sales_line_items'),
+        ):
+            total = review = 0
+            try:
+                with self.get_connection() as conn:
+                    cursor = conn.cursor(dictionary=True)
+                    cursor.execute(f"SELECT * FROM {inv_t}")
+                    invoices = cursor.fetchall()
+                    cursor.execute(f"SELECT * FROM {li_t} ORDER BY invoice_id, sl_no")
+                    line_rows = cursor.fetchall()
+
+                    by_invoice = {}
+                    for li in line_rows:
+                        by_invoice.setdefault(li['invoice_id'], []).append(li)
+
+                    upd = cursor  # reuse same cursor/connection for the writes
+                    for inv in invoices:
+                        v = validate_db_row(inv, by_invoice.get(inv['id'], []))
+                        if v['status'] == 'review':
+                            review += 1
+                        total += 1
+                        upd.execute(
+                            f"UPDATE {inv_t} SET validation_status=%s, "
+                            f"validation_diff=%s, validation_notes=%s WHERE id=%s",
+                            (v['status'], v['diff'], notes_from_result(v), inv['id'])
+                        )
+                    conn.commit()
+                    cursor.close()
+            except Exception as e:
+                print(f"[!] revalidate {kind} error: {e}")
+            summary[kind] = {'total': total, 'review': review}
+        print(f"[+] Revalidated existing bills: {summary}")
+        return summary
+
     def insert_sales_bill(self, bill_data: Dict) -> Tuple[bool, Optional[int], Optional[str]]:
         """Insert a sales invoice and its line items into the database."""
         if not bill_data.get('success') or not bill_data.get('data'):
@@ -1685,7 +1784,8 @@ class DatabaseManager:
                     buyer_name, buyer_gstin, buyer_address, buyer_state,
                     ship_to_name, ship_to_address,
                     subtotal, total_cgst, total_sgst, total_igst, other_charges, round_off, total_amount, amount_in_words,
-                    vehicle_number, transporter_name
+                    vehicle_number, transporter_name,
+                    validation_status, validation_diff, validation_notes
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s,
@@ -1693,9 +1793,13 @@ class DatabaseManager:
                     %s, %s, %s, %s,
                     %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s
+                    %s, %s,
+                    %s, %s, %s
                 )
                 """
+
+                # Same reconciliation as purchase bills (see insert_bill).
+                validation = bill_data.get('validation') or validate_extraction(data)
 
                 other_charges_total = sum(c.get('amount', 0) or 0 for c in other_charges if c.get('description'))
 
@@ -1731,7 +1835,10 @@ class DatabaseManager:
                     float(taxes.get('total_amount', 0) or 0),
                     taxes.get('amount_in_words', ''),
                     transport.get('vehicle_number', ''),
-                    transport.get('transporter_name', '')
+                    transport.get('transporter_name', ''),
+                    validation['status'],
+                    validation['diff'],
+                    notes_from_result(validation)
                 ))
 
                 invoice_id = cursor.lastrowid
@@ -1795,6 +1902,7 @@ class DatabaseManager:
             si.subtotal, si.total_cgst, si.total_sgst, si.total_igst,
             si.total_amount, si.vehicle_number, si.eway_bill_number, si.irn,
             si.project, si.created_at,
+            si.validation_status, si.validation_diff, si.validation_notes,
             COUNT(sli.id) as line_item_count
         FROM sales_invoices si
         LEFT JOIN sales_line_items sli ON si.id = sli.invoice_id
@@ -2026,9 +2134,17 @@ class DatabaseManager:
                     vehicle_number = %s,
                     transporter_name = %s,
                     project = %s,
+                    validation_status = %s,
+                    validation_diff = %s,
+                    validation_notes = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 """
+
+                # Re-validate from the updated numbers so every edit / reprocess
+                # refreshes the reconciliation verdict (validate_db_row reads the
+                # same flat keys this update writes).
+                validation = validate_db_row(bill_data, bill_data.get('line_items', []))
 
                 cursor.execute(update_query, (
                     bill_data.get('invoice_number', ''),
@@ -2062,6 +2178,9 @@ class DatabaseManager:
                     bill_data.get('vehicle_number', ''),
                     bill_data.get('transporter_name', ''),
                     bill_data.get('project', '') or None,
+                    validation['status'],
+                    validation['diff'],
+                    notes_from_result(validation),
                     invoice_id
                 ))
 
@@ -3143,9 +3262,17 @@ class DatabaseManager:
                     vehicle_number = %s,
                     transporter_name = %s,
                     project = %s,
+                    validation_status = %s,
+                    validation_diff = %s,
+                    validation_notes = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
                 """
+
+                # Re-validate from the updated numbers so every edit / reprocess
+                # refreshes the reconciliation verdict (validate_db_row reads the
+                # same flat keys this update writes).
+                validation = validate_db_row(bill_data, bill_data.get('line_items', []))
 
                 cursor.execute(update_query, (
                     bill_data.get('invoice_number', ''),
@@ -3179,6 +3306,9 @@ class DatabaseManager:
                     bill_data.get('vehicle_number', ''),
                     bill_data.get('transporter_name', ''),
                     bill_data.get('project', '') or None,
+                    validation['status'],
+                    validation['diff'],
+                    notes_from_result(validation),
                     invoice_id
                 ))
 

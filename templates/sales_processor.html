@@ -247,6 +247,26 @@
                     Invoice Summary
                 </div>
                 <div class="tabs-actions">
+                    <label class="bp-flagged-toggle" title="Show only bills flagged for review">
+                        <input type="checkbox" id="flaggedOnlyToggle"> Flagged only
+                        <span class="bp-flagged-count" id="flaggedCount"></span>
+                    </label>
+                    <button class="btn btn-secondary btn-sm" id="validateBtn" title="Re-check every stored bill's arithmetic and flag inconsistent ones">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        Run Validation
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="reprocessFlaggedBtn" title="Re-extract all flagged bills from their PDFs and auto-apply the ones that now reconcile">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                        </svg>
+                        Reprocess Flagged
+                    </button>
                     <button class="btn btn-secondary btn-sm" id="refreshBtn">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -286,6 +306,7 @@
                                 <th>SGST</th>
                                 <th>IGST</th>
                                 <th>Total</th>
+                                <th title="Reconciliation check">Check</th>
                                 <th>Project</th>
                                 <th>Added</th>
                                 <th>Actions</th>
@@ -293,7 +314,7 @@
                         </thead>
                         <tbody id="invoicesBody">
                             <tr class="loading-row">
-                                <td colspan="14">
+                                <td colspan="15">
                                     <div class="loading-spinner"></div>
                                     Loading invoices...
                                 </td>
@@ -386,6 +407,23 @@
                     </svg>
                     Process Bills
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reprocess Diff Modal -->
+    <div class="modal" id="reprocessModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="reprocessTitle">Reprocess Bill</h3>
+                <button class="modal-close" id="closeReprocessModal">&times;</button>
+            </div>
+            <div class="modal-body" id="reprocessBody">
+                <!-- Diff content inserted by JS -->
+            </div>
+            <div class="modal-footer" id="reprocessFooter" style="display:none; padding:16px; gap:8px; justify-content:flex-end;">
+                <button class="btn btn-secondary btn-sm" id="reprocessCancelBtn">Close</button>
+                <button class="btn btn-primary btn-sm" id="reprocessApplyBtn">Apply new values</button>
             </div>
         </div>
     </div>

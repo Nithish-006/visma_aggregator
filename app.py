@@ -13,6 +13,7 @@ from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank
 from database import DatabaseManager, build_project_filter_sql
 from bank_statement_processor import process_bank_statement
 from bill_processor import process_bill_file, generate_excel, format_extracted_data_for_display
+from extraction_validator import validate_extraction
 import po_processor
 
 app = Flask(__name__)
@@ -3335,6 +3336,8 @@ def get_personal_descriptions():
 @login_required
 def bill_processor_page():
     """Render bill processor page"""
+    # Ensure the reconciliation/validation columns exist (additive migration).
+    db_manager.ensure_validation_columns()
     return render_template('bill_processor.html')
 
 
@@ -3831,6 +3834,185 @@ def update_stored_bill(invoice_id):
 
 
 # ============================================================================
+# VALIDATION / REPROCESS (review queue + correction)
+# ============================================================================
+
+def _locate_invoice_file(filename, prefix):
+    """Find the stored source file on the volume. Files are saved as
+    <prefix>_<timestamp>_<originalname>; the DB keeps the original filename.
+    Mirrors the serve route. Returns an absolute path or None."""
+    import glob as _glob
+    if not filename:
+        return None
+    direct = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if os.path.exists(direct):
+        return direct
+    matches = _glob.glob(os.path.join(app.config['UPLOAD_FOLDER'], f"{prefix}_*_{filename}"))
+    return sorted(matches)[-1] if matches else None
+
+
+def _extraction_to_flat(data, project):
+    """Flatten a nested Gemini extraction dict into the flat shape update_bill /
+    update_sales_bill expect, injecting the preserved project tag. other_charges
+    is collapsed to the single summed column those updaters store."""
+    header = data.get('invoice_header', {}) or {}
+    vendor = data.get('vendor', {}) or {}
+    buyer = data.get('buyer', {}) or {}
+    ship_to = data.get('ship_to', {}) or {}
+    taxes = data.get('taxes', {}) or {}
+    transport = data.get('transport', {}) or {}
+    other_total = sum((c.get('amount', 0) or 0)
+                      for c in (data.get('other_charges', []) or [])
+                      if c.get('description'))
+    return {
+        'invoice_number': header.get('invoice_number', ''),
+        'invoice_date': header.get('invoice_date', ''),
+        'irn': header.get('irn', ''),
+        'ack_number': header.get('ack_number', ''),
+        'eway_bill_number': header.get('eway_bill_number', ''),
+        'vendor_name': vendor.get('name', ''),
+        'vendor_gstin': vendor.get('gstin', ''),
+        'vendor_address': vendor.get('address', ''),
+        'vendor_state': vendor.get('state', ''),
+        'vendor_pan': vendor.get('pan', ''),
+        'vendor_phone': vendor.get('phone', ''),
+        'vendor_bank_name': vendor.get('bank_name', ''),
+        'vendor_bank_account': vendor.get('bank_account', ''),
+        'vendor_bank_ifsc': vendor.get('bank_ifsc', ''),
+        'buyer_name': buyer.get('name', ''),
+        'buyer_gstin': buyer.get('gstin', ''),
+        'buyer_address': buyer.get('address', ''),
+        'buyer_state': buyer.get('state', ''),
+        'ship_to_name': ship_to.get('name', ''),
+        'ship_to_address': ship_to.get('address', ''),
+        'subtotal': taxes.get('subtotal', 0) or taxes.get('taxable_amount', 0) or 0,
+        'total_cgst': taxes.get('total_cgst', 0) or 0,
+        'total_sgst': taxes.get('total_sgst', 0) or 0,
+        'total_igst': taxes.get('total_igst', 0) or 0,
+        'other_charges': other_total,
+        'round_off': taxes.get('round_off', 0) or 0,
+        'total_amount': taxes.get('total_amount', 0) or 0,
+        'amount_in_words': taxes.get('amount_in_words', ''),
+        'vehicle_number': transport.get('vehicle_number', ''),
+        'transporter_name': transport.get('transporter_name', ''),
+        'project': project,  # preserved from the existing row — never re-derived
+        'line_items': data.get('line_items', []) or [],
+    }
+
+
+def _reprocess_invoice(invoice_id, kind, apply_changes):
+    """Re-extract one stored invoice from its source PDF using the improved
+    pipeline, re-validate, and return an old->new diff. Applies the new values
+    (preserving the project tag) only when apply_changes is set AND the new
+    extraction reconciles ('ok'), per the clean-only policy.
+    """
+    is_sales = (kind == 'sales')
+    prefix = 'sales' if is_sales else 'bill'
+    get_detail = db_manager.get_sales_bill_detail if is_sales else db_manager.get_bill_detail
+    updater = db_manager.update_sales_bill if is_sales else db_manager.update_bill
+
+    existing = get_detail(invoice_id)
+    if not existing:
+        return {'success': False, 'error': 'Bill not found'}, 404
+
+    project = existing.get('project')
+    filename = existing.get('filename')
+
+    pdf_path = _locate_invoice_file(filename, prefix)
+    if not pdf_path:
+        return {'success': False, 'error': f'Source file not found on disk for "{filename}"'}, 200
+
+    results = process_bill_file(pdf_path, filename)
+    res = results[0] if results else None
+    if not res or not res.get('success') or not res.get('data'):
+        return {'success': False,
+                'error': (res or {}).get('error', 'Re-extraction failed')}, 200
+
+    new_data = res['data']
+    new_validation = res.get('validation') or validate_extraction(new_data)
+    flat = _extraction_to_flat(new_data, project)
+
+    def f(x):
+        try:
+            return round(float(x or 0), 2)
+        except (TypeError, ValueError):
+            return 0.0
+
+    fields = ['subtotal', 'total_cgst', 'total_sgst', 'total_igst',
+              'other_charges', 'round_off', 'total_amount']
+    diff = {}
+    for k in fields:
+        diff[k] = {'old': f(existing.get(k)), 'new': f(flat.get(k)),
+                   'changed': f(existing.get(k)) != f(flat.get(k))}
+    diff['line_item_count'] = {'old': len(existing.get('line_items', [])),
+                               'new': len(flat.get('line_items', [])),
+                               'changed': len(existing.get('line_items', [])) != len(flat.get('line_items', []))}
+    diff['invoice_number'] = {'old': existing.get('invoice_number', ''),
+                              'new': flat.get('invoice_number', ''),
+                              'changed': (existing.get('invoice_number') or '') != (flat.get('invoice_number') or '')}
+
+    applied = False
+    apply_blocked = None
+    if apply_changes:
+        if new_validation.get('status') == 'ok':
+            ok, err = updater(invoice_id, flat)
+            applied = bool(ok)
+            if not ok:
+                apply_blocked = err or 'update failed'
+        else:
+            apply_blocked = "Re-extraction still flagged 'review' — not applied (clean-only policy)"
+
+    return {
+        'success': True,
+        'invoice_id': invoice_id,
+        'kind': kind,
+        'model': res.get('model'),
+        'project_preserved': project,
+        'old_validation': {
+            'status': existing.get('validation_status'),
+            'diff': f(existing.get('validation_diff')),
+            'notes': existing.get('validation_notes'),
+        },
+        'new_validation': new_validation,
+        'diff': diff,
+        'applied': applied,
+        'apply_blocked': apply_blocked,
+    }, 200
+
+
+@app.route('/api/bills/revalidate', methods=['POST'])
+@login_required
+def revalidate_bills():
+    """Run the Tier-1 reconciliation over every stored bill (purchase + sales)
+    and persist the verdicts. Populates the review queue."""
+    try:
+        summary = db_manager.revalidate_existing_bills()
+        return jsonify({'success': True, 'summary': summary})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/bills/reprocess/<int:invoice_id>', methods=['POST'])
+@login_required
+def reprocess_bill(invoice_id):
+    """Re-extract a purchase bill from its PDF; preview or apply (clean-only)."""
+    apply_changes = bool((request.json or {}).get('apply', False))
+    payload, status = _reprocess_invoice(invoice_id, 'purchase', apply_changes)
+    return jsonify(payload), status
+
+
+@app.route('/api/sales/reprocess/<int:invoice_id>', methods=['POST'])
+@login_required
+def reprocess_sales_bill(invoice_id):
+    """Re-extract a sales bill from its PDF; preview or apply (clean-only)."""
+    apply_changes = bool((request.json or {}).get('apply', False))
+    payload, status = _reprocess_invoice(invoice_id, 'sales', apply_changes)
+    return jsonify(payload), status
+
+
+# ============================================================================
 # SALES BILLS API ENDPOINTS
 # ============================================================================
 
@@ -3848,6 +4030,8 @@ def sales_processor_page():
     """Render sales processor page"""
     # Ensure sales tables exist
     db_manager.ensure_sales_tables()
+    # Ensure the reconciliation/validation columns exist (additive migration).
+    db_manager.ensure_validation_columns()
     return render_template('sales_processor.html')
 
 

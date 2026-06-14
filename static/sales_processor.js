@@ -4,6 +4,7 @@
 
 // State
 let storedBills = [];
+let flaggedOnly = false;        // review-queue filter: show only validation_status='review'
 let allProjects = [];          // historical — filter dropdown only
 let canonicalProjects = [];    // canonical — per-row edit picker
 let canonicalProjectSet = new Set();
@@ -14,6 +15,9 @@ let fileQueue = [];
 let processedResults = [];
 let rawResults = [];
 let activeProjectEdit = null;
+
+// Max bills extracted concurrently during bulk upload (see bill_processor.js).
+const MAX_CONCURRENT_UPLOADS = 5;
 
 // Edit Modal State
 let currentEditBill = null;
@@ -68,6 +72,16 @@ function init() {
     document.getElementById('newBillBtn').addEventListener('click', openUploadModal);
     document.getElementById('refreshBtn').addEventListener('click', refreshData);
     document.getElementById('exportAllBtn').addEventListener('click', exportAllBills);
+
+    // Validation / review-queue controls
+    document.getElementById('validateBtn').addEventListener('click', runValidation);
+    document.getElementById('reprocessFlaggedBtn').addEventListener('click', bulkReprocessFlagged);
+    document.getElementById('flaggedOnlyToggle').addEventListener('change', (e) => {
+        flaggedOnly = e.target.checked;
+        renderInvoicesTable();
+    });
+    document.getElementById('closeReprocessModal').addEventListener('click', closeReprocessModal);
+    document.getElementById('reprocessCancelBtn').addEventListener('click', closeReprocessModal);
 
     // Event delegation for project cell clicks
     document.getElementById('invoicesBody').addEventListener('click', handleTableClick);
@@ -416,6 +430,224 @@ function refreshData() {
 }
 
 // ============================================================================
+// VALIDATION / REVIEW QUEUE
+// ============================================================================
+
+function getVisibleBills() {
+    return flaggedOnly
+        ? storedBills.filter(b => b.validation_status === 'review')
+        : storedBills;
+}
+
+function validationBadge(bill) {
+    const status = bill.validation_status;
+    if (status === 'review') {
+        const notes = (bill.validation_notes || 'Failed reconciliation').replace(/"/g, '&quot;');
+        return `<span class="val-badge val-review" title="${notes}">⚠ Review</span>`;
+    }
+    if (status === 'ok') {
+        return `<span class="val-badge val-ok" title="Reconciles">✓ OK</span>`;
+    }
+    return `<span class="val-badge val-unknown" title="Not checked yet">–</span>`;
+}
+
+function updateFlaggedCount() {
+    const el = document.getElementById('flaggedCount');
+    if (!el) return;
+    const n = storedBills.filter(b => b.validation_status === 'review').length;
+    el.textContent = n ? `(${n})` : '';
+}
+
+async function runValidation() {
+    const btn = document.getElementById('validateBtn');
+    const prev = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Validating…';
+    try {
+        const res = await fetch('/api/bills/revalidate', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            const s = data.summary.sales || {};
+            showToast(`Validated ${s.total || 0} sales bills (${s.review || 0} flagged)`, 'success');
+            await loadStoredBills();
+        } else {
+            showToast(data.error || 'Validation failed', 'error');
+        }
+    } catch (e) {
+        showToast('Validation failed: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = prev;
+    }
+}
+
+let currentReprocessId = null;
+
+async function reprocessBill(billId) {
+    currentReprocessId = billId;
+    openReprocessModal();
+    const body = document.getElementById('reprocessBody');
+    const footer = document.getElementById('reprocessFooter');
+    footer.style.display = 'none';
+    body.innerHTML = '<div class="reprocess-loading"><div class="loading-spinner"></div> Re-extracting from the source PDF…</div>';
+    try {
+        const res = await fetch(`/api/sales/reprocess/${billId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apply: false })
+        });
+        const data = await res.json();
+        if (!data.success) {
+            body.innerHTML = `<div class="reprocess-error">⚠ ${escapeHtml(data.error || 'Reprocess failed')}</div>`;
+            return;
+        }
+        renderReprocessDiff(data);
+    } catch (e) {
+        body.innerHTML = `<div class="reprocess-error">⚠ ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function renderReprocessDiff(data) {
+    const body = document.getElementById('reprocessBody');
+    const footer = document.getElementById('reprocessFooter');
+    const applyBtn = document.getElementById('reprocessApplyBtn');
+
+    const labels = {
+        subtotal: 'Subtotal', total_cgst: 'CGST', total_sgst: 'SGST', total_igst: 'IGST',
+        other_charges: 'Other charges', round_off: 'Round off', total_amount: 'Total',
+        line_item_count: 'Line items', invoice_number: 'Invoice #'
+    };
+    const rows = Object.keys(labels).map(k => {
+        const d = data.diff[k];
+        if (!d) return '';
+        const isNum = typeof d.old === 'number';
+        const fmt = v => isNum ? formatIndianCurrency(v) : (v || '-');
+        const cls = d.changed ? 'diff-changed' : '';
+        return `<tr class="${cls}">
+            <td>${labels[k]}</td>
+            <td class="text-right">${fmt(d.old)}</td>
+            <td class="text-right">${d.changed ? '→' : ''}</td>
+            <td class="text-right">${fmt(d.new)}</td>
+        </tr>`;
+    }).join('');
+
+    const nv = data.new_validation || {};
+    const isOk = nv.status === 'ok';
+    const statusBanner = isOk
+        ? `<div class="reprocess-status ok">✓ Re-extraction reconciles (score ${nv.score})</div>`
+        : `<div class="reprocess-status review">⚠ Still flagged after re-extraction (score ${nv.score})<br><small>${escapeHtml((nv.failures || []).join('; '))}</small></div>`;
+
+    body.innerHTML = `
+        <div class="reprocess-meta">
+            Model: <strong>${escapeHtml(data.model || '—')}</strong> ·
+            Project preserved: <strong>${escapeHtml(data.project_preserved || '(none)')}</strong>
+        </div>
+        ${statusBanner}
+        <table class="reprocess-diff-table">
+            <thead><tr><th>Field</th><th class="text-right">Stored</th><th></th><th class="text-right">Re-extracted</th></tr></thead>
+            <tbody>${rows}</tbody>
+        </table>
+        <p class="reprocess-note">Applying replaces the stored values with the re-extracted ones. The project tag is always kept.</p>
+    `;
+
+    footer.style.display = 'flex';
+    if (isOk) {
+        applyBtn.disabled = false;
+        applyBtn.title = 'Apply the re-extracted values';
+        applyBtn.textContent = 'Apply new values';
+    } else {
+        applyBtn.disabled = true;
+        applyBtn.title = 'Clean-only policy: a still-flagged re-extraction cannot be applied';
+        applyBtn.textContent = 'Cannot apply (still flagged)';
+    }
+    applyBtn.onclick = () => applyReprocess(data.invoice_id);
+}
+
+async function applyReprocess(billId) {
+    const applyBtn = document.getElementById('reprocessApplyBtn');
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Applying…';
+    try {
+        const res = await fetch(`/api/sales/reprocess/${billId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apply: true })
+        });
+        const data = await res.json();
+        if (data.success && data.applied) {
+            showToast('Bill reprocessed and corrected', 'success');
+            closeReprocessModal();
+            await loadStoredBills();
+        } else {
+            showToast(data.apply_blocked || data.error || 'Could not apply', 'error');
+            applyBtn.disabled = false;
+            applyBtn.textContent = 'Apply new values';
+        }
+    } catch (e) {
+        showToast('Apply failed: ' + e.message, 'error');
+        applyBtn.disabled = false;
+        applyBtn.textContent = 'Apply new values';
+    }
+}
+
+function openReprocessModal() {
+    document.getElementById('reprocessModal').classList.add('show');
+}
+function closeReprocessModal() {
+    document.getElementById('reprocessModal').classList.remove('show');
+    currentReprocessId = null;
+}
+
+async function bulkReprocessFlagged() {
+    const flagged = storedBills.filter(b => b.validation_status === 'review');
+    if (flagged.length === 0) {
+        showToast('No flagged bills to reprocess', 'info');
+        return;
+    }
+    if (!confirm(`Re-extract ${flagged.length} flagged bill(s) from their PDFs and apply the ones that now reconcile? Project tags are preserved.`)) {
+        return;
+    }
+    const btn = document.getElementById('reprocessFlaggedBtn');
+    const prev = btn.innerHTML;
+    btn.disabled = true;
+
+    const queue = flagged.slice();
+    let done = 0, applied = 0, stillFlagged = 0, failed = 0;
+    let nextIndex = 0;
+
+    async function worker() {
+        while (true) {
+            const i = nextIndex++;
+            if (i >= queue.length) return;
+            const bill = queue[i];
+            try {
+                const res = await fetch(`/api/sales/reprocess/${bill.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apply: true })
+                });
+                const data = await res.json();
+                if (data.success && data.applied) applied++;
+                else if (data.success) stillFlagged++;
+                else failed++;
+            } catch (e) {
+                failed++;
+            }
+            done++;
+            btn.innerHTML = `Reprocessing ${done}/${queue.length}…`;
+        }
+    }
+
+    const pool = Math.min(MAX_CONCURRENT_UPLOADS, queue.length);
+    await Promise.all(Array.from({ length: pool }, () => worker()));
+
+    btn.disabled = false;
+    btn.innerHTML = prev;
+    showToast(`Reprocessed ${done}: ${applied} corrected, ${stillFlagged} still flagged, ${failed} failed`, applied ? 'success' : 'info');
+    await loadStoredBills();
+}
+
+// ============================================================================
 // RENDER TABLES
 // ============================================================================
 
@@ -425,7 +657,10 @@ function renderInvoicesTable() {
     const tableContainer = document.querySelector('#invoicesTab .table-container');
     const mobileList = document.getElementById('mobileInvoiceList');
 
-    if (storedBills.length === 0) {
+    updateFlaggedCount();
+    const bills = getVisibleBills();
+
+    if (bills.length === 0) {
         tableContainer.style.display = 'none';
         if (mobileList) mobileList.innerHTML = '';
         emptyState.style.display = 'flex';
@@ -436,7 +671,7 @@ function renderInvoicesTable() {
     emptyState.style.display = 'none';
 
     // Render desktop table
-    tbody.innerHTML = storedBills.map(bill => {
+    tbody.innerHTML = bills.map(bill => {
         const projectDisplay = bill.project || '';
         const projectClass = projectDisplay ? '' : 'empty';
         const projectText = projectDisplay || 'Click to add';
@@ -455,6 +690,7 @@ function renderInvoicesTable() {
                 <td class="text-right">${formatIndianCurrency(bill.total_sgst)}</td>
                 <td class="text-right">${formatIndianCurrency(bill.total_igst)}</td>
                 <td class="text-right cell-amount">${formatIndianCurrency(bill.total_amount)}</td>
+                <td class="cell-check">${validationBadge(bill)}</td>
                 <td class="project-cell" data-bill-id="${bill.id}" data-project="${escapeForAttr(projectDisplay)}">
                     <div class="project-display">
                         <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
@@ -477,6 +713,12 @@ function renderInvoicesTable() {
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-reprocess" onclick="reprocessBill(${bill.id})" title="Reprocess from PDF (re-extract, keeps project)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                             </svg>
                         </button>
                         <button class="btn-icon btn-danger" onclick="deleteInvoice(${bill.id})" title="Delete">
@@ -503,7 +745,7 @@ function renderMobileInvoiceCards() {
     const mobileList = document.getElementById('mobileInvoiceList');
     if (!mobileList) return;
 
-    mobileList.innerHTML = storedBills.map(bill => {
+    mobileList.innerHTML = getVisibleBills().map(bill => {
         const cgst = parseFloat(bill.total_cgst) || 0;
         const sgst = parseFloat(bill.total_sgst) || 0;
         const igst = parseFloat(bill.total_igst) || 0;
@@ -527,7 +769,7 @@ function renderMobileInvoiceCards() {
             <div class="invoice-card" onclick="viewInvoiceDetail(${bill.id})">
                 <div class="invoice-card-header">
                     <span class="invoice-card-number">#${escapeHtml(bill.invoice_number || 'N/A')}</span>
-                    <span class="invoice-card-date">${dateDisplay}</span>
+                    <span class="invoice-card-date">${dateDisplay} ${validationBadge(bill)}</span>
                 </div>
                 <div class="invoice-card-vendor">${escapeHtml(bill.vendor_name || 'Unknown Vendor')}</div>
                 <div class="invoice-card-buyer">To: ${escapeHtml(bill.buyer_name || '-')}</div>
@@ -1275,46 +1517,71 @@ async function processFiles() {
 
     updateProgress(0, total);
 
-    for (const file of fileQueue) {
-        const fileStartTime = Date.now();
-        document.getElementById('processingText').textContent = `Processing ${file.name}...`;
-        addProcessingLog(`Processing: ${file.name}`, 'info');
+    // Bounded concurrency pool (mirrors bill_processor.js): several files
+    // extract at once instead of one Gemini round-trip at a time. Wall-clock
+    // ≈ the slowest file, capped well under the paid-tier RPM.
+    const files = fileQueue.slice();           // snapshot of the queue
+    // Per-file result slots so the final order matches the queue order
+    // regardless of which file's extraction finishes first.
+    const rawSlots = new Array(total).fill(null);
+    const displaySlots = new Array(total).fill(null);
+    let nextIndex = 0;
 
-        try {
-            const result = await uploadAndProcessFile(file);
-            const fileTime = Date.now() - fileStartTime;
+    async function worker() {
+        while (true) {
+            const i = nextIndex++;
+            if (i >= total) return;
+            const file = files[i];
+            const fileStartTime = Date.now();
+            addProcessingLog(`Processing: ${file.name}`, 'info');
 
-            if (result.success) {
-                rawResults.push(...result.results);
+            try {
+                const result = await uploadAndProcessFile(file);
+                const fileTime = Date.now() - fileStartTime;
 
-                // Log each result from display_data
-                for (const item of result.display_data) {
-                    if (item.is_duplicate) {
-                        addProcessingLog(`Duplicate: Invoice #${item.invoice_number || 'N/A'} already exists`, 'duplicate');
-                    } else if (item.success) {
-                        addProcessingLog(`Extracted: Invoice #${item.invoice_number || 'N/A'} - ${item.vendor_name || 'Unknown'} (${formatDuration(fileTime)})`, 'success');
+                if (result.success) {
+                    rawSlots[i] = result.results;
+
+                    // Log each result from display_data
+                    for (const item of result.display_data) {
+                        if (item.is_duplicate) {
+                            addProcessingLog(`Duplicate: Invoice #${item.invoice_number || 'N/A'} already exists`, 'duplicate');
+                        } else if (item.success) {
+                            addProcessingLog(`Extracted: Invoice #${item.invoice_number || 'N/A'} - ${item.vendor_name || 'Unknown'} (${formatDuration(fileTime)})`, 'success');
+                        }
                     }
+                    displaySlots[i] = result.display_data;
+                } else {
+                    addProcessingLog(`Failed: ${file.name} - ${result.error || 'Unknown error'}`, 'error');
+                    displaySlots[i] = [{
+                        success: false,
+                        error: result.error || 'Unknown error',
+                        filename: file.name
+                    }];
                 }
-                processedResults.push(...result.display_data);
-            } else {
-                addProcessingLog(`Failed: ${result.error || 'Unknown error'}`, 'error');
-                processedResults.push({
+            } catch (error) {
+                addProcessingLog(`Error: ${file.name} - ${error.message || 'Processing failed'}`, 'error');
+                displaySlots[i] = [{
                     success: false,
-                    error: result.error || 'Unknown error',
+                    error: error.message || 'Processing failed',
                     filename: file.name
-                });
+                }];
             }
-        } catch (error) {
-            addProcessingLog(`Error: ${error.message || 'Processing failed'}`, 'error');
-            processedResults.push({
-                success: false,
-                error: error.message || 'Processing failed',
-                filename: file.name
-            });
-        }
 
-        processed++;
-        updateProgress(processed, total);
+            processed++;
+            updateProgress(processed, total);
+            document.getElementById('processingText').textContent =
+                `Processed ${processed} of ${total}...`;
+        }
+    }
+
+    const poolSize = Math.min(MAX_CONCURRENT_UPLOADS, total);
+    await Promise.all(Array.from({ length: poolSize }, () => worker()));
+
+    // Flatten the per-file slots back into queue order.
+    for (let i = 0; i < total; i++) {
+        if (rawSlots[i]) rawResults.push(...rawSlots[i]);
+        if (displaySlots[i]) processedResults.push(...displaySlots[i]);
     }
 
     // Calculate total time

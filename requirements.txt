@@ -37,3 +37,5 @@ google-genai
 Pillow
 PyPDF2
 openai
+# PDF -> image rasterization for multi-page bills (pip-only, no system libs)
+PyMuPDF

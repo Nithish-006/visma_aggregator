@@ -2954,3 +2954,102 @@ textarea.form-input {
         transform: translateY(0);
     }
 }
+
+/* ============================================================================
+   VALIDATION / REVIEW QUEUE
+   ============================================================================ */
+
+.val-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: default;
+}
+.val-badge.val-ok {
+    background: rgba(5, 150, 105, 0.12);
+    color: var(--success-color);
+}
+.val-badge.val-review {
+    background: rgba(217, 119, 6, 0.14);
+    color: var(--warning-color);
+}
+.val-badge.val-unknown {
+    background: rgba(107, 114, 128, 0.12);
+    color: var(--text-muted);
+}
+.cell-check { text-align: center; }
+
+.bp-flagged-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+.bp-flagged-count {
+    color: var(--warning-color);
+    font-weight: 600;
+}
+
+.btn-icon.btn-reprocess:hover {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+/* Reprocess diff modal */
+.reprocess-loading,
+.reprocess-error {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+.reprocess-error { color: var(--error-color); }
+.reprocess-meta {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+}
+.reprocess-status {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+}
+.reprocess-status.ok {
+    background: rgba(5, 150, 105, 0.12);
+    color: var(--success-color);
+}
+.reprocess-status.review {
+    background: rgba(217, 119, 6, 0.14);
+    color: var(--warning-color);
+}
+.reprocess-status small { font-weight: 400; }
+.reprocess-diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.reprocess-diff-table th,
+.reprocess-diff-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+.reprocess-diff-table th { color: var(--text-muted); font-weight: 600; text-align: left; }
+.reprocess-diff-table tr.diff-changed td {
+    background: rgba(217, 119, 6, 0.08);
+    font-weight: 600;
+}
+.reprocess-note {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 12px;
+}
+.text-right { text-align: right; }

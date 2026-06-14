@@ -59,9 +59,17 @@ uploads/
 *.db
 *.sqlite
 
-# Prod data backups (contain exported financial rows — never commit)
-backup_txn_tables_*.sql
+# Prod data backups / dumps (exported financial rows — never commit).
+# Covers backup_txn_tables_*.sql, backup_prod_txn_*.sql, and any future dumps.
+backup_*.sql
+*.dump
 
 # Local one-off ops scripts and prod data backups (contain hard-coded
 # prod credentials and exported row snapshots — never commit)
 _local_ops/
+
+# Prod DB credentials for one-off validation scripts (never commit)
+.env.prod
+
+# Generated validation reports (also covered by *.xlsx above; explicit for clarity)
+validation_report_*.xlsx
