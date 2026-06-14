@@ -466,6 +466,10 @@ let currentReprocessId = null;
 async function reprocessBill(billId) {
     currentReprocessId = billId;
     openReprocessModal();
+    // Reset modal chrome in case it was last used in bulk-progress mode.
+    document.getElementById('reprocessTitle').textContent = 'Reprocess Bill';
+    document.getElementById('reprocessApplyBtn').style.display = '';
+    document.getElementById('reprocessCancelBtn').textContent = 'Close';
     const body = document.getElementById('reprocessBody');
     const footer = document.getElementById('reprocessFooter');
     footer.style.display = 'none';
@@ -588,13 +592,47 @@ async function bulkReprocessFlagged() {
     if (!confirm(`Re-extract ${flagged.length} flagged bill(s) from their PDFs and apply the ones that now reconcile? Project tags are preserved.`)) {
         return;
     }
+    const total = flagged.length;
     const btn = document.getElementById('reprocessFlaggedBtn');
-    const prev = btn.innerHTML;
+    const prevBtn = btn.innerHTML;
     btn.disabled = true;
+
+    // Open the modal as a live progress panel (bar + tally + per-bill log).
+    openReprocessModal();
+    document.getElementById('reprocessTitle').textContent = 'Reprocessing flagged bills';
+    const footer = document.getElementById('reprocessFooter');
+    footer.style.display = 'none';
+    document.getElementById('reprocessBody').innerHTML = `
+        <div class="bulk-progress">
+            <div class="bulk-progress-bar"><div class="bulk-progress-fill" id="bulkFill"></div></div>
+            <div class="bulk-progress-head">
+                <span id="bulkCounter">0 / ${total}</span>
+                <span class="bulk-tally" id="bulkTally"></span>
+            </div>
+            <div class="bulk-progress-log" id="bulkLog"></div>
+            <div class="bulk-progress-summary" id="bulkSummary" style="display:none;"></div>
+        </div>`;
+    const fill = document.getElementById('bulkFill');
+    const counter = document.getElementById('bulkCounter');
+    const tally = document.getElementById('bulkTally');
+    const log = document.getElementById('bulkLog');
 
     const queue = flagged.slice();
     let done = 0, applied = 0, stillFlagged = 0, failed = 0;
     let nextIndex = 0;
+
+    function logLine(bill, cls, icon, msg) {
+        const row = document.createElement('div');
+        row.className = `bulk-log-row ${cls}`;
+        row.innerHTML = `<span class="bulk-log-icon">${icon}</span> #${escapeHtml(String(bill.invoice_number || bill.id))} — ${escapeHtml(msg)}`;
+        log.appendChild(row);
+        log.scrollTop = log.scrollHeight;
+    }
+    function updateHead() {
+        counter.textContent = `${done} / ${total}`;
+        fill.style.width = `${Math.round(100 * done / total)}%`;
+        tally.textContent = `${applied} corrected · ${stillFlagged} still flagged · ${failed} failed`;
+    }
 
     async function worker() {
         while (true) {
@@ -608,22 +646,33 @@ async function bulkReprocessFlagged() {
                     body: JSON.stringify({ apply: true })
                 });
                 const data = await res.json();
-                if (data.success && data.applied) applied++;
-                else if (data.success) stillFlagged++;
-                else failed++;
+                if (data.success && data.applied) { applied++; logLine(bill, 'ok', '✓', 'corrected & applied'); }
+                else if (data.success) { stillFlagged++; logLine(bill, 'review', '⚠', data.apply_blocked || 'still flagged'); }
+                else { failed++; logLine(bill, 'fail', '✗', data.error || 'failed'); }
             } catch (e) {
                 failed++;
+                logLine(bill, 'fail', '✗', e.message || 'request failed');
             }
             done++;
-            btn.innerHTML = `Reprocessing ${done}/${queue.length}…`;
+            updateHead();
+            btn.innerHTML = `Reprocessing ${done}/${total}…`;
         }
     }
 
+    updateHead();
     const pool = Math.min(MAX_CONCURRENT_UPLOADS, queue.length);
     await Promise.all(Array.from({ length: pool }, () => worker()));
 
+    // Done — show a summary line and let the user close.
+    const summary = document.getElementById('bulkSummary');
+    summary.textContent = `Done — ${applied} corrected, ${stillFlagged} still flagged, ${failed} failed.`;
+    summary.style.display = 'block';
+    footer.style.display = 'flex';
+    document.getElementById('reprocessApplyBtn').style.display = 'none';  // no per-bill apply in bulk mode
+    document.getElementById('reprocessCancelBtn').textContent = 'Close';
+
     btn.disabled = false;
-    btn.innerHTML = prev;
+    btn.innerHTML = prevBtn;
     showToast(`Reprocessed ${done}: ${applied} corrected, ${stillFlagged} still flagged, ${failed} failed`, applied ? 'success' : 'info');
     await loadStoredBills();
 }

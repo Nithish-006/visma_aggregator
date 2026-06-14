@@ -24,10 +24,14 @@ from extraction_validator import validate_extraction
 # with no accuracy edge on this OCR/extraction task, and falling through to it on
 # every free-tier throttle was the main source of latency.
 GEMINI_MODELS = [
-    "gemini-3-flash",        # primary: best vision quality at flash speed
+    "gemini-3-flash",        # primary: best vision quality at flash speed, cheaper than 3.5
     "gemini-2.5-flash",      # fallback: proven on GST tables
     "gemini-2.5-flash-lite", # last resort: cheap/fast, lower accuracy
 ]
+# Note: gemini-3.5-flash is the newest/most capable Flash but costs more than
+# gemini-3-flash with no meaningful accuracy edge on this OCR/extraction task,
+# so it is intentionally NOT in the chain. (Display name kept below in case it
+# is reintroduced.)
 
 # Extraction prompt
 EXTRACTION_PROMPT = """
@@ -232,6 +236,7 @@ def get_pdf_page_count(pdf_path):
 def get_model_display_name(model):
     """Get a friendly display name for the model"""
     names = {
+        "gemini-3.5-flash": "Gemini 3.5 Flash",
         "gemini-3-flash": "Gemini 3 Flash",
         "gemini-3-pro": "Gemini 3 Pro",
         "gemini-2.5-flash": "Gemini 2.5 Flash",
