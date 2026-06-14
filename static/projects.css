@@ -459,6 +459,32 @@ html, body {
     border-color: var(--proj-accent);
 }
 
+/* Forward link to the full breakdown on the Project Summary page */
+.proj-breakdown-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+    border: 1px solid var(--proj-accent);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.34rem 0.7rem;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+.proj-breakdown-link:hover {
+    background: var(--proj-accent);
+    color: #fff;
+}
+.proj-breakdown-link svg {
+    transition: transform 0.15s ease;
+}
+.proj-breakdown-link:hover svg {
+    transform: translateX(2px);
+}
+
 .proj-modal-body {
     padding: 1.5rem;
     overflow-y: auto;

@@ -372,6 +372,13 @@
         if (!p) return;
         activeProjectId = projectId;
         detailTitle.textContent = `${p.id} − ${p.stem_name}`;
+        // Forward link to the full breakdown on the Project Summary page. The
+        // canonical "<id> - NAME" tag is what that page matches on (by id).
+        const breakdownLink = document.getElementById('detail-breakdown-link');
+        if (breakdownLink) {
+            breakdownLink.href = '/project-summary?project=' +
+                encodeURIComponent(`${p.id} - ${p.stem_name}`);
+        }
         // Fresh insight state: PO tab first, counts cleared, panels in loading state.
         insights = null;
         cashPayments = [];

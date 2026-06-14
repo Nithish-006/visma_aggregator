@@ -571,6 +571,20 @@
             bindLandingEvents();
             renderLanding();
             showLanding();
+
+            // Deep link: /project-summary?project=<id - NAME> opens that project's
+            // detail directly (used by the "View detailed breakdown" link on the
+            // Projects registry). Match the registry card so the header shows a
+            // clean title; fall back to the raw param if it isn't a known card.
+            const wanted = new URLSearchParams(window.location.search).get('project');
+            if (wanted) {
+                const card = state.registryCards.find(c => c.display === wanted);
+                if (card) {
+                    openProject(card.display, `${card.id} − ${card.stem_name}`);
+                } else {
+                    openProject(wanted, wanted);
+                }
+            }
         } catch (err) {
             console.error('Init error:', err);
             document.getElementById('ps-cards').innerHTML =
