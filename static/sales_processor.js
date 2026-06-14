@@ -1922,7 +1922,14 @@ function formatDateForInput(dateStr) {
     try {
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) return '';
-        return date.toISOString().split('T')[0];
+        // Build the YYYY-MM-DD from LOCAL date parts. Using toISOString() here
+        // converts to UTC and can roll the day back across the timezone offset
+        // (e.g. local midnight in IST becomes the previous day in UTC), which
+        // made the edit form show the date one day earlier than stored.
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
     } catch {
         return '';
     }

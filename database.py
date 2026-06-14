@@ -22,6 +22,30 @@ from config import (
 from extraction_validator import validate_extraction, validate_db_row, notes_from_result
 
 
+def _parse_invoice_date(date_str):
+    """Parse an invoice date string to a date object.
+
+    The edit form's <input type="date"> submits ISO ``YYYY-MM-DD`` (e.g.
+    ``2026-06-12``). dateutil with ``dayfirst=True`` MISREADS that — it treats
+    the trailing two groups as day-then-month and returns ``2026-12-06``,
+    swapping day and month. So parse an ISO string explicitly, and only fall
+    back to day-first parsing for the ``DD-MMM-YYYY`` / ``DD/MM/YYYY`` formats
+    the extractor and Indian invoices use (where day-first is correct).
+    """
+    if not date_str:
+        return None
+    date_str = str(date_str).strip()
+    if not date_str:
+        return None
+    try:
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+            return datetime.strptime(date_str, '%Y-%m-%d').date()
+        from dateutil import parser
+        return parser.parse(date_str, dayfirst=True).date()
+    except Exception:
+        return None
+
+
 def build_project_filter_sql(column, project, params, fuzzy=False):
     """SQL condition for a comma-separated project selection.
 
@@ -789,14 +813,7 @@ class DatabaseManager:
         other_charges = data.get('other_charges', [])
 
         # Parse invoice date
-        invoice_date = None
-        date_str = header.get('invoice_date', '')
-        if date_str:
-            try:
-                from dateutil import parser
-                invoice_date = parser.parse(date_str, dayfirst=True).date()
-            except:
-                pass
+        invoice_date = _parse_invoice_date(header.get('invoice_date', ''))
 
         try:
             with self.get_connection() as conn:
@@ -1762,14 +1779,7 @@ class DatabaseManager:
         line_items = data.get('line_items', [])
         other_charges = data.get('other_charges', [])
 
-        invoice_date = None
-        date_str = header.get('invoice_date', '')
-        if date_str:
-            try:
-                from dateutil import parser
-                invoice_date = parser.parse(date_str, dayfirst=True).date()
-            except:
-                pass
+        invoice_date = _parse_invoice_date(header.get('invoice_date', ''))
 
         try:
             with self.get_connection() as conn:
@@ -2087,14 +2097,7 @@ class DatabaseManager:
 
     def update_sales_bill(self, invoice_id: int, bill_data: Dict) -> Tuple[bool, Optional[str]]:
         """Update a sales invoice and its line items in the database."""
-        invoice_date = None
-        date_str = bill_data.get('invoice_date', '')
-        if date_str:
-            try:
-                from dateutil import parser
-                invoice_date = parser.parse(date_str, dayfirst=True).date()
-            except:
-                pass
+        invoice_date = _parse_invoice_date(bill_data.get('invoice_date', ''))
 
         try:
             with self.get_connection() as conn:
@@ -3214,14 +3217,7 @@ class DatabaseManager:
             Tuple of (success, error_message)
         """
         # Parse invoice date
-        invoice_date = None
-        date_str = bill_data.get('invoice_date', '')
-        if date_str:
-            try:
-                from dateutil import parser
-                invoice_date = parser.parse(date_str, dayfirst=True).date()
-            except:
-                pass
+        invoice_date = _parse_invoice_date(bill_data.get('invoice_date', ''))
 
         try:
             with self.get_connection() as conn:
