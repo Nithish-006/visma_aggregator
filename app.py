@@ -976,6 +976,27 @@ def _attach_client_payments(projects):
     return projects
 
 
+def _po_and_payments_for_project(project_param):
+    """Resolve a canonical "<id> - NAME" selection to its PO value and total
+    client payments (bank + cash). Returns (po_value, client_payments) as
+    floats; (0, 0) when no single project id can be parsed (e.g. the 'All'
+    selection or an untagged value)."""
+    m = re.match(r'^\s*(\d+)\s*-', project_param or '')
+    if not m:
+        return 0.0, 0.0
+    pid = int(m.group(1))
+    try:
+        project = db_manager.get_project(pid)
+        if not project:
+            return 0.0, 0.0
+        po_value = float(project.get('po_total_value') or 0)
+        enriched = _attach_client_payments([project])[0]
+        return po_value, float(enriched.get('received_total') or 0)
+    except Exception as e:
+        print(f"[!] Could not load PO/payments for project {pid}: {e}")
+        return 0.0, 0.0
+
+
 @app.route('/api/projects', methods=['GET'])
 @login_required
 def api_list_projects():
@@ -5104,6 +5125,8 @@ def get_project_summary_combined():
     category = request.args.get('category', None)
     vendor = request.args.get('vendor', None)
 
+    po_value, client_payments = _po_and_payments_for_project(project)
+
     combined_rows = []
 
     for bank_code in VALID_BANK_CODES:
@@ -5128,9 +5151,12 @@ def get_project_summary_combined():
                 'total_income': 0, 'total_income_formatted': '₹0',
                 'total_bank_transfer': 0, 'total_bank_transfer_formatted': '₹0',
                 'total_expense': 0, 'total_expense_formatted': '₹0',
-                'total_transactions': 0
+                'total_transactions': 0,
+                'po_value': po_value,
+                'po_value_formatted': format_indian_number(po_value),
+                'client_payments': client_payments,
+                'client_payments_formatted': format_indian_number(client_payments),
             },
-            'bank_breakdown': [],
             'category_breakdown': [],
             'project_breakdown': [],
             'vendor_breakdown': [],
@@ -5155,30 +5181,12 @@ def get_project_summary_combined():
         'total_bank_transfer_formatted': format_indian_number(total_bank_transfer),
         'total_expense': total_expense,
         'total_expense_formatted': format_indian_number(total_expense),
-        'total_transactions': len(combined)
+        'total_transactions': len(combined),
+        'po_value': po_value,
+        'po_value_formatted': format_indian_number(po_value),
+        'client_payments': client_payments,
+        'client_payments_formatted': format_indian_number(client_payments),
     }
-
-    # Bank-wise breakdown
-    bank_breakdown = []
-    for bank_code in VALID_BANK_CODES:
-        bank_df = combined[combined['bank'] == bank_code]
-        if bank_df.empty:
-            continue
-        bank_config = get_bank_config(bank_code)
-        b_income = float(bank_df['CR Amount'].sum())
-        b_expense = float(bank_df['DR Amount'].sum())
-        bank_breakdown.append({
-            'bank_code': bank_code,
-            'bank_name': bank_config['name'],
-            'color': bank_config['color'],
-            'income': b_income,
-            'income_formatted': format_indian_number(b_income),
-            'expense': b_expense,
-            'expense_formatted': format_indian_number(b_expense),
-            'net': b_income - b_expense,
-            'net_formatted': format_indian_number(b_income - b_expense),
-            'transaction_count': len(bank_df)
-        })
 
     # Category breakdown (expenses only)
     expense_df = combined[combined['DR Amount'] > 0]
@@ -5377,7 +5385,6 @@ def get_project_summary_combined():
 
     return jsonify({
         'summary': summary,
-        'bank_breakdown': bank_breakdown,
         'category_breakdown': category_breakdown,
         'project_breakdown': project_breakdown,
         'vendor_breakdown': vendor_breakdown,

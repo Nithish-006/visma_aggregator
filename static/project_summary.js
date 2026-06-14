@@ -688,7 +688,6 @@
             // Render all sections
             renderCrossFilterChips();
             renderKPI(combined.summary);
-            renderBankBreakdown(combined.bank_breakdown);
             renderCategoryBars(combined.category_breakdown);
             renderProjectTable();
             renderVendorTable();
@@ -706,46 +705,11 @@
     // ── Render: KPI Cards ──────────────────────────────────────────────
     function renderKPI(summary) {
         if (!summary) return;
-        $('#kpi-income').textContent = summary.total_income_formatted || '\u20B90';
-        $('#kpi-expense').textContent = summary.total_expense_formatted || '\u20B90';
-        $('#kpi-transfer').textContent = summary.total_bank_transfer_formatted || '\u20B90';
-        $('#kpi-count').textContent = (summary.total_transactions || 0).toLocaleString();
+        $('#kpi-po-value').textContent = summary.po_value_formatted || '\u20B90';
+        $('#kpi-client-payments').textContent = summary.client_payments_formatted || '\u20B90';
         // Reset bill KPIs (will be updated when bills data loads)
         $('#kpi-purchase-bills').textContent = '\u20B90';
         $('#kpi-sales-bills').textContent = '\u20B90';
-    }
-
-    // ── Render: Bank Breakdown ─────────────────────────────────────────
-    function renderBankBreakdown(bankBreakdown) {
-        const container = document.getElementById('bank-breakdown');
-        if (!bankBreakdown || bankBreakdown.length === 0) {
-            container.innerHTML = '<div class="ps-empty">No bank data available</div>';
-            return;
-        }
-        container.innerHTML = bankBreakdown.map(b => {
-            const isAxis = b.bank_code === 'axis';
-            const creditLabel = isAxis ? 'Bank Transfer' : 'Income';
-            const creditClass = isAxis ? 'bank-transfer' : 'income';
-            return `
-            <div class="ps-bank-card bank-${b.bank_code}">
-                <div class="ps-bank-name">${b.bank_name}</div>
-                <div class="ps-bank-stats">
-                    <div class="ps-bank-stat-row">
-                        <span class="ps-bank-stat-label">${creditLabel}</span>
-                        <span class="ps-bank-stat-value ${creditClass}">${b.income_formatted}</span>
-                    </div>
-                    <div class="ps-bank-stat-row">
-                        <span class="ps-bank-stat-label">Expense</span>
-                        <span class="ps-bank-stat-value expense">${b.expense_formatted}</span>
-                    </div>
-                    <div class="ps-bank-stat-row">
-                        <span class="ps-bank-stat-label">Net</span>
-                        <span class="ps-bank-stat-value net">${b.net_formatted}</span>
-                    </div>
-                </div>
-                <div class="ps-bank-count">${b.transaction_count} transactions</div>
-            </div>
-        `}).join('');
     }
 
     // ── Render: Category Horizontal Bars ───────────────────────────────

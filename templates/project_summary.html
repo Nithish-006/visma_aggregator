@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <title>Project Summary | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=12">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=13">
 </head>
 
 <body>
@@ -99,21 +99,13 @@
         <div class="ps-left">
             <!-- KPI Cards -->
             <div class="ps-kpi-grid">
-                <div class="ps-kpi-card kpi-income">
-                    <div class="ps-kpi-label">Total Income</div>
-                    <div class="ps-kpi-value" id="kpi-income">₹0</div>
+                <div class="ps-kpi-card kpi-po-value">
+                    <div class="ps-kpi-label">PO Value</div>
+                    <div class="ps-kpi-value" id="kpi-po-value">₹0</div>
                 </div>
-                <div class="ps-kpi-card kpi-expense">
-                    <div class="ps-kpi-label">Total Expense</div>
-                    <div class="ps-kpi-value" id="kpi-expense">₹0</div>
-                </div>
-                <div class="ps-kpi-card kpi-transfer">
-                    <div class="ps-kpi-label">Total Bank Transfer</div>
-                    <div class="ps-kpi-value" id="kpi-transfer">₹0</div>
-                </div>
-                <div class="ps-kpi-card kpi-count">
-                    <div class="ps-kpi-label">Transactions</div>
-                    <div class="ps-kpi-value" id="kpi-count">0</div>
+                <div class="ps-kpi-card kpi-client-payments">
+                    <div class="ps-kpi-label">Client Payments</div>
+                    <div class="ps-kpi-value" id="kpi-client-payments">₹0</div>
                 </div>
                 <div class="ps-kpi-card kpi-purchase-bills">
                     <div class="ps-kpi-label">Purchase Bills Value</div>
@@ -122,14 +114,6 @@
                 <div class="ps-kpi-card kpi-sales-bills">
                     <div class="ps-kpi-label">Sales Bills Value</div>
                     <div class="ps-kpi-value" id="kpi-sales-bills">₹0</div>
-                </div>
-            </div>
-
-            <!-- Bank Breakdown -->
-            <div class="ps-section">
-                <h2 class="ps-section-title">Bank Breakdown</h2>
-                <div class="ps-bank-grid" id="bank-breakdown">
-                    <!-- Rendered by JS -->
                 </div>
             </div>
 
@@ -307,7 +291,7 @@
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=12"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=13"></script>
 <script>
 function hardRefresh() {
     if ('caches' in window) {

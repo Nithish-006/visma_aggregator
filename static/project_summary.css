@@ -432,7 +432,7 @@ body {
 
 .ps-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 16px;
     margin-bottom: 24px;
 }
@@ -455,20 +455,12 @@ body {
     height: 3px;
 }
 
-.kpi-income::before {
-    background: linear-gradient(90deg, #10b981, #059669);
-}
-
-.kpi-expense::before {
-    background: linear-gradient(90deg, #ef4444, #dc2626);
-}
-
-.kpi-transfer::before {
+.kpi-po-value::before {
     background: linear-gradient(90deg, #3b82f6, #2563eb);
 }
 
-.kpi-count::before {
-    background: linear-gradient(90deg, #f59e0b, #d97706);
+.kpi-client-payments::before {
+    background: linear-gradient(90deg, #10b981, #059669);
 }
 
 .kpi-purchase-bills::before {
@@ -495,16 +487,12 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
-.kpi-income .ps-kpi-value {
-    color: var(--income-color);
-}
-
-.kpi-expense .ps-kpi-value {
-    color: var(--expense-color);
-}
-
-.kpi-transfer .ps-kpi-value {
+.kpi-po-value .ps-kpi-value {
     color: var(--accent-color);
+}
+
+.kpi-client-payments .ps-kpi-value {
+    color: var(--income-color);
 }
 
 .kpi-purchase-bills .ps-kpi-value {
