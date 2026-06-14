@@ -734,11 +734,24 @@ def _process_kvb_statement(
     else:
         df = pd.read_excel(file_path, skiprows=skip_rows)
 
-    # Clean column names (remove 'Unnamed:' prefixes if present)
-    if any('Unnamed' in str(col) for col in df.columns):
+    # Drop fully-empty trailing columns first. Sheets often carry a couple of
+    # stray blank columns; pandas names them 'Unnamed: N'. If left in, they make
+    # the file look like it has no real header (see the guarded promote below)
+    # and previously caused the correct header to be clobbered by the B/F row.
+    df = df.dropna(axis=1, how='all')
+
+    # If the real header still wasn't captured, the actual header is in the first
+    # data row, so promote it. Only do this when the expected KVB header keywords
+    # are absent from the current columns — otherwise a correctly-detected header
+    # would be wrongly overwritten just because a blank column produced an
+    # 'Unnamed:' name.
+    _col_text = ' '.join(str(c).lower() for c in df.columns)
+    _kvb_header_keywords = ['transaction date', 'particulars', 'debit', 'credit']
+    if sum(1 for k in _kvb_header_keywords if k in _col_text) < 3:
         # First row is likely the actual header
         df.columns = df.iloc[0].values
         df = df.iloc[1:].reset_index(drop=True)
+        df = df.dropna(axis=1, how='all')
 
     safe_print(f"[+] Loaded {len(df)} rows")
     safe_print(f"[*] Columns found: {list(df.columns)}")
