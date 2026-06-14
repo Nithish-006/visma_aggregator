@@ -112,7 +112,10 @@ body {
    ============================================================================ */
 
 .main-content {
-    max-width: 1800px;
+    /* Use most of the viewport on wide monitors so the 15-column invoice
+       table fits without horizontal scrolling, capped so it never gets
+       uncomfortably wide. */
+    max-width: min(2400px, 97vw);
     margin: 0 auto;
     padding: 24px;
 }
@@ -641,6 +644,47 @@ body {
     white-space: normal;
     line-height: 1.4;
     font-size: 0.8125rem;
+}
+
+/* ----------------------------------------------------------------------------
+   Invoice listing table: 15 columns. Compact the cells and constrain the wide
+   text columns so every column — including Check and the action buttons — is
+   visible at once without horizontal scrolling.
+   ---------------------------------------------------------------------------- */
+#invoicesTable {
+    table-layout: auto;
+}
+#invoicesTable th,
+#invoicesTable td {
+    padding: 10px 10px;
+    font-size: 0.8125rem;
+}
+#invoicesTable th {
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+}
+/* Keep the long text columns from eating width — ellipsis on overflow. */
+#invoicesTable .cell-wrap {
+    max-width: 150px;
+    min-width: 90px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Vendor GSTIN (15 chars) and Added are fixed, narrow columns. */
+#invoicesTable td:nth-child(4),
+#invoicesTable th:nth-child(4) {
+    max-width: 130px;
+    white-space: nowrap;
+}
+/* Tighten the action button group so all four buttons sit on one line. */
+#invoicesTable .action-buttons {
+    gap: 4px;
+    flex-wrap: nowrap;
+}
+#invoicesTable .action-buttons .btn-icon {
+    width: 28px;
+    height: 28px;
 }
 
 /* Editable Project Cell */
