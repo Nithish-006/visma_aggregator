@@ -87,18 +87,43 @@ RULE 2 — TAXES vs OTHER CHARGES (freight / shipping / packing must NOT pollute
   into it by mistake — move it to other_charges and recompute.
 
 ═══════════════════════════════════════════════════════════════════════
-RULE 3 — MULTI-PAGE INVOICES (read the WHOLE document, consolidate to ONE invoice):
+RULE 3 — MULTI-PAGE PDFs: CONTINUATION PAGES vs. DUPLICATE COPIES
 ═══════════════════════════════════════════════════════════════════════
-- This document may span 2, 3 or more pages but is ONE single invoice.
-- Read and combine ALL pages — do NOT stop at the first page.
-- line_items: merge the rows from EVERY page into one continuous list, in order.
-  Continuation pages often repeat the column header and the invoice header — do
-  not duplicate header rows, but DO capture every distinct goods row across pages.
-- The FINAL CONSOLIDATED totals (taxable_amount, total_cgst/sgst/igst, round_off,
-  total_amount, amount_in_words) are usually on the LAST page. Use those final
-  figures — never the per-page subtotal of page 1 alone.
-- Header fields (invoice number, date, vendor, buyer) come from where they appear
-  (usually page 1). Return a SINGLE consolidated invoice object, not one per page.
+A multi-page PDF is ONE of two things. Decide which BEFORE extracting:
+
+(A) CONTINUATION PAGES — one long invoice split across pages because the goods
+    table did not fit on a single page. The pages carry DIFFERENT goods rows and
+    the totals appear only at the very end.
+
+(B) DUPLICATE / TRIPLICATE COPIES — the SAME invoice printed several times in one
+    PDF. Indian GST invoices are commonly issued in copies, each page marked with
+    labels like "ORIGINAL FOR RECIPIENT / BUYER", "DUPLICATE FOR TRANSPORTER",
+    "TRIPLICATE FOR SUPPLIER", or simply "Original Copy", "Duplicate Copy",
+    "Triplicate Copy", "Extra Copy". These copies are IDENTICAL — same invoice
+    number, same date, same line items, same totals — just reprinted.
+
+HOW TO TELL THEM APART:
+- Same invoice number + same date + same total_amount repeating on a later page,
+  or an explicit "Duplicate/Triplicate/Original for ..." copy label  -> these are
+  COPIES (case B), NOT continuation.
+- A later page that continues the goods table with NEW rows and no copy label,
+  with totals only at the end  -> continuation (case A).
+
+WHAT TO DO:
+- Case A (continuation): read and COMBINE all pages into ONE invoice. Merge the
+  goods rows from EVERY page into one continuous line_items list, in order
+  (continuation pages often repeat the column header / invoice header — do NOT
+  duplicate header rows, but DO capture every distinct goods row). Take the FINAL
+  CONSOLIDATED totals (taxable_amount, total_cgst/sgst/igst, round_off,
+  total_amount, amount_in_words) from the LAST page — never a page-1 subtotal.
+- Case B (copies): process ONLY the ORIGINAL copy (prefer the page marked
+  "Original"; if none is marked, use the first occurrence). EXTRACT IT ONCE.
+  IGNORE the duplicate and triplicate pages entirely. Do NOT merge their line
+  items and do NOT add up their totals — the duplicates are the SAME bill, so
+  aggregating them would double/triple the amounts. The result must reflect a
+  single invoice's values, exactly as if only the original page were uploaded.
+- In BOTH cases: header fields (invoice number, date, vendor, buyer) come from
+  where they appear (usually page 1). Return a SINGLE invoice object, not one per page.
 
 GENERAL INSTRUCTIONS:
 1. Extract ALL line items - do NOT skip any row from the goods table (across all pages)
@@ -378,10 +403,15 @@ def extract_from_pdf(pdf_path, page_count=None):
         content_parts.append(
             EXTRACTION_PROMPT + (
                 f"\n\nThe {n} image(s) above are the pages of ONE invoice, in order "
-                f"(PAGE 1 of {n} ... PAGE {n} of {n}). Read EVERY page, merge all "
-                "line items into a single list in page order, and take the FINAL "
-                f"consolidated totals from the LAST page (PAGE {n}) — never a "
-                "per-page subtotal from an earlier page. Return ONE invoice object."
+                f"(PAGE 1 of {n} ... PAGE {n} of {n}). Apply RULE 3: first decide "
+                "whether these pages are CONTINUATION pages (different goods rows, "
+                "one long invoice) or DUPLICATE/TRIPLICATE COPIES (same invoice "
+                "number/date/totals reprinted, or pages labelled Original/Duplicate/"
+                "Triplicate). If continuation, merge all line items in page order and "
+                f"take the FINAL totals from the LAST page (PAGE {n}). If they are "
+                "copies, extract ONLY the original copy ONCE and IGNORE the duplicate/"
+                "triplicate pages — never aggregate their line items or totals. "
+                "Return ONE invoice object."
             )
         )
     else:
@@ -391,10 +421,15 @@ def extract_from_pdf(pdf_path, page_count=None):
         content_parts = [
             types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf'),
             EXTRACTION_PROMPT + (
-                "\n\nThis PDF is ONE invoice spanning "
-                f"{page_count or 'multiple'} page(s). Read EVERY page, merge all "
-                "line items into a single list, and return the FINAL consolidated "
-                "totals (usually printed on the last page). Return ONE invoice object."
+                "\n\nThis PDF spans "
+                f"{page_count or 'multiple'} page(s). Apply RULE 3: decide whether the "
+                "pages are CONTINUATION pages of one long invoice or DUPLICATE/"
+                "TRIPLICATE COPIES of the same invoice. If continuation, read every "
+                "page, merge all line items, and return the FINAL consolidated totals "
+                "(usually on the last page). If they are copies (same invoice number/"
+                "date/totals reprinted, or pages labelled Original/Duplicate/"
+                "Triplicate), extract ONLY the original copy ONCE and IGNORE the rest "
+                "— never aggregate duplicate line items or totals. Return ONE invoice object."
             )
         ]
 
