@@ -531,6 +531,9 @@ async function runValidation() {
 }
 
 let currentReprocessId = null;
+// The exact re-extracted values shown in the preview. Posted back verbatim on
+// apply so we write what the user approved, not a fresh re-extraction.
+let currentReprocessExtraction = null;
 
 async function reprocessBill(billId) {
     currentReprocessId = billId;
@@ -564,6 +567,9 @@ function renderReprocessDiff(data) {
     const body = document.getElementById('reprocessBody');
     const footer = document.getElementById('reprocessFooter');
     const applyBtn = document.getElementById('reprocessApplyBtn');
+
+    // Remember the previewed values so apply posts these exact numbers back.
+    currentReprocessExtraction = data.extraction || null;
 
     const labels = {
         subtotal: 'Subtotal', total_cgst: 'CGST', total_sgst: 'SGST', total_igst: 'IGST',
@@ -624,7 +630,7 @@ async function applyReprocess(billId) {
         const res = await fetch(`/api/sales/reprocess/${billId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apply: true })
+            body: JSON.stringify({ apply: true, extraction: currentReprocessExtraction })
         });
         const data = await res.json();
         if (data.success && data.applied) {
@@ -649,6 +655,7 @@ function openReprocessModal() {
 function closeReprocessModal() {
     document.getElementById('reprocessModal').classList.remove('show');
     currentReprocessId = null;
+    currentReprocessExtraction = null;
 }
 
 async function bulkReprocessFlagged() {

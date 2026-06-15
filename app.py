@@ -13,7 +13,7 @@ from config import Config, allowed_file, BANK_CONFIG, VALID_BANK_CODES, get_bank
 from database import DatabaseManager, build_project_filter_sql
 from bank_statement_processor import process_bank_statement
 from bill_processor import process_bill_file, generate_excel, format_extracted_data_for_display
-from extraction_validator import validate_extraction
+from extraction_validator import validate_extraction, validate_db_row
 import po_processor
 
 app = Flask(__name__)
@@ -3921,23 +3921,22 @@ def _extraction_to_flat(data, project):
     }
 
 
-# Caches the extraction the user PREVIEWED so that "Apply" applies exactly the
-# values they approved — not a fresh, non-deterministic re-extraction. Keyed by
-# (kind, invoice_id). Without this, vision re-extraction at apply-time can come
-# back flagged 'review' even though the preview reconciled, blocking the apply.
-_reprocess_preview_cache = {}
-
-
-def _reprocess_invoice(invoice_id, kind, apply_changes):
+def _reprocess_invoice(invoice_id, kind, apply_changes, supplied_flat=None):
     """Re-extract one stored invoice from its source PDF using the improved
     pipeline, re-validate, and return an old->new diff. Applies the new values
     (preserving the project tag) only when apply_changes is set AND the new
     extraction reconciles ('ok'), per the clean-only policy.
 
-    On apply, reuses the extraction captured during the preview pass (cached by
-    (kind, invoice_id)) so the values applied are the same ones the user saw and
-    approved — vision extraction is non-deterministic, so re-extracting at apply
-    time could otherwise yield a different, still-flagged result.
+    The single-bill flow is a two-step preview→apply: the preview returns the
+    re-extracted values to the browser (the `extraction` key), and the apply
+    posts those same values back as `supplied_flat`. This guarantees the values
+    applied are exactly the ones the user saw and approved — vision extraction
+    is non-deterministic, so re-extracting at apply time could otherwise yield a
+    different verdict and silently block a preview the user just saw reconcile.
+    The values are re-validated server-side (clean-only still enforced) and the
+    project tag is always taken from the stored row, never trusted from the
+    client. When no supplied_flat is given (the preview pass, or the one-shot
+    bulk reprocess) the bill is extracted fresh from its PDF.
     """
     is_sales = (kind == 'sales')
     prefix = 'sales' if is_sales else 'bill'
@@ -3951,14 +3950,14 @@ def _reprocess_invoice(invoice_id, kind, apply_changes):
     project = existing.get('project')
     filename = existing.get('filename')
 
-    cache_key = (kind, invoice_id)
-    cached = _reprocess_preview_cache.get(cache_key) if apply_changes else None
-    if cached:
-        # Apply the exact extraction the user previewed/approved.
-        res = {'model': cached.get('model')}
-        new_data = cached['new_data']
-        new_validation = cached['new_validation']
-        flat = cached['flat']
+    if apply_changes and supplied_flat is not None:
+        # Apply the exact values the user previewed and approved. Force the
+        # stored project tag (never trust the client copy) and re-validate
+        # server-side so the clean-only gate below is authoritative.
+        flat = dict(supplied_flat)
+        flat['project'] = project
+        new_validation = validate_db_row(flat, flat.get('line_items', []))
+        model = None
     else:
         pdf_path = _locate_invoice_file(filename, prefix)
         if not pdf_path:
@@ -3973,6 +3972,7 @@ def _reprocess_invoice(invoice_id, kind, apply_changes):
         new_data = res['data']
         new_validation = res.get('validation') or validate_extraction(new_data)
         flat = _extraction_to_flat(new_data, project)
+        model = res.get('model')
 
     def f(x):
         try:
@@ -4003,24 +4003,15 @@ def _reprocess_invoice(invoice_id, kind, apply_changes):
                 apply_blocked = err or 'update failed'
         else:
             apply_blocked = "Re-extraction still flagged 'review' — not applied (clean-only policy)"
-        # Apply is terminal for this preview — drop the cached extraction so a
-        # later reprocess starts fresh.
-        _reprocess_preview_cache.pop(cache_key, None)
-    else:
-        # Preview pass — remember this extraction so the matching Apply uses it.
-        _reprocess_preview_cache[cache_key] = {
-            'new_data': new_data,
-            'new_validation': new_validation,
-            'flat': flat,
-            'model': res.get('model'),
-        }
 
     return {
         'success': True,
         'invoice_id': invoice_id,
         'kind': kind,
-        'model': res.get('model'),
+        'model': model,
         'project_preserved': project,
+        # Echoed so the apply step can post these exact values back.
+        'extraction': flat,
         'old_validation': {
             'status': existing.get('validation_status'),
             'diff': f(existing.get('validation_diff')),
@@ -4051,8 +4042,10 @@ def revalidate_bills():
 @login_required
 def reprocess_bill(invoice_id):
     """Re-extract a purchase bill from its PDF; preview or apply (clean-only)."""
-    apply_changes = bool((request.json or {}).get('apply', False))
-    payload, status = _reprocess_invoice(invoice_id, 'purchase', apply_changes)
+    body = request.json or {}
+    apply_changes = bool(body.get('apply', False))
+    supplied_flat = body.get('extraction') if apply_changes else None
+    payload, status = _reprocess_invoice(invoice_id, 'purchase', apply_changes, supplied_flat)
     return jsonify(payload), status
 
 
@@ -4060,8 +4053,10 @@ def reprocess_bill(invoice_id):
 @login_required
 def reprocess_sales_bill(invoice_id):
     """Re-extract a sales bill from its PDF; preview or apply (clean-only)."""
-    apply_changes = bool((request.json or {}).get('apply', False))
-    payload, status = _reprocess_invoice(invoice_id, 'sales', apply_changes)
+    body = request.json or {}
+    apply_changes = bool(body.get('apply', False))
+    supplied_flat = body.get('extraction') if apply_changes else None
+    payload, status = _reprocess_invoice(invoice_id, 'sales', apply_changes, supplied_flat)
     return jsonify(payload), status
 
 
