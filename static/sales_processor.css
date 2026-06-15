@@ -3014,6 +3014,12 @@ textarea.form-input {
 .val-badge.val-ok { background: rgba(5, 150, 105, 0.12); color: var(--success-color); }
 .val-badge.val-review { background: rgba(217, 119, 6, 0.14); color: var(--warning-color); }
 .val-badge.val-unknown { background: rgba(107, 114, 128, 0.12); color: var(--text-muted); }
+/* Manually-approved: green like OK, but a dashed ring marks it as a human
+   override rather than an auto-reconciled pass. */
+.val-badge.val-approved { border: 1px dashed var(--success-color); }
+/* Badges the user can act on (mark OK / re-check). */
+.val-badge.val-clickable { cursor: pointer; }
+.val-badge.val-clickable:hover { filter: brightness(1.15); }
 .cell-check { text-align: center; }
 
 .bp-flagged-toggle {

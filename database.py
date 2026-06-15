@@ -1711,6 +1711,21 @@ class DatabaseManager:
                         )
                         if cursor.fetchone()[0] == 0:
                             cursor.execute(alter_sql.format(t=table))
+                    # Upgrade the status ENUM to allow a sticky manual 'approved'
+                    # verdict (user-confirmed despite the auto-reconciliation flag).
+                    # Idempotent: only runs when 'approved' isn't already allowed.
+                    cursor.execute(
+                        "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
+                        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s "
+                        "AND COLUMN_NAME = 'validation_status'",
+                        (table,)
+                    )
+                    row = cursor.fetchone()
+                    if row and 'approved' not in (row[0] or ''):
+                        cursor.execute(
+                            f"ALTER TABLE {table} MODIFY COLUMN validation_status "
+                            f"ENUM('ok','review','approved') DEFAULT 'review'"
+                        )
                 cursor.close()
                 print("[+] Validation columns ensured")
                 return True
@@ -1747,10 +1762,14 @@ class DatabaseManager:
 
                     upd = cursor  # reuse same cursor/connection for the writes
                     for inv in invoices:
+                        total += 1
+                        # Manual approval is sticky — never overwrite it on a
+                        # bulk re-check, so the user's decision survives.
+                        if inv.get('validation_status') == 'approved':
+                            continue
                         v = validate_db_row(inv, by_invoice.get(inv['id'], []))
                         if v['status'] == 'review':
                             review += 1
-                        total += 1
                         upd.execute(
                             f"UPDATE {inv_t} SET validation_status=%s, "
                             f"validation_diff=%s, validation_notes=%s WHERE id=%s",
@@ -1763,6 +1782,66 @@ class DatabaseManager:
             summary[kind] = {'total': total, 'review': review}
         print(f"[+] Revalidated existing bills: {summary}")
         return summary
+
+    def approve_bill_validation(self, invoice_id: int, kind: str = 'purchase') -> Tuple[bool, Optional[str]]:
+        """Manually mark a bill's reconciliation verdict as 'approved' — a
+        human-confirmed OK that the auto-reconciliation couldn't certify. This
+        is sticky: revalidate_existing_bills skips approved rows, so it survives
+        future re-checks. The original failure notes are left intact for audit.
+        """
+        inv_t = 'sales_invoices' if kind == 'sales' else 'bill_invoices'
+        try:
+            self.ensure_validation_columns()
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    f"UPDATE {inv_t} SET validation_status='approved', "
+                    f"updated_at=CURRENT_TIMESTAMP WHERE id=%s",
+                    (invoice_id,)
+                )
+                affected = cursor.rowcount
+                conn.commit()
+                cursor.close()
+            if affected == 0:
+                return False, 'Bill not found'
+            return True, None
+        except Exception as e:
+            print(f"[!] approve_bill_validation error: {e}")
+            return False, str(e)
+
+    def recheck_bill_validation(self, invoice_id: int, kind: str = 'purchase') -> Tuple[bool, Optional[str]]:
+        """Recompute one stored bill's reconciliation verdict and write it back,
+        clearing any manual approval. The single-row version of
+        revalidate_existing_bills. Returns (True, new_status) on success.
+        """
+        inv_t = 'sales_invoices' if kind == 'sales' else 'bill_invoices'
+        li_t = 'sales_line_items' if kind == 'sales' else 'bill_line_items'
+        try:
+            self.ensure_validation_columns()
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(f"SELECT * FROM {inv_t} WHERE id=%s", (invoice_id,))
+                inv = cursor.fetchone()
+                if not inv:
+                    cursor.close()
+                    return False, 'Bill not found'
+                cursor.execute(
+                    f"SELECT * FROM {li_t} WHERE invoice_id=%s ORDER BY sl_no",
+                    (invoice_id,)
+                )
+                items = cursor.fetchall()
+                v = validate_db_row(inv, items)
+                cursor.execute(
+                    f"UPDATE {inv_t} SET validation_status=%s, validation_diff=%s, "
+                    f"validation_notes=%s WHERE id=%s",
+                    (v['status'], v['diff'], notes_from_result(v), invoice_id)
+                )
+                conn.commit()
+                cursor.close()
+            return True, v['status']
+        except Exception as e:
+            print(f"[!] recheck_bill_validation error: {e}")
+            return False, str(e)
 
     def insert_sales_bill(self, bill_data: Dict) -> Tuple[bool, Optional[int], Optional[str]]:
         """Insert a sales invoice and its line items into the database."""

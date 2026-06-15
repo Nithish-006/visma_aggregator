@@ -439,16 +439,65 @@ function getVisibleBills() {
         : storedBills;
 }
 
+// Clickable: a flagged bill can be manually marked OK; a manually-approved
+// bill can be re-checked against the reconciliation rules.
 function validationBadge(bill) {
     const status = bill.validation_status;
     if (status === 'review') {
         const notes = (bill.validation_notes || 'Failed reconciliation').replace(/"/g, '&quot;');
-        return `<span class="val-badge val-review" title="${notes}">⚠ Review</span>`;
+        return `<span class="val-badge val-review val-clickable" title="${notes} — click to mark OK" onclick="event.stopPropagation(); approveBillValidation(${bill.id})">⚠ Review</span>`;
+    }
+    if (status === 'approved') {
+        const notes = (bill.validation_notes || '').replace(/"/g, '&quot;');
+        const why = notes ? ` (despite: ${notes})` : '';
+        return `<span class="val-badge val-ok val-approved val-clickable" title="Manually approved${why} — click to re-check" onclick="event.stopPropagation(); recheckBillValidation(${bill.id})">✓ OK ✋</span>`;
     }
     if (status === 'ok') {
         return `<span class="val-badge val-ok" title="Reconciles">✓ OK</span>`;
     }
     return `<span class="val-badge val-unknown" title="Not checked yet">–</span>`;
+}
+
+// Manually mark a flagged bill as OK (sticky — survives "Run validation").
+async function approveBillValidation(billId) {
+    if (!confirm('Mark this bill as OK?\n\nThis manually approves it despite the reconciliation flag. It will stay OK even after re-running validation.')) return;
+    try {
+        const res = await fetch(`/api/sales/${billId}/validation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'approve' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Bill marked OK (manually approved)', 'success');
+            await loadStoredBills();
+        } else {
+            showToast(data.error || 'Could not update', 'error');
+        }
+    } catch (e) {
+        showToast('Update failed: ' + e.message, 'error');
+    }
+}
+
+// Clear a manual approval and recompute the reconciliation verdict.
+async function recheckBillValidation(billId) {
+    if (!confirm('Re-check this bill against the reconciliation rules?\n\nThis clears the manual approval and may flag it for review again.')) return;
+    try {
+        const res = await fetch(`/api/sales/${billId}/validation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'recheck' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`Re-checked — now: ${data.status === 'ok' ? 'OK' : 'Review'}`, 'success');
+            await loadStoredBills();
+        } else {
+            showToast(data.error || 'Could not re-check', 'error');
+        }
+    } catch (e) {
+        showToast('Re-check failed: ' + e.message, 'error');
+    }
 }
 
 function updateFlaggedCount() {

@@ -3921,11 +3921,23 @@ def _extraction_to_flat(data, project):
     }
 
 
+# Caches the extraction the user PREVIEWED so that "Apply" applies exactly the
+# values they approved — not a fresh, non-deterministic re-extraction. Keyed by
+# (kind, invoice_id). Without this, vision re-extraction at apply-time can come
+# back flagged 'review' even though the preview reconciled, blocking the apply.
+_reprocess_preview_cache = {}
+
+
 def _reprocess_invoice(invoice_id, kind, apply_changes):
     """Re-extract one stored invoice from its source PDF using the improved
     pipeline, re-validate, and return an old->new diff. Applies the new values
     (preserving the project tag) only when apply_changes is set AND the new
     extraction reconciles ('ok'), per the clean-only policy.
+
+    On apply, reuses the extraction captured during the preview pass (cached by
+    (kind, invoice_id)) so the values applied are the same ones the user saw and
+    approved — vision extraction is non-deterministic, so re-extracting at apply
+    time could otherwise yield a different, still-flagged result.
     """
     is_sales = (kind == 'sales')
     prefix = 'sales' if is_sales else 'bill'
@@ -3939,19 +3951,28 @@ def _reprocess_invoice(invoice_id, kind, apply_changes):
     project = existing.get('project')
     filename = existing.get('filename')
 
-    pdf_path = _locate_invoice_file(filename, prefix)
-    if not pdf_path:
-        return {'success': False, 'error': f'Source file not found on disk for "{filename}"'}, 200
+    cache_key = (kind, invoice_id)
+    cached = _reprocess_preview_cache.get(cache_key) if apply_changes else None
+    if cached:
+        # Apply the exact extraction the user previewed/approved.
+        res = {'model': cached.get('model')}
+        new_data = cached['new_data']
+        new_validation = cached['new_validation']
+        flat = cached['flat']
+    else:
+        pdf_path = _locate_invoice_file(filename, prefix)
+        if not pdf_path:
+            return {'success': False, 'error': f'Source file not found on disk for "{filename}"'}, 200
 
-    results = process_bill_file(pdf_path, filename)
-    res = results[0] if results else None
-    if not res or not res.get('success') or not res.get('data'):
-        return {'success': False,
-                'error': (res or {}).get('error', 'Re-extraction failed')}, 200
+        results = process_bill_file(pdf_path, filename)
+        res = results[0] if results else None
+        if not res or not res.get('success') or not res.get('data'):
+            return {'success': False,
+                    'error': (res or {}).get('error', 'Re-extraction failed')}, 200
 
-    new_data = res['data']
-    new_validation = res.get('validation') or validate_extraction(new_data)
-    flat = _extraction_to_flat(new_data, project)
+        new_data = res['data']
+        new_validation = res.get('validation') or validate_extraction(new_data)
+        flat = _extraction_to_flat(new_data, project)
 
     def f(x):
         try:
@@ -3982,6 +4003,17 @@ def _reprocess_invoice(invoice_id, kind, apply_changes):
                 apply_blocked = err or 'update failed'
         else:
             apply_blocked = "Re-extraction still flagged 'review' — not applied (clean-only policy)"
+        # Apply is terminal for this preview — drop the cached extraction so a
+        # later reprocess starts fresh.
+        _reprocess_preview_cache.pop(cache_key, None)
+    else:
+        # Preview pass — remember this extraction so the matching Apply uses it.
+        _reprocess_preview_cache[cache_key] = {
+            'new_data': new_data,
+            'new_validation': new_validation,
+            'flat': flat,
+            'model': res.get('model'),
+        }
 
     return {
         'success': True,
@@ -4031,6 +4063,37 @@ def reprocess_sales_bill(invoice_id):
     apply_changes = bool((request.json or {}).get('apply', False))
     payload, status = _reprocess_invoice(invoice_id, 'sales', apply_changes)
     return jsonify(payload), status
+
+
+def _set_invoice_validation(invoice_id, kind):
+    """Manually approve a flagged bill ('approve') or recompute its verdict
+    ('recheck'). Approve is a sticky override that survives re-validation."""
+    action = (request.json or {}).get('action', 'approve')
+    if action == 'approve':
+        ok, info = db_manager.approve_bill_validation(invoice_id, kind)
+        if not ok:
+            return jsonify({'success': False, 'error': info or 'Update failed'}), 200
+        return jsonify({'success': True, 'status': 'approved'})
+    if action == 'recheck':
+        ok, info = db_manager.recheck_bill_validation(invoice_id, kind)
+        if not ok:
+            return jsonify({'success': False, 'error': info or 'Re-check failed'}), 200
+        return jsonify({'success': True, 'status': info})
+    return jsonify({'success': False, 'error': f'Unknown action: {action}'}), 400
+
+
+@app.route('/api/bills/<int:invoice_id>/validation', methods=['POST'])
+@login_required
+def set_bill_validation(invoice_id):
+    """Manually mark a purchase bill OK (approve) or re-check it."""
+    return _set_invoice_validation(invoice_id, 'purchase')
+
+
+@app.route('/api/sales/<int:invoice_id>/validation', methods=['POST'])
+@login_required
+def set_sales_validation(invoice_id):
+    """Manually mark a sales bill OK (approve) or re-check it."""
+    return _set_invoice_validation(invoice_id, 'sales')
 
 
 # ============================================================================

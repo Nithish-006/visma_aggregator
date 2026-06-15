@@ -3026,6 +3026,18 @@ textarea.form-input {
     background: rgba(107, 114, 128, 0.12);
     color: var(--text-muted);
 }
+/* Manually-approved: green like OK, but a dashed ring marks it as a human
+   override rather than an auto-reconciled pass. */
+.val-badge.val-approved {
+    border: 1px dashed var(--success-color);
+}
+/* Badges the user can act on (mark OK / re-check). */
+.val-badge.val-clickable {
+    cursor: pointer;
+}
+.val-badge.val-clickable:hover {
+    filter: brightness(1.15);
+}
 .cell-check { text-align: center; }
 
 .bp-flagged-toggle {
