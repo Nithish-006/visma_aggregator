@@ -686,3 +686,15 @@ def get_project_summary_date_range():
         'min_date': '2026-01-01',
         'max_date': today,
     })
+
+
+# The Excel export body lives in reports.project_summary_export (it was ~1290
+# lines); this route is a thin delegator.
+from reports.project_summary_export import export_project_summary as _build_export
+
+
+@bp.route('/api/project-summary/export')
+@login_required
+def export_project_summary():
+    """Export professional project summary report as multi-tab Excel."""
+    return _build_export()
