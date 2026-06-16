@@ -1,6 +1,7 @@
 """Personal expense tracker: pages + /api/personal/* endpoints."""
 
 import io
+import traceback
 from datetime import datetime
 
 from flask import (
