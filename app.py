@@ -40,23 +40,10 @@ app.secret_key = os.environ.get('SECRET_KEY', 'visma-finance-secret-key-2024-sec
 # Permanent session lifetime (30 days for "Stay signed in")
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
-# Login credentials
-VALID_USERNAME = 'visma'
-VALID_PASSWORD = '1617'
-
-
-def login_required(f):
-    """Decorator to require login for protected routes"""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not session.get('logged_in'):
-            # For API routes, return 401
-            if request.path.startswith('/api/'):
-                return jsonify({'error': 'Authentication required'}), 401
-            # For page routes, redirect to login
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
+# Auth lives in its own blueprint; login_required is imported back for the
+# routes still defined in this module.
+from auth import bp as auth_bp, login_required
+app.register_blueprint(auth_bp)
 
 # Create uploads directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -189,74 +176,6 @@ def get_upload_history():
         return jsonify({'history': history})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
-# ============================================================================
-# AUTHENTICATION ROUTES
-# ============================================================================
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    """Handle user login"""
-    # If already logged in, redirect to dashboard
-    if session.get('logged_in'):
-        return redirect(url_for('index'))
-
-    error = None
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
-
-        if username == VALID_USERNAME and password == VALID_PASSWORD:
-            session['logged_in'] = True
-            session['username'] = username
-            # Check if "Stay signed in" was selected
-            if request.form.get('remember_me'):
-                session.permanent = True
-            return redirect(url_for('index'))
-        else:
-            error = 'Invalid username or password. Please try again.'
-
-    return render_template('login.html', error=error)
-
-
-@app.route('/logout')
-def logout():
-    """Handle user logout"""
-    session.clear()
-    return redirect(url_for('login'))
-
-
-# ============================================================================
-# PROTECTED ROUTES
-# ============================================================================
-
-@app.route('/sw.js')
-def service_worker():
-    return send_file('static/sw.js', mimetype='application/javascript')
-
-
-@app.route('/')
-@login_required
-def index():
-    """Render hub page with bank selection"""
-    # Get stats for each bank
-    bank_stats = {}
-    for bank_code in VALID_BANK_CODES:
-        try:
-            df = get_bank_df(bank_code)
-            bank_stats[bank_code] = {
-                'transaction_count': len(df),
-                'name': BANK_CONFIG[bank_code]['name']
-            }
-        except Exception as e:
-
-            bank_stats[bank_code] = {
-                'transaction_count': 0,
-                'name': BANK_CONFIG[bank_code]['name']
-            }
-
-    return render_template('hub.html', bank_stats=bank_stats)
 
 
 # ============================================================================
@@ -1059,7 +978,7 @@ def api_update_project_po_data(project_id):
 def bank_dashboard(bank_code):
     """Render bank-specific dashboard page"""
     if bank_code not in VALID_BANK_CODES:
-        return redirect(url_for('index'))
+        return redirect(url_for('auth.index'))
 
     bank_config = get_bank_config(bank_code)
     return render_template('index.html',
@@ -1073,7 +992,7 @@ def bank_dashboard(bank_code):
 def edit_transactions(bank_code):
     """Render bank-specific transaction edit page"""
     if bank_code not in VALID_BANK_CODES:
-        return redirect(url_for('index'))
+        return redirect(url_for('auth.index'))
 
     bank_config = get_bank_config(bank_code)
     return render_template('edit_transactions.html',
@@ -1087,7 +1006,7 @@ def edit_transactions(bank_code):
 def bank_charts(bank_code):
     """Render bank-specific charts page"""
     if bank_code not in VALID_BANK_CODES:
-        return redirect(url_for('index'))
+        return redirect(url_for('auth.index'))
 
     bank_config = get_bank_config(bank_code)
     return render_template('charts.html',
