@@ -16,6 +16,21 @@ from bill_processor import process_bill_file, generate_excel, format_extracted_d
 from extraction_validator import validate_extraction, validate_db_row
 import po_processor
 
+# Shared singletons / mutable state (extracted from this file's old globals)
+from extensions import db_manager, state
+from helpers.formatting import sanitize_for_excel, safe_col_width, format_indian_number
+from helpers.projects import (
+    get_project_stems, normalize_project_stem, build_smart_project_groups,
+    match_bills_to_project_groups, match_labour_to_project_groups,
+    parse_project_selection, project_value_matches_selection,
+)
+from helpers.bankdata import load_bank_data_from_db, get_bank_df, reload_bank_data
+from helpers.dataframe import (
+    load_financial_data_from_db, load_financial_data_from_excel, reload_data,
+    parse_month_filter, filter_by_months, filter_by_date_range,
+    filter_by_project, filter_by_category, filter_by_vendor, robust_filter_by_project,
+)
+
 app = Flask(__name__)
 app.config.from_object(Config)
 
@@ -46,600 +61,9 @@ def login_required(f):
 # Create uploads directory if it doesn't exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Initialize database manager (singleton with connection pool)
-db_manager = DatabaseManager()
-db_connected = False
 
-# Global dataframe cache for multi-bank support
-df_cache = {}
-
-# Legacy global dataframe (for backwards compatibility)
-df_global = None
-
-
-
-
-# ============================================================================
-# DATA LOADING FUNCTIONS (Multi-Bank Support)
-# ============================================================================
-
-def load_bank_data_from_db(bank_code='axis'):
-    """Load and preprocess financial data from database for a specific bank"""
-    global db_manager, db_connected
-
-    if not db_connected:
-        db_connected = db_manager.connect()
-
-    if not db_connected:
-
-        return pd.DataFrame()
-
-    try:
-        df = db_manager.get_all_transactions(bank_code)
-
-        if df.empty:
-
-            return pd.DataFrame()
-
-        # Ensure date column is datetime
-        if 'Date' in df.columns:
-            df['date'] = pd.to_datetime(df['Date'])
-        else:
-            df['date'] = pd.to_datetime(df['transaction_date'])
-
-        # Ensure numeric columns
-        df['DR Amount'] = pd.to_numeric(df['DR Amount'], errors='coerce').fillna(0)
-        df['CR Amount'] = pd.to_numeric(df['CR Amount'], errors='coerce').fillna(0)
-
-        # Sort by date first
-        df = df.sort_values('date')
-
-        # Compute derived fields
-        df['month_name'] = df['date'].dt.strftime('%B %Y')
-        df['month'] = df['date'].dt.to_period('M').astype(str)
-        df['net'] = df['CR Amount'] - df['DR Amount']
-        df['running_balance'] = df['net'].cumsum()
-
-        # Clean categories
-        df['Category'] = df['Category'].fillna('Uncategorized')
-        df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
-
-
-        return df
-
-    except Exception as e:
-
-        return pd.DataFrame()
-
-
-def get_bank_df(bank_code='axis'):
-    """Get dataframe for a specific bank (with caching)"""
-    global df_cache
-
-    if bank_code not in df_cache:
-        df_cache[bank_code] = load_bank_data_from_db(bank_code)
-
-    return df_cache.get(bank_code, pd.DataFrame())
-
-
-def reload_bank_data(bank_code='axis'):
-    """Reload financial data for a specific bank"""
-    global df_cache
-    if bank_code in df_cache:
-        del df_cache[bank_code]
-    return get_bank_df(bank_code)
-
-
-def load_financial_data_from_db():
-    """Load and preprocess financial data from database (legacy - uses axis)"""
-    return load_bank_data_from_db('axis')
-
-
-def load_financial_data_from_excel():
-    """Load and preprocess financial data from Excel file"""
-    try:
-        df = pd.read_excel(app.config['EXCEL_FILE'])
-
-        # Parse dates - handle both formats
-        def parse_date(date_str):
-            if pd.isna(date_str):
-                return pd.NaT
-            date_str = str(date_str).strip()
-            for fmt in ['%d-%m-%Y', '%d/%m/%Y', '%d-%m-%y', '%d/%m/%y']:
-                try:
-                    return pd.to_datetime(date_str, format=fmt)
-                except:
-                    continue
-            try:
-                return pd.to_datetime(date_str, dayfirst=True)
-            except:
-                return pd.NaT
-
-        df['date'] = df['Date'].apply(parse_date)
-
-        # Clean amounts - remove commas
-        df['DR Amount'] = df['DR Amount'].astype(str).str.replace(',', '').replace('nan', '')
-        df['DR Amount'] = pd.to_numeric(df['DR Amount'], errors='coerce').fillna(0)
-
-        df['CR Amount'] = df['CR Amount'].astype(str).str.replace(',', '').replace('nan', '')
-        df['CR Amount'] = pd.to_numeric(df['CR Amount'], errors='coerce').fillna(0)
-
-        # Sort by date first
-        df = df.sort_values('date')
-
-        # Derived fields
-        df['month_name'] = df['date'].dt.strftime('%B %Y')
-        df['month'] = df['date'].dt.to_period('M').astype(str)
-        df['net'] = df['CR Amount'] - df['DR Amount']
-        df['running_balance'] = df['net'].cumsum()
-
-        # Clean categories
-        df['Category'] = df['Category'].fillna('Uncategorized')
-        df['Client/Vendor'] = df['Client/Vendor'].fillna('Unknown')
-
-
-        return df
-
-    except Exception as e:
-
-        return pd.DataFrame()
-
-
-def reload_data():
-    """Reload financial data (legacy - for backwards compatibility)"""
-    global df_global
-    if app.config['USE_DATABASE']:
-        df_global = load_financial_data_from_db()
-    else:
-        df_global = load_financial_data_from_excel()
-    return df_global
-
-
-# Load data at startup
-df_global = reload_data()
-
-
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
-def parse_month_filter(month_filter):
-    """Parse month filter - handle single or multiple months"""
-    if not month_filter or month_filter == 'All':
-        return ['All']
-    if ',' in month_filter:
-        return [m.strip() for m in month_filter.split(',')]
-    return [month_filter]
-
-
-def filter_by_months(df, month_list):
-    """Filter dataframe by list of months"""
-    if month_list == ['All']:
-        return df
-    return df[df['month'].isin(month_list)]
-
-
-ILLEGAL_XML_CHARS = re.compile(r'[\x00-\x08\x0B\x0C\x0E-\x1F]')
-
-def sanitize_for_excel(df):
-    """Remove illegal XML characters that cause openpyxl to crash"""
-    for col in df.select_dtypes(include=['object']).columns:
-        df[col] = df[col].apply(
-            lambda x: ILLEGAL_XML_CHARS.sub('', x) if isinstance(x, str) else x
-        )
-    return df
-
-
-def safe_col_width(series, col_name):
-    """Calculate column width safely, handling empty/mixed-type columns"""
-    if series.empty:
-        return len(str(col_name)) + 2
-    try:
-        col_max = series.fillna('').astype(str).apply(len).max()
-        return min(max(int(col_max), len(str(col_name))) + 2, 50)
-    except Exception:
-        return len(str(col_name)) + 2
-
-
-def filter_by_date_range(df, start_date=None, end_date=None):
-    """Filter dataframe by date range"""
-    if not start_date and not end_date:
-        return df
-
-    filtered_df = df.copy()
-
-    if start_date:
-        try:
-            start = pd.to_datetime(start_date)
-            filtered_df = filtered_df[filtered_df['date'] >= start]
-        except Exception as e:
-            pass
-
-
-    if end_date:
-        try:
-            end = pd.to_datetime(end_date)
-            filtered_df = filtered_df[filtered_df['date'] <= end]
-        except Exception as e:
-            pass
-
-
-    return filtered_df
-
-
-def filter_by_project(df, project=None):
-    """Filter dataframe by project (supports comma-separated multi-select)"""
-    if not project or project == 'All':
-        return df
-
-    # Handle both 'Project' and 'project' column names
-    project_col = 'Project' if 'Project' in df.columns else 'project'
-    if project_col not in df.columns:
-        return df
-
-    # Handle comma-separated multi-select
-    if ',' in project:
-        projects = [p.strip() for p in project.split(',')]
-        return df[df[project_col].astype(str).str.strip().isin(projects)]
-
-    return df[df[project_col].astype(str).str.strip() == project.strip()]
-
-
-def filter_by_category(df, category=None):
-    """Filter dataframe by category (supports comma-separated multi-select)"""
-    if not category or category == 'All':
-        return df
-
-    if 'Category' not in df.columns:
-        return df
-
-    # Handle comma-separated multi-select
-    if ',' in category:
-        categories = [c.strip() for c in category.split(',')]
-        return df[df['Category'].isin(categories)]
-
-    return df[df['Category'] == category]
-
-
-def filter_by_vendor(df, vendor=None):
-    """Filter dataframe by vendor (supports comma-separated multi-select)"""
-    if not vendor or vendor == 'All':
-        return df
-
-    vendor_col = 'Client/Vendor' if 'Client/Vendor' in df.columns else 'vendor'
-    if vendor_col not in df.columns:
-        return df
-
-    # Handle comma-separated multi-select
-    if ',' in vendor:
-        vendors = [v.strip() for v in vendor.split(',')]
-        return df[df[vendor_col].isin(vendors)]
-
-    return df[df[vendor_col] == vendor]
-
-
-def get_project_stems(project_str):
-    """Extract first token (stem) from each project name for fuzzy matching.
-    'RCH CT,SHOBA' -> ['rch', 'shoba']"""
-    if not project_str:
-        return []
-    projects = [p.strip() for p in project_str.split(',') if p.strip()]
-    stems = []
-    for p in projects:
-        tokens = p.split()
-        first_token = tokens[0].lower() if tokens else p.lower()
-        stems.append(first_token)
-    return stems
-
-
-NON_PROJECT_STEMS = {
-    'axis', 'axi', 'kvb', 'factory', 'labour', 'labor', 'office', 'bank', 'salary',
-    'tax', 'gst', 'tds', 'neft', 'rtgs', 'imps', 'upi', 'interest', 'charges',
-    'unknown', 'unassigned', 'general', 'misc', 'amount', 'transfer', 'return',
-    'received', 'payment', 'deposit', 'withdrawal', 'credit', 'debit'
-}
-
-PROJECT_ALIASES = {
-    'palson': 'polson',
-    'polsons': 'polson',
-}
-
-
-def normalize_project_stem(name):
-    """Lowercase, strip whitespace, normalize plurals via alias lookup only."""
-    s = name.lower().strip()
-    # Check exact alias first
-    if s in PROJECT_ALIASES:
-        return PROJECT_ALIASES[s]
-    # Try stripping trailing 's'/'es' and check if the base form is a known alias
-    if s.endswith('es') and len(s) > 3:
-        candidate = s[:-2]
-        if candidate in PROJECT_ALIASES:
-            return PROJECT_ALIASES[candidate]
-    elif s.endswith('s') and len(s) > 2:
-        candidate = s[:-1]
-        if candidate in PROJECT_ALIASES:
-            return PROJECT_ALIASES[candidate]
-    # Return as-is (no blind plural stripping)
-    return s
-
-
-def build_smart_project_groups(all_project_names, bill_projects):
-    """Build smart stem-based project groups from bank txn projects and bill projects.
-
-    Returns {canonical_stem: set(original_project_names)}
-    """
-    # Merge all project names
-    all_names = set()
-    for name in all_project_names:
-        s = str(name).strip()
-        if s and s.lower() != 'nan':
-            all_names.add(s)
-    for name in bill_projects:
-        s = str(name).strip()
-        if s and s.lower() != 'nan':
-            all_names.add(s)
-
-    # Build candidate stems from first words of all names
-    candidate_stems = set()
-    for name in all_names:
-        tokens = name.split()
-        if tokens:
-            candidate_stems.add(normalize_project_stem(tokens[0]))
-
-    stem_groups = {}  # canonical_stem -> set of original names
-
-    for name in all_names:
-        s = name.strip()
-        if not s:
-            continue
-
-        stem = None
-
-        # Rule 1: If name contains ' - ' (dash separator), extract part AFTER dash
-        if ' - ' in s:
-            after_dash = s.split(' - ', 1)[1].strip()
-            if after_dash:
-                first_token = after_dash.split()[0] if after_dash.split() else after_dash
-                candidate = normalize_project_stem(first_token)
-                if candidate not in NON_PROJECT_STEMS:
-                    stem = candidate
-
-        # Rule 2: Check all tokens against candidate stems
-        if stem is None:
-            tokens = s.split()
-            for token in tokens:
-                candidate = normalize_project_stem(token)
-                if candidate not in NON_PROJECT_STEMS and candidate in candidate_stems:
-                    stem = candidate
-                    break
-
-        # Rule 3: Fallback - use first word
-        if stem is None:
-            tokens = s.split()
-            first = normalize_project_stem(tokens[0]) if tokens else normalize_project_stem(s)
-            if first not in NON_PROJECT_STEMS:
-                stem = first
-
-        # Skip if all tokens are non-project stems
-        if stem is None or stem in NON_PROJECT_STEMS:
-            continue
-
-        stem_groups.setdefault(stem, set()).add(name)
-
-    return stem_groups
-
-
-def match_bills_to_project_groups(bills_list, stem_groups):
-    """Match bills to project stem groups.
-
-    Returns {stem: [list of bill dicts]}
-    """
-    # Build reverse lookup: original_name -> stem
-    name_to_stem = {}
-    for stem, names in stem_groups.items():
-        for name in names:
-            name_to_stem[name] = stem
-
-    result = {}
-    for bill in bills_list:
-        project = str(bill.get('project', '') or '').strip()
-        if not project or project.lower() == 'nan':
-            continue
-
-        matched_stem = name_to_stem.get(project)
-
-        # If not directly matched, try fuzzy matching with same logic
-        if matched_stem is None:
-            if ' - ' in project:
-                after_dash = project.split(' - ', 1)[1].strip()
-                if after_dash:
-                    first_token = after_dash.split()[0] if after_dash.split() else after_dash
-                    candidate = normalize_project_stem(first_token)
-                    if candidate in stem_groups:
-                        matched_stem = candidate
-            if matched_stem is None:
-                tokens = project.split()
-                for token in tokens:
-                    candidate = normalize_project_stem(token)
-                    if candidate in stem_groups:
-                        matched_stem = candidate
-                        break
-            if matched_stem is None:
-                tokens = project.split()
-                first = normalize_project_stem(tokens[0]) if tokens else normalize_project_stem(project)
-                if first in stem_groups:
-                    matched_stem = first
-
-        if matched_stem:
-            result.setdefault(matched_stem, []).append(bill)
-
-    return result
-
-
-def match_labour_to_project_groups(labour_costs, stem_groups):
-    """Match salary/attendance project names to stem groups.
-
-    labour_costs: {project_name: cost} from salary DB
-    stem_groups: {stem: set(names)} from build_smart_project_groups
-
-    Returns {stem: total_labour_cost}
-    """
-    # Build reverse lookup from existing stem groups
-    name_to_stem = {}
-    for stem, names in stem_groups.items():
-        for name in names:
-            name_to_stem[name.lower().strip()] = stem
-
-    result = {}
-    for project, cost in labour_costs.items():
-        p = project.strip()
-        p_lower = p.lower()
-
-        # Direct match
-        matched_stem = name_to_stem.get(p_lower)
-
-        # Fuzzy match using same logic as other matchers
-        if matched_stem is None:
-            if ' - ' in p:
-                after_dash = p.split(' - ', 1)[1].strip()
-                if after_dash:
-                    candidate = normalize_project_stem(after_dash.split()[0])
-                    if candidate in stem_groups:
-                        matched_stem = candidate
-        if matched_stem is None:
-            tokens = p.split()
-            for token in tokens:
-                candidate = normalize_project_stem(token)
-                if candidate in stem_groups:
-                    matched_stem = candidate
-                    break
-        if matched_stem is None:
-            tokens = p.split()
-            first = normalize_project_stem(tokens[0]) if tokens else normalize_project_stem(p)
-            if first in stem_groups:
-                matched_stem = first
-
-        if matched_stem:
-            result[matched_stem] = result.get(matched_stem, 0) + cost
-
-    return result
-
-
-_CANONICAL_PROJECT_RE = re.compile(r'^\s*(\d+)\s*-')
-
-
-def parse_project_selection(project_str):
-    """Parse a comma-separated project filter into strict and fuzzy terms.
-
-    Canonical selections ("659 - JAMUNA") are matched STRICTLY by their id
-    prefix — the registry-fed UI always sends this form. Free-text
-    selections (legacy callers) keep stem-prefix matching.
-
-    Returns (ids, stems).
-    """
-    ids, stems = [], []
-    for p in (project_str or '').split(','):
-        p = p.strip()
-        if not p or p == 'All':
-            continue
-        m = _CANONICAL_PROJECT_RE.match(p)
-        if m:
-            ids.append(int(m.group(1)))
-        else:
-            tokens = p.split()
-            stems.append(normalize_project_stem(tokens[0].lower()) if tokens else p.lower())
-    return ids, stems
-
-
-def project_value_matches_selection(value, selection):
-    """True when a project tag matches the parsed selection (ids, stems).
-
-    Canonical ids match strictly on the "<id> -" tag prefix. Stems do a
-    prefix test on the raw value and on the segment after " - "."""
-    ids, stems = selection
-    v = str(value or '').strip()
-    if not v:
-        return False
-    m = _CANONICAL_PROJECT_RE.match(v)
-    if ids and m and int(m.group(1)) in ids:
-        return True
-    if stems:
-        low = v.lower()
-        after_dash = low.split(' - ', 1)[-1].strip()
-        for s in stems:
-            if low.startswith(s) or after_dash.startswith(s):
-                return True
-    return False
-
-
-def robust_filter_by_project(df, project=None):
-    """Filter dataframe by the selected project(s).
-
-    Canonical selections ("659 - JAMUNA") match rows strictly by the
-    "<id> -" tag prefix; free-text selections keep the legacy stem-prefix
-    behaviour (also testing the segment after " - ")."""
-    if not project or project == 'All':
-        return df
-
-    project_col = 'Project' if 'Project' in df.columns else 'project'
-    if project_col not in df.columns:
-        return df
-
-    ids, stems = parse_project_selection(project)
-    if not ids and not stems:
-        return df
-
-    s = df[project_col].astype(str).str.strip()
-    mask = pd.Series(False, index=df.index)
-    for pid in ids:
-        mask = mask | s.str.match(rf'^{pid}\s*-')
-    if stems:
-        lower_col = s.str.lower()
-        after_dash = lower_col.str.split(' - ', n=1).str[-1].str.strip()
-        for stem in stems:
-            mask = mask | lower_col.str.startswith(stem) | after_dash.str.startswith(stem)
-    return df[mask]
-
-
-def format_indian_number(amount):
-    """Format number with Indian comma system (full numbers, no abbreviations)"""
-    if pd.isna(amount) or amount == 0:
-        return "₹0"
-
-    abs_amount = abs(amount)
-    sign = "-" if amount < 0 else ""
-
-    # Format with Indian comma system (lakhs and crores)
-    # Example: 12,34,567.89
-    def indian_format(num):
-        s = f"{num:,.2f}"
-        # Convert to Indian format: 1,234,567.89 -> 12,34,567.89
-        parts = s.split('.')
-        integer_part = parts[0].replace(',', '')
-        decimal_part = parts[1] if len(parts) > 1 else '00'
-
-        # Apply Indian grouping
-        if len(integer_part) <= 3:
-            formatted = integer_part
-        else:
-            # First group of 3 from right, then groups of 2
-            formatted = integer_part[-3:]
-            remaining = integer_part[:-3]
-            while remaining:
-                if len(remaining) <= 2:
-                    formatted = remaining + ',' + formatted
-                    remaining = ''
-                else:
-                    formatted = remaining[-2:] + ',' + formatted
-                    remaining = remaining[:-2]
-
-        # Remove decimal if it's .00
-        if decimal_part == '00':
-            return formatted
-        return formatted + '.' + decimal_part
-
-    return f"{sign}₹{indian_format(abs_amount)}"
+# Load legacy data at startup (populates extensions.state.df_global)
+reload_data()
 
 
 # ============================================================================
@@ -684,11 +108,10 @@ def upload_statement():
 
 
             # Ensure database is connected
-            global db_connected
-            if not db_connected:
+            if not state.db_connected:
                 connected = db_manager.connect()
                 if connected:
-                    db_connected = True
+                    state.db_connected = True
                 else:
                     return jsonify({
                         'error': 'Database connection failed',
@@ -758,7 +181,7 @@ def upload_statement():
 @login_required
 def get_upload_history():
     """Get recent upload history"""
-    if not app.config['USE_DATABASE'] or not db_connected:
+    if not app.config['USE_DATABASE'] or not state.db_connected:
         return jsonify({'history': []})
 
     try:
@@ -1681,9 +1104,8 @@ def bank_charts(bank_code):
 @login_required
 def clear_cache():
     """Clear in-memory dataframe cache and reload from database"""
-    global df_cache, df_global
-    df_cache = {}
-    df_global = reload_data()
+    state.df_cache.clear()
+    reload_data()
     return jsonify({'success': True, 'message': 'Cache cleared successfully'})
 
 
@@ -2343,11 +1765,10 @@ def upload_bank_statement(bank_code):
         if app.config['USE_DATABASE']:
 
 
-            global db_connected
-            if not db_connected:
+            if not state.db_connected:
                 connected = db_manager.connect()
                 if connected:
-                    db_connected = True
+                    state.db_connected = True
                 else:
                     return jsonify({
                         'error': 'Database connection failed',
@@ -4591,7 +4012,7 @@ def get_summary():
     end_date = request.args.get('end_date', None)
 
     # Filter data
-    df = df_global.copy()
+    df = state.df_global.copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -4666,7 +4087,7 @@ def get_monthly_trend():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = df_global.copy()
+    df = state.df_global.copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -4706,7 +4127,7 @@ def get_category_breakdown():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = df_global.copy()
+    df = state.df_global.copy()
     expense_df = df[df['DR Amount'] > 0]
 
     if category != 'All':
@@ -4738,7 +4159,7 @@ def get_running_balance():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = df_global.copy()
+    df = state.df_global.copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -4788,7 +4209,7 @@ def get_top_vendors():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = df_global.copy()
+    df = state.df_global.copy()
     expense_df = df[df['DR Amount'] > 0]
 
     if category != 'All':
@@ -4817,7 +4238,7 @@ def get_top_vendors():
 @login_required
 def get_categories():
     """Get list of all categories"""
-    categories = ['All'] + sorted(df_global['Category'].str.strip().unique().tolist())
+    categories = ['All'] + sorted(state.df_global['Category'].str.strip().unique().tolist())
     return jsonify({'categories': categories})
 
 @app.route('/api/months')
@@ -4825,7 +4246,7 @@ def get_categories():
 def get_months():
     """Get list of all available months"""
     # Create unique pairs of (month_code, month_name) sorted by month_code
-    pairs = df_global[['month', 'month_name']].drop_duplicates().sort_values('month')
+    pairs = state.df_global[['month', 'month_name']].drop_duplicates().sort_values('month')
 
     months_data = [{'value': 'All', 'label': 'All'}]
     for _, row in pairs.iterrows():
@@ -4841,14 +4262,14 @@ def get_months():
 @login_required
 def get_date_range():
     """Get the min and max dates available in the data"""
-    if len(df_global) == 0:
+    if len(state.df_global) == 0:
         return jsonify({
             'min_date': None,
             'max_date': None
         })
 
-    min_date = df_global['date'].min()
-    max_date = df_global['date'].max()
+    min_date = state.df_global['date'].min()
+    max_date = state.df_global['date'].max()
 
     return jsonify({
         'min_date': min_date.strftime('%Y-%m-%d') if pd.notna(min_date) else None,
@@ -4869,7 +4290,7 @@ def get_transactions():
     sort_order = request.args.get('sort_order', 'desc') # asc, desc
     search_query = request.args.get('search', '').lower()
 
-    df = df_global.copy()
+    df = state.df_global.copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -5042,7 +4463,7 @@ def download_transactions():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = df_global.copy()
+    df = state.df_global.copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -5111,7 +4532,7 @@ def get_insights():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = df_global.copy()
+    df = state.df_global.copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
