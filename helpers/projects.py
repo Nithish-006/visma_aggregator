@@ -6,6 +6,8 @@ transactions, bills, and salary records, and the canonical project registry.
 
 import re
 
+from extensions import db_manager
+
 
 def get_project_stems(project_str):
     """Extract first token (stem) from each project name for fuzzy matching.
@@ -260,3 +262,33 @@ def project_value_matches_selection(value, selection):
             if low.startswith(s) or after_dash.startswith(s):
                 return True
     return False
+
+
+def _canonical_project_set():
+    """Return a case-insensitive map of display_form_lower -> canonical_display."""
+    try:
+        projects = db_manager.list_projects()
+    except Exception:
+        projects = []
+    return {p['display'].lower(): p['display'] for p in projects}
+
+
+def validate_project_value(raw_value):
+    """Normalize and validate a project value against the canonical registry.
+
+    Returns (ok, normalized_value, error_message).
+    - Empty / None  -> (True, '', None)
+    - Canonical hit -> (True, canonical_display, None)
+    - Anything else -> (False, raw_value, "<readable error>")
+    """
+    value = (raw_value or '').strip()
+    if not value:
+        return True, '', None
+    canonical = _canonical_project_set()
+    hit = canonical.get(value.lower())
+    if hit:
+        return True, hit, None
+    return False, value, (
+        f"Project '{value}' is not in the canonical registry. "
+        "Pick one from the Projects page (or leave blank)."
+    )
