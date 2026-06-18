@@ -117,14 +117,14 @@ a { color: inherit; text-decoration: none; }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn svg { width: 15px; height: 15px; }
 
-main { flex: 1; }
+main { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 
 /* ── Card grid ────────────────────────────────────────────── */
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(244px, 1fr));
     gap: 16px;
-    padding: 40px 0 52px;
+    padding: 40px 0;
 }
 
 .card {
