@@ -139,9 +139,9 @@ html, body {
 
 /* Main + list */
 .proj-main {
-    max-width: 1320px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 2rem 1.25rem 4rem;
+    padding: 2rem 1.75rem 4rem;
 }
 
 /* Top-level list is now a vertical stack of sections (Projects / Others).

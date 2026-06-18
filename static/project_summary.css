@@ -146,7 +146,7 @@ body {
     flex-wrap: wrap;
     align-items: flex-end;
     gap: 14px 16px;
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
 }
 
@@ -439,9 +439,9 @@ body {
     display: grid;
     grid-template-columns: 1fr 340px;
     gap: 24px;
-    max-width: 1400px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 24px;
+    padding: 24px 32px;
 }
 
 .ps-left {
@@ -1640,20 +1640,37 @@ tr.ps-cf-active td:first-child {
    ============================================================================ */
 
 @media (max-width: 480px) {
+    /* Clean, ordered filter stack on phones:
+       row 1 — Period pills (full width)
+       row 2 — Category | Vendor (even two-up)
+       row 3 — Reset (full-width) */
     .ps-filters {
         flex-wrap: wrap;
+        align-items: stretch;
+        gap: 10px 8px;
     }
 
-    .ps-filter-group {
-        flex: 1 1 calc(50% - 6px);
+    .ps-filter-period {
+        flex: 1 1 100%;
+        order: 1;
+    }
+
+    .ps-filter-dropdown {
+        flex: 1 1 calc(50% - 4px);
+        min-width: 0;
+        max-width: none;
+        order: 2;
     }
 
     .ps-filter-group input[type="date"] {
         width: 100%;
     }
 
-    .ps-filter-dropdown {
-        min-width: 0;
+    .ps-filter-bar .ps-reset-btn {
+        flex: 1 1 100%;
+        order: 3;
+        align-self: stretch;
+        justify-content: center;
     }
 
     .ps-kpi-grid {
@@ -1693,9 +1710,9 @@ tr.ps-cf-active td:first-child {
    ============================================================================ */
 
 .ps-landing {
-    max-width: 1320px;
+    max-width: 1600px;
     margin: 0 auto;
-    padding: 28px 24px 64px;
+    padding: 28px 32px 64px;
 }
 
 .ps-cards {
