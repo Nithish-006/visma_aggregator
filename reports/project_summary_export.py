@@ -15,8 +15,8 @@ import pandas as pd
 from flask import request, jsonify, send_file
 
 from config import VALID_BANK_CODES, get_bank_config, now_ist
-from database import DatabaseManager
 from extensions import db_manager
+import salary_api
 from helpers.bankdata import get_bank_df
 from helpers.dataframe import (
     filter_by_date_range, filter_by_category, filter_by_vendor, robust_filter_by_project,
@@ -754,9 +754,9 @@ def export_project_summary():
 
         bills_by_stem = match_bills_to_project_groups(export_bills, stem_groups)
 
-        # Fetch labour costs from salary/attendance DB, filtered by project
+        # Fetch labour costs from the external salary API, filtered by project
         try:
-            labour_costs_raw = DatabaseManager.get_labour_costs_by_project(
+            labour_costs_raw = salary_api.get_labour_costs_by_project(
                 start_date=start_date, end_date=end_date
             )
             if project:
@@ -944,10 +944,9 @@ def export_project_summary():
             ws_pb.column_dimensions['C'].width = 20
 
         # ──────────────────────────────────────────────────────────
-        # TAB 10: Labour Attendance & Salary Summary (all months in range)
+        # TAB 10: Labour Salary Summary (per-worker monthly, from the API)
         # ──────────────────────────────────────────────────────────
         import calendar as cal
-        from datetime import date as date_cls
 
         labour_sheet_names = []
         try:
@@ -960,20 +959,19 @@ def export_project_summary():
                 labour_start = f"{today.year}-{today.month:02d}-01"
                 labour_end = f"{today.year}-{today.month:02d}-{cal.monthrange(today.year, today.month)[1]:02d}"
 
-            monthly_data = DatabaseManager.get_monthly_salary_and_attendance(
-                start_date=labour_start, end_date=labour_end
+            monthly_data = salary_api.get_monthly_labour_summary(
+                start_date=labour_start, end_date=labour_end, project=project
             )
 
             # Styling for labour sheets
             labour_title_font = Font(name='Calibri', bold=True, size=13, color='1A1A2E')
             labour_header_font = Font(name='Calibri', bold=True, size=10, color='FFFFFF')
             labour_header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-            summary_header_fill = PatternFill(start_color='2F5496', end_color='2F5496', fill_type='solid')
-            sunday_fill = PatternFill(start_color='FCE4EC', end_color='FCE4EC', fill_type='solid')
-            present_font = Font(color='006100')
-            absent_font = Font(color='DC2626')
             labour_currency = '#,##0.00'
 
+            # The salary API exposes per-worker MONTHLY totals (not day-by-day
+            # attendance), so each month is rendered as a per-worker salary
+            # summary table rather than the old day-grid calendar.
             for month_data in monthly_data:
                 sheet_name = f"Labour {month_data['sheet_name']}"
                 if len(sheet_name) > 31:
@@ -981,307 +979,79 @@ def export_project_summary():
                 labour_sheet_names.append(sheet_name)
 
                 ws_l = wb.create_sheet(sheet_name)
-                days_in_month = month_data['days_in_month']
-                yr = month_data['year']
-                mn = month_data['month_num']
-
-                # Build attendance lookup: worker_id -> day -> {status, ot, project}
-                att_map = {}
-                for a in month_data['attendance']:
-                    wid = a['worker_id']
-                    try:
-                        from dateutil import parser as dp
-                        d = dp.parse(str(a['date'])).day
-                    except:
-                        continue
-                    if wid not in att_map:
-                        att_map[wid] = {}
-                    att_map[wid][d] = {
-                        'status': a['status'],
-                        'ot': a['ot_hours'],
-                        'project': a['project']
-                    }
-
-                # Filter workers by selected project(s) if active
-                labour_workers = month_data['workers']
-                labour_attendance = month_data['attendance']
-                labour_project_breakdown = month_data['project_breakdown']
-                labour_daily_headcount = month_data['daily_headcount']
-                if project:
-                    labour_sel = parse_project_selection(project)
-
-                    # Step 1: Filter attendance to ONLY records on the selected project
-                    project_attendance = [
-                        a for a in month_data['attendance']
-                        if project_value_matches_selection(a.get('project'), labour_sel)
-                    ]
-
-                    # Step 2: Get worker IDs from project-filtered attendance
-                    matching_worker_ids = set(a['worker_id'] for a in project_attendance)
-
-                    if matching_worker_ids:
-                        labour_attendance = project_attendance
-
-                        # Step 3: Recompute worker stats from project-filtered attendance only
-                        from collections import defaultdict as _dd
-                        worker_stats = _dd(lambda: {'present_days': 0, 'ot_hours': 0.0})
-                        for a in labour_attendance:
-                            wid = a['worker_id']
-                            if a['status'] == 'P':
-                                worker_stats[wid]['present_days'] += 1
-                                worker_stats[wid]['ot_hours'] += float(a.get('ot_hours', 0) or 0)
-
-                        labour_workers = []
-                        for w in month_data['workers']:
-                            if w['worker_id'] not in matching_worker_ids:
-                                continue
-                            wid = w['worker_id']
-                            proj_days = worker_stats[wid]['present_days']
-                            proj_ot = worker_stats[wid]['ot_hours']
-                            base = w['base_salary_per_day']
-                            proj_base_pay = round(proj_days * base, 2)
-                            proj_ot_pay = round((base / 8) * proj_ot, 2) if base > 0 else 0
-                            labour_workers.append({
-                                **w,
-                                'working_days': proj_days,
-                                'ot_hours': proj_ot,
-                                'base_pay': proj_base_pay,
-                                'ot_pay': proj_ot_pay,
-                                'total_salary': round(proj_base_pay + proj_ot_pay, 2)
-                            })
-
-                        labour_project_breakdown = [
-                            p for p in month_data['project_breakdown']
-                            if project_value_matches_selection(p.get('name'), labour_sel)
-                        ]
-
-                        # Rebuild att_map for filtered attendance only
-                        att_map = {}
-                        for a in labour_attendance:
-                            wid = a['worker_id']
-                            try:
-                                from dateutil import parser as dp
-                                d = dp.parse(str(a['date'])).day
-                            except:
-                                continue
-                            if wid not in att_map:
-                                att_map[wid] = {}
-                            att_map[wid][d] = {
-                                'status': a['status'],
-                                'ot': a['ot_hours'],
-                                'project': a['project']
-                            }
-
-                        # Recompute daily headcount from filtered attendance only
-                        _dh_map = _dd(lambda: {'present': 0, 'absent': 0, 'holiday': 0, 'ot_hours': 0.0})
-                        for a in labour_attendance:
-                            _date_key = str(a['date'])
-                            _status = a['status']
-                            if _status == 'P':
-                                _dh_map[_date_key]['present'] += 1
-                                _dh_map[_date_key]['ot_hours'] += float(a.get('ot_hours', 0) or 0)
-                            elif _status == 'A':
-                                _dh_map[_date_key]['absent'] += 1
-                            elif _status == 'H':
-                                _dh_map[_date_key]['holiday'] += 1
-                        labour_daily_headcount = [
-                            {'date': d, 'present': v['present'], 'absent': v['absent'],
-                             'holiday': v['holiday'], 'ot_hours': round(v['ot_hours'], 2)}
-                            for d, v in sorted(_dh_map.items())
-                        ]
-                    else:
-                        # No attendance on this project for this month — skip sheet entirely
-                        continue
 
                 # ===== ROW 1: Title =====
                 ws_l.cell(row=1, column=1,
-                          value=f"LABOUR ATTENDANCE FOR {month_data['sheet_name']}").font = labour_title_font
-                ws_l.merge_cells(start_row=1, start_column=1, end_row=1, end_column=4)
+                          value=f"LABOUR SALARY SUMMARY — {month_data['month_name'].upper()}").font = labour_title_font
+                ws_l.merge_cells(start_row=1, start_column=1, end_row=1, end_column=9)
 
-                # ===== ROW 2-3: Headers =====
-                # Fixed columns
-                fixed_headers = ['S.No', 'Name', 'DESIGNATION', 'TEAM']
-                for ci, h in enumerate(fixed_headers, 1):
+                # ===== ROW 2: Headers =====
+                headers = ['S.No', 'NAME', 'DESIGNATION', 'PRESENT DAYS', 'OT HOURS',
+                           'BASE/DAY', 'BASE PAY', 'OT PAY', 'TOTAL SALARY']
+                for ci, h in enumerate(headers, 1):
                     c = ws_l.cell(row=2, column=ci, value=h)
                     c.font = labour_header_font
                     c.fill = labour_header_fill
                     c.alignment = Alignment(horizontal='center')
-                    # Row 3 empty for fixed cols
-                    ws_l.cell(row=3, column=ci).fill = labour_header_fill
-
-                # Day columns: 3 cols per day (status, OT, project)
-                col = 5  # start after fixed
-                day_col_starts = {}  # day -> starting column
-                for day in range(1, days_in_month + 1):
-                    day_col_starts[day] = col
-                    dt = date_cls(yr, mn, day)
-                    is_sunday = dt.weekday() == 6
-                    day_label = f"{day} SUN" if is_sunday else str(day)
-
-                    cell_h1 = ws_l.cell(row=2, column=col, value=day_label)
-                    cell_h1.font = labour_header_font
-                    cell_h1.fill = sunday_fill if is_sunday else labour_header_fill
-                    cell_h1.alignment = Alignment(horizontal='center')
-                    # Merge across 3 cols for day header
-                    ws_l.merge_cells(start_row=2, start_column=col, end_row=2, end_column=col + 2)
-
-                    # Sub-headers
-                    for si, sub in enumerate(['', 'OT', 'Pr']):
-                        sc = ws_l.cell(row=3, column=col + si, value=sub)
-                        sc.font = Font(size=8, bold=True)
-                        sc.fill = sunday_fill if is_sunday else labour_header_fill
-                        if not is_sunday:
-                            sc.font = Font(size=8, bold=True, color='FFFFFF')
-                        sc.alignment = Alignment(horizontal='center')
-                    col += 3
-
-                # Summary column headers
-                summary_start_col = col
-                sum_headers = ['TOTAL PRESENT', 'TOTAL OT', 'BASE SALARY',
-                               'BASE PAY', 'OT PAY', 'TOTAL SALARY']
-                # Main header merged across summary cols
-                ws_l.cell(row=2, column=summary_start_col,
-                          value=f"{month_data['sheet_name']} MONTH LABOUR ATTENDANCE & PAYMENT").font = Font(
-                    bold=True, size=9, color='FFFFFF')
-                ws_l.cell(row=2, column=summary_start_col).fill = summary_header_fill
-                for c in range(summary_start_col, summary_start_col + 6):
-                    ws_l.cell(row=2, column=c).fill = summary_header_fill
-                ws_l.merge_cells(start_row=2, start_column=summary_start_col,
-                                 end_row=2, end_column=summary_start_col + 5)
-                for si, sh in enumerate(sum_headers):
-                    sc = ws_l.cell(row=3, column=summary_start_col + si, value=sh)
-                    sc.font = Font(bold=True, size=8, color='FFFFFF')
-                    sc.fill = summary_header_fill
-                    sc.alignment = Alignment(horizontal='center')
 
                 # ===== DATA ROWS (one per worker) =====
-                data_row = 4
+                data_row = 3
                 sno = 1
-                for w in labour_workers:
+                for w in month_data['workers']:
                     ws_l.cell(row=data_row, column=1, value=sno)
                     ws_l.cell(row=data_row, column=2, value=w['name'])
                     ws_l.cell(row=data_row, column=3, value=w['designation'])
-                    ws_l.cell(row=data_row, column=4, value=w['team'])
-
-                    # Day-by-day columns
-                    for day in range(1, days_in_month + 1):
-                        dc = day_col_starts[day]
-                        att = att_map.get(w['worker_id'], {}).get(day)
-                        if att:
-                            status_cell = ws_l.cell(row=data_row, column=dc, value=att['status'])
-                            if att['status'] == 'P':
-                                status_cell.font = present_font
-                            elif att['status'] == 'A':
-                                status_cell.font = absent_font
-                            if att['ot']:
-                                ws_l.cell(row=data_row, column=dc + 1, value=att['ot'])
-                            if att['project']:
-                                ws_l.cell(row=data_row, column=dc + 2, value=att['project'])
-
-                    # Summary columns
-                    ws_l.cell(row=data_row, column=summary_start_col, value=w['working_days'])
-                    ws_l.cell(row=data_row, column=summary_start_col + 1, value=w['ot_hours'])
-                    ws_l.cell(row=data_row, column=summary_start_col + 2,
+                    ws_l.cell(row=data_row, column=4, value=w['present_days'])
+                    ws_l.cell(row=data_row, column=5, value=w['ot_hours'])
+                    ws_l.cell(row=data_row, column=6,
                               value=w['base_salary_per_day']).number_format = labour_currency
-                    ws_l.cell(row=data_row, column=summary_start_col + 3,
+                    ws_l.cell(row=data_row, column=7,
                               value=w['base_pay']).number_format = labour_currency
-                    ws_l.cell(row=data_row, column=summary_start_col + 4,
+                    ws_l.cell(row=data_row, column=8,
                               value=w['ot_pay']).number_format = labour_currency
-                    ws_l.cell(row=data_row, column=summary_start_col + 5,
+                    ws_l.cell(row=data_row, column=9,
                               value=w['total_salary']).number_format = labour_currency
-
                     sno += 1
                     data_row += 1
 
-                # ===== SUMMARY SECTIONS =====
-                data_row += 1  # blank row
-
-                # Monthly Summary
+                # ===== MONTHLY SUMMARY footer =====
+                data_row += 1
                 ws_l.cell(row=data_row, column=1, value='MONTHLY SUMMARY').font = Font(bold=True, size=11)
                 ws_l.cell(row=data_row, column=1).fill = PatternFill(
                     start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
                 data_row += 1
 
-                total_workers = len(labour_workers)
-                total_present = sum(w['working_days'] for w in labour_workers)
-                total_ot = sum(w['ot_hours'] for w in labour_workers)
-                total_sal = sum(w['total_salary'] for w in labour_workers)
-
-                kpi_labels = ['Total Workers', 'Total Present Days', 'Total OT Hours', 'Total Salary']
-                kpi_values = [total_workers, total_present, round(total_ot, 2), total_sal]
-                for ki, (kl, kv) in enumerate(zip(kpi_labels, kpi_values)):
-                    c = ki * 3
-                    ws_l.cell(row=data_row, column=c + 1, value=kl).font = Font(bold=True)
-                    cell = ws_l.cell(row=data_row, column=c + 2, value=kv)
-                    if kl == 'Total Salary':
-                        cell.number_format = labour_currency
+                summary_pairs = [
+                    ('Total Workers', month_data['headcount'], None),
+                    ('Total Present Days', month_data['total_present_days'], None),
+                    ('Total OT Hours', month_data['total_ot_hours'], None),
+                    ('Total Base Pay', month_data['total_base_pay'], labour_currency),
+                    ('Total OT Pay', month_data['total_ot_pay'], labour_currency),
+                    ('Total Salary', month_data['total_salary'], labour_currency),
+                ]
+                for label, value, fmt in summary_pairs:
+                    ws_l.cell(row=data_row, column=2, value=label).font = Font(bold=True)
+                    cell = ws_l.cell(row=data_row, column=4, value=value)
+                    if fmt:
+                        cell.number_format = fmt
+                    if label == 'Total Salary':
                         cell.font = Font(bold=True, color='006100')
-                data_row += 2
-
-                # Project Breakdown
-                ws_l.cell(row=data_row, column=1, value='PROJECT BREAKDOWN').font = Font(bold=True, size=11)
-                ws_l.cell(row=data_row, column=1).fill = PatternFill(
-                    start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
-                data_row += 1
-
-                pb_headers = ['Project', 'Workers', 'Working Days', 'OT Hours']
-                for ci, h in enumerate(pb_headers, 1):
-                    c = ws_l.cell(row=data_row, column=ci, value=h)
-                    c.font = Font(bold=True, color='FFFFFF', size=9)
-                    c.fill = labour_header_fill
-                data_row += 1
-
-                for proj in sorted(labour_project_breakdown, key=lambda x: x['name']):
-                    ws_l.cell(row=data_row, column=1, value=proj['name'])
-                    ws_l.cell(row=data_row, column=2, value=proj['workers'])
-                    ws_l.cell(row=data_row, column=3, value=proj['working_days'])
-                    ws_l.cell(row=data_row, column=4, value=proj['ot_hours'])
                     data_row += 1
-                data_row += 1
 
-                # Daily Headcount
-                ws_l.cell(row=data_row, column=1, value='DAILY HEADCOUNT').font = Font(bold=True, size=11)
-                ws_l.cell(row=data_row, column=1).fill = PatternFill(
-                    start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
+                # OT pay applies to daily-rate workers only; monthly-salaried
+                # workers show OT hours for tracking but never accrue OT pay.
                 data_row += 1
-
-                dh_headers = ['Day', 'Date', 'Present', 'Absent', 'Holiday', 'OT Hours']
-                for ci, h in enumerate(dh_headers, 1):
-                    c = ws_l.cell(row=data_row, column=ci, value=h)
-                    c.font = Font(bold=True, color='FFFFFF', size=9)
-                    c.fill = labour_header_fill
-                data_row += 1
-
-                day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                for dh in labour_daily_headcount:
-                    try:
-                        from dateutil import parser as dp
-                        dd = dp.parse(str(dh['date']))
-                        ws_l.cell(row=data_row, column=1, value=day_names[dd.weekday()])
-                        ws_l.cell(row=data_row, column=2, value=dd.strftime('%d/%m/%Y'))
-                    except:
-                        ws_l.cell(row=data_row, column=2, value=str(dh['date']))
-                    ws_l.cell(row=data_row, column=3, value=dh['present'])
-                    ws_l.cell(row=data_row, column=4, value=dh['absent'])
-                    ws_l.cell(row=data_row, column=5, value=dh['holiday'])
-                    ws_l.cell(row=data_row, column=6, value=dh['ot_hours'])
-                    data_row += 1
+                ws_l.cell(row=data_row, column=1, value=(
+                    'Note: OT pay applies to daily-rate workers only; monthly-salaried '
+                    'workers show OT hours for tracking but no OT pay.'
+                )).font = Font(italic=True, size=9, color='6B7280')
 
                 # Column widths
-                ws_l.column_dimensions['A'].width = 5
-                ws_l.column_dimensions['B'].width = 20
-                ws_l.column_dimensions['C'].width = 12
-                ws_l.column_dimensions['D'].width = 10
-                # Day columns are narrow (3 per day)
-                for day in range(1, days_in_month + 1):
-                    dc = day_col_starts[day]
-                    for offset, w in enumerate([3, 3, 8]):
-                        col_letter = get_column_letter(dc + offset)
-                        ws_l.column_dimensions[col_letter].width = w
-                # Summary columns
-                for si, sw in enumerate([13, 10, 12, 10, 10, 12]):
-                    col_letter = get_column_letter(summary_start_col + si)
-                    ws_l.column_dimensions[col_letter].width = sw
+                ws_l.column_dimensions['A'].width = 6
+                ws_l.column_dimensions['B'].width = 24
+                ws_l.column_dimensions['C'].width = 16
+                for col_letter in ('D', 'E', 'F', 'G', 'H', 'I'):
+                    ws_l.column_dimensions[col_letter].width = 14
 
         except Exception as e:
             print(f"[!] Labour tab export error: {e}")

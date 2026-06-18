@@ -14,11 +14,11 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 from config import Config, now_ist, VALID_BANK_CODES
-from database import DatabaseManager
 from extensions import db_manager
 from helpers.formatting import format_indian_number
 from helpers.bankdata import get_bank_df
 import po_processor
+import salary_api
 from auth import login_required
 
 bp = Blueprint('projects', __name__)
@@ -474,8 +474,9 @@ def api_project_insights(project_id):
     sales_bills, sales_summary = db_manager.get_bills_for_canonical_project(
         project_id, kind='sales')
 
-    # ── Labour from the attendance app DB ──
-    labour = DatabaseManager.get_labour_summary_for_project(project_id)
+    # ── Labour from the external salary API (attendance-priced server-side) ──
+    labour = salary_api.get_labour_summary_for_project(
+        project_id, project_display=project.get('display'))
 
     po_value = float(project.get('po_total_value') or 0)
     labour_total = float(labour.get('total_cost') or 0)

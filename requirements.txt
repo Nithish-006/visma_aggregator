@@ -32,6 +32,9 @@ pytz
 # Environment Variables
 python-dotenv
 
+# HTTP client (Project Salary API)
+requests
+
 # Bill Processing (Gemini Vision)
 google-genai
 Pillow

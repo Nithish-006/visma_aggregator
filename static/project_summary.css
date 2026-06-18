@@ -204,6 +204,50 @@ body {
     border-color: var(--border-strong);
 }
 
+/* Period filter — month pills */
+.ps-filter-period {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ps-month-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.ps-month-pill {
+    padding: 7px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+}
+
+.ps-month-pill:hover {
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+}
+
+.ps-month-pill.active {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #fff;
+}
+
+/* Labour Salary monthly table — grand-total row */
+.ps-table tr.ps-total-row td {
+    border-top: 2px solid var(--border-strong);
+    background: var(--bg-secondary);
+}
+
 /* ============================================================================
    CUSTOM MULTI-SELECT DROPDOWN
    ============================================================================ */

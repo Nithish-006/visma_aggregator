@@ -11,17 +11,15 @@ import pandas as pd
 from flask import Blueprint, render_template, request, jsonify
 
 from config import VALID_BANK_CODES, now_ist
-from database import DatabaseManager
 from extensions import db_manager
+import salary_api
 from helpers.formatting import format_indian_number
 from helpers.bankdata import get_bank_df
 from helpers.dataframe import (
     filter_by_date_range, filter_by_category, filter_by_vendor, robust_filter_by_project,
 )
 from helpers.projects import (
-    build_smart_project_groups, match_bills_to_project_groups,
-    match_labour_to_project_groups, parse_project_selection,
-    project_value_matches_selection,
+    build_smart_project_groups, parse_project_selection,
 )
 # project_summary consumes the projects blueprint's PO/payments resolver.
 # One-directional: blueprints.projects never imports project_summary.
@@ -38,6 +36,21 @@ def project_summary():
     return render_template('project_summary.html')
 
 
+def _labour_monthly_for_project(project, start_date, end_date):
+    """Per-month labour salary for the open canonical project, from the salary API.
+
+    Returns the salary_api.get_labour_summary_for_project shape. When the
+    selection carries no canonical id (free-text / no project), returns a benign
+    empty-but-available stub so the UI shows its "no attendance" state, not an error.
+    """
+    ids, _ = parse_project_selection(project)
+    if not ids:
+        return {'available': True, 'monthly': [], 'total_cost': 0.0,
+                'total_days': 0, 'total_ot_hours': 0.0, 'project_names': []}
+    return salary_api.get_labour_summary_for_project(
+        ids[0], project_display=project, start_date=start_date, end_date=end_date)
+
+
 @bp.route('/api/project-summary/combined')
 @login_required
 def get_project_summary_combined():
@@ -49,6 +62,9 @@ def get_project_summary_combined():
     vendor = request.args.get('vendor', None)
 
     po_value, client_payments = _po_and_payments_for_project(project)
+
+    # Labour salary (monthly) for the open project — sourced from the salary API.
+    labour_monthly = _labour_monthly_for_project(project, start_date, end_date)
 
     combined_rows = []
 
@@ -81,7 +97,7 @@ def get_project_summary_combined():
                 'client_payments_formatted': format_indian_number(client_payments),
             },
             'category_breakdown': [],
-            'project_breakdown': [],
+            'labour_monthly': labour_monthly,
             'vendor_breakdown': [],
             'monthly_trend': {'months': [], 'income': [], 'expense': [], 'net': []},
             'transactions': [],
@@ -128,110 +144,9 @@ def get_project_summary_combined():
                 'percentage': round(pct, 1)
             })
 
-    # Project breakdown — smart stem-grouped with material, other expense, labour
-    project_col = 'Project' if 'Project' in combined.columns else 'project'
-    v_col = 'Client/Vendor' if 'Client/Vendor' in combined.columns else 'client_vendor'
-    LABOUR_CATS_API = {'LABOUR PAYMENT', 'LABOR PAYMENT', 'LABOUR', 'LABOR'}
-    EXCLUDE_CATS_API = {'MATERIAL PURCHASE', 'AMOUNT RECEIVED', 'SALARY AC', 'BANK CHARGES', 'DUTIES & TAX'}
-
-    project_breakdown = []
-    try:
-        # Collect project names from bank txns
-        bank_proj_names = []
-        if project_col in combined.columns:
-            bank_proj_names = [str(p) for p in combined[project_col].dropna().unique()
-                               if str(p).strip() and str(p).lower() != 'nan']
-
-        # Fetch bills with line items
-        try:
-            api_bills = db_manager.get_bills_with_line_items_for_export(
-                start_date=start_date, end_date=end_date)
-        except:
-            api_bills = []
-
-        # Filter bills by the project selection when a filter is active
-        if project and project != 'All':
-            proj_sel = parse_project_selection(project)
-            if proj_sel[0] or proj_sel[1]:
-                api_bills = [b for b in api_bills
-                             if project_value_matches_selection(b.get('project'), proj_sel)]
-
-        bill_proj_names = [str(b.get('project', '')) for b in api_bills
-                           if str(b.get('project', '')).strip() and str(b.get('project', '')).lower() != 'nan']
-
-        # Build stem groups
-        api_stem_groups = build_smart_project_groups(bank_proj_names, bill_proj_names)
-        api_bills_by_stem = match_bills_to_project_groups(api_bills, api_stem_groups)
-
-        # Fetch labour costs
-        try:
-            api_labour_raw = DatabaseManager.get_labour_costs_by_project(
-                start_date=start_date, end_date=end_date)
-            # Filter labour by the project selection when a filter is active
-            if project and project != 'All':
-                proj_sel = parse_project_selection(project)
-                if proj_sel[0] or proj_sel[1]:
-                    api_labour_raw = {k: v for k, v in api_labour_raw.items()
-                                      if project_value_matches_selection(k, proj_sel)}
-            api_labour_by_stem = match_labour_to_project_groups(api_labour_raw, api_stem_groups)
-        except:
-            api_labour_by_stem = {}
-
-        for stem in sorted(api_stem_groups.keys()):
-            project_names = api_stem_groups[stem]
-            group_label = stem.upper()
-            proj_list = ', '.join(sorted(str(p) for p in project_names if str(p) != 'nan'))
-
-            # --- Material total from bills (use total_amount = subtotal + taxes) ---
-            group_bills = api_bills_by_stem.get(stem, [])
-            material_total = 0
-            for bill in group_bills:
-                material_total += bill.get('total_amount', 0)
-
-            # --- Income + Other expense totals from bank txns ---
-            income_total = 0
-            other_total = 0
-            if project_col in combined.columns:
-                g_mask = combined[project_col].isin(project_names)
-                g_df = combined[g_mask]
-                if not g_df.empty:
-                    if 'CR Amount' in g_df.columns:
-                        income_total = float(g_df['CR Amount'].sum())
-
-                    exp_df = g_df[g_df['DR Amount'] > 0].copy()
-                    if 'Category' in exp_df.columns:
-                        upper_cats = exp_df['Category'].str.upper().str.strip()
-                        labour_mask = upper_cats.isin(LABOUR_CATS_API)
-                        exclude_mask = exp_df['Category'].isin(EXCLUDE_CATS_API) | labour_mask
-                        exp_df = exp_df[~exclude_mask]
-                    if not exp_df.empty:
-                        other_total = float(exp_df['DR Amount'].sum())
-
-            # --- Labour from salary DB ---
-            labour_total = api_labour_by_stem.get(stem, 0)
-
-            total_value = material_total + other_total + labour_total
-
-            project_breakdown.append({
-                'stem': stem,
-                'project': group_label,
-                'project_names': proj_list,
-                'income': income_total,
-                'income_formatted': format_indian_number(income_total),
-                'total_value': total_value,
-                'total_value_formatted': format_indian_number(total_value),
-                'material_total': material_total,
-                'material_total_formatted': format_indian_number(material_total),
-                'other_total': other_total,
-                'other_total_formatted': format_indian_number(other_total),
-                'labour_total': labour_total,
-                'labour_total_formatted': format_indian_number(labour_total),
-            })
-        project_breakdown.sort(key=lambda x: x['total_value'], reverse=True)
-    except Exception as e:
-        print(f"[!] Project breakdown API error: {e}")
-        import traceback
-        traceback.print_exc()
+    # NOTE: the old stem-grouped "project breakdown" was removed. Labour
+    # salary is fetched up front via _labour_monthly_for_project() and
+    # returned to the page as `labour_monthly` (per-month, for this project).
 
     # Monthly trend
     monthly_trend = {'months': [], 'income': [], 'expense': [], 'net': []}
@@ -309,7 +224,7 @@ def get_project_summary_combined():
     return jsonify({
         'summary': summary,
         'category_breakdown': category_breakdown,
-        'project_breakdown': project_breakdown,
+        'labour_monthly': labour_monthly,
         'vendor_breakdown': vendor_breakdown,
         'monthly_trend': monthly_trend,
         'transactions': transactions_list,

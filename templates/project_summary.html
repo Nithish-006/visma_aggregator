@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <title>Project Summary | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=13">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=14">
 </head>
 
 <body>
@@ -66,13 +66,9 @@
     <!-- Filter Bar -->
     <div class="ps-filter-bar">
         <div class="ps-filters">
-            <div class="ps-filter-group">
-                <label>From</label>
-                <input type="date" id="filter-start-date">
-            </div>
-            <div class="ps-filter-group">
-                <label>To</label>
-                <input type="date" id="filter-end-date">
+            <div class="ps-filter-group ps-filter-period">
+                <label>Period</label>
+                <div class="ps-month-pills" id="month-pills"></div>
             </div>
             <div class="ps-filter-group ps-filter-dropdown">
                 <label>Category</label>
@@ -125,25 +121,24 @@
                 </div>
             </div>
 
-            <!-- Project Breakdown -->
+            <!-- Labour Salary (Monthly) -->
             <div class="ps-section">
-                <h2 class="ps-section-title">Project Breakdown</h2>
+                <h2 class="ps-section-title">Labour Salary (Monthly)</h2>
                 <div class="ps-table-wrap">
-                    <table class="ps-table" id="project-table">
+                    <table class="ps-table" id="labour-monthly-table">
                         <thead>
                             <tr>
-                                <th>Project</th>
-                                <th class="text-right">Income</th>
-                                <th class="text-right">Material Exp</th>
-                                <th class="text-right">Other Exp</th>
-                                <th class="text-right">Labour</th>
+                                <th>Month</th>
+                                <th class="text-right">Workers</th>
+                                <th class="text-right">Man-days</th>
+                                <th class="text-right">OT hrs</th>
+                                <th class="text-right">Salary</th>
                             </tr>
                         </thead>
-                        <tbody id="project-table-body">
+                        <tbody id="labour-monthly-body">
                         </tbody>
                     </table>
                 </div>
-                <div class="ps-pagination" id="project-pagination"></div>
             </div>
 
             <!-- Vendor Breakdown Table -->
@@ -291,7 +286,7 @@
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=13"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=14"></script>
 <script>
 function hardRefresh() {
     if ('caches' in window) {

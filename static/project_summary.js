@@ -12,9 +12,9 @@
         currentProject: null,      // canonical display, e.g. "659 - JAMUNA"
         registryCards: [],
         defaultDates: { min: '', max: '' },
-        filters: { startDate: '', endDate: '', project: [], category: [], vendor: [] },
+        // month: '' = all months; otherwise 'YYYY-MM' (mapped to a date range when querying)
+        filters: { month: '', project: [], category: [], vendor: [] },
         pagination: {
-            projectBreakdown: { page: 1, perPage: 15 },
             vendorBreakdown: { page: 1, perPage: 15, showAll: false },
             axisTransactions: { page: 1, perPage: 15 },
             kvbTransactions: { page: 1, perPage: 15 },
@@ -101,10 +101,22 @@
         };
     }
 
+    // 'YYYY-MM' -> {start: 'YYYY-MM-01', end: 'YYYY-MM-<lastday>'}; null when 'All'.
+    function monthToRange(month) {
+        if (!month) return null;
+        const [y, m] = month.split('-').map(Number);
+        const last = new Date(y, m, 0).getDate(); // day 0 of next month = last day of this
+        const mm = String(m).padStart(2, '0');
+        return { start: `${y}-${mm}-01`, end: `${y}-${mm}-${String(last).padStart(2, '0')}` };
+    }
+
     function buildQueryParams() {
         const p = new URLSearchParams();
-        if (state.filters.startDate) p.set('start_date', state.filters.startDate);
-        if (state.filters.endDate) p.set('end_date', state.filters.endDate);
+        const range = monthToRange(state.filters.month);
+        if (range) {
+            p.set('start_date', range.start);
+            p.set('end_date', range.end);
+        }
         // Canonical "<id> - NAME" — the backend matches it strictly by id.
         if (state.currentProject) p.set('project', state.currentProject);
         if (state.filters.category.length > 0) p.set('category', state.filters.category.join(','));
@@ -379,7 +391,6 @@
         dd.toggleValue(value);
 
         // Reset pagination since filtered data changes
-        state.pagination.projectBreakdown.page = 1;
         state.pagination.vendorBreakdown.page = 1;
         state.pagination.axisTransactions.page = 1;
         state.pagination.kvbTransactions.page = 1;
@@ -536,11 +547,9 @@
         document.getElementById('ps-landing').classList.add('hidden');
         document.getElementById('ps-detail').classList.remove('hidden');
         document.getElementById('export-btn').classList.remove('hidden');
-        // Fresh secondary filters for every project
-        state.filters.startDate = state.defaultDates.min;
-        state.filters.endDate = state.defaultDates.max;
-        $('#filter-start-date').value = state.filters.startDate;
-        $('#filter-end-date').value = state.filters.endDate;
+        // Fresh secondary filters for every project — default to All months.
+        state.filters.month = '';
+        renderMonthPills();
         Object.values(dropdowns).forEach(d => d.clear());
         state.filters.category = [];
         state.filters.vendor = [];
@@ -593,24 +602,13 @@
     }
 
     function bindFilterEvents() {
-        const debouncedRefresh = debounce(() => refreshAll(), 300);
+        // Month pills are rendered dynamically; clicks are handled in renderMonthPills().
 
-        $('#filter-start-date').addEventListener('change', (e) => {
-            state.filters.startDate = e.target.value;
-            debouncedRefresh();
-        });
-        $('#filter-end-date').addEventListener('change', (e) => {
-            state.filters.endDate = e.target.value;
-            debouncedRefresh();
-        });
-
-        // Reset button — restores default dates and clears category/vendor;
+        // Reset button — back to All months and clears category/vendor;
         // the project itself stays pinned (leave via the back button).
         $('#reset-filters').addEventListener('click', () => {
-            state.filters.startDate = state.defaultDates.min;
-            state.filters.endDate = state.defaultDates.max;
-            $('#filter-start-date').value = state.filters.startDate;
-            $('#filter-end-date').value = state.filters.endDate;
+            state.filters.month = '';
+            renderMonthPills();
             Object.values(dropdowns).forEach(d => d.clear());
             state.filters.category = [];
             state.filters.vendor = [];
@@ -659,7 +657,6 @@
     async function refreshAll() {
         if (!state.currentProject) return; // landing view — nothing to refresh
         const seq = ++refreshSeq;
-        state.pagination.projectBreakdown.page = 1;
         state.pagination.vendorBreakdown.page = 1;
         state.pagination.axisTransactions.page = 1;
         state.pagination.kvbTransactions.page = 1;
@@ -689,7 +686,7 @@
             renderCrossFilterChips();
             renderKPI(combined.summary);
             renderCategoryBars(combined.category_breakdown);
-            renderProjectTable();
+            renderLabourMonthly();
             renderVendorTable();
             renderExpenseTracker();
 
@@ -746,37 +743,88 @@
         });
     }
 
-    // ── Render: Project Breakdown (auditor-style cards) ─────────────────
-    function renderProjectTable() {
-        const data = state.data.combined?.project_breakdown || [];
-        const tbody = document.getElementById('project-table-body');
+    // ── Month pills (period filter) ─────────────────────────────────────
+    const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // List of 'YYYY-MM' between two 'YYYY-MM-DD' dates, newest first.
+    function monthsInRange(minDate, maxDate) {
+        if (!minDate || !maxDate) return [];
+        const [y0, m0] = minDate.split('-').map(Number);
+        const [y1, m1] = maxDate.split('-').map(Number);
+        const out = [];
+        let y = y0, m = m0;
+        while (y < y1 || (y === y1 && m <= m1)) {
+            out.push(`${y}-${String(m).padStart(2, '0')}`);
+            m++; if (m > 12) { m = 1; y++; }
+        }
+        return out.reverse();
+    }
+
+    // '2026-06' -> 'Jun-2026'
+    function monthPillLabel(monthKey) {
+        const [y, m] = monthKey.split('-').map(Number);
+        return `${MONTH_ABBR[m - 1]}-${y}`;
+    }
+
+    function renderMonthPills() {
+        const container = document.getElementById('month-pills');
+        if (!container) return;
+        const pills = [{ key: '', label: 'All' }].concat(
+            monthsInRange(state.defaultDates.min, state.defaultDates.max)
+                .map(mk => ({ key: mk, label: monthPillLabel(mk) }))
+        );
+        container.innerHTML = pills.map(p =>
+            `<button class="ps-month-pill${state.filters.month === p.key ? ' active' : ''}" data-month="${p.key}">${p.label}</button>`
+        ).join('');
+        container.querySelectorAll('.ps-month-pill').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const m = btn.dataset.month || '';
+                if (m === state.filters.month) return;
+                state.filters.month = m;
+                container.querySelectorAll('.ps-month-pill').forEach(b =>
+                    b.classList.toggle('active', b.dataset.month === m));
+                refreshAll();
+            });
+        });
+    }
+
+    // ── Render: Labour Salary (Monthly) — per-month totals from the salary API ──
+    function renderLabourMonthly() {
+        const lab = state.data.combined?.labour_monthly;
+        const tbody = document.getElementById('labour-monthly-body');
         if (!tbody) return;
 
-        if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="ps-empty">No project data</td></tr>';
-            renderPaginationControls('project-pagination', 1, 1, () => {});
+        if (!lab || lab.available === false) {
+            tbody.innerHTML = '<tr><td colspan="5" class="ps-empty">Couldn’t reach the salary service — labour figures are unavailable.</td></tr>';
+            return;
+        }
+        const months = lab.monthly || [];
+        if (months.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="ps-empty">No labour recorded for this project in the selected period.</td></tr>';
             return;
         }
 
-        const { page, perPage } = state.pagination.projectBreakdown;
-        const totalPages = Math.ceil(data.length / perPage) || 1;
-        const start = (page - 1) * perPage;
-        const pageData = data.slice(start, start + perPage);
-
-        tbody.innerHTML = pageData.map(p => `
+        const rows = months.map(m => `
             <tr>
-                <td>${escapeHtml(p.project)}</td>
-                <td class="text-right text-income">${p.income_formatted || '0'}</td>
-                <td class="text-right text-expense">${p.material_total_formatted}</td>
-                <td class="text-right text-expense">${p.other_total_formatted}</td>
-                <td class="text-right" style="color:var(--accent-color);font-weight:600;">${p.labour_total_formatted}</td>
+                <td>${escapeHtml(m.label)}</td>
+                <td class="text-right">${Number(m.workers).toLocaleString('en-IN')}</td>
+                <td class="text-right">${Number(m.days).toLocaleString('en-IN')}</td>
+                <td class="text-right">${Number(m.ot_hours).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</td>
+                <td class="text-right" style="color:var(--accent-color);font-weight:600;">${formatIndianNumber(m.cost)}</td>
             </tr>
         `).join('');
 
-        renderPaginationControls('project-pagination', page, totalPages, (pg) => {
-            state.pagination.projectBreakdown.page = pg;
-            renderProjectTable();
-        });
+        const totalRow = `
+            <tr class="ps-total-row">
+                <td><strong>Total</strong></td>
+                <td class="text-right"></td>
+                <td class="text-right"><strong>${Number(lab.total_days).toLocaleString('en-IN')}</strong></td>
+                <td class="text-right"><strong>${Number(lab.total_ot_hours).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</strong></td>
+                <td class="text-right" style="color:var(--accent-color);font-weight:700;">${formatIndianNumber(lab.total_cost)}</td>
+            </tr>`;
+
+        tbody.innerHTML = rows + totalRow;
     }
 
     // ── Render: Vendor Table ───────────────────────────────────────────
