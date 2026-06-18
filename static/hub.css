@@ -117,37 +117,26 @@ a { color: inherit; text-decoration: none; }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn svg { width: 15px; height: 15px; }
 
-/* ── Intro ────────────────────────────────────────────────── */
 main { flex: 1; }
-
-.intro { padding: 44px 0 26px; }
-
-.intro__title {
-    margin: 0;
-    font-family: var(--serif);
-    font-weight: 400;
-    font-size: 30px;
-    letter-spacing: -0.3px;
-    color: var(--text);
-}
-
-.intro__sub { margin: 8px 0 0; font-size: 15px; color: var(--text-2); }
 
 /* ── Card grid ────────────────────────────────────────────── */
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(244px, 1fr));
     gap: 16px;
-    padding-bottom: 52px;
+    padding: 40px 0 52px;
 }
 
 .card {
+    --card-accent: var(--border-strong);
+    --card-tint: var(--surface);
     position: relative;
     display: flex;
     align-items: center;
     gap: 16px;
-    background: var(--surface);
+    background: var(--card-tint);
     border: 1px solid var(--border);
+    border-left: 3px solid var(--card-accent);
     border-radius: var(--r-card);
     padding: 20px;
     box-shadow: var(--shadow);
@@ -156,6 +145,7 @@ main { flex: 1; }
 
 .card:hover {
     border-color: var(--border-strong);
+    border-left-color: var(--card-accent);
     box-shadow: var(--shadow-hover);
     transform: translateY(-2px);
 }
@@ -167,7 +157,7 @@ main { flex: 1; }
     display: grid; place-items: center;
     background: var(--surface-soft);
     border-radius: 12px;
-    color: var(--text);
+    color: var(--card-accent);
     transition: background .18s ease, color .18s ease;
 }
 .card__icon svg { width: 24px; height: 24px; }
@@ -207,23 +197,19 @@ main { flex: 1; }
     transition: transform .18s ease, color .18s ease;
 }
 .card__arrow svg { width: 19px; height: 19px; display: block; }
-.card:hover .card__arrow { transform: translateX(3px); color: var(--accent); }
+.card:hover .card__arrow { transform: translateX(3px); color: var(--card-accent); }
 
-/* Hero — Project Summary, full width with coral wash */
-.card--hero {
-    grid-column: 1 / -1;
-    background: linear-gradient(120deg, var(--accent-soft), var(--surface) 62%);
-    padding: 26px 28px;
-}
-.card--hero .card__icon { background: var(--surface); color: var(--accent); }
+/* Per-module accent — coloured left bar, faint matching tint, coloured icon */
+.card--hero    { grid-column: 1 / -1; padding: 26px 28px; --card-accent: #D97757; --card-tint: #FBF1EC; }
+.card--hero .card__icon { background: var(--surface); }
 .card--hero .card__name { font-family: var(--serif); font-weight: 500; font-size: 21px; }
-.card--hero:hover .card__arrow { color: var(--accent-strong); }
 
-/* Bank accents — quiet brand color, no shouting */
-.card--axis:hover .card__icon { background: var(--axis); color: #fff; }
-.card--kvb:hover .card__icon { background: var(--kvb); color: #fff; }
-.card--axis .card__statnum { color: var(--axis); }
-.card--kvb .card__statnum { color: var(--kvb); }
+.card--expense  { --card-accent: #7C6BD6; --card-tint: #F3F0FB; }
+.card--projects { --card-accent: #3B6BC9; --card-tint: #ECF1FA; }
+.card--axis     { --card-accent: #DC2626; --card-tint: #FBECEC; }
+.card--kvb      { --card-accent: #16A34A; --card-tint: #EAF6EE; }
+.card--purchase { --card-accent: #D9883B; --card-tint: #FBF2E7; }
+.card--sales    { --card-accent: #0E9C9C; --card-tint: #E8F6F5; }
 
 /* gentle load reveal */
 @media (prefers-reduced-motion: no-preference) {
@@ -251,7 +237,5 @@ main { flex: 1; }
     .brand__tag { display: none; }
     .btn span { display: none; }
     .btn { padding: 7px 9px; }
-    .intro { padding: 32px 0 20px; }
-    .intro__title { font-size: 25px; }
-    .grid { grid-template-columns: 1fr; }
+    .grid { grid-template-columns: 1fr; padding-top: 28px; }
 }
