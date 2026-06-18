@@ -31,11 +31,16 @@ class SalaryApiError(Exception):
 
 
 def _base_url():
-    return (os.environ.get('SALARY_API_BASE_URL') or '').rstrip('/')
+    return (os.environ.get('SALARY_API_BASE_URL') or '').strip().rstrip('/')
 
 
 def _api_key():
-    return os.environ.get('SALARY_API_KEY') or ''
+    # Accept either name: SALARY_API_KEY (this client's own convention) or
+    # FINANCE_API_KEY (what the salary server calls the shared secret — callers
+    # often reuse that name). .strip() guards against trailing newlines/spaces
+    # picked up when pasting into a hosting console.
+    return (os.environ.get('SALARY_API_KEY')
+            or os.environ.get('FINANCE_API_KEY') or '').strip()
 
 
 def is_configured():
@@ -134,6 +139,8 @@ def get_labour_summary_for_project(project_id, project_display=None,
     empty = {'available': False, 'monthly': [], 'total_cost': 0.0,
              'total_days': 0, 'total_ot_hours': 0.0, 'project_names': []}
     if not is_configured():
+        print("[!] Salary API not configured: set SALARY_API_BASE_URL and "
+              "SALARY_API_KEY (or FINANCE_API_KEY) in the environment.")
         return {**empty, 'error': 'Salary API not configured'}
 
     try:
