@@ -2,18 +2,18 @@
    Projects page — canonical project registry  (light theme)
    ============================================================================ */
 :root {
-    --proj-bg-grad-start: #f0f4f8;
-    --proj-bg-grad-end:   #d9e2ec;
+    --proj-bg-grad-start: #FAF9F5;
+    --proj-bg-grad-end:   #F4F2EC;
     --proj-surface:       #ffffff;
-    --proj-surface-soft:  #f8fafc;
+    --proj-surface-soft:  #F4F2EC;
     --proj-border:        rgba(0, 0, 0, 0.08);
     --proj-border-strong: rgba(0, 0, 0, 0.14);
-    --proj-text:          #1a1a2e;
-    --proj-text-dim:      #4a4a68;
-    --proj-text-muted:    #6b7280;
-    --proj-accent:        #4f46e5;      /* indigo — matches the hub Projects tile */
-    --proj-accent-strong: #4338ca;
-    --proj-accent-soft:   rgba(99, 102, 241, 0.12);
+    --proj-text:          #1F1E1D;
+    --proj-text-dim:      #6E6C66;
+    --proj-text-muted:    #98948B;
+    --proj-accent:        #D97757;      /* coral — matches the hub Projects tile */
+    --proj-accent-strong: #C2603F;
+    --proj-accent-soft:   rgba(217, 119, 87, 0.12);
     --proj-accent-2:      #0891b2;
     --proj-design:        #0e7490;      /* teal — Designs */
     --proj-design-strong: #155e75;
@@ -48,7 +48,7 @@ html, body {
     justify-content: space-between;
     gap: 1rem;
     padding: 1rem 2rem;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(244, 242, 236, 0.9) 100%);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--proj-border);
@@ -88,7 +88,7 @@ html, body {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    background: linear-gradient(135deg, #818cf8 0%, var(--proj-accent-strong) 100%);
+    background: linear-gradient(135deg, #E8A98F 0%, var(--proj-accent-strong) 100%);
     color: #ffffff;
     border: none;
     padding: 0.65rem 1.1rem;
@@ -97,14 +97,14 @@ html, body {
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 14px rgba(67, 56, 202, 0.25);
+    box-shadow: 0 4px 14px rgba(194, 96, 63, 0.25);
     font-family: inherit;
     text-decoration: none;
 }
 
 .proj-primary-btn:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(67, 56, 202, 0.35);
+    box-shadow: 0 6px 18px rgba(194, 96, 63, 0.35);
 }
 
 .proj-primary-btn:disabled {
@@ -217,13 +217,13 @@ html, body {
 
 /* "Projects" — subtle indigo tint so the bucket reads as the primary type. */
 .proj-section--projects .project-card {
-    background: linear-gradient(145deg, #ffffff 0%, #f3f4ff 100%);
-    border-color: rgba(99, 102, 241, 0.20);
+    background: linear-gradient(145deg, #ffffff 0%, #FBF1EC 100%);
+    border-color: rgba(217, 119, 87, 0.20);
 }
 .proj-section--projects .project-card:hover {
     border-color: var(--proj-accent);
-    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
-    box-shadow: 0 10px 30px rgba(67, 56, 202, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
+    background: linear-gradient(145deg, #FAEDE6 0%, #F5DDD2 100%);
+    box-shadow: 0 10px 30px rgba(194, 96, 63, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 /* "Designs" — teal accent + tinted header rule and cards. */
@@ -269,7 +269,7 @@ html, body {
     gap: 1rem;
     width: 100%;
     min-height: 158px;
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    background: #FFFFFF;
     border: 1px solid var(--proj-border);
     border-radius: 16px;
     padding: 1.4rem 1.4rem;
@@ -284,8 +284,8 @@ html, body {
 .project-card:hover {
     transform: translateY(-2px);
     border-color: var(--proj-accent);
-    background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
-    box-shadow: 0 10px 30px rgba(67, 56, 202, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
+    background: linear-gradient(145deg, #FAEDE6 0%, #F5DDD2 100%);
+    box-shadow: 0 10px 30px rgba(194, 96, 63, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .project-card-main {
@@ -389,7 +389,7 @@ html, body {
 .proj-modal-card {
     position: relative;
     width: min(560px, 92vw);
-    background: linear-gradient(160deg, #ffffff 0%, #f8fafc 100%);
+    background: linear-gradient(160deg, #ffffff 0%, #F4F2EC 100%);
     border: 1px solid var(--proj-border);
     border-radius: 18px;
     box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
@@ -999,7 +999,7 @@ html, body {
     z-index: 2;
     /* Solid colour (accent-soft flattened onto white): a translucent sticky
        header lets scrolled rows bleed through the column titles. */
-    background: #ecedfd;
+    background: #FAEFEB;
     /* border-collapse drops sticky cell borders — draw the rule as a shadow */
     box-shadow: 0 1px 0 var(--proj-border-strong);
     color: var(--proj-text-muted);
@@ -1100,9 +1100,9 @@ html, body {
 
 /* Selected segment — colour echoes the section it maps to. */
 .proj-type-option input:checked + span {
-    background: linear-gradient(135deg, #818cf8 0%, var(--proj-accent-strong) 100%);
+    background: linear-gradient(135deg, #E8A98F 0%, var(--proj-accent-strong) 100%);
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(67, 56, 202, 0.25);
+    box-shadow: 0 2px 8px rgba(194, 96, 63, 0.25);
 }
 .proj-type-option input[value="design"]:checked + span {
     background: linear-gradient(135deg, #22d3ee 0%, var(--proj-design) 100%);
@@ -1337,7 +1337,7 @@ html, body {
 
 .proj-chip.accent {
     background: var(--proj-accent-soft);
-    border-color: rgba(99, 102, 241, 0.35);
+    border-color: rgba(217, 119, 87, 0.35);
 }
 
 .proj-chip-k {

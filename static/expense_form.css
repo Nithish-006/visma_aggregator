@@ -4,21 +4,21 @@
 
 :root {
     /* Light Theme - Elegant Gradients */
-    --bg-primary: linear-gradient(160deg, #f0f4f8 0%, #d9e2ec 100%);
+    --bg-primary: #FAF9F5;
     --bg-secondary: #ffffff;
-    --bg-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-    --bg-hover: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+    --bg-card: #FFFFFF;
+    --bg-hover: #F4F2EC;
     --bg-input: #ffffff;
-    --text-primary: #1a1a2e;
-    --text-secondary: #4a4a68;
-    --text-muted: #6b7280;
-    --border-color: #e5e7eb;
-    --border-strong: #d1d5db;
+    --text-primary: #1F1E1D;
+    --text-secondary: #6E6C66;
+    --text-muted: #98948B;
+    --border-color: #ECE9E1;
+    --border-strong: #DDD8CC;
     --income-color: #059669;
     --income-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
     --expense-color: #dc2626;
     --expense-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    --accent-color: #ea580c;
+    --accent-color: #D97757;
     --axis-color: #dc2626;
     --kvb-color: #059669;
 
@@ -40,7 +40,7 @@ html {
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
-    background: linear-gradient(160deg, #f0f4f8 0%, #d9e2ec 100%);
+    background: #FAF9F5;
     background-attachment: fixed;
     min-height: 100vh;
     min-height: -webkit-fill-available;

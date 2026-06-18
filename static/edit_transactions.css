@@ -1,4 +1,4 @@
-/* ============================================================================
+﻿/* ============================================================================
    EDIT TRANSACTIONS PAGE - LIGHT THEME STYLES
    ============================================================================ */
 
@@ -14,7 +14,7 @@
    ============================================================================ */
 
 .edit-toolbar-wrapper {
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    background: #FFFFFF;
     padding: 0.75rem 1rem;
     border-radius: 12px;
     margin-bottom: 0.875rem;
@@ -63,7 +63,7 @@
     height: 36px;
     font-size: 0.875rem;
     padding: 0.4rem 0.6rem;
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    background: #FFFFFF;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
@@ -80,7 +80,7 @@
     padding: 0.4rem 0.6rem;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    background: #FFFFFF;
     color: var(--text-main);
     width: 100%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -89,7 +89,7 @@
 .edit-filter-toolbar .filter-input.date-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.15);
 }
 
 /* Calendar icon styling for light theme */
@@ -111,7 +111,7 @@
 .edit-actions-toolbar .search-input {
     height: 36px;
     font-size: 0.875rem;
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    background: #FFFFFF;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
@@ -192,7 +192,7 @@
     border-radius: var(--radius-sm);
     font-size: 0.875rem;
     min-width: 130px;
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    background: #FFFFFF;
     color: var(--text-main);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -205,7 +205,7 @@
 .filter-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.15);
 }
 
 .filter-actions {
@@ -218,7 +218,7 @@
 
 /* Bulk Edit Bar - Dark Theme */
 .bulk-edit-bar {
-    background: linear-gradient(135deg, var(--primary-color) 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, var(--primary-color) 0%, #C2603F 100%);
     color: white;
     padding: 12px 20px;
     border-radius: var(--radius-md);
@@ -227,7 +227,7 @@
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    box-shadow: 0 4px 15px rgba(74, 108, 247, 0.3);
+    box-shadow: 0 4px 15px rgba(217, 119, 87, 0.3);
 }
 
 .bulk-info {
@@ -322,11 +322,11 @@
 
 .edit-table th.sortable.header-sort-active .sort-icon {
     opacity: 1;
-    color: #60a5fa;
+    color: #E08B6F;
 }
 
 .edit-table th.sortable.sorting {
-    background: rgba(96, 165, 250, 0.15);
+    background: rgba(224, 139, 111, 0.15);
 }
 
 .edit-table th.sortable.sorting .sort-icon {
@@ -365,15 +365,15 @@
 }
 
 .edit-table tbody tr:nth-child(even) {
-    background: linear-gradient(90deg, #f9fafb 0%, #f5f7fa 100%);
+    background: #F4F2EC;
 }
 
 .edit-table tbody tr:hover {
-    background: rgba(74, 108, 247, 0.08);
+    background: rgba(217, 119, 87, 0.08);
 }
 
 .edit-table tbody tr.selected {
-    background: rgba(74, 108, 247, 0.15);
+    background: rgba(217, 119, 87, 0.15);
     border-left: 3px solid var(--primary-color);
 }
 
@@ -397,15 +397,15 @@
 }
 
 .editable-cell:hover {
-    background: rgba(74, 108, 247, 0.1);
+    background: rgba(217, 119, 87, 0.1);
 }
 
 /* Excel-like focused cell highlight */
 .editable-cell.cell-focused {
     outline: 2px solid var(--primary-color);
     outline-offset: -2px;
-    background: rgba(74, 108, 247, 0.08);
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+    background: rgba(217, 119, 87, 0.08);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.15);
 }
 
 .editable-cell.editing {
@@ -435,7 +435,7 @@
 .editable-cell select:focus,
 .editable-cell textarea:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.2);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.2);
 }
 
 /* ============================================================================
@@ -461,7 +461,7 @@
 
 .combobox-input:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.2);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.2);
 }
 
 .combobox-dropdown {
@@ -493,7 +493,7 @@
 
 .combobox-item:hover,
 .combobox-item.combobox-highlighted {
-    background: rgba(74, 108, 247, 0.12);
+    background: rgba(217, 119, 87, 0.12);
 }
 
 .combobox-item.combobox-current {
@@ -562,7 +562,7 @@
     border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 600;
-    background: rgba(74, 108, 247, 0.15);
+    background: rgba(217, 119, 87, 0.15);
     color: var(--primary-light);
 }
 
@@ -617,8 +617,8 @@
     width: 100%;
     padding: 6px 8px;
     background: #ffffff;
-    color: #1a1a2e;
-    border: 1px solid #6366f1;
+    color: #1F1E1D;
+    border: 1px solid #D97757;
     border-radius: 6px;
     font-size: 0.85rem;
     font-family: inherit;
@@ -628,13 +628,13 @@
 }
 
 .project-select:focus {
-    border-color: #4338ca;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+    border-color: #C2603F;
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.18);
 }
 
 .project-select option {
     background: #ffffff;
-    color: #1a1a2e;
+    color: #1F1E1D;
 }
 
 .project-select option:disabled {
@@ -1068,7 +1068,7 @@ input[type="checkbox"] {
     }
 
     .edit-table tbody tr.selected {
-        background: rgba(74, 108, 247, 0.12);
+        background: rgba(217, 119, 87, 0.12);
         border-left: 3px solid var(--primary-color);
         padding-left: 13px;
     }
@@ -1366,7 +1366,7 @@ input[type="checkbox"] {
     align-items: center;
     padding: 20px 24px;
     border-bottom: 1px solid var(--border-color);
-    background: linear-gradient(135deg, var(--primary-color) 0%, #7c3aed 100%);
+    background: linear-gradient(135deg, var(--primary-color) 0%, #C2603F 100%);
 }
 
 .split-modal-header h2 {
@@ -1569,7 +1569,7 @@ input[type="checkbox"] {
 .split-field select:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.15);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.15);
 }
 
 .split-field input.error {

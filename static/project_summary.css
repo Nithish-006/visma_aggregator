@@ -3,17 +3,20 @@
    ============================================================================ */
 
 :root {
-    --bg-primary: #f0f4f8;
-    --bg-secondary: #ffffff;
-    --bg-card: #ffffff;
-    --text-primary: #1a1a2e;
-    --text-secondary: #4a4a68;
-    --text-muted: #6b7280;
-    --border-color: #e5e7eb;
-    --border-strong: #d1d5db;
+    --bg-primary: #FAF9F5;
+    --bg-secondary: #FFFFFF;
+    --bg-card: #FFFFFF;
+    --bg-soft: #F4F2EC;
+    --text-primary: #1F1E1D;
+    --text-secondary: #6E6C66;
+    --text-muted: #98948B;
+    --border-color: #ECE9E1;
+    --border-strong: #DDD8CC;
     --income-color: #059669;
-    --expense-color: #dc2626;
-    --accent-color: #2563eb;
+    --expense-color: #DC2626;
+    --accent-color: #D97757;
+    --accent-strong: #C2603F;
+    --accent-soft: #F6EBE4;
     --axis-color: #97144D;
     --kvb-color: #1E4785;
 }
@@ -115,8 +118,8 @@ body {
 }
 
 .ps-export-btn:hover {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: #C2603F;
+    border-color: #C2603F;
 }
 
 .ps-export-btn:active {
@@ -140,17 +143,17 @@ body {
 
 .ps-filters {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
-    gap: 12px;
+    gap: 14px 16px;
     max-width: 1400px;
     margin: 0 auto;
-    flex-wrap: nowrap;
 }
 
 .ps-filter-group {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
     flex: 0 0 auto;
 }
 
@@ -176,7 +179,7 @@ body {
 .ps-filter-group input[type="date"]:focus {
     outline: none;
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+    box-shadow: 0 0 0 3px rgba(217,119,87,0.1);
 }
 
 .ps-filter-dropdown {
@@ -204,16 +207,20 @@ body {
     border-color: var(--border-strong);
 }
 
-/* Period filter — month pills */
+/* Period filter — month pills get their own full-width row */
 .ps-filter-period {
-    flex: 1 1 auto;
+    flex: 1 1 100%;
     min-width: 0;
 }
+
+/* Category / Vendor / Reset share the row below the pills */
+.ps-filter-dropdown { flex: 1 1 200px; max-width: 260px; }
+.ps-filter-bar .ps-reset-btn { align-self: flex-end; }
 
 .ps-month-pills {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 7px;
     align-items: center;
 }
 
@@ -281,7 +288,7 @@ body {
 .ps-dd-trigger.has-selection {
     color: var(--text-primary);
     border-color: var(--accent-color);
-    background: rgba(37,99,235,0.04);
+    background: rgba(217,119,87,0.04);
 }
 
 .ps-dd-text {
@@ -340,7 +347,7 @@ body {
 
 .ps-dd-search input:focus {
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px rgba(37,99,235,0.1);
+    box-shadow: 0 0 0 2px rgba(217,119,87,0.1);
 }
 
 .ps-dd-options {
@@ -376,7 +383,7 @@ body {
 }
 
 .ps-dd-option.selected {
-    background: rgba(37,99,235,0.06);
+    background: rgba(217,119,87,0.06);
 }
 
 .ps-dd-checkbox {
@@ -500,7 +507,7 @@ body {
 }
 
 .kpi-po-value::before {
-    background: linear-gradient(90deg, #3b82f6, #2563eb);
+    background: linear-gradient(90deg, #E08B6F, #D97757);
 }
 
 .kpi-client-payments::before {
@@ -508,11 +515,11 @@ body {
 }
 
 .kpi-purchase-bills::before {
-    background: linear-gradient(90deg, #f97316, #ea580c);
+    background: linear-gradient(90deg, #E08B6F, #D97757);
 }
 
 .kpi-sales-bills::before {
-    background: linear-gradient(90deg, #8b5cf6, #7c3aed);
+    background: linear-gradient(90deg, #10b981, #059669);
 }
 
 .ps-kpi-label {
@@ -540,11 +547,11 @@ body {
 }
 
 .kpi-purchase-bills .ps-kpi-value {
-    color: #f97316;
+    color: var(--accent-color);
 }
 
 .kpi-sales-bills .ps-kpi-value {
-    color: #8b5cf6;
+    color: var(--income-color);
 }
 
 /* ============================================================================
@@ -1210,18 +1217,18 @@ body {
 
 /* Category bar hover */
 .ps-cat-row.ps-clickable:hover {
-    background: rgba(37, 99, 235, 0.04);
+    background: rgba(217, 119, 87, 0.04);
     border-radius: 6px;
 }
 
 /* Table row hover for cross-filter */
 tr.ps-clickable:hover {
-    background: rgba(37, 99, 235, 0.06) !important;
+    background: rgba(217, 119, 87, 0.06) !important;
 }
 
 /* Active cross-filter state - category bar */
 .ps-cat-row.ps-cf-active {
-    background: rgba(37, 99, 235, 0.08);
+    background: rgba(217, 119, 87, 0.08);
     border-radius: 6px;
     box-shadow: inset 3px 0 0 var(--accent-color);
 }
@@ -1233,7 +1240,7 @@ tr.ps-clickable:hover {
 
 /* Active cross-filter state - table rows */
 tr.ps-cf-active {
-    background: rgba(37, 99, 235, 0.06) !important;
+    background: rgba(217, 119, 87, 0.06) !important;
 }
 
 tr.ps-cf-active td:first-child {
@@ -1250,8 +1257,8 @@ tr.ps-cf-active td:first-child {
     gap: 8px;
     padding: 10px 16px;
     margin-bottom: 16px;
-    background: rgba(37, 99, 235, 0.04);
-    border: 1px solid rgba(37, 99, 235, 0.15);
+    background: rgba(217, 119, 87, 0.04);
+    border: 1px solid rgba(217, 119, 87, 0.15);
     border-radius: 10px;
     animation: ps-cf-slide-in 0.2s ease;
 }
@@ -1300,9 +1307,9 @@ tr.ps-cf-active td:first-child {
 }
 
 .ps-cf-chip.category {
-    background: rgba(59, 130, 246, 0.12);
-    color: #2563eb;
-    border: 1px solid rgba(59, 130, 246, 0.25);
+    background: rgba(217, 119, 87, 0.12);
+    color: #D97757;
+    border: 1px solid rgba(217, 119, 87, 0.25);
 }
 
 .ps-cf-chip.vendor {
@@ -1355,7 +1362,7 @@ tr.ps-cf-active td:first-child {
 }
 
 .ps-bill-link:hover {
-    color: #1d4ed8;
+    color: #C2603F;
     text-decoration: underline;
 }
 
@@ -1719,7 +1726,7 @@ tr.ps-cf-active td:first-child {
     font-size: 0.72rem;
     font-weight: 700;
     color: var(--accent-color);
-    background: rgba(37, 99, 235, 0.10);
+    background: rgba(217, 119, 87, 0.10);
     padding: 2px 9px;
     border-radius: 999px;
     font-variant-numeric: tabular-nums;
@@ -1746,8 +1753,8 @@ tr.ps-cf-active td:first-child {
     font-family: inherit;
     color: inherit;
     cursor: pointer;
-    background: linear-gradient(145deg, #ffffff 0%, #f0f6ff 100%);
-    border: 1px solid rgba(37, 99, 235, 0.18);
+    background: linear-gradient(145deg, #ffffff 0%, #faf3ee 100%);
+    border: 1px solid rgba(217, 119, 87, 0.20);
     border-radius: 16px;
     padding: 18px 20px;
     transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1757,8 +1764,8 @@ tr.ps-cf-active td:first-child {
 .ps-proj-card:hover {
     transform: translateY(-2px);
     border-color: var(--accent-color);
-    background: linear-gradient(145deg, #eff6ff 0%, #dbeafe 100%);
-    box-shadow: 0 10px 28px rgba(37, 99, 235, 0.16), 0 4px 12px rgba(0, 0, 0, 0.05);
+    background: linear-gradient(145deg, #fdf3ee 0%, #f6e6dc 100%);
+    box-shadow: 0 10px 28px rgba(217, 119, 87, 0.16), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .ps-proj-card-main {
@@ -1774,7 +1781,7 @@ tr.ps-cf-active td:first-child {
     line-height: 1;
     letter-spacing: 0.03em;
     color: var(--accent-color);
-    background: rgba(37, 99, 235, 0.10);
+    background: rgba(217, 119, 87, 0.10);
     padding: 4px 9px;
     border-radius: 999px;
     font-variant-numeric: tabular-nums;

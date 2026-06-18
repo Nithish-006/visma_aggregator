@@ -1,26 +1,26 @@
-/* ============================================================================
+﻿/* ============================================================================
    BILL PROCESSOR - LIGHT THEME STYLES
    ============================================================================ */
 
 :root {
     /* Light Theme - Elegant Gradients */
-    --bg-primary: linear-gradient(160deg, #f0f4f8 0%, #d9e2ec 100%);
+    --bg-primary: #FAF9F5;
     --bg-secondary: #ffffff;
-    --bg-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
-    --bg-hover: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
-    --text-primary: #1a1a2e;
-    --text-secondary: #4a4a68;
-    --text-muted: #6b7280;
-    --border-color: #e5e7eb;
-    --border-strong: #d1d5db;
+    --bg-card: #FFFFFF;
+    --bg-hover: #F4F2EC;
+    --text-primary: #1F1E1D;
+    --text-secondary: #6E6C66;
+    --text-muted: #98948B;
+    --border-color: #ECE9E1;
+    --border-strong: #DDD8CC;
     --success-color: #059669;
     --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
     --error-color: #dc2626;
     --warning-color: #d97706;
-    --info-color: #2563eb;
-    --accent-color: #2563eb;
-    --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    --accent-hover: #1d4ed8;
+    --info-color: #D97757;
+    --accent-color: #D97757;
+    --accent-gradient: linear-gradient(135deg, #E08B6F 0%, #D97757 100%);
+    --accent-hover: #C2603F;
 }
 
 * {
@@ -31,7 +31,7 @@
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: linear-gradient(160deg, #f0f4f8 0%, #d9e2ec 100%);
+    background: #FAF9F5;
     background-attachment: fixed;
     min-height: 100vh;
     color: var(--text-primary);
@@ -132,7 +132,7 @@ body {
 }
 
 .stat-card {
-    background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+    background: #FFFFFF;
     border: 1px solid rgba(0, 0, 0, 0.06);
     border-radius: 14px;
     padding: 16px;
@@ -152,7 +152,7 @@ body {
     width: 42px;
     height: 42px;
     border-radius: 10px;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
+    background: linear-gradient(135deg, rgba(224, 139, 111, 0.15) 0%, rgba(217, 119, 87, 0.1) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -192,8 +192,8 @@ body {
 
 /* GST Icon Colors */
 .stat-icon.gst-cgst {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%);
-    color: #3b82f6;
+    background: linear-gradient(135deg, rgba(224, 139, 111, 0.15) 0%, rgba(217, 119, 87, 0.1) 100%);
+    color: #E08B6F;
 }
 
 .stat-icon.gst-sgst {
@@ -311,7 +311,7 @@ body {
 .bp-filter-input:focus {
     outline: none;
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);
 }
 
 .bp-filter-dropdown {
@@ -339,7 +339,7 @@ body {
 .bp-filter-select:focus {
     outline: none;
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);
 }
 
 .bp-select-wrapper::after {
@@ -413,7 +413,7 @@ body {
 .bp-dd-trigger.has-selection {
     color: var(--text-primary);
     border-color: var(--accent-color);
-    background: rgba(37, 99, 235, 0.04);
+    background: rgba(217, 119, 87, 0.04);
 }
 
 .bp-dd-text {
@@ -472,7 +472,7 @@ body {
 
 .bp-dd-search input:focus {
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1);
 }
 
 .bp-dd-options {
@@ -508,7 +508,7 @@ body {
 }
 
 .bp-dd-option.selected {
-    background: rgba(37, 99, 235, 0.06);
+    background: rgba(217, 119, 87, 0.06);
 }
 
 .bp-dd-checkbox {
@@ -745,7 +745,7 @@ body {
 }
 
 .project-input:focus {
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 0 2px rgba(224, 139, 111, 0.2);
 }
 
 .project-suggestions {
@@ -1638,7 +1638,7 @@ body {
 }
 
 .edit-section-title svg {
-    color: #60a5fa;
+    color: #E08B6F;
     flex-shrink: 0;
 }
 
@@ -1705,7 +1705,7 @@ body {
 
 .form-input:focus {
     outline: none;
-    border-color: #60a5fa;
+    border-color: #E08B6F;
     box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
 }
 
@@ -1826,7 +1826,7 @@ textarea.form-input {
 
 .line-input:focus {
     outline: none;
-    border-color: #60a5fa;
+    border-color: #E08B6F;
 }
 
 .line-input-sm {
@@ -2007,12 +2007,12 @@ textarea.form-input {
 
 /* Edit Button in Table */
 .btn-icon.btn-edit {
-    color: #60a5fa;
+    color: #E08B6F;
 }
 
 .btn-icon.btn-edit:hover {
     background: rgba(96, 165, 250, 0.15);
-    color: #93c5fd;
+    color: #EBB69E;
 }
 
 /* Button Spinner */
@@ -2185,7 +2185,7 @@ textarea.form-input {
 
 .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    background: linear-gradient(90deg, #E08B6F, #E08B6F);
     border-radius: 4px;
     transition: width 0.3s ease;
 }
