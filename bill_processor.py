@@ -248,6 +248,158 @@ def clean_json_response(response_text):
     return text
 
 
+# Generation config shared by every extraction call.
+# - response_mime_type='application/json' constrains the model to emit a single
+#   valid JSON object (no markdown fences, no prose), which is the single biggest
+#   guard against the "Expecting value: line 1 column 1 (char 0)" parse failure.
+# - max_output_tokens is set high because gemini-3-flash / 2.5-flash are THINKING
+#   models: with the default (~8k) budget, internal reasoning can consume the
+#   whole allowance and leave an EMPTY text part -> response.text == "" -> the
+#   char-0 error. A generous budget leaves room for both thinking and the JSON.
+# - temperature 0 makes extraction deterministic and less prone to stray tokens.
+GENERATION_CONFIG = types.GenerateContentConfig(
+    response_mime_type='application/json',
+    temperature=0.0,
+    max_output_tokens=65535,
+)
+
+
+def extract_response_text(response):
+    """
+    Pull the text out of a Gemini response, tolerating empty/blocked candidates.
+
+    `response.text` raises (or returns '') when the candidate has no text part —
+    e.g. a safety block, or a thinking model that spent its whole token budget on
+    reasoning. Returns (text, reason): text is None/'' when nothing usable came
+    back, and reason explains why (finish_reason / block) for the logs.
+    """
+    try:
+        text = response.text
+    except Exception:
+        text = None
+    if text and text.strip():
+        return text, None
+
+    reason = 'empty response'
+    try:
+        # prompt_feedback carries safety/block info even when there are no candidates
+        feedback = getattr(response, 'prompt_feedback', None)
+        block_reason = getattr(feedback, 'block_reason', None) if feedback else None
+        if block_reason:
+            reason = f'blocked: {block_reason}'
+
+        candidates = getattr(response, 'candidates', None) or []
+        if candidates:
+            cand = candidates[0]
+            fr = getattr(cand, 'finish_reason', None)
+            if fr is not None and not block_reason:
+                reason = f'finish_reason={fr}'
+            # Last resort: stitch the text parts back together by hand.
+            content = getattr(cand, 'content', None)
+            parts = getattr(content, 'parts', None) or []
+            joined = ''.join(getattr(p, 'text', '') or '' for p in parts)
+            if joined.strip():
+                return joined, None
+    except Exception:
+        pass
+    return None, reason
+
+
+def repair_json(text):
+    """
+    Best-effort recovery of a JSON object from imperfect model output.
+
+    Handles the two realistic failure modes left after JSON mode: a stray token
+    before/after the object, and a response truncated mid-object. Returns a dict
+    on success, or None if nothing parseable can be salvaged.
+    """
+    start = text.find('{')
+    if start == -1:
+        return None
+
+    # 1) Trim to the outermost {...} and try as-is.
+    end = text.rfind('}')
+    if end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    # 2) Truncated output: close any still-open braces/brackets and retry.
+    snippet = text[start:]
+    depth_obj = depth_arr = 0
+    in_str = escaped = False
+    closing = []
+    for ch in snippet:
+        if in_str:
+            if escaped:
+                escaped = False
+            elif ch == '\\':
+                escaped = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == '{':
+            depth_obj += 1
+            closing.append('}')
+        elif ch == '[':
+            depth_arr += 1
+            closing.append(']')
+        elif ch == '}' and depth_obj:
+            depth_obj -= 1
+            if closing:
+                closing.pop()
+        elif ch == ']' and depth_arr:
+            depth_arr -= 1
+            if closing:
+                closing.pop()
+    patched = snippet.rstrip().rstrip(',') + ''.join(reversed(closing))
+    try:
+        return json.loads(patched)
+    except json.JSONDecodeError:
+        return None
+
+
+def generate_and_parse(client, model, model_name, contents, empty_retries=1):
+    """
+    Run one Gemini extraction call and parse the JSON result.
+
+    Returns (data, error): data is the parsed dict on success (error None), or
+    (None, error_message) when the response could not be parsed. API/transport
+    exceptions (rate limit, 404, network) are NOT caught here — they propagate to
+    the caller's existing fallback handling. An empty response is retried once on
+    the SAME model (it is usually a transient blip) before giving up.
+    """
+    attempt = 0
+    while True:
+        response = client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=GENERATION_CONFIG,
+        )
+        text, empty_reason = extract_response_text(response)
+
+        if text:
+            cleaned = clean_json_response(text)
+            try:
+                return json.loads(cleaned), None
+            except json.JSONDecodeError as e:
+                repaired = repair_json(cleaned)
+                if repaired is not None:
+                    print(f"[~] {model_name} returned imperfect JSON — repaired successfully")
+                    return repaired, None
+                return None, f'Failed to parse response: {e}'
+
+        if attempt < empty_retries:
+            attempt += 1
+            print(f"[!] {model_name} returned no text ({empty_reason}); "
+                  f"retrying {attempt}/{empty_retries}...")
+            continue
+        return None, f'Empty response from model ({empty_reason})'
+
+
 def get_pdf_page_count(pdf_path):
     """Get the number of pages in a PDF"""
     try:
@@ -298,26 +450,20 @@ def extract_from_image(image_path):
         try:
             print(f"[*] Trying {model_name}...")
 
-            response = client.models.generate_content(
-                model=model,
-                contents=[
-                    img,
-                    EXTRACTION_PROMPT
-                ]
+            data, parse_error = generate_and_parse(
+                client, model, model_name, [img, EXTRACTION_PROMPT]
             )
 
-            response_text = clean_json_response(response.text)
-            data = json.loads(response_text)
+            if data is not None:
+                line_items = data.get('line_items', [])
+                print(f"[+] {model_name} extracted {len(line_items)} line items successfully")
+                return {'success': True, 'data': data, 'model': model_name}
 
-            line_items = data.get('line_items', [])
-            print(f"[+] {model_name} extracted {len(line_items)} line items successfully")
-
-            return {'success': True, 'data': data, 'model': model_name}
-
-        except json.JSONDecodeError as e:
-            print(f"[!] {model_name} JSON parse error: {e}")
-            last_error = f'Failed to parse response: {str(e)}'
+            # Empty / unparseable response — fall through to the next model.
+            print(f"[!] {model_name}: {parse_error}")
+            last_error = parse_error
             continue
+
         except Exception as e:
             error_str = str(e)
             if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'rate' in error_str.lower():
@@ -440,23 +586,20 @@ def extract_from_pdf(pdf_path, page_count=None):
         try:
             print(f"[*] Trying {model_name} for PDF...")
 
-            response = client.models.generate_content(
-                model=model,
-                contents=content_parts
+            data, parse_error = generate_and_parse(
+                client, model, model_name, content_parts
             )
 
-            response_text = clean_json_response(response.text)
-            data = json.loads(response_text)
+            if data is not None:
+                line_items = data.get('line_items', [])
+                print(f"[+] {model_name} extracted {len(line_items)} consolidated line items from PDF")
+                return {'success': True, 'data': data, 'model': model_name}
 
-            line_items = data.get('line_items', [])
-            print(f"[+] {model_name} extracted {len(line_items)} consolidated line items from PDF")
-
-            return {'success': True, 'data': data, 'model': model_name}
-
-        except json.JSONDecodeError as e:
-            print(f"[!] {model_name} PDF JSON parse error: {e}")
-            last_error = f'Failed to parse response: {str(e)}'
+            # Empty / unparseable response — fall through to the next model.
+            print(f"[!] {model_name} PDF: {parse_error}")
+            last_error = parse_error
             continue
+
         except Exception as e:
             error_str = str(e)
             if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'rate' in error_str.lower():
