@@ -138,7 +138,9 @@ body {
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border-color);
-    padding: 12px 24px;
+    /* Full-width bar; horizontal inset lives on .ps-filters so its content
+       lines up with .ps-layout (and therefore the first KPI card). */
+    padding: 12px 0;
 }
 
 .ps-filters {
@@ -148,6 +150,9 @@ body {
     gap: 14px 16px;
     max-width: 1600px;
     margin: 0 auto;
+    /* Match .ps-layout's max-width + horizontal padding so filters start
+       exactly where the PO Value KPI starts. */
+    padding: 0 32px;
 }
 
 .ps-filter-group {
@@ -437,7 +442,7 @@ body {
 
 .ps-layout {
     display: grid;
-    grid-template-columns: 1fr 340px;
+    grid-template-columns: 1fr;
     gap: 24px;
     max-width: 1600px;
     margin: 0 auto;
@@ -446,35 +451,6 @@ body {
 
 .ps-left {
     min-width: 0;
-}
-
-.ps-right {
-    min-width: 0;
-}
-
-.ps-right-inner {
-    position: sticky;
-    top: 140px;
-    max-height: calc(100vh - 160px);
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    background: #ffffff;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    padding: 16px;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-color) transparent;
-}
-
-.ps-right-inner::-webkit-scrollbar {
-    width: 4px;
-}
-
-.ps-right-inner::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 2px;
 }
 
 /* ============================================================================
@@ -1544,7 +1520,6 @@ tr.ps-cf-active td:first-child {
     }
 
     .ps-layout {
-        grid-template-columns: 1fr 300px;
         gap: 16px;
         padding: 16px;
     }
@@ -1555,16 +1530,6 @@ tr.ps-cf-active td:first-child {
    ============================================================================ */
 
 @media (max-width: 1024px) {
-    .ps-layout {
-        grid-template-columns: 1fr;
-    }
-
-    .ps-right-inner {
-        position: static;
-        max-height: none;
-        overflow: visible;
-    }
-
     .ps-bank-grid {
         grid-template-columns: 1fr;
     }
@@ -1587,18 +1552,39 @@ tr.ps-cf-active td:first-child {
         padding: 12px;
     }
 
+    /* Tighten the bill modal on phones: full-width totals and smaller
+       padding so the content isn't squeezed into a narrow middle column. */
+    .ps-bill-modal-header {
+        padding: 16px;
+    }
+
+    .ps-bill-modal-body {
+        padding: 16px;
+    }
+
+    .ps-bill-totals {
+        max-width: 100%;
+    }
+
+    /* Keep the filter dropdown menus inside the viewport. */
+    .ps-dd-menu {
+        max-width: calc(100vw - 30px);
+    }
+
     .ps-header {
         padding: 12px 16px;
     }
 
     .ps-filter-bar {
-        padding: 10px 16px;
+        padding: 10px 0;
         top: 61px;
     }
 
     .ps-filters {
         flex-wrap: wrap;
         gap: 8px;
+        /* Stay aligned with .ps-layout's 12px padding on small screens. */
+        padding: 0 12px;
     }
 
     .ps-filter-group input[type="date"] {
@@ -1900,4 +1886,123 @@ tr.ps-cf-active td:first-child {
 @media (max-width: 600px) {
     .ps-landing { padding: 18px 14px 48px; }
     .ps-proj-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================================
+   MOBILE LEDGER CARDS  (<=768px)
+   Every wide data table collapses into stacked cards: the title column becomes
+   the card heading, each remaining cell is a quiet LABEL : value row, and
+   amounts stay color-coded (.text-income / .text-expense) and right-aligned.
+   One pattern, repeated across Labour / Vendor / Bank / Bills / Sales tables,
+   so the page reads the same everywhere on a phone. Decorated in JS via
+   applyMobileTableCards() which stamps each <td> with data-label.
+   ============================================================================ */
+@media (max-width: 768px) {
+    /* No more sideways scroll — cards own the full width. */
+    .ps-table-wrap { overflow-x: visible; }
+
+    .ps-table,
+    .ps-table tbody,
+    .ps-table tbody tr,
+    .ps-table tbody td { display: block; width: 100%; }
+
+    .ps-table thead { display: none; }
+
+    .ps-table tbody tr {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        box-shadow: 0 1px 2px rgba(31, 30, 29, 0.04);
+    }
+    .ps-table tbody tr:hover { background: var(--bg-card); }
+
+    /* Active cross-filter row keeps the accent affordance as a card. */
+    .ps-table tbody tr.ps-cf-active {
+        border-color: var(--accent-color);
+        background: var(--accent-soft);
+    }
+
+    /* The monthly "Total" row reads as a highlighted summary card. */
+    .ps-table tbody tr.ps-total-row {
+        background: var(--bg-soft);
+        border-color: var(--border-strong);
+    }
+
+    /* Label : value rows. */
+    .ps-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 14px;
+        padding: 5px 0;
+        border: none;
+        text-align: right;
+        font-size: 0.8125rem;
+        min-width: 0;
+    }
+    .ps-table tbody td:last-child { padding-bottom: 0; }
+
+    .ps-table tbody td::before {
+        content: attr(data-label);
+        flex: 0 0 auto;
+        text-align: left;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    /* Title cell = card heading: no label chip, full-width, underlined. */
+    .ps-table tbody td.ps-cell-title {
+        order: -1;
+        justify-content: flex-start;
+        text-align: left;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        padding: 0 0 8px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid var(--border-color);
+        word-break: break-word;
+    }
+    .ps-table tbody td.ps-cell-title::before { content: none; }
+
+    /* Keep amounts tabular + prominent; let long values wrap rather than clip. */
+    .ps-table tbody td.text-right { font-variant-numeric: tabular-nums; }
+    .ps-table tbody td.text-income,
+    .ps-table tbody td.text-expense { font-weight: 700; }
+    .ps-table tbody td.cell-wrap { overflow-wrap: anywhere; }
+
+    /* Empty / loading placeholder spans the whole card, no label. */
+    .ps-table tbody td.ps-empty {
+        display: block;
+        text-align: center;
+        color: var(--text-muted);
+        padding: 14px 0;
+    }
+    .ps-table tbody td.ps-empty::before { content: none; }
+
+    /* Category bars: drop the fixed 180px label so they fit a phone. */
+    .ps-cat-row {
+        flex-wrap: wrap;
+        row-gap: 6px;
+    }
+    .ps-cat-label {
+        flex: 1 1 100%;
+        white-space: normal;
+    }
+    .ps-cat-amount { min-width: 0; }
+
+    /* Pagination: center and let it breathe instead of cramping inline. */
+    .ps-pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
 }

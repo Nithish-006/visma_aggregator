@@ -2367,6 +2367,8 @@ textarea.form-input {
     display: none;
     padding: 12px;
     gap: 12px;
+    width: 100%;
+    overflow-x: hidden;
 }
 
 .invoice-card {
@@ -2411,12 +2413,14 @@ textarea.form-input {
     color: var(--text-primary);
     margin-bottom: 4px;
     line-height: 1.3;
+    overflow-wrap: anywhere;
 }
 
 .invoice-card-buyer {
     font-size: 0.8125rem;
     color: var(--text-muted);
     margin-bottom: 12px;
+    overflow-wrap: anywhere;
 }
 
 .invoice-card-footer {
@@ -2436,7 +2440,16 @@ textarea.form-input {
     background: var(--bg-card);
     padding: 4px 10px;
     border-radius: 12px;
+    min-width: 0;
+    max-width: 60%;
+    /* Keep a long project name on one clipped line inside the pill. */
+    overflow: hidden;
+    white-space: nowrap;
 }
+
+.invoice-card-project svg { flex-shrink: 0; }
+
+.invoice-card-footer { gap: 10px; }
 
 .invoice-card-project svg {
     width: 12px;
@@ -2525,9 +2538,10 @@ textarea.form-input {
         padding-bottom: calc(20px + var(--safe-area-bottom, 0px));
     }
 
-    /* Summary Stats - Responsive Grid */
+    /* Summary Stats — fluid grid: flows 2→5 columns by width, never crams
+       the 7 cards into a fixed 4-up that wraps the values mid-number. */
     .summary-stats {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 10px;
         margin-bottom: 16px;
     }
@@ -2608,6 +2622,16 @@ textarea.form-input {
         min-width: 0;
     }
 
+    /* Project dropdown: drop the 180px floor and keep its menu inside the
+       viewport so the filter bar can't push past the screen edge at 390px. */
+    .bp-project-dropdown {
+        min-width: 0;
+    }
+
+    .bp-dd-menu {
+        max-width: calc(100vw - 30px);
+    }
+
     .bp-filter-select {
         min-width: 0;
         width: 100%;
@@ -2618,8 +2642,26 @@ textarea.form-input {
         justify-content: center;
     }
 
+    /* Keep the action buttons available to managers on mobile — wrap them
+       onto a full-width row below the section title instead of hiding them. */
     .tabs-actions {
-        display: none;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        order: 3;
+    }
+
+    .tabs-actions .btn {
+        flex: 1 1 auto;
+        justify-content: center;
+        font-size: 0.8125rem;
+    }
+
+    .bp-flagged-toggle {
+        flex: 1 1 100%;
+        justify-content: center;
     }
 
     /* Empty state */
@@ -2831,7 +2873,9 @@ textarea.form-input {
         padding: 10px;
     }
 
+    /* 7 stat cards in 4 columns is unreadable at ~390px — drop to 2-up. */
     .summary-stats {
+        grid-template-columns: repeat(2, 1fr);
         gap: 8px;
     }
 

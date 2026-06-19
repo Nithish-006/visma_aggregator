@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <title>Project Summary | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=16">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=17">
 </head>
 
 <body>
@@ -245,34 +245,6 @@
             </div>
         </div>
 
-        <!-- RIGHT PANEL - Expense Tracker -->
-        <div class="ps-right">
-            <div class="ps-right-inner">
-                <div class="ps-et-header">
-                    <h3 class="ps-et-title">Expense Tracker</h3>
-                    <div class="ps-et-bank-filter">
-                        <button class="ps-et-bank-btn active" data-bank="all">All</button>
-                        <button class="ps-et-bank-btn axis" data-bank="axis">AXIS</button>
-                        <button class="ps-et-bank-btn kvb" data-bank="kvb">KVB</button>
-                    </div>
-                </div>
-                <!-- Summary Bar (same as personal tracker) -->
-                <div class="ps-et-summary">
-                    <div class="ps-et-summary-item">
-                        <span class="ps-et-summary-label">Income</span>
-                        <span class="ps-et-summary-value income" id="personal-income">0.00</span>
-                    </div>
-                    <div class="ps-et-summary-item">
-                        <span class="ps-et-summary-label">Expenses</span>
-                        <span class="ps-et-summary-value expense" id="personal-expense">0.00</span>
-                    </div>
-                </div>
-                <!-- Daily Transactions (exact tracker UI) -->
-                <div class="ps-et-transactions" id="personal-daily-view">
-                    <div class="ps-empty">Loading...</div>
-                </div>
-            </div>
-        </div>
     </div>
 
     </div><!-- /ps-detail -->
@@ -286,7 +258,7 @@
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=14"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=15"></script>
 <script>
 function hardRefresh() {
     if ('caches' in window) {

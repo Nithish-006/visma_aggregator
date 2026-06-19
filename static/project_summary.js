@@ -22,10 +22,8 @@
             salesBills: { page: 1, perPage: 15 }
         },
         activeBankTab: 'axis',
-        etBankFilter: 'all',
         data: {
             combined: null,
-            personalTxns: [],
             personalSummary: null,
             bills: { bills: [], total: 0 },
             salesBills: { bills: [], total: 0 }
@@ -163,38 +161,6 @@
         '#ec4899', '#06b6d4', '#f97316', '#6366f1', '#14b8a6',
         '#e11d48', '#84cc16', '#a855f7', '#0ea5e9', '#d946ef'
     ];
-
-    // ── Category icons (same as expense tracker) ───────────────────────
-    const categoryIcons = {
-        'Salary': { icon: '\uD83D\uDCB0', name: 'Salary' },
-        'Food': { icon: '\uD83C\uDF54', name: 'Food' },
-        'Transport': { icon: '\uD83D\uDE97', name: 'Transport' },
-        'Shopping': { icon: '\uD83D\uDED2', name: 'Shopping' },
-        'Bills': { icon: '\uD83D\uDCC4', name: 'Bills' },
-        'Entertainment': { icon: '\uD83C\uDFAC', name: 'Entertain' },
-        'Health': { icon: '\uD83D\uDC8A', name: 'Health' },
-        'Social Life': { icon: '\uD83C\uDF89', name: 'Social' },
-        'Investment': { icon: '\uD83D\uDCC8', name: 'Invest' },
-        'default_income': { icon: '\uD83D\uDCB5', name: 'Income' },
-        'default_expense': { icon: '\uD83D\uDCB8', name: 'Expense' }
-    };
-
-    function getCategoryInfo(transaction) {
-        const vendor = (transaction.vendor || '').toLowerCase();
-        if (transaction.transaction_type === 'income') {
-            if (vendor.includes('salary') || vendor.includes('wage')) return categoryIcons['Salary'];
-            return categoryIcons['default_income'];
-        }
-        if (vendor.includes('food') || vendor.includes('restaurant') || vendor.includes('cafe') || vendor.includes('swiggy') || vendor.includes('zomato')) return categoryIcons['Food'];
-        if (vendor.includes('uber') || vendor.includes('ola') || vendor.includes('petrol') || vendor.includes('fuel') || vendor.includes('transport')) return categoryIcons['Transport'];
-        if (vendor.includes('amazon') || vendor.includes('flipkart') || vendor.includes('shop') || vendor.includes('mall')) return categoryIcons['Shopping'];
-        if (vendor.includes('bill') || vendor.includes('electric') || vendor.includes('water') || vendor.includes('gas') || vendor.includes('rent')) return categoryIcons['Bills'];
-        if (vendor.includes('movie') || vendor.includes('netflix') || vendor.includes('spotify') || vendor.includes('game')) return categoryIcons['Entertainment'];
-        if (vendor.includes('hospital') || vendor.includes('doctor') || vendor.includes('pharmacy') || vendor.includes('medical')) return categoryIcons['Health'];
-        if (vendor.includes('party') || vendor.includes('dinner') || vendor.includes('friend') || vendor.includes('split')) return categoryIcons['Social Life'];
-        if (vendor.includes('invest') || vendor.includes('stock') || vendor.includes('mutual') || vendor.includes('sip')) return categoryIcons['Investment'];
-        return categoryIcons['default_expense'];
-    }
 
     // ── Custom Multi-Select Dropdown ──────────────────────────────────
     class PSDropdown {
@@ -636,16 +602,6 @@
             renderVendorTable();
         });
 
-        // Expense Tracker bank toggle
-        $$('.ps-et-bank-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                $$('.ps-et-bank-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                state.etBankFilter = btn.dataset.bank;
-                renderExpenseTracker();
-            });
-        });
-
         // Export button
         $('#export-btn').addEventListener('click', () => {
             const params = buildQueryParams();
@@ -666,15 +622,13 @@
         const params = buildQueryParams();
 
         try {
-            const [combined, personalTxns, filterOpts] = await Promise.all([
+            const [combined, filterOpts] = await Promise.all([
                 fetchJSON('/api/project-summary/combined?' + params.toString()),
-                fetchJSON('/api/personal/transactions?' + params.toString()),
                 fetchJSON('/api/project-summary/filter-options?' + params.toString())
             ]);
             if (seq !== refreshSeq) return; // superseded by a newer filter change
 
             state.data.combined = combined;
-            state.data.personalTxns = personalTxns.transactions || [];
 
             // Update dropdown options dynamically (scoped to this project)
             if (filterOpts) {
@@ -688,7 +642,6 @@
             renderCategoryBars(combined.category_breakdown);
             renderLabourMonthly();
             renderVendorTable();
-            renderExpenseTracker();
 
             // Fetch active bank tab transactions and bills
             fetchBankTransactions(state.activeBankTab, 1);
@@ -790,6 +743,27 @@
     }
 
     // ── Render: Labour Salary (Monthly) — per-month totals from the salary API ──
+    // ── Mobile: collapse a wide table into stacked "ledger cards" ───────
+    // Reads the <thead> labels and stamps each <td> with data-label so the
+    // CSS (max-width:768px) can render LABEL : value rows. The title column
+    // becomes the card heading. Idempotent — safe to call after every render.
+    function applyMobileTableCards(tableId, opts) {
+        const titleCol = (opts && opts.titleCol) || 0;
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        const heads = Array.from(table.querySelectorAll('thead th'))
+            .map(th => th.textContent.trim());
+        table.querySelectorAll('tbody tr').forEach(tr => {
+            const tds = tr.querySelectorAll('td');
+            // Skip placeholder rows (empty-state / loading) that span all columns.
+            if (tds.length <= 1) return;
+            tds.forEach((td, i) => {
+                if (heads[i]) td.setAttribute('data-label', heads[i]);
+                td.classList.toggle('ps-cell-title', i === titleCol);
+            });
+        });
+    }
+
     function renderLabourMonthly() {
         const lab = state.data.combined?.labour_monthly;
         const tbody = document.getElementById('labour-monthly-body');
@@ -815,16 +789,8 @@
             </tr>
         `).join('');
 
-        const totalRow = `
-            <tr class="ps-total-row">
-                <td><strong>Total</strong></td>
-                <td class="text-right"></td>
-                <td class="text-right"><strong>${Number(lab.total_days).toLocaleString('en-IN')}</strong></td>
-                <td class="text-right"><strong>${Number(lab.total_ot_hours).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</strong></td>
-                <td class="text-right" style="color:var(--accent-color);font-weight:700;">${formatIndianNumber(lab.total_cost)}</td>
-            </tr>`;
-
-        tbody.innerHTML = rows + totalRow;
+        tbody.innerHTML = rows;
+        applyMobileTableCards('labour-monthly-table');
     }
 
     // ── Render: Vendor Table ───────────────────────────────────────────
@@ -864,6 +830,7 @@
                 applyCrossFilter('vendor', row.dataset.cfValue);
             });
         });
+        applyMobileTableCards('vendor-table');
 
         renderPaginationControls('vendor-pagination', page, totalPages, (pg) => {
             state.pagination.vendorBreakdown.page = pg;
@@ -936,6 +903,7 @@
                     <td class="text-right ${t.dr_amount > 0 ? 'text-expense' : ''}">${t.dr_formatted}</td>
                     <td class="text-right ${t.cr_amount > 0 ? 'text-income' : ''}">${t.cr_formatted}</td>
                 </tr>`).join('');
+                applyMobileTableCards('bank-txn-table', { titleCol: 1 });
             }
 
             const paginationKey = bankCode + 'Transactions';
@@ -948,98 +916,6 @@
         } catch (err) {
             console.error('Bank txn fetch error:', err);
         }
-    }
-
-    // ── Render: Expense Tracker (Right Panel) ──────────────────────────
-    function renderExpenseTracker() {
-        let txns = state.data.personalTxns;
-
-        // Apply bank filter
-        if (state.etBankFilter !== 'all') {
-            txns = txns.filter(t => t.bank === state.etBankFilter);
-        }
-
-        // Update summary
-        let income = 0;
-        let expense = 0;
-        txns.forEach(t => {
-            if (t.transaction_type === 'income') {
-                income += parseFloat(t.amount);
-            } else {
-                expense += parseFloat(t.amount);
-            }
-        });
-        $('#personal-income').textContent = formatAmount(income);
-        $('#personal-expense').textContent = formatAmount(expense);
-
-        // Render daily view
-        const container = document.getElementById('personal-daily-view');
-        if (!txns || txns.length === 0) {
-            container.innerHTML = '<div class="ps-empty">No transactions for this period</div>';
-            return;
-        }
-
-        // Group by date
-        const grouped = {};
-        txns.forEach(t => {
-            const d = t.date;
-            if (!grouped[d]) grouped[d] = [];
-            grouped[d].push(t);
-        });
-
-        const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const MONTHS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
-
-        let html = '';
-        Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
-            const dayTxns = grouped[dateStr];
-            const date = new Date(dateStr);
-            const dayIncome = dayTxns.filter(t => t.transaction_type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0);
-            const dayExpense = dayTxns.filter(t => t.transaction_type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
-
-            html += `<div class="ps-et-date-group">
-                <div class="ps-et-date-header">
-                    <div class="ps-et-date-info">
-                        <span class="ps-et-date-day">${String(date.getDate()).padStart(2, '0')}</span>
-                        <span class="ps-et-date-weekday">${DAYS[date.getDay()]}</span>
-                        <span class="ps-et-date-month">${MONTHS[date.getMonth()]}.${date.getFullYear()}</span>
-                    </div>
-                    <div class="ps-et-date-totals">
-                        ${dayIncome > 0 ? `<span class="ps-et-date-income">${formatAmount(dayIncome)}</span>` : ''}
-                        ${dayExpense > 0 ? `<span class="ps-et-date-expense">${formatAmount(dayExpense)}</span>` : ''}
-                    </div>
-                </div>`;
-
-            dayTxns.forEach(t => {
-                const cat = getCategoryInfo(t);
-                const typeClass = t.transaction_type === 'income' ? 'income' : 'expense';
-                const projectText = escapeHtml(t.project || 'General');
-                const descText = t.description ? escapeHtml(t.description) : '';
-                const metaText = descText ? `${projectText} &bull; ${descText}` : projectText;
-
-                let bankBadge = '';
-                if (t.bank) {
-                    const bankClass = t.bank === 'axis' ? 'bank-axis' : 'bank-kvb';
-                    bankBadge = `<span class="ps-et-bank-badge ${bankClass}">${t.bank.toUpperCase()}</span>`;
-                }
-
-                html += `<div class="ps-et-txn-row">
-                    <div class="ps-et-txn-category">
-                        <span class="ps-et-cat-icon">${cat.icon}</span>
-                        <span class="ps-et-cat-name">${cat.name}</span>
-                    </div>
-                    <div class="ps-et-txn-details">
-                        <div class="ps-et-txn-vendor">${escapeHtml(t.vendor)}${bankBadge}</div>
-                        <div class="ps-et-txn-meta">${metaText}</div>
-                    </div>
-                    <div class="ps-et-txn-amount ${typeClass}">${formatAmount(t.amount)}</div>
-                </div>`;
-            });
-
-            html += '</div>';
-        });
-
-        container.innerHTML = html;
     }
 
     // ── Render: Bills Table (server-side pagination) ────────────────────
@@ -1092,6 +968,7 @@
                 viewBillDetail(link.dataset.billId);
             });
         });
+        applyMobileTableCards('bills-table');
 
         renderPaginationControls('bills-pagination', data.page, data.total_pages, (pg) => {
             fetchBills(pg);
@@ -1160,6 +1037,7 @@
                 viewSalesBillDetail(link.dataset.billId);
             });
         });
+        applyMobileTableCards('sales-bills-table');
 
         renderPaginationControls('sales-bills-pagination', data.page, data.total_pages, (pg) => {
             fetchSalesBills(pg);

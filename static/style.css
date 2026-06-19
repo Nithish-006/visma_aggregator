@@ -2439,13 +2439,13 @@ body {
         display: block;
     }
 
-    /* Clean row style - full width */
+    /* Clean row style - full width, white feed rows on the ivory page */
     .transactions-table tbody tr {
         display: grid;
         grid-template-columns: 1fr auto;
         grid-template-rows: auto auto;
         align-items: center;
-        background: var(--bg-dark);
+        background: var(--bg-card);
         border-bottom: 1px solid var(--border-color);
         padding: 14px 16px;
         gap: 4px 12px;
@@ -2483,12 +2483,19 @@ body {
         letter-spacing: 0.02em;
     }
 
-    /* Vendor cell - bottom left, prominent */
+    /* Vendor cell - bottom left, prominent. Reset the desktop
+       nowrap/ellipsis/max-width so long names wrap instead of clipping. */
     .transactions-table tbody td:nth-child(2) {
         display: flex;
         flex-direction: column;
         grid-column: 1;
         grid-row: 2;
+        min-width: 0;
+        max-width: none;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        overflow-wrap: anywhere;
         font-size: 1rem;
         font-weight: 600;
         color: var(--text-main);
@@ -2544,13 +2551,14 @@ body {
         min-width: auto;
     }
 
+    /* Darker reds/greens so amounts stay legible on the light feed rows. */
     .transactions-table tbody .monetary-pill.debit {
-        color: #f87171;
+        color: #dc2626;
         background: transparent;
     }
 
     .transactions-table tbody .monetary-pill.credit {
-        color: #4ade80;
+        color: #059669;
         background: transparent;
     }
 

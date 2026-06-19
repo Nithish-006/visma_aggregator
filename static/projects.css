@@ -1059,6 +1059,20 @@ html, body {
     .proj-main { padding: 1.25rem 1rem 4rem; }
     .proj-section-grid { grid-template-columns: 1fr; gap: 0.85rem; }
     .project-card { min-height: 0; padding: 1.25rem; }
+
+    /* Add-cash form: the 3-up amount|date|button row squeezes the date
+       picker below a usable width on phones. Put amount + date side by
+       side, then note, then a full-width Add button. */
+    .proj-cash-form-row {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+            "amount date"
+            "note   note"
+            "add    add";
+    }
+
+    /* Don't pin the ID field to 110px while the name input starves. */
+    .proj-input-id { flex: 0 0 76px; }
 }
 
 /* ── Type toggle (project ↔ other) ──────────────────── */
@@ -1404,4 +1418,60 @@ html, body {
 
 @media (max-width: 640px) {
     .proj-tab { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
+
+    /* Modal line-item tables collapse into stacked cards (decorated in JS with
+       data-label). First column is the heading; the rest are LABEL : value. */
+    .proj-li-scroll { max-height: none; overflow-x: hidden; }
+
+    .proj-li-table,
+    .proj-li-table tbody,
+    .proj-li-table tbody tr,
+    .proj-li-table tbody td { display: block; width: 100%; }
+
+    .proj-li-table thead { display: none; }
+
+    .proj-li-table tbody tr {
+        background: var(--proj-surface);
+        border: 1px solid var(--proj-border);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+    }
+
+    .proj-li-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        padding: 3px 0;
+        border: none;
+        text-align: right;
+        white-space: normal;
+    }
+    .proj-li-table tbody td::before {
+        content: attr(data-label);
+        flex: 0 0 auto;
+        text-align: left;
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--proj-text-muted);
+    }
+    .proj-li-table tbody td.proj-li-num { white-space: nowrap; }
+
+    /* First column = card heading. */
+    .proj-li-table tbody td.proj-li-title {
+        justify-content: flex-start;
+        text-align: left;
+        font-weight: 600;
+        color: var(--proj-text);
+        padding: 0 0 6px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid var(--proj-border);
+        overflow-wrap: anywhere;
+    }
+    .proj-li-table tbody td.proj-li-title::before { content: none; }
+    /* The .proj-li-desc 50%-width override doesn't apply once cells are blocks. */
+    .proj-li-table tbody td.proj-li-desc { width: 100%; }
 }

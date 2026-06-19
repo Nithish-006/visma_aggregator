@@ -905,6 +905,33 @@
             </div>${namesNote}`;
     }
 
+    // ── Mobile: collapse the modal's line-item tables into stacked cards ──
+    // Reads each table's own <thead> and stamps every <td> with data-label so
+    // the CSS (max-width:640px) can render LABEL : value rows. A MutationObserver
+    // catches tables injected by any tab (expenses / bills / labour / PO items).
+    function decorateProjLiTables(root) {
+        (root || document).querySelectorAll('.proj-li-table:not([data-mobi])').forEach(table => {
+            const heads = Array.from(table.querySelectorAll('thead th'))
+                .map(th => th.textContent.trim());
+            table.querySelectorAll('tbody tr').forEach(tr => {
+                const tds = tr.querySelectorAll('td');
+                if (tds.length <= 1) return;
+                tds.forEach((td, i) => {
+                    if (heads[i]) td.setAttribute('data-label', heads[i]);
+                    td.classList.toggle('proj-li-title', i === 0);
+                });
+            });
+            table.setAttribute('data-mobi', '1');
+        });
+    }
+    (function watchProjTables() {
+        const modal = document.getElementById('project-detail-modal');
+        if (modal && 'MutationObserver' in window) {
+            new MutationObserver(() => decorateProjLiTables(modal))
+                .observe(modal, { childList: true, subtree: true });
+        }
+    })();
+
     let currentPo = null;
 
     // ── Render the extracted PO gist ───────────────────
