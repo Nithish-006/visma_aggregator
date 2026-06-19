@@ -3,24 +3,24 @@
    ============================================================================ */
 
 :root {
-    /* Light Theme - Elegant Gradients */
-    --bg-primary: #FAF9F5;
-    --bg-secondary: #ffffff;
-    --bg-card: #FFFFFF;
-    --bg-hover: #F4F2EC;
-    --text-primary: #1F1E1D;
-    --text-secondary: #1F1E1D;
-    --text-muted: #1F1E1D;
-    --border-color: #ECE9E1;
-    --border-strong: #DDD8CC;
-    --success-color: #059669;
-    --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --error-color: #dc2626;
-    --warning-color: #d97706;
-    --info-color: #D97757;
-    --accent-color: #D97757;
-    --accent-gradient: linear-gradient(135deg, #E08B6F 0%, #D97757 100%);
-    --accent-hover: #C2603F;
+    /* Local aliases -> central tokens in theme.css (single source of truth) */
+    --bg-primary: var(--c-bg);
+    --bg-secondary: var(--c-surface);
+    --bg-card: var(--c-surface);
+    --bg-hover: var(--c-surface-soft);
+    --text-primary: var(--c-text);
+    --text-secondary: var(--c-text);
+    --text-muted: var(--c-text-muted);
+    --border-color: var(--c-border);
+    --border-strong: var(--c-border-strong);
+    --success-color: var(--c-success);
+    --success-gradient: var(--c-success-grad);
+    --error-color: var(--c-danger);
+    --warning-color: var(--c-warning);
+    --info-color: var(--c-info);
+    --accent-color: var(--c-accent);
+    --accent-gradient: var(--c-accent-grad);
+    --accent-hover: var(--c-accent-strong);
 }
 
 * {
@@ -32,7 +32,6 @@
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background: #FAF9F5;
-    background-attachment: fixed;
     min-height: 100vh;
     color: var(--text-primary);
     letter-spacing: -0.01em;
@@ -2512,10 +2511,15 @@ textarea.form-input {
         display: block;
     }
 
-    /* Compact header */
+    /* Compact header — drop the backdrop blur on mobile: re-blurring over
+       moving content during momentum scroll causes scroll jank. Use a solid
+       background instead (the desktop frosted look is unchanged). */
     .header {
         padding: 12px 16px;
         padding-top: calc(12px + var(--safe-area-top, 0px));
+        background: var(--bg-secondary);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
     }
 
     .page-title {

@@ -2,28 +2,29 @@
    Projects page â€” canonical project registry  (light theme)
    ============================================================================ */
 :root {
-    --proj-bg-grad-start: #FAF9F5;
-    --proj-bg-grad-end:   #F4F2EC;
-    --proj-surface:       #ffffff;
-    --proj-surface-soft:  #F4F2EC;
-    --proj-border:        rgba(0, 0, 0, 0.08);
-    --proj-border-strong: rgba(0, 0, 0, 0.14);
-    --proj-text:          #1F1E1D;
-    --proj-text-dim:      #1F1E1D;
-    --proj-text-muted:    #1F1E1D;
-    --proj-accent:        #D97757;      /* coral â€” matches the hub Projects tile */
-    --proj-accent-strong: #C2603F;
-    --proj-accent-soft:   rgba(217, 119, 87, 0.12);
-    --proj-accent-2:      #0891b2;
-    --proj-design:        #0e7490;      /* teal â€” Designs */
-    --proj-design-strong: #155e75;
-    --proj-design-soft:   rgba(8, 145, 178, 0.14);
-    --proj-success:       #047857;
-    --proj-success-soft:  rgba(16, 185, 129, 0.12);
-    --proj-danger:        #b91c1c;
-    --proj-danger-soft:   rgba(239, 68, 68, 0.10);
-    --proj-warning:       #b45309;
-    --proj-warning-soft:  rgba(245, 158, 11, 0.14);
+    /* Local aliases -> central tokens in theme.css (single source of truth) */
+    --proj-bg-grad-start: var(--c-bg);
+    --proj-bg-grad-end:   var(--c-surface-soft);
+    --proj-surface:       var(--c-surface);
+    --proj-surface-soft:  var(--c-surface-soft);
+    --proj-border:        var(--c-border-a);
+    --proj-border-strong: var(--c-border-strong-a);
+    --proj-text:          var(--c-text);
+    --proj-text-dim:      var(--c-text-muted);
+    --proj-text-muted:    var(--c-text-muted);
+    --proj-accent:        var(--c-accent);      /* coral â€” matches the hub Projects tile */
+    --proj-accent-strong: var(--c-accent-strong);
+    --proj-accent-soft:   var(--c-accent-soft-a);
+    --proj-accent-2:      var(--c-cyan);
+    --proj-design:        var(--c-teal);        /* teal â€” Designs */
+    --proj-design-strong: var(--c-teal-strong);
+    --proj-design-soft:   var(--c-teal-soft);
+    --proj-success:       var(--c-success-deep);
+    --proj-success-soft:  var(--c-success-soft);
+    --proj-danger:        var(--c-danger-deep);
+    --proj-danger-soft:   var(--c-danger-soft);
+    --proj-warning:       var(--c-warning-deep);
+    --proj-warning-soft:  var(--c-warning-soft);
 }
 
 * { box-sizing: border-box; }

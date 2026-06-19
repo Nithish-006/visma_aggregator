@@ -3,24 +3,24 @@
    ============================================================================ */
 
 :root {
-    /* Light Theme - Elegant Gradients */
-    --bg-primary: #FAF9F5;
-    --bg-secondary: #ffffff;
-    --bg-card: #FFFFFF;
-    --bg-hover: #F4F2EC;
-    --bg-input: #ffffff;
-    --text-primary: #1F1E1D;
-    --text-secondary: #1F1E1D;
-    --text-muted: #1F1E1D;
-    --border-color: #ECE9E1;
-    --border-strong: #DDD8CC;
-    --income-color: #059669;
-    --income-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --expense-color: #dc2626;
-    --expense-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    --accent-color: #D97757;
-    --axis-color: #dc2626;
-    --kvb-color: #059669;
+    /* Local aliases -> central tokens in theme.css (single source of truth) */
+    --bg-primary: var(--c-bg);
+    --bg-secondary: var(--c-surface);
+    --bg-card: var(--c-surface);
+    --bg-hover: var(--c-surface-soft);
+    --bg-input: var(--c-input);
+    --text-primary: var(--c-text);
+    --text-secondary: var(--c-text);
+    --text-muted: var(--c-text-muted);
+    --border-color: var(--c-border);
+    --border-strong: var(--c-border-strong);
+    --income-color: var(--c-success);
+    --income-gradient: var(--c-success-grad);
+    --expense-color: var(--c-danger);
+    --expense-gradient: var(--c-danger-grad);
+    --accent-color: var(--c-accent);
+    --axis-color: var(--c-danger);   /* note: repurposed as red in this form */
+    --kvb-color: var(--c-success);   /* note: repurposed as green in this form */
 
     --safe-area-top: env(safe-area-inset-top, 0px);
     --safe-area-bottom: env(safe-area-inset-bottom, 0px);

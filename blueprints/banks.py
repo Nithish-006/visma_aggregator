@@ -57,20 +57,6 @@ def edit_transactions(bank_code):
                          bank_config=bank_config)
 
 
-@bp.route('/charts/<bank_code>')
-@login_required
-def bank_charts(bank_code):
-    """Render bank-specific charts page"""
-    if bank_code not in VALID_BANK_CODES:
-        return redirect(url_for('auth.index'))
-
-    bank_config = get_bank_config(bank_code)
-    return render_template('charts.html',
-                         bank_code=bank_code,
-                         bank_name=bank_config['name'],
-                         bank_config=bank_config)
-
-
 @bp.route('/api/clear-cache', methods=['POST'])
 @login_required
 def clear_cache():
@@ -244,48 +230,6 @@ def get_bank_monthly_trend(bank_code):
     })
 
 
-@bp.route('/api/<bank_code>/category_breakdown')
-@login_required
-def get_bank_category_breakdown(bank_code):
-    """Get expense breakdown by category for a specific bank"""
-    if bank_code not in VALID_BANK_CODES:
-        return jsonify({'error': 'Invalid bank code'}), 400
-
-    category = request.args.get('category', 'All')
-    project = request.args.get('project', 'All')
-    start_date = request.args.get('start_date', None)
-    end_date = request.args.get('end_date', None)
-
-    df = get_bank_df(bank_code).copy()
-    if df.empty:
-        return jsonify({'categories': [], 'amounts': []})
-
-    expense_df = df[df['DR Amount'] > 0]
-    if category != 'All':
-        expense_df = expense_df[expense_df['Category'] == category]
-    expense_df = filter_by_date_range(expense_df, start_date, end_date)
-    expense_df = filter_by_project(expense_df, project)
-
-    if expense_df.empty:
-        return jsonify({'categories': [], 'amounts': []})
-
-    category_totals = expense_df.groupby('Category')['DR Amount'].sum().sort_values(ascending=False)
-
-    top_category = category_totals.index[0] if len(category_totals) > 0 else None
-    top_category_amount = float(category_totals.iloc[0]) if len(category_totals) > 0 else 0
-    total_expenses = float(category_totals.sum())
-    top_category_pct = (top_category_amount / total_expenses * 100) if total_expenses > 0 else 0
-
-    return jsonify({
-        'categories': category_totals.index.tolist(),
-        'amounts': category_totals.values.tolist(),
-        'top_category': top_category,
-        'top_category_amount': top_category_amount,
-        'top_category_amount_formatted': format_indian_number(top_category_amount),
-        'top_category_pct': round(top_category_pct, 1)
-    })
-
-
 @bp.route('/api/<bank_code>/running_balance')
 @login_required
 def get_bank_running_balance(bank_code):
@@ -342,47 +286,6 @@ def get_bank_running_balance(bank_code):
         'peak_date': peak_date,
         'sparkline_dates': sparkline_dates,
         'sparkline_balance': sparkline_balance
-    })
-
-
-@bp.route('/api/<bank_code>/top_vendors')
-@login_required
-def get_bank_top_vendors(bank_code):
-    """Get top 10 vendors by expense for a specific bank"""
-    if bank_code not in VALID_BANK_CODES:
-        return jsonify({'error': 'Invalid bank code'}), 400
-
-    category = request.args.get('category', 'All')
-    project = request.args.get('project', 'All')
-    start_date = request.args.get('start_date', None)
-    end_date = request.args.get('end_date', None)
-
-    df = get_bank_df(bank_code).copy()
-    if df.empty:
-        return jsonify({'vendors': [], 'amounts': []})
-
-    expense_df = df[df['DR Amount'] > 0]
-    if category != 'All':
-        expense_df = expense_df[expense_df['Category'] == category]
-    expense_df = filter_by_date_range(expense_df, start_date, end_date)
-    expense_df = filter_by_project(expense_df, project)
-
-    if expense_df.empty:
-        return jsonify({'vendors': [], 'amounts': []})
-
-    vendor_totals = expense_df.groupby('Client/Vendor')['DR Amount'].sum().sort_values(ascending=False).head(10)
-
-    top_vendor = vendor_totals.index[0] if len(vendor_totals) > 0 else None
-    top_vendor_amount = float(vendor_totals.iloc[0]) if len(vendor_totals) > 0 else 0
-    threshold = float(vendor_totals.quantile(0.8)) if len(vendor_totals) > 0 else 0
-
-    return jsonify({
-        'vendors': vendor_totals.index.tolist(),
-        'amounts': vendor_totals.values.tolist(),
-        'top_vendor': top_vendor,
-        'top_vendor_amount': top_vendor_amount,
-        'top_vendor_amount_formatted': format_indian_number(top_vendor_amount),
-        'threshold': threshold
     })
 
 
@@ -624,77 +527,6 @@ def get_bank_filter_options(bank_code):
         options = db_manager.get_filter_options(bank_code)
 
     return jsonify(options)
-
-
-@bp.route('/api/<bank_code>/insights')
-@login_required
-def get_bank_insights(bank_code):
-    """Get key insights for a specific bank"""
-    if bank_code not in VALID_BANK_CODES:
-        return jsonify({'error': 'Invalid bank code'}), 400
-
-    category = request.args.get('category', 'All')
-    project = request.args.get('project', 'All')
-    start_date = request.args.get('start_date', None)
-    end_date = request.args.get('end_date', None)
-
-    df = get_bank_df(bank_code).copy()
-    if df.empty:
-        return jsonify({
-            'avg_monthly_expense': 0,
-            'avg_monthly_expense_formatted': '₹0',
-            'expense_trend_pct': 0,
-            'expense_trend_direction': 'no data',
-            'avg_transaction_size': 0,
-            'avg_transaction_size_formatted': '₹0',
-            'peak_day': None,
-            'cashflow_velocity': 0,
-            'total_months': 0
-        })
-
-    if category != 'All':
-        df = df[df['Category'] == category]
-    df = filter_by_date_range(df, start_date, end_date)
-    df = filter_by_project(df, project)
-
-    monthly_expenses = df.groupby('month')['DR Amount'].sum()
-    avg_monthly_expense = float(monthly_expenses.mean()) if len(monthly_expenses) > 0 else 0
-
-    if len(monthly_expenses) >= 3:
-        last_3_months = monthly_expenses.tail(3)
-        first_month = last_3_months.iloc[0]
-        last_month = last_3_months.iloc[-1]
-        trend_pct = ((last_month - first_month) / first_month * 100) if first_month > 0 else 0
-        trend_direction = 'increasing' if trend_pct > 0 else 'decreasing' if trend_pct < 0 else 'stable'
-    else:
-        trend_pct = 0
-        trend_direction = 'insufficient data'
-
-    expense_df = df[df['DR Amount'] > 0]
-    avg_transaction_size = float(expense_df['DR Amount'].mean()) if len(expense_df) > 0 else 0
-
-    expense_df_with_day = expense_df.copy()
-    expense_df_with_day['day_of_week'] = expense_df_with_day['date'].dt.day_name()
-    day_expenses = expense_df_with_day.groupby('day_of_week')['DR Amount'].sum()
-    peak_day = day_expenses.idxmax() if len(day_expenses) > 0 else None
-    peak_day_amount = float(day_expenses.max()) if len(day_expenses) > 0 else 0
-
-    total_months = len(df['month'].unique())
-    transactions_per_month = len(df) / total_months if total_months > 0 else 0
-
-    return jsonify({
-        'avg_monthly_expense': avg_monthly_expense,
-        'avg_monthly_expense_formatted': format_indian_number(avg_monthly_expense),
-        'expense_trend_pct': round(trend_pct, 1),
-        'expense_trend_direction': trend_direction,
-        'avg_transaction_size': avg_transaction_size,
-        'avg_transaction_size_formatted': format_indian_number(avg_transaction_size),
-        'peak_day': peak_day,
-        'peak_day_amount': peak_day_amount,
-        'peak_day_amount_formatted': format_indian_number(peak_day_amount),
-        'cashflow_velocity': round(transactions_per_month, 0),
-        'total_months': total_months
-    })
 
 
 @bp.route('/api/<bank_code>/upload', methods=['POST'])

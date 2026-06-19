@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 
 <head>
     <meta charset="UTF-8" />
@@ -23,6 +23,7 @@
     </script>
 
     <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=1">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
 </head>
 
@@ -303,15 +304,6 @@
 
                 <!-- Action Buttons (below table for mobile friendliness) -->
                 <div class="table-actions" style="justify-content: flex-end;">
-                    <a href="/charts/{{ bank_code | default('axis') }}" class="action-btn charts-btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="18" y1="20" x2="18" y2="10"></line>
-                            <line x1="12" y1="20" x2="12" y2="4"></line>
-                            <line x1="6" y1="20" x2="6" y2="14"></line>
-                        </svg>
-                        <span>View Charts</span>
-                    </a>
                     <a href="/edit-transactions/{{ bank_code | default('axis') }}" class="action-btn edit-btn">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

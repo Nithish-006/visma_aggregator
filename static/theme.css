@@ -1,0 +1,115 @@
+/* =========================================================================
+   theme.css — SINGLE SOURCE OF TRUTH for the app's color palette & design tokens
+   -------------------------------------------------------------------------
+   Every page links this FIRST, before its own stylesheet. Each page's :root
+   keeps its own local variable names but points them at the --c-* tokens
+   defined here (e.g. `--text-primary: var(--c-text);`). That means the actual
+   color values live in exactly one place.
+
+   To add a dark theme (next run): fill in the [data-theme="dark"] block below
+   with overrides for the --c-* tokens, then flip <html data-theme="dark">.
+   Nothing else needs to change — every page recolors automatically.
+   ========================================================================= */
+
+:root {
+    /* ---- Surfaces ------------------------------------------------------- */
+    --c-bg:              #FAF9F5;   /* page background (warm ivory) */
+    --c-surface:         #FFFFFF;   /* cards / panels */
+    --c-surface-soft:    #F4F2EC;   /* soft fill: hover, secondary bg, gradient end */
+    --c-input:           #FFFFFF;   /* form inputs */
+
+    /* ---- Text ----------------------------------------------------------- */
+    --c-text:            #1F1E1D;   /* primary text */
+    --c-text-muted:      #1F1E1D;   /* secondary/muted (identical today; split for dark mode) */
+    --c-text-soft:       #6E6C66;   /* genuinely lighter gray (login secondary text) */
+
+    /* ---- Borders -------------------------------------------------------- */
+    --c-border:          #ECE9E1;
+    --c-border-strong:   #DDD8CC;
+    --c-border-a:        rgba(0, 0, 0, 0.08);   /* translucent border (projects) */
+    --c-border-strong-a: rgba(0, 0, 0, 0.14);
+
+    /* ---- Accent (coral) ------------------------------------------------- */
+    --c-accent:          #D97757;
+    --c-accent-strong:   #C2603F;
+    --c-accent-light:    #E08B6F;
+    --c-accent-soft:     #F6EBE4;
+    --c-accent-soft-a:   rgba(217, 119, 87, 0.12);
+    --c-accent-grad:     linear-gradient(135deg, #E08B6F 0%, #D97757 100%);
+
+    /* ---- Functional status --------------------------------------------- */
+    --c-success:         #059669;
+    --c-success-grad:    linear-gradient(135deg, #10b981 0%, #059669 100%);
+    --c-success-soft:    rgba(16, 185, 129, 0.12);
+    --c-success-deep:    #047857;
+    --c-danger:          #dc2626;
+    --c-danger-grad:     linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    --c-danger-soft:     rgba(239, 68, 68, 0.10);
+    --c-danger-deep:     #b91c1c;
+    --c-warning:         #d97706;
+    --c-warning-grad:    linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    --c-warning-soft:    rgba(245, 158, 11, 0.14);
+    --c-warning-deep:    #b45309;
+    --c-info:            #D97757;   /* info = coral in bill/sales processors */
+
+    /* ---- Secondary accents (teal / cyan — projects "Designs") ----------- */
+    --c-teal:            #0e7490;
+    --c-teal-strong:     #155e75;
+    --c-teal-soft:       rgba(8, 145, 178, 0.14);
+    --c-cyan:            #0891b2;
+
+    /* ---- Bank brand colors --------------------------------------------- */
+    --c-axis:            #97144D;
+    --c-axis-grad:       linear-gradient(135deg, #be185d 0%, #97144D 100%);
+    --c-kvb:             #1E4785;
+    --c-kvb-grad:        linear-gradient(135deg, #2563eb 0%, #1E4785 100%);
+
+    /* ---- Shape ---------------------------------------------------------- */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+
+    /* ---- Shadows -------------------------------------------------------- */
+    --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
+    --shadow-lg:      0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
+    --shadow-card:    0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    --shadow-primary: 0 4px 14px rgba(217, 119, 87, 0.25);
+    --shadow-warm:        0 1px 3px rgba(35, 31, 25, 0.08);   /* hub */
+    --shadow-warm-hover:  0 6px 22px rgba(35, 31, 25, 0.07);  /* hub */
+
+    /* ---- Typography ----------------------------------------------------- */
+    --font-ui:    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-serif: "Source Serif 4", Georgia, serif;
+
+    /* ---- Motion --------------------------------------------------------- */
+    --transition-fast: 0.15s ease;
+    --transition:      0.25s ease;
+}
+
+/* =========================================================================
+   DARK THEME — scaffold for next run.
+   Activated by <html data-theme="dark">. Empty today (no visual effect).
+   To enable: uncomment and tune the overrides below. Only the --c-* color
+   tokens need new values; shape/type/motion tokens above are theme-agnostic.
+   ========================================================================= */
+[data-theme="dark"] {
+    /* --- fill in next run; template of every overridable token: ---
+    --c-bg:              #1A1917;
+    --c-surface:         #242220;
+    --c-surface-soft:    #2E2B28;
+    --c-input:           #242220;
+    --c-text:            #F2F0EB;
+    --c-text-muted:      #B8B4AC;
+    --c-border:          #38352F;
+    --c-border-strong:   #4A463E;
+    --c-border-a:        rgba(255, 255, 255, 0.10);
+    --c-border-strong-a: rgba(255, 255, 255, 0.16);
+    --c-accent:          #E08B6F;
+    --c-accent-strong:   #D97757;
+    --c-accent-light:    #EBA98F;
+    --c-accent-soft:     rgba(217, 119, 87, 0.16);
+    --c-accent-soft-a:   rgba(217, 119, 87, 0.18);
+    ... (success / danger / warning / teal / axis / kvb, + gradients)
+    */
+}

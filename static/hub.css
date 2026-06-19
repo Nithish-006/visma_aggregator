@@ -3,27 +3,28 @@
    ============================================================================ */
 
 :root {
-    --bg: #FAF9F5;
-    --surface: #FFFFFF;
-    --surface-soft: #F4F2EC;
-    --border: #ECE9E1;
-    --border-strong: #DDD8CC;
-    --text: #1F1E1D;
-    --text-2: #1F1E1D;
-    --text-3: #1F1E1D;
-    --accent: #D97757;
-    --accent-strong: #C2603F;
-    --accent-soft: #F6EBE4;
-    --axis: #97144D;
-    --kvb: #1E4785;
+    /* Local aliases → central tokens in theme.css (single source of truth) */
+    --bg: var(--c-bg);
+    --surface: var(--c-surface);
+    --surface-soft: var(--c-surface-soft);
+    --border: var(--c-border);
+    --border-strong: var(--c-border-strong);
+    --text: var(--c-text);
+    --text-2: var(--c-text-muted);
+    --text-3: var(--c-text-muted);
+    --accent: var(--c-accent);
+    --accent-strong: var(--c-accent-strong);
+    --accent-soft: var(--c-accent-soft);
+    --axis: var(--c-axis);
+    --kvb: var(--c-kvb);
 
-    --ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --serif: "Source Serif 4", Georgia, serif;
+    --ui: var(--font-ui);
+    --serif: var(--font-serif);
 
-    --r-card: 16px;
+    --r-card: var(--radius-lg);
     --r-btn: 10px;
-    --shadow: 0 1px 3px rgba(35, 31, 25, 0.08);
-    --shadow-hover: 0 6px 22px rgba(35, 31, 25, 0.07);
+    --shadow: var(--shadow-warm);
+    --shadow-hover: var(--shadow-warm-hover);
 }
 
 * { box-sizing: border-box; }

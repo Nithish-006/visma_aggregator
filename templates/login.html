@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 
 <head>
     <meta charset="UTF-8" />
@@ -12,22 +12,25 @@
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+    <!-- Central design tokens (single source of truth) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=1">
+
     <style>
         :root {
-            /* Light Theme - Elegant Gradients */
-            --primary-color: #D97757;
-            --primary-dark: #C2603F;
-            --primary-light: #E08B6F;
-            --primary-gradient: linear-gradient(135deg, #E08B6F 0%, #D97757 100%);
-            --accent-color: #059669;
-            --bg-dark: #FAF9F5;
-            --bg-card: #FFFFFF;
-            --text-main: #1F1E1D;
-            --text-secondary: #6E6C66;
-            --border-color: #ECE9E1;
-            --border-strong: #DDD8CC;
-            --error-color: #dc2626;
-            --success-color: #059669;
+            /* Local aliases -> central tokens in theme.css */
+            --primary-color: var(--c-accent);
+            --primary-dark: var(--c-accent-strong);
+            --primary-light: var(--c-accent-light);
+            --primary-gradient: var(--c-accent-grad);
+            --accent-color: var(--c-success);
+            --bg-dark: var(--c-bg);
+            --bg-card: var(--c-surface);
+            --text-main: var(--c-text);
+            --text-secondary: var(--c-text-soft);
+            --border-color: var(--c-border);
+            --border-strong: var(--c-border-strong);
+            --error-color: var(--c-danger);
+            --success-color: var(--c-success);
         }
 
         * {

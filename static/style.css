@@ -4,61 +4,49 @@
    ============================================================================ */
 
 :root {
+    /* Local aliases → central tokens in theme.css (single source of truth).
+       Shape/shadow/motion tokens (--radius-*, --shadow-*, --transition*) are
+       inherited directly from theme.css :root — not redeclared here. */
+
     /* Claude theme — warm ivory + coral */
-    --primary-color: #D97757;
-    --primary-dark: #C2603F;
-    --primary-light: #E08B6F;
-    --accent-color: #059669;
+    --primary-color: var(--c-accent);
+    --primary-dark: var(--c-accent-strong);
+    --primary-light: var(--c-accent-light);
+    --accent-color: var(--c-success);
 
     /* Backgrounds — flat warm ivory / white */
-    --bg-gradient: #FAF9F5;
-    --bg-gradient-soft: #FFFFFF;
-    --bg-card: #FFFFFF;
-    --bg-card-hover: #F4F2EC;
-    --bg-input: #FFFFFF;
+    --bg-gradient: var(--c-bg);
+    --bg-gradient-soft: var(--c-surface);
+    --bg-card: var(--c-surface);
+    --bg-card-hover: var(--c-surface-soft);
+    --bg-input: var(--c-input);
 
     /* Card surfaces */
-    --card-gradient: #FFFFFF;
-    --card-gradient-hover: #F4F2EC;
+    --card-gradient: var(--c-surface);
+    --card-gradient-hover: var(--c-surface-soft);
 
     /* Rich, readable text */
-    --text-main: #1F1E1D;
-    --text-secondary: #1F1E1D;
-    --text-muted: #1F1E1D;
+    --text-main: var(--c-text);
+    --text-secondary: var(--c-text);
+    --text-muted: var(--c-text-muted);
 
     /* Refined borders */
-    --border-color: #ECE9E1;
-    --border-strong: #DDD8CC;
+    --border-color: var(--c-border);
+    --border-strong: var(--c-border-strong);
 
     /* Status Colors with gradients */
-    --success-color: #059669;
-    --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --danger-color: #dc2626;
-    --danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    --warning-color: #d97706;
-    --warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    --success-color: var(--c-success);
+    --success-gradient: var(--c-success-grad);
+    --danger-color: var(--c-danger);
+    --danger-gradient: var(--c-danger-grad);
+    --warning-color: var(--c-warning);
+    --warning-gradient: var(--c-warning-grad);
 
     /* Bank Colors */
-    --axis-color: #97144D;
-    --axis-gradient: linear-gradient(135deg, #be185d 0%, #97144D 100%);
-    --kvb-color: #1E4785;
-    --kvb-gradient: linear-gradient(135deg, #2563eb 0%, #1E4785 100%);
-
-    /* Spacing & Radius */
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-
-    /* Refined shadows with color tints */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
-    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
-    --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-    --shadow-primary: 0 4px 14px rgba(217, 119, 87, 0.25);
-
-    /* Transitions */
-    --transition-fast: 0.15s ease;
-    --transition: 0.25s ease;
+    --axis-color: var(--c-axis);
+    --axis-gradient: var(--c-axis-grad);
+    --kvb-color: var(--c-kvb);
+    --kvb-gradient: var(--c-kvb-grad);
 }
 
 /* Reset */
@@ -1051,16 +1039,6 @@ body {
 .action-btn.upload-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(217, 119, 87, 0.4);
-}
-
-.action-btn.charts-btn {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: white;
-}
-
-.action-btn.charts-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
 }
 
 /* Pagination Controls */

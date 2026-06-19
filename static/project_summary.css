@@ -3,22 +3,23 @@
    ============================================================================ */
 
 :root {
-    --bg-primary: #FAF9F5;
-    --bg-secondary: #FFFFFF;
-    --bg-card: #FFFFFF;
-    --bg-soft: #F4F2EC;
-    --text-primary: #1F1E1D;
-    --text-secondary: #1F1E1D;
-    --text-muted: #1F1E1D;
-    --border-color: #ECE9E1;
-    --border-strong: #DDD8CC;
-    --income-color: #059669;
-    --expense-color: #DC2626;
-    --accent-color: #D97757;
-    --accent-strong: #C2603F;
-    --accent-soft: #F6EBE4;
-    --axis-color: #97144D;
-    --kvb-color: #1E4785;
+    /* Local aliases -> central tokens in theme.css (single source of truth) */
+    --bg-primary: var(--c-bg);
+    --bg-secondary: var(--c-surface);
+    --bg-card: var(--c-surface);
+    --bg-soft: var(--c-surface-soft);
+    --text-primary: var(--c-text);
+    --text-secondary: var(--c-text);
+    --text-muted: var(--c-text-muted);
+    --border-color: var(--c-border);
+    --border-strong: var(--c-border-strong);
+    --income-color: var(--c-success);
+    --expense-color: var(--c-danger);
+    --accent-color: var(--c-accent);
+    --accent-strong: var(--c-accent-strong);
+    --accent-soft: var(--c-accent-soft);
+    --axis-color: var(--c-axis);
+    --kvb-color: var(--c-kvb);
 }
 
 * {
