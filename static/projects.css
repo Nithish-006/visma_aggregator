@@ -1,5 +1,5 @@
-/* ============================================================================
-   Projects page — canonical project registry  (light theme)
+﻿/* ============================================================================
+   Projects page â€” canonical project registry  (light theme)
    ============================================================================ */
 :root {
     --proj-bg-grad-start: #FAF9F5;
@@ -9,13 +9,13 @@
     --proj-border:        rgba(0, 0, 0, 0.08);
     --proj-border-strong: rgba(0, 0, 0, 0.14);
     --proj-text:          #1F1E1D;
-    --proj-text-dim:      #6E6C66;
-    --proj-text-muted:    #98948B;
-    --proj-accent:        #D97757;      /* coral — matches the hub Projects tile */
+    --proj-text-dim:      #1F1E1D;
+    --proj-text-muted:    #1F1E1D;
+    --proj-accent:        #D97757;      /* coral â€” matches the hub Projects tile */
     --proj-accent-strong: #C2603F;
     --proj-accent-soft:   rgba(217, 119, 87, 0.12);
     --proj-accent-2:      #0891b2;
-    --proj-design:        #0e7490;      /* teal — Designs */
+    --proj-design:        #0e7490;      /* teal â€” Designs */
     --proj-design-strong: #155e75;
     --proj-design-soft:   rgba(8, 145, 178, 0.14);
     --proj-success:       #047857;
@@ -215,7 +215,7 @@ html, body {
     background: var(--proj-warning-soft);
 }
 
-/* "Projects" — subtle indigo tint so the bucket reads as the primary type. */
+/* "Projects" â€” subtle indigo tint so the bucket reads as the primary type. */
 .proj-section--projects .project-card {
     background: linear-gradient(145deg, #ffffff 0%, #FBF1EC 100%);
     border-color: rgba(217, 119, 87, 0.20);
@@ -226,7 +226,7 @@ html, body {
     box-shadow: 0 10px 30px rgba(194, 96, 63, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-/* "Designs" — teal accent + tinted header rule and cards. */
+/* "Designs" â€” teal accent + tinted header rule and cards. */
 .proj-section--designs .proj-section-head {
     border-bottom-color: rgba(8, 145, 178, 0.35);
 }
@@ -260,7 +260,7 @@ html, body {
     border-radius: 14px;
 }
 
-/* Project card — grid tile */
+/* Project card â€” grid tile */
 .project-card {
     display: flex;
     flex-direction: column;
@@ -318,7 +318,7 @@ html, body {
     margin-right: 1px;
 }
 
-/* Project name — the clear focal point of each tile */
+/* Project name â€” the clear focal point of each tile */
 .project-card-stem {
     font-size: 1.3rem;
     font-weight: 700;
@@ -434,7 +434,7 @@ html, body {
     gap: 0.5rem;
 }
 
-/* Header "Edit" toggle — reveals the edit panel (type / reprocess / PO values) */
+/* Header "Edit" toggle â€” reveals the edit panel (type / reprocess / PO values) */
 .proj-edit-toggle {
     display: inline-flex;
     align-items: center;
@@ -669,7 +669,7 @@ html, body {
 
 .proj-toast.hidden { opacity: 0; pointer-events: none; }
 
-/* ── Card finance strip (PO Value / Received / Balance) ──
+/* â”€â”€ Card finance strip (PO Value / Received / Balance) â”€â”€
    A clean, aligned row of labelled stats. Replaces the old cramped pills
    that wrapped onto each other and used cryptic abbreviations ("Recd"). */
 .project-card-foot {
@@ -717,7 +717,7 @@ html, body {
 .proj-fin-v.pending  { color: var(--proj-warning); font-weight: 600; }
 .proj-fin-v.muted    { color: var(--proj-text-muted); font-weight: 600; }
 
-/* ── Payments vs PO (detail modal) ───────────────────── */
+/* â”€â”€ Payments vs PO (detail modal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-payments {
     margin: 0.85rem 0 0.5rem;
     padding: 0.85rem 0.95rem;
@@ -784,7 +784,7 @@ html, body {
     color: var(--proj-text-muted);
 }
 
-/* ── Cash client payments (detail modal) ─────────────── */
+/* â”€â”€ Cash client payments (detail modal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-cash {
     margin: 0.5rem 0 0.5rem;
     padding: 0.85rem 0.95rem;
@@ -804,7 +804,7 @@ html, body {
     color: var(--proj-accent-strong);
     margin-left: auto;
 }
-/* "+ Add" reveal button — sits at the far right of the cash header. */
+/* "+ Add" reveal button â€” sits at the far right of the cash header. */
 .proj-cash-add-btn {
     display: inline-flex;
     align-items: center;
@@ -920,7 +920,7 @@ html, body {
     background: var(--proj-danger-soft, rgba(220, 38, 38, 0.12));
 }
 
-/* ── PO gist (detail modal) ──────────────────────────── */
+/* â”€â”€ PO gist (detail modal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-po-gist { margin: 0.85rem 0 0.25rem; }
 .proj-gist-loading,
 .proj-gist-empty,
@@ -979,7 +979,7 @@ html, body {
     font-size: 1.05rem;
 }
 
-/* ── PO line-item breakdown ──────────────────────────── */
+/* â”€â”€ PO line-item breakdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-gist-items { margin-top: 0.9rem; }
 .proj-gist-items .proj-field-label { margin-bottom: 0.35rem; }
 .proj-li-scroll {
@@ -1000,7 +1000,7 @@ html, body {
     /* Solid colour (accent-soft flattened onto white): a translucent sticky
        header lets scrolled rows bleed through the column titles. */
     background: #FAEFEB;
-    /* border-collapse drops sticky cell borders — draw the rule as a shadow */
+    /* border-collapse drops sticky cell borders â€” draw the rule as a shadow */
     box-shadow: 0 1px 0 var(--proj-border-strong);
     color: var(--proj-text-muted);
     font-weight: 600;
@@ -1018,7 +1018,7 @@ html, body {
 .proj-li-desc { width: 50%; }
 .proj-li-unit { color: var(--proj-text-muted); white-space: nowrap; }
 
-/* ── PO edit form ────────────────────────────────────── */
+/* â”€â”€ PO edit form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-po-edit { margin-top: 0.85rem; }
 .proj-gist-grid {
     display: grid;
@@ -1075,7 +1075,7 @@ html, body {
     .proj-input-id { flex: 0 0 76px; }
 }
 
-/* ── Type toggle (project ↔ other) ──────────────────── */
+/* â”€â”€ Type toggle (project â†” other) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-type-toggle {
     display: flex;
     width: 100%;
@@ -1112,7 +1112,7 @@ html, body {
     user-select: none;
 }
 
-/* Selected segment — colour echoes the section it maps to. */
+/* Selected segment â€” colour echoes the section it maps to. */
 .proj-type-option input:checked + span {
     background: linear-gradient(135deg, #E8A98F 0%, var(--proj-accent-strong) 100%);
     color: #ffffff;
@@ -1139,7 +1139,7 @@ html, body {
 }
 
 /* Detail-modal type row */
-/* Edit panel — hidden until the header "Edit" button is pressed. A dashed
+/* Edit panel â€” hidden until the header "Edit" button is pressed. A dashed
    frame visually sets the editing controls apart from the read-only summary.
    Inside, each control is its own labelled row so Type and PO actions line up
    symmetrically. */
@@ -1185,7 +1185,7 @@ html, body {
     color: var(--proj-danger);
 }
 
-/* ── Closed / active status toggle (edit panel) ─────── */
+/* â”€â”€ Closed / active status toggle (edit panel) â”€â”€â”€â”€â”€â”€â”€ */
 .proj-status-toggle {
     display: flex;
     align-items: center;
@@ -1235,7 +1235,7 @@ html, body {
     color: var(--proj-text-dim);
 }
 
-/* ── "Closed" registry section + dimmed cards ───────── */
+/* â”€â”€ "Closed" registry section + dimmed cards â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-section--closed .proj-section-head {
     border-bottom-color: rgba(107, 114, 128, 0.35);
 }
@@ -1259,7 +1259,7 @@ html, body {
 }
 
 /* ============================================================================
-   Project detail modal — insight tabs (PO / payments / expenses / bills /
+   Project detail modal â€” insight tabs (PO / payments / expenses / bills /
    labour). The detail modal is wider than the create modal because the tabs
    hold tables.
    ============================================================================ */

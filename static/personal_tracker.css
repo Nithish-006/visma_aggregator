@@ -1,4 +1,4 @@
-/* ============================================================================
+﻿/* ============================================================================
    PERSONAL TRACKER - ULTRA COMPACT MOBILE-FIRST DESIGN
    ============================================================================ */
 
@@ -9,8 +9,8 @@
     --bg-card: #FFFFFF;
     --bg-hover: #F4F2EC;
     --text-primary: #1F1E1D;
-    --text-secondary: #6E6C66;
-    --text-muted: #98948B;
+    --text-secondary: #1F1E1D;
+    --text-muted: #1F1E1D;
     --border-color: #ECE9E1;
     --border-strong: #DDD8CC;
     --income-color: #059669;
@@ -38,7 +38,7 @@ html {
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     background: #FAF9F5;
     background-attachment: fixed;
     min-height: 100vh;
@@ -296,7 +296,7 @@ body {
 .summary-value {
     font-size: 1.125rem;
     font-weight: 700;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-variant-numeric: tabular-nums;
 }
 
@@ -383,7 +383,7 @@ body {
     gap: 16px;
     font-size: 0.8125rem;
     font-weight: 600;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-variant-numeric: tabular-nums;
 }
 
@@ -476,7 +476,7 @@ body {
     font-weight: 600;
     text-align: right;
     white-space: nowrap;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-variant-numeric: tabular-nums;
 }
 
@@ -520,7 +520,7 @@ body {
     gap: 20px;
     font-size: 0.875rem;
     font-weight: 600;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-variant-numeric: tabular-nums;
 }
 
@@ -551,7 +551,7 @@ body {
 .total-card-value {
     font-size: 2rem;
     font-weight: 700;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-variant-numeric: tabular-nums;
 }
 
@@ -625,7 +625,7 @@ body {
     font-size: 0.9375rem;
     font-weight: 600;
     color: var(--accent-color);
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-variant-numeric: tabular-nums;
 }
 

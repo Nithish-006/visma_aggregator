@@ -23,8 +23,8 @@
 
     /* Rich, readable text */
     --text-main: #1F1E1D;
-    --text-secondary: #6E6C66;
-    --text-muted: #98948B;
+    --text-secondary: #1F1E1D;
+    --text-muted: #1F1E1D;
 
     /* Refined borders */
     --border-color: #ECE9E1;

@@ -1,4 +1,4 @@
-/* ============================================================================
+﻿/* ============================================================================
    PROJECT SUMMARY - Light Theme Desktop Layout
    ============================================================================ */
 
@@ -8,8 +8,8 @@
     --bg-card: #FFFFFF;
     --bg-soft: #F4F2EC;
     --text-primary: #1F1E1D;
-    --text-secondary: #6E6C66;
-    --text-muted: #98948B;
+    --text-secondary: #1F1E1D;
+    --text-muted: #1F1E1D;
     --border-color: #ECE9E1;
     --border-strong: #DDD8CC;
     --income-color: #059669;
@@ -212,7 +212,7 @@ body {
     border-color: var(--border-strong);
 }
 
-/* Period filter — month pills get their own full-width row */
+/* Period filter â€” month pills get their own full-width row */
 .ps-filter-period {
     flex: 1 1 100%;
     min-width: 0;
@@ -254,7 +254,7 @@ body {
     color: #fff;
 }
 
-/* Labour Salary monthly table — grand-total row */
+/* Labour Salary monthly table â€” grand-total row */
 .ps-table tr.ps-total-row td {
     border-top: 2px solid var(--border-strong);
     background: var(--bg-secondary);
@@ -1627,9 +1627,9 @@ tr.ps-cf-active td:first-child {
 
 @media (max-width: 480px) {
     /* Clean, ordered filter stack on phones:
-       row 1 — Period pills (full width)
-       row 2 — Category | Vendor (even two-up)
-       row 3 — Reset (full-width) */
+       row 1 â€” Period pills (full width)
+       row 2 â€” Category | Vendor (even two-up)
+       row 3 â€” Reset (full-width) */
     .ps-filters {
         flex-wrap: wrap;
         align-items: stretch;
@@ -1692,7 +1692,7 @@ tr.ps-cf-active td:first-child {
 }
 
 /* ============================================================================
-   LANDING — registry-fed project cards (click a card to open its breakdown)
+   LANDING â€” registry-fed project cards (click a card to open its breakdown)
    ============================================================================ */
 
 .ps-landing {
@@ -1839,7 +1839,7 @@ tr.ps-cf-active td:first-child {
 .ps-proj-fin-cell .v.income { color: var(--income-color); }
 .ps-proj-fin-cell .v.expense { color: var(--expense-color); }
 
-/* Designs — teal tint */
+/* Designs â€” teal tint */
 .ps-proj-section--designs .ps-proj-count {
     color: #0e7490;
     background: rgba(8, 145, 178, 0.12);
@@ -1858,7 +1858,7 @@ tr.ps-cf-active td:first-child {
     background: rgba(8, 145, 178, 0.12);
 }
 
-/* Others — amber tint */
+/* Others â€” amber tint */
 .ps-proj-section--others .ps-proj-count {
     color: #b45309;
     background: rgba(245, 158, 11, 0.14);
@@ -1898,7 +1898,7 @@ tr.ps-cf-active td:first-child {
    applyMobileTableCards() which stamps each <td> with data-label.
    ============================================================================ */
 @media (max-width: 768px) {
-    /* No more sideways scroll — cards own the full width. */
+    /* No more sideways scroll â€” cards own the full width. */
     .ps-table-wrap { overflow-x: visible; }
 
     .ps-table,

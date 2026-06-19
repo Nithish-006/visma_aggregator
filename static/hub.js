@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Load sales bill count
     loadSalesBillCount();
 
+    // Load active projects count
+    loadProjectsCount();
+
     // Add animation on card hover
     initCardAnimations();
 });
@@ -142,6 +145,37 @@ async function loadSalesBillCount() {
 }
 
 /**
+ * Load active projects count for the Projects Registry card.
+ * "Active" mirrors the registry: type === 'project' and not closed (is_inactive).
+ */
+async function loadProjectsCount() {
+    const projectsCount = document.getElementById('projects-count');
+    try {
+        const response = await fetch('/api/projects', { credentials: 'same-origin' });
+        if (!response.ok) {
+            throw new Error('Failed to fetch projects');
+        }
+
+        const data = await response.json();
+        const projects = data.projects || [];
+        const activeCount = projects.filter(p => {
+            const isClosed = p.is_inactive === true || p.is_inactive === 1;
+            const type = p.project_type || (p.is_project === false ? 'other' : 'project');
+            return !isClosed && type === 'project';
+        }).length;
+
+        if (projectsCount) {
+            projectsCount.textContent = formatNumber(activeCount);
+        }
+    } catch (error) {
+        console.error('Error loading projects count:', error);
+        if (projectsCount) {
+            projectsCount.textContent = '0';
+        }
+    }
+}
+
+/**
  * Clear server cache and reload hub stats
  */
 async function refreshCache() {
@@ -162,6 +196,7 @@ async function refreshCache() {
         await loadPersonalTrackerCount();
         await loadBillProcessorCount();
         await loadSalesBillCount();
+        await loadProjectsCount();
 
         btn.querySelector('span').textContent = 'Done!';
         setTimeout(() => { btn.querySelector('span').textContent = 'Refresh'; }, 1500);

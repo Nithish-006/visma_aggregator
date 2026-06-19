@@ -9,8 +9,8 @@
     --bg-card: #FFFFFF;
     --bg-hover: #F4F2EC;
     --text-primary: #1F1E1D;
-    --text-secondary: #6E6C66;
-    --text-muted: #98948B;
+    --text-secondary: #1F1E1D;
+    --text-muted: #1F1E1D;
     --border-color: #ECE9E1;
     --border-strong: #DDD8CC;
     --success-color: #059669;
@@ -1686,7 +1686,7 @@ body {
 .form-group label {
     font-size: 0.75rem;
     font-weight: 500;
-    color: #94a3b8;
+    color: #1F1E1D;
     text-transform: uppercase;
     letter-spacing: 0.025em;
 }
@@ -1977,7 +1977,7 @@ textarea.form-input {
     justify-content: center;
     gap: 12px;
     padding: 48px;
-    color: #94a3b8;
+    color: #1F1E1D;
 }
 
 /* Image Viewer */
@@ -2193,7 +2193,7 @@ textarea.form-input {
 .progress-text {
     margin-top: 8px;
     font-size: 0.8125rem;
-    color: #94a3b8;
+    color: #1F1E1D;
     text-align: center;
 }
 

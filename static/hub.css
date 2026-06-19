@@ -1,5 +1,5 @@
-/* ============================================================================
-   HUB — Claude-style light theme (warm ivory + coral)
+﻿/* ============================================================================
+   HUB â€” Claude-style light theme (warm ivory + coral)
    ============================================================================ */
 
 :root {
@@ -9,8 +9,8 @@
     --border: #ECE9E1;
     --border-strong: #DDD8CC;
     --text: #1F1E1D;
-    --text-2: #6E6C66;
-    --text-3: #98948B;
+    --text-2: #1F1E1D;
+    --text-3: #1F1E1D;
     --accent: #D97757;
     --accent-strong: #C2603F;
     --accent-soft: #F6EBE4;
@@ -52,7 +52,7 @@ a { color: inherit; text-decoration: none; }
     padding: 0 28px;
 }
 
-/* ── Header ───────────────────────────────────────────────── */
+/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .topbar {
     border-bottom: 1px solid var(--border);
     background: rgba(250, 249, 245, 0.85);
@@ -119,7 +119,7 @@ a { color: inherit; text-decoration: none; }
 
 main { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 
-/* ── Card grid ────────────────────────────────────────────── */
+/* â”€â”€ Card grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(244px, 1fr));
@@ -167,6 +167,7 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
 
 .card__name {
     margin: 0;
+    font-family: var(--serif);
     font-size: 16px;
     font-weight: 600;
     letter-spacing: -0.1px;
@@ -200,10 +201,10 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
 .card__arrow svg { width: 19px; height: 19px; display: block; }
 .card:hover .card__arrow { transform: translateX(3px); color: var(--card-accent); }
 
-/* Per-module accent — coloured left bar, faint matching tint, coloured icon */
+/* Per-module accent â€” coloured left bar, faint matching tint, coloured icon */
 .card--hero    { grid-column: 1 / -1; padding: 26px 28px; --card-accent: #D97757; --card-tint: #FBF1EC; }
 .card--hero .card__icon { background: var(--surface); }
-.card--hero .card__name { font-family: var(--serif); font-weight: 500; font-size: 21px; }
+.card--hero .card__name { font-family: var(--serif); font-weight: 600; font-size: 21px; }
 
 .card--expense  { --card-accent: #7C6BD6; --card-tint: #F3F0FB; }
 .card--projects { --card-accent: #3B6BC9; --card-tint: #ECF1FA; }
@@ -225,14 +226,14 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     @keyframes rise { to { opacity: 1; transform: translateY(0); } }
 }
 
-/* ── Footer ───────────────────────────────────────────────── */
+/* â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .foot {
     border-top: 1px solid var(--border);
     padding: 20px 0 32px;
 }
 .foot__note { font-size: 12.5px; color: var(--text-3); }
 
-/* ── Responsive ───────────────────────────────────────────── */
+/* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (max-width: 640px) {
     .wrap { padding: 0 18px; }
     .brand__tag { display: none; }
