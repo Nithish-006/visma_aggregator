@@ -168,9 +168,9 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
 
 .card__name {
     margin: 0;
-    font-family: var(--serif);
+    font-family: var(--ui);
     font-size: 16px;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.1px;
     color: var(--text);
 }
@@ -205,7 +205,7 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
 /* Per-module accent â€” coloured left bar, faint matching tint, coloured icon */
 .card--hero    { grid-column: 1 / -1; padding: 26px 28px; --card-accent: #D97757; --card-tint: #FBF1EC; }
 .card--hero .card__icon { background: var(--surface); }
-.card--hero .card__name { font-family: var(--serif); font-weight: 600; font-size: 21px; }
+.card--hero .card__name { font-family: var(--ui); font-weight: 700; font-size: 21px; }
 
 .card--expense  { --card-accent: #7C6BD6; --card-tint: #F3F0FB; }
 .card--projects { --card-accent: #3B6BC9; --card-tint: #ECF1FA; }
