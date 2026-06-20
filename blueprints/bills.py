@@ -79,11 +79,16 @@ def process_bill():
 
                 # No duplicate found, proceed with insert
                 success, invoice_id, error = db_manager.insert_bill(bill)
+                # A composite unique-key collision (invoice_number + date + gstin +
+                # amount) can fire even though the invoice_number-only check above
+                # passed. insert_bill surfaces it as "Duplicate invoice" — classify
+                # it as a duplicate so it isn't reported as a silent save failure.
+                is_dup = (not success) and error == 'Duplicate invoice'
                 db_results.append({
                     'saved': success,
                     'invoice_id': invoice_id,
                     'db_error': error,
-                    'is_duplicate': False
+                    'is_duplicate': is_dup
                 })
             else:
                 db_results.append({'saved': False, 'invoice_id': None, 'db_error': 'Extraction failed', 'is_duplicate': False})
@@ -96,6 +101,7 @@ def process_bill():
             if i < len(db_results):
                 display_item['db_saved'] = db_results[i]['saved']
                 display_item['invoice_id'] = db_results[i]['invoice_id']
+                display_item['db_error'] = db_results[i].get('db_error')
                 display_item['is_duplicate'] = db_results[i].get('is_duplicate', False)
                 if db_results[i].get('existing_bill'):
                     display_item['existing_bill'] = db_results[i]['existing_bill']

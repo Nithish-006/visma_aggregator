@@ -1661,8 +1661,12 @@ async function processFiles() {
                     for (const item of result.display_data) {
                         if (item.is_duplicate) {
                             addProcessingLog(`Duplicate: Invoice #${item.invoice_number || 'N/A'} already exists`, 'duplicate');
+                        } else if (item.success && item.db_saved) {
+                            addProcessingLog(`Saved: Invoice #${item.invoice_number || 'N/A'} - ${item.vendor_name || 'Unknown'} (${formatDuration(fileTime)})`, 'success');
                         } else if (item.success) {
-                            addProcessingLog(`Extracted: Invoice #${item.invoice_number || 'N/A'} - ${item.vendor_name || 'Unknown'} (${formatDuration(fileTime)})`, 'success');
+                            // Extraction worked but the DB insert failed — do NOT
+                            // report this as success, surface the real reason.
+                            addProcessingLog(`NOT saved: Invoice #${item.invoice_number || 'N/A'} - ${item.db_error || 'database error'}`, 'error');
                         }
                     }
                     displaySlots[i] = result.display_data;
@@ -1734,9 +1738,12 @@ function showProcessingResults() {
     document.getElementById('processingStatus').style.display = 'none';
     document.getElementById('resultsPreview').style.display = 'block';
 
-    const successCount = processedResults.filter(r => r.success && !r.is_duplicate).length;
+    // "Success" means the bill actually landed in the database — not merely that
+    // extraction worked. A bill that extracted but failed to save counts as an error.
+    const isSaved = r => r.success && r.db_saved && !r.is_duplicate;
+    const successCount = processedResults.filter(isSaved).length;
     const duplicateCount = processedResults.filter(r => r.is_duplicate).length;
-    const errorCount = processedResults.filter(r => !r.success && !r.is_duplicate).length;
+    const errorCount = processedResults.filter(r => !isSaved(r) && !r.is_duplicate).length;
 
     document.getElementById('successCount').textContent = successCount;
 
@@ -1752,10 +1759,11 @@ function showProcessingResults() {
         let statusClass = 'error';
         let icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
 
+        const savedOk = result.success && result.db_saved;
         if (result.is_duplicate) {
             statusClass = 'duplicate';
             icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
-        } else if (result.success) {
+        } else if (savedOk) {
             statusClass = 'success';
             icon = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
         }
@@ -1765,8 +1773,13 @@ function showProcessingResults() {
         if (result.is_duplicate && result.existing_bill) {
             const existing = result.existing_bill;
             detailMessage = `<span class="duplicate-warning">DUPLICATE BILL</span> - Already processed on ${existing.created_at || 'N/A'}<br>Existing: Invoice #${existing.invoice_number} | ${existing.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(existing.total_amount)}`;
-        } else if (result.success) {
+        } else if (result.is_duplicate) {
+            detailMessage = `<span class="duplicate-warning">DUPLICATE BILL</span> - Invoice #${result.invoice_number || 'N/A'} already exists`;
+        } else if (savedOk) {
             detailMessage = `Invoice: ${result.invoice_number || 'N/A'} | ${result.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(result.total_amount)}`;
+        } else if (result.success) {
+            // Extracted but the DB insert failed — this is the silent-loss case.
+            detailMessage = `<span class="duplicate-warning">NOT SAVED</span> - Extracted Invoice #${result.invoice_number || 'N/A'} but could not save: ${result.db_error || 'database error'}`;
         } else {
             detailMessage = `Error: ${result.error}`;
         }
