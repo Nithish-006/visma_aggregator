@@ -1189,18 +1189,19 @@ body {
 /* Processing Logs */
 .processing-logs {
     margin-top: 16px;
-    max-height: 150px;
+    max-height: 280px;
     overflow-y: auto;
     background: var(--bg-card);
     border-radius: 8px;
     padding: 12px;
     text-align: left;
     font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
-    font-size: 0.75rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
 }
 
 .log-entry {
-    padding: 4px 0;
+    padding: 3px 0;
     color: var(--text-secondary);
     display: flex;
     gap: 8px;
@@ -1218,12 +1219,25 @@ body {
     text-align: center;
 }
 
+/* Long messages (e.g. a full DB error) wrap instead of overflowing */
+.log-msg {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.log-msg b {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
 .log-entry.log-success {
     color: var(--success-color);
 }
 
 .log-entry.log-error {
     color: var(--error-color);
+    font-weight: 600;
 }
 
 .log-entry.log-duplicate {
@@ -1232,6 +1246,30 @@ body {
 
 .log-entry.log-info {
     color: var(--text-secondary);
+}
+
+/* Processing-log panel inside the results view */
+.results-log {
+    margin-top: 16px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+}
+
+.results-log > summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    user-select: none;
+    list-style-position: inside;
+}
+
+.results-log > summary:hover {
+    color: var(--text-primary);
+}
+
+.results-log .processing-logs {
+    margin-top: 10px;
 }
 
 /* ============================================================================

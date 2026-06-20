@@ -14,6 +14,7 @@ let currentAddedFilter = '';
 let fileQueue = [];
 let processedResults = [];
 let rawResults = [];
+let processingLog = [];        // persisted copy of the progress log so it survives into the results view
 let activeProjectEdit = null;
 
 // Max bills extracted concurrently during bulk upload. Bounded pool keeps us
@@ -1576,26 +1577,39 @@ function formatFileSize(bytes) {
 let processingStartTime = null;
 let totalProcessingTime = 0;
 
+const LOG_ICONS = { 'info': '○', 'success': '✓', 'error': '✗', 'duplicate': '⚠' };
+
+function renderLogEntry(container, entry) {
+    const el = document.createElement('div');
+    el.className = `log-entry log-${entry.status}`;
+    const icon = LOG_ICONS[entry.status] || '○';
+    el.innerHTML = `<span class="log-time">${entry.time}</span> <span class="log-icon">${icon}</span> <span class="log-msg">${entry.message}</span>`;
+    container.appendChild(el);
+}
+
 function addProcessingLog(message, status = 'info') {
-    const logsContainer = document.getElementById('processingLogs');
     const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const entry = { time: timestamp, status, message };
+    processingLog.push(entry);   // keep a persistent copy for the results view
 
-    const statusIcon = {
-        'info': '○',
-        'success': '✓',
-        'error': '✗',
-        'duplicate': '⚠'
-    }[status] || '○';
+    const logsContainer = document.getElementById('processingLogs');
+    if (logsContainer) {
+        renderLogEntry(logsContainer, entry);
+        logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+}
 
-    const logEntry = document.createElement('div');
-    logEntry.className = `log-entry log-${status}`;
-    logEntry.innerHTML = `<span class="log-time">${timestamp}</span> <span class="log-icon">${statusIcon}</span> ${message}`;
-
-    logsContainer.appendChild(logEntry);
-    logsContainer.scrollTop = logsContainer.scrollHeight;
+// Re-draw the whole captured log into a container (used by the results view so
+// the full processing trace — including every failure reason — stays visible
+// after processing finishes).
+function renderProcessingLog(container) {
+    if (!container) return;
+    container.innerHTML = '';
+    processingLog.forEach(entry => renderLogEntry(container, entry));
 }
 
 function clearProcessingLogs() {
+    processingLog = [];
     document.getElementById('processingLogs').innerHTML = '';
 }
 
@@ -1648,7 +1662,8 @@ async function processFiles() {
             if (i >= total) return;
             const file = files[i];
             const fileStartTime = Date.now();
-            addProcessingLog(`Processing: ${file.name}`, 'info');
+            const tag = `<b>${file.name}</b>`;
+            addProcessingLog(`${tag} — uploading &amp; extracting…`, 'info');
 
             try {
                 const result = await uploadAndProcessFile(file);
@@ -1657,21 +1672,32 @@ async function processFiles() {
                 if (result.success) {
                     rawSlots[i] = result.results;
 
-                    // Log each result from display_data
-                    for (const item of result.display_data) {
-                        if (item.is_duplicate) {
-                            addProcessingLog(`Duplicate: Invoice #${item.invoice_number || 'N/A'} already exists`, 'duplicate');
-                        } else if (item.success && item.db_saved) {
-                            addProcessingLog(`Saved: Invoice #${item.invoice_number || 'N/A'} - ${item.vendor_name || 'Unknown'} (${formatDuration(fileTime)})`, 'success');
-                        } else if (item.success) {
-                            // Extraction worked but the DB insert failed — do NOT
-                            // report this as success, surface the real reason.
-                            addProcessingLog(`NOT saved: Invoice #${item.invoice_number || 'N/A'} - ${item.db_error || 'database error'}`, 'error');
+                    // Log the two stages — EXTRACTION then DATABASE SAVE — as
+                    // separate lines so it's obvious which one failed.
+                    const items = result.display_data || [];
+                    items.forEach((item, pi) => {
+                        const pageTag = items.length > 1 ? ` (page ${item.page || pi + 1})` : '';
+                        const inv = item.invoice_number || 'N/A';
+
+                        if (!item.success) {
+                            addProcessingLog(`${tag}${pageTag}: extraction failed — ${item.error || 'could not read bill'}`, 'error');
+                            return;
                         }
-                    }
-                    displaySlots[i] = result.display_data;
+
+                        // Extraction worked — show what was read, then the DB result.
+                        addProcessingLog(`${tag}${pageTag}: extracted Invoice #${inv} — ${item.vendor_name || 'Unknown vendor'}, ${formatIndianCurrency(item.total_amount)}`, 'info');
+
+                        if (item.is_duplicate) {
+                            addProcessingLog(`&rarr; duplicate — Invoice #${inv} already in database, skipped`, 'duplicate');
+                        } else if (item.db_saved) {
+                            addProcessingLog(`&rarr; saved to database (ID ${item.invoice_id}) in ${formatDuration(fileTime)}`, 'success');
+                        } else {
+                            addProcessingLog(`&rarr; SAVE FAILED — ${item.db_error || 'database error'}`, 'error');
+                        }
+                    });
+                    displaySlots[i] = items;
                 } else {
-                    addProcessingLog(`Failed: ${file.name} - ${result.error || 'Unknown error'}`, 'error');
+                    addProcessingLog(`${tag}: processing failed — ${result.error || 'Unknown error'}`, 'error');
                     displaySlots[i] = [{
                         success: false,
                         error: result.error || 'Unknown error',
@@ -1679,7 +1705,7 @@ async function processFiles() {
                     }];
                 }
             } catch (error) {
-                addProcessingLog(`Error: ${file.name} - ${error.message || 'Processing failed'}`, 'error');
+                addProcessingLog(`${tag}: request error — ${error.message || 'Processing failed'}`, 'error');
                 displaySlots[i] = [{
                     success: false,
                     error: error.message || 'Processing failed',
@@ -1744,6 +1770,12 @@ function showProcessingResults() {
     const successCount = processedResults.filter(isSaved).length;
     const duplicateCount = processedResults.filter(r => r.is_duplicate).length;
     const errorCount = processedResults.filter(r => !isSaved(r) && !r.is_duplicate).length;
+
+    // Carry the full progress log into the results view. Auto-expand it when
+    // anything failed so the reason is visible without a click.
+    renderProcessingLog(document.getElementById('resultsLog'));
+    const logPanel = document.getElementById('resultsLogPanel');
+    if (logPanel) logPanel.open = errorCount > 0;
 
     document.getElementById('successCount').textContent = successCount;
 
