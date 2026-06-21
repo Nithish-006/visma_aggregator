@@ -104,7 +104,7 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
     auditor layout (project header → per-bill line items → bill totals →
     project total), but for just this project's bills.
     """
-    from openpyxl.styles import Font, Alignment
+    from openpyxl.styles import Font, Alignment, PatternFill
 
     title_font = st['title_font']
     header_font = st['header_font']
@@ -112,6 +112,7 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
     currency_fmt = st['currency_fmt']
     thin_border = st['thin_border']
     green_fill = st['green_fill']
+    block_bg = st['block_bg']
     project_name_fill = st['project_name_fill']
     project_name_font = st['project_name_font']
 
@@ -124,6 +125,7 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
 
     ws.cell(row=1, column=1, value=sheet_title).font = title_font
     cr = 3
+    block_start = cr
 
     # ── PROJECT HEADER (blue fill, white text) ──
     for c in range(1, BILL_COLS + 1):
@@ -212,6 +214,16 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
         cell.font = total_font
         cell.number_format = currency_fmt
 
+    # ── Mild-yellow background over the block's content rows (line items + bill
+    # totals); the blue project header / column headers and the green project
+    # total keep their own fills, matching the prior auditor theme. ──
+    blank = PatternFill(fill_type=None)
+    for rr in range(block_start, cr + 1):
+        for c in range(1, BILL_COLS + 1):
+            cell = ws.cell(row=rr, column=c)
+            if cell.fill == blank or cell.fill == PatternFill():
+                cell.fill = block_bg
+
     col_widths = {'A': 8, 'B': 28, 'C': 18, 'D': 18, 'E': 14, 'F': 35, 'G': 12,
                   'H': 10, 'I': 8, 'J': 12, 'K': 15, 'L': 12, 'M': 12, 'N': 12, 'O': 15}
     for col_letter, width in col_widths.items():
@@ -256,6 +268,16 @@ def export_single_project_summary(project_id):
     display = project.get('display') or f"{project_id} - {project.get('stem_name', '')}"
     stem_name = project.get('stem_name', '') or display
     po_value = float(project.get('po_total_value') or 0)
+
+    # Full PO gist (terms, tax split, payment terms, scope line items) so the
+    # PO Value sheet mirrors everything we persist — nothing dropped to a headline.
+    try:
+        po_gist = db_manager.get_project_po(project_id) or {}
+    except Exception as e:
+        print(f"[!] Error fetching PO gist for project export: {e}")
+        po_gist = {}
+    if po_gist.get('total_value') is not None and not po_value:
+        po_value = float(po_gist.get('total_value') or 0)
 
     st = _make_styles()
     currency_fmt = st['currency_fmt']
@@ -352,17 +374,40 @@ def export_single_project_summary(project_id):
             cell.fill = st['header_fill']
             cell.alignment = Alignment(horizontal='center', vertical='center')
 
-    def auto_width(ws, cap=40):
+    # Banner fills carry long labels in column 1 (project header, project total,
+    # column-header band) that Excel spills over empty neighbours — they must not
+    # dictate column A's width.
+    _BANNER_FILLS = {'4472C4', 'C6EFCE', '2563EB', '2F2F2F'}
+
+    def _is_col1_banner(cell):
+        f = cell.fill
+        if f is not None and getattr(f, 'patternType', None) == 'solid':
+            rgb = (f.fgColor.rgb or '')[-6:].upper()
+            return rgb in _BANNER_FILLS
+        return False
+
+    def auto_width(ws, cap=50):
+        """Expand columns to fit content so the sheet opens fully readable.
+
+        The title row and column-1 banner cells (which spill in Excel) are
+        excluded so they don't blow out column A, and any preset column width is
+        treated as a floor — auto_width only ever widens, never narrows.
+        """
         for col_cells in ws.columns:
             max_len = 0
             col_letter = get_column_letter(col_cells[0].column)
             for cell in col_cells:
+                if cell.row == 1:                       # decorative title row
+                    continue
+                if cell.column == 1 and _is_col1_banner(cell):
+                    continue
                 try:
                     val = str(cell.value) if cell.value is not None else ''
                     max_len = max(max_len, len(val))
                 except Exception:
                     pass
-            ws.column_dimensions[col_letter].width = min(max_len + 3, cap)
+            existing = ws.column_dimensions[col_letter].width or 0
+            ws.column_dimensions[col_letter].width = max(existing, min(max_len + 3, cap))
 
     def kv_row(ws, row, label, value, *, fmt=None, font=None, bold_label=True):
         lcell = ws.cell(row=row, column=1, value=label)
@@ -378,22 +423,81 @@ def export_single_project_summary(project_id):
         return st['bank_axis_font'] if bc == 'axis' else st['bank_kvb_font'] if bc == 'kvb' else None
 
     # ─────────────────────────────────────────────── SHEET 1: PO Value ──
+    # Comprehensive PO breakdown: every term we persist (number/date/client,
+    # the taxable + tax + total split, amount-in-words, payment terms, the PO
+    # document) followed by the full scope line-item table, then the received /
+    # balance roll-up. Nothing is collapsed to a single headline value.
     ws = wb.create_sheet('PO Value')
     ws.cell(row=1, column=1, value=f'PO Value — {display}').font = st['title_font']
     pct = (received_total / po_value) if po_value > 0 else 0
     bal_label = 'Excess Received' if balance < -0.5 else 'Balance Due'
+
     r = 3
-    kv_row(ws, r, 'PO Number', project.get('po_number') or '—'); r += 1
-    kv_row(ws, r, 'PO Document', project.get('po_filename') or '—'); r += 1
-    kv_row(ws, r, 'PO Value', po_value, fmt=currency_fmt, font=st['blue_amount']); r += 2
+    ws.cell(row=r, column=1, value='PO TERMS').font = st['subtitle_font']; r += 1
+    kv_row(ws, r, 'PO Number', po_gist.get('po_number') or project.get('po_number') or '—'); r += 1
+    kv_row(ws, r, 'PO Date', po_gist.get('po_date') or '—'); r += 1
+    kv_row(ws, r, 'Client', po_gist.get('client_name') or '—'); r += 1
+    kv_row(ws, r, 'Currency', po_gist.get('currency') or 'INR'); r += 1
+    kv_row(ws, r, 'PO Document', project.get('po_filename') or po_gist.get('source_filename') or '—'); r += 1
+    if po_gist.get('extraction_status'):
+        kv_row(ws, r, 'Extraction Status', str(po_gist.get('extraction_status'))); r += 1
+    r += 1
+
+    # ── Value split (taxable → tax → total) ──
+    ws.cell(row=r, column=1, value='VALUE BREAKDOWN').font = st['subtitle_font']; r += 1
+    kv_row(ws, r, 'Taxable Value', float(po_gist.get('taxable_value') or 0), fmt=currency_fmt); r += 1
+    kv_row(ws, r, 'Total Tax', float(po_gist.get('total_tax') or 0), fmt=currency_fmt); r += 1
+    kv_row(ws, r, 'PO Value (Total)', po_value, fmt=currency_fmt, font=st['blue_amount']); r += 1
+    if po_gist.get('amount_in_words'):
+        kv_row(ws, r, 'Amount in Words', str(po_gist.get('amount_in_words'))); r += 1
+    if po_gist.get('payment_terms'):
+        kv_row(ws, r, 'Payment Terms', str(po_gist.get('payment_terms'))); r += 1
+    r += 1
+
+    # ── Scope line items (description / qty / unit / rate / amount) ──
+    line_items = po_gist.get('line_items') or []
+    if line_items:
+        ws.cell(row=r, column=1, value=f'SCOPE LINE ITEMS ({len(line_items)})').font = st['subtitle_font']; r += 1
+        li_headers = ['SL.NO', 'Description', 'Qty', 'Unit', 'Rate', 'Amount']
+        for ci, h in enumerate(li_headers, 1):
+            ws.cell(row=r, column=ci, value=h)
+        style_header_row(ws, r, len(li_headers))
+        r += 1
+        li_total = 0.0
+        for idx, it in enumerate(line_items, 1):
+            ws.cell(row=r, column=1, value=idx)
+            ws.cell(row=r, column=2, value=str(it.get('description') or '—'))
+            qv = it.get('quantity')
+            if qv not in (None, '', 0):
+                ws.cell(row=r, column=3, value=float(qv)).number_format = '#,##0.###'
+            ws.cell(row=r, column=4, value=str(it.get('unit') or '—'))
+            rv = it.get('rate')
+            if rv not in (None, '', 0):
+                ws.cell(row=r, column=5, value=float(rv)).number_format = currency_fmt
+            av = it.get('amount')
+            if av not in (None, '', 0):
+                amt = float(av)
+                ws.cell(row=r, column=6, value=amt).number_format = currency_fmt
+                li_total += amt
+            r += 1
+        ws.cell(row=r, column=2, value='Line Items Total').font = Font(bold=True)
+        tc = ws.cell(row=r, column=6, value=li_total)
+        tc.font = Font(bold=True)
+        tc.number_format = currency_fmt
+        r += 2
+    else:
+        scope_n = po_gist.get('line_item_count')
+        if scope_n:
+            kv_row(ws, r, 'Scope Items', int(scope_n)); r += 2
+
+    # ── Received / balance roll-up ──
+    ws.cell(row=r, column=1, value='RECEIVED vs PO').font = st['subtitle_font']; r += 1
     kv_row(ws, r, 'Received — Bank (KVB)', received_bank, fmt=currency_fmt, font=st['income_font']); r += 1
     kv_row(ws, r, 'Received — Cash', received_cash, fmt=currency_fmt, font=st['income_font']); r += 1
-    kv_row(ws, r, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font']); r += 2
+    kv_row(ws, r, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font']); r += 1
     kv_row(ws, r, bal_label, abs(balance), fmt=currency_fmt,
            font=(st['red_amount'] if balance > 0.5 else st['green_amount'])); r += 1
     kv_row(ws, r, '% Received', pct, fmt=pct_fmt); r += 1
-    ws.column_dimensions['A'].width = 26
-    ws.column_dimensions['B'].width = 22
 
     # ──────────────────────────────────────── SHEET 2: Client Payments ──
     ws = wb.create_sheet('Client Payments')
@@ -451,15 +555,8 @@ def export_single_project_summary(project_id):
         ws.column_dimensions[col].width = w
 
     # ──────────────────────────────────────────────── SHEET 3: Expenses ──
-    # Consolidated analytical sheet: total, a category breakdown with a bar
-    # chart (like the dashboard), vendor + bank breakdowns, and a filterable
-    # transactions table (Excel column auto-filter).
-    from openpyxl.chart import BarChart, Reference
-    from openpyxl.chart.series import DataPoint
-    CAT_COLORS = ['3B82F6', 'EF4444', '10B981', 'F59E0B', '8B5CF6',
-                  'EC4899', '06B6D4', 'F97316', '6366F1', '14B8A6',
-                  'E11D48', '84CC16', 'A855F7', '0EA5E9', 'D946EF']
-
+    # Consolidated analytical sheet: total, a category breakdown, vendor + bank
+    # breakdowns, and a filterable transactions table (Excel column auto-filter).
     ws = wb.create_sheet('Expenses')
     ws.cell(row=1, column=1, value=f'Expenses — {display}').font = st['title_font']
     if date_label:
@@ -470,84 +567,57 @@ def export_single_project_summary(project_id):
 
     has_cats = (not expense_df.empty) and ('Category' in expense_df.columns)
 
-    # ── BY CATEGORY (+ horizontal bar chart) ──
+    # ── BY CATEGORY ──
     r = 5
     ws.cell(row=r, column=1, value='BY CATEGORY').font = st['subtitle_font']
     r += 1
-    cat_header_row = r
-    for ci, h in enumerate(['Category', 'Amount', 'Count', '% of Spend'], 1):
+    for ci, h in enumerate(['Category', 'Amount'], 1):
         ws.cell(row=r, column=ci, value=h)
-    style_header_row(ws, r, 4)
+    style_header_row(ws, r, 2)
     r += 1
-    cat_count = 0
     if has_cats:
-        cat_grp = expense_df.groupby('Category')['DR Amount'].agg(['sum', 'count']).sort_values('sum', ascending=False)
-        for cat, row in cat_grp.iterrows():
-            amt = float(row['sum'])
+        cat_grp = expense_df.groupby('Category')['DR Amount'].sum().sort_values(ascending=False)
+        for cat, amt in cat_grp.items():
             ws.cell(row=r, column=1, value=str(cat))
-            ws.cell(row=r, column=2, value=amt).number_format = currency_fmt
-            ws.cell(row=r, column=3, value=int(row['count']))
-            ws.cell(row=r, column=4, value=(amt / expense_total if expense_total else 0)).number_format = pct_fmt
+            ws.cell(row=r, column=2, value=float(amt)).number_format = currency_fmt
             r += 1
-            cat_count += 1
-    cat_last_row = r - 1
     ws.cell(row=r, column=1, value='TOTAL').font = Font(bold=True)
     tc = ws.cell(row=r, column=2, value=expense_total)
     tc.font = Font(bold=True)
     tc.number_format = currency_fmt
     r += 1
 
-    if cat_count > 0:
-        chart = BarChart()
-        chart.type = 'bar'           # horizontal bars, like the dashboard
-        chart.title = 'Expense by Category'
-        chart.legend = None
-        data = Reference(ws, min_col=2, min_row=cat_header_row, max_row=cat_last_row)
-        cats = Reference(ws, min_col=1, min_row=cat_header_row + 1, max_row=cat_last_row)
-        chart.add_data(data, titles_from_data=True)
-        chart.set_categories(cats)
-        series = chart.series[0]
-        for i in range(cat_count):
-            dp = DataPoint(idx=i)
-            dp.graphicalProperties.solidFill = CAT_COLORS[i % len(CAT_COLORS)]
-            series.data_points.append(dp)
-        chart.height = max(6, min(22, cat_count * 0.9 + 2))
-        chart.width = 16
-        ws.add_chart(chart, f'G{cat_header_row}')
-
     # ── BY VENDOR ──
     r += 1
     ws.cell(row=r, column=1, value='BY VENDOR').font = st['subtitle_font']
     r += 1
-    for ci, h in enumerate(['Vendor', 'Amount', 'Count'], 1):
+    for ci, h in enumerate(['Vendor', 'Amount'], 1):
         ws.cell(row=r, column=ci, value=h)
-    style_header_row(ws, r, 3)
+    style_header_row(ws, r, 2)
     r += 1
     if not expense_df.empty and v_col in expense_df.columns:
-        ven_grp = expense_df.groupby(v_col)['DR Amount'].agg(['sum', 'count']).sort_values('sum', ascending=False)
-        for vn, row in ven_grp.iterrows():
+        ven_grp = expense_df.groupby(v_col)['DR Amount'].sum().sort_values(ascending=False)
+        for vn, amt in ven_grp.items():
             ws.cell(row=r, column=1, value=str(vn) if str(vn) != 'nan' else 'Unknown')
-            ws.cell(row=r, column=2, value=float(row['sum'])).number_format = currency_fmt
-            ws.cell(row=r, column=3, value=int(row['count']))
+            ws.cell(row=r, column=2, value=float(amt)).number_format = currency_fmt
             r += 1
 
     # ── BY BANK ──
     r += 1
     ws.cell(row=r, column=1, value='BY BANK').font = st['subtitle_font']
     r += 1
-    for ci, h in enumerate(['Bank', 'Amount', 'Count'], 1):
+    for ci, h in enumerate(['Bank', 'Amount'], 1):
         ws.cell(row=r, column=ci, value=h)
-    style_header_row(ws, r, 3)
+    style_header_row(ws, r, 2)
     r += 1
     if not expense_df.empty and 'bank' in expense_df.columns:
-        bank_grp = expense_df.groupby('bank')['DR Amount'].agg(['sum', 'count']).sort_values('sum', ascending=False)
-        for bcode, row in bank_grp.iterrows():
+        bank_grp = expense_df.groupby('bank')['DR Amount'].sum().sort_values(ascending=False)
+        for bcode, amt in bank_grp.items():
             bcell = ws.cell(row=r, column=1, value=str(bcode).upper())
             bf = bank_font(str(bcode))
             if bf:
                 bcell.font = bf
-            ws.cell(row=r, column=2, value=float(row['sum'])).number_format = currency_fmt
-            ws.cell(row=r, column=3, value=int(row['count']))
+            ws.cell(row=r, column=2, value=float(amt)).number_format = currency_fmt
             r += 1
 
     # ── TRANSACTIONS (filterable) ──
@@ -706,6 +776,12 @@ def export_single_project_summary(project_id):
            font=(st['green_amount'] if received_total - spend_total >= 0 else st['red_amount'])); cr += 1
     ws.column_dimensions['A'].width = 30
     ws.column_dimensions['B'].width = 22
+
+    # Expand every sheet's columns to fit their content so the workbook opens
+    # fully readable — no manual column-widening needed. Runs last so it sizes
+    # against the final content of every sheet (overrides the per-sheet widths).
+    for sheet in wb.worksheets:
+        auto_width(sheet, cap=50)
 
     output = io.BytesIO()
     wb.save(output)
