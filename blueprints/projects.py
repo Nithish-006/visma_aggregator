@@ -519,6 +519,14 @@ def api_project_insights(project_id):
     })
 
 
+@bp.route('/api/projects/<int:project_id>/export')
+@login_required
+def api_export_project(project_id):
+    """Per-project Excel export, structured like this project's detail pop-up."""
+    from reports.project_summary_export import export_single_project_summary
+    return export_single_project_summary(project_id)
+
+
 @bp.route('/api/projects/<int:project_id>/upload-po', methods=['POST'])
 @login_required
 def api_upload_project_po(project_id):

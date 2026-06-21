@@ -211,6 +211,15 @@
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
+    // Render a bank name as a colored badge: Axis in red, KVB in green.
+    function bankBadge(bank) {
+        const code = String(bank || '').trim().toLowerCase();
+        const label = code ? escapeHtml(code.toUpperCase()) : '';
+        if (!label) return '';
+        const cls = code === 'axis' ? 'bank-axis' : code === 'kvb' ? 'bank-kvb' : '';
+        return `<span class="proj-bank-badge ${cls}">${label}</span>`;
+    }
+
     // Indian-format a number with a ₹ prefix (e.g. 2325190 -> ₹23,25,190).
     function formatINR(value) {
         const n = Number(value) || 0;
@@ -412,6 +421,11 @@
         detailUploadError.classList.add('hidden');
         detailUploadError.textContent = '';
         detailUploadForm.reset();
+        // Reset the optional export date range for each freshly opened project.
+        const exFrom = document.getElementById('detail-export-from');
+        const exTo = document.getElementById('detail-export-to');
+        if (exFrom) exFrom.value = '';
+        if (exTo) exTo.value = '';
 
         if (p.has_po) {
             detailPoExisting.classList.remove('hidden');
@@ -442,6 +456,22 @@
         if (turningOn) switchTab('po'); // the edit panel lives on the PO tab
         setEditMode(turningOn);
     });
+
+    // ── Export this project as a pop-up-structured Excel workbook ──
+    const exportBtn = document.getElementById('detail-export-btn');
+    const exportFrom = document.getElementById('detail-export-from');
+    const exportTo = document.getElementById('detail-export-to');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            if (!activeProjectId) return;
+            const params = new URLSearchParams();
+            if (exportFrom && exportFrom.value) params.set('start_date', exportFrom.value);
+            if (exportTo && exportTo.value) params.set('end_date', exportTo.value);
+            const qs = params.toString();
+            showToast('Preparing Excel…');
+            window.location.href = `/api/projects/${activeProjectId}/export${qs ? '?' + qs : ''}`;
+        });
+    }
 
     // ── Insight tabs ───────────────────────────────────
     function switchTab(key) {
@@ -809,7 +839,7 @@
                 <td class="proj-li-unit">${fmtDate(t.date)}</td>
                 <td class="proj-li-desc" title="${escapeHtml(t.description)}">${escapeHtml((t.vendor && t.vendor !== 'Unknown') ? t.vendor : t.description)}</td>
                 <td><span class="proj-cat-chip">${escapeHtml(t.category)}</span></td>
-                <td class="proj-li-unit">${escapeHtml(String(t.bank || '').toUpperCase())}</td>
+                <td class="proj-li-unit">${bankBadge(t.bank)}</td>
                 <td class="proj-li-num">${formatINR(t.amount)}</td>
             </tr>`).join('');
         const truncNote = ex.count > ex.transactions.length
