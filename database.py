@@ -1127,12 +1127,18 @@ class DatabaseManager:
         result = self.fetch_all(query, tuple(params) if params else None)
         return result[0][0] if result else 0
 
-    def check_duplicate_invoice(self, invoice_number: str) -> Optional[Dict]:
+    def check_duplicate_invoice(self, invoice_number: str, vendor_name: str = None) -> Optional[Dict]:
         """
         Check if a bill with the given invoice number already exists.
 
+        The same invoice number can legitimately be reused by different vendors,
+        so a bill is only a duplicate when BOTH the invoice number and the vendor
+        name match an existing record. When vendor_name is omitted the check falls
+        back to invoice-number-only matching (legacy behaviour).
+
         Args:
             invoice_number: The invoice number to check
+            vendor_name: The vendor name to scope the check to (case-insensitive)
 
         Returns:
             Dict with existing bill details if duplicate found, None otherwise
@@ -1143,13 +1149,23 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute("""
-                    SELECT id, invoice_number, invoice_date, vendor_name, vendor_gstin,
-                           total_amount, filename, created_at
-                    FROM bill_invoices
-                    WHERE invoice_number = %s
-                    LIMIT 1
-                """, (invoice_number.strip(),))
+                if vendor_name and vendor_name.strip():
+                    cursor.execute("""
+                        SELECT id, invoice_number, invoice_date, vendor_name, vendor_gstin,
+                               total_amount, filename, created_at
+                        FROM bill_invoices
+                        WHERE invoice_number = %s
+                          AND LOWER(TRIM(vendor_name)) = LOWER(TRIM(%s))
+                        LIMIT 1
+                    """, (invoice_number.strip(), vendor_name.strip()))
+                else:
+                    cursor.execute("""
+                        SELECT id, invoice_number, invoice_date, vendor_name, vendor_gstin,
+                               total_amount, filename, created_at
+                        FROM bill_invoices
+                        WHERE invoice_number = %s
+                        LIMIT 1
+                    """, (invoice_number.strip(),))
                 result = cursor.fetchone()
                 cursor.close()
 
@@ -2160,21 +2176,37 @@ class DatabaseManager:
         result = self.fetch_all(query, tuple(params) if params else None)
         return result[0][0] if result else 0
 
-    def check_duplicate_sales_invoice(self, invoice_number: str) -> Optional[Dict]:
-        """Check if a sales bill with the given invoice number already exists."""
+    def check_duplicate_sales_invoice(self, invoice_number: str, vendor_name: str = None) -> Optional[Dict]:
+        """Check if a sales bill with the given invoice number already exists.
+
+        A bill is only a duplicate when BOTH the invoice number and the vendor
+        name match, since different vendors can reuse the same invoice number.
+        When vendor_name is omitted the check falls back to invoice-number-only
+        matching (legacy behaviour).
+        """
         if not invoice_number or invoice_number.strip() == '':
             return None
 
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute("""
-                    SELECT id, invoice_number, invoice_date, vendor_name, vendor_gstin,
-                           total_amount, filename, created_at
-                    FROM sales_invoices
-                    WHERE invoice_number = %s
-                    LIMIT 1
-                """, (invoice_number.strip(),))
+                if vendor_name and vendor_name.strip():
+                    cursor.execute("""
+                        SELECT id, invoice_number, invoice_date, vendor_name, vendor_gstin,
+                               total_amount, filename, created_at
+                        FROM sales_invoices
+                        WHERE invoice_number = %s
+                          AND LOWER(TRIM(vendor_name)) = LOWER(TRIM(%s))
+                        LIMIT 1
+                    """, (invoice_number.strip(), vendor_name.strip()))
+                else:
+                    cursor.execute("""
+                        SELECT id, invoice_number, invoice_date, vendor_name, vendor_gstin,
+                               total_amount, filename, created_at
+                        FROM sales_invoices
+                        WHERE invoice_number = %s
+                        LIMIT 1
+                    """, (invoice_number.strip(),))
                 result = cursor.fetchone()
                 cursor.close()
 

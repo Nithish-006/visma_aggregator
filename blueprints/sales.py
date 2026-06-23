@@ -84,9 +84,12 @@ def process_sales_bill():
         for bill in results:
             if bill.get('success'):
                 invoice_number = bill.get('data', {}).get('invoice_header', {}).get('invoice_number', '')
+                vendor_name = bill.get('data', {}).get('vendor', {}).get('name', '')
 
-                # Check for duplicate invoice before saving
-                existing_bill = db_manager.check_duplicate_sales_invoice(invoice_number)
+                # Check for duplicate invoice before saving. A bill counts as a
+                # duplicate only when invoice number AND vendor match, since
+                # different vendors can reuse the same invoice number.
+                existing_bill = db_manager.check_duplicate_sales_invoice(invoice_number, vendor_name)
                 if existing_bill:
                     db_results.append({
                         'saved': False,
