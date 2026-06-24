@@ -8,6 +8,8 @@
 import os
 import json
 import re
+import time
+import base64
 from io import BytesIO
 from datetime import datetime
 
@@ -400,6 +402,213 @@ def generate_and_parse(client, model, model_name, contents, empty_retries=1):
         return None, f'Empty response from model ({empty_reason})'
 
 
+# ============================================================================
+# TRANSIENT-ERROR RETRY
+# ============================================================================
+# The single biggest source of "extraction failed" is a transient 503
+# UNAVAILABLE ("This model is currently experiencing high demand"). It is a
+# SERVER-SIDE overload, not a problem with the request — Google itself says it
+# is "usually temporary". The old code fell straight through to the next model
+# with no wait, so during a demand spike (when every Flash model is overloaded
+# at once) the whole chain failed in milliseconds. We now retry the SAME model
+# a few times with exponential backoff, which lets the spike pass and recovers
+# the overwhelming majority of these failures.
+
+# Per-model attempt budget for transient overload / rate-limit before falling
+# through to the next model. 1 initial try + (MODEL_RETRIES - 1) retries.
+MODEL_RETRIES = 4
+BACKOFF_BASE_SECONDS = 1.5   # waits: 1.5s, 3s, 6s
+BACKOFF_MAX_SECONDS = 8.0
+
+
+def classify_error(error_str):
+    """
+    Bucket an API exception so the model loop knows how to react:
+      'overloaded' -> 503/500 server overload     -> retry same model (backoff)
+      'rate'       -> 429 rate limit               -> retry same model (backoff)
+      'missing'    -> 404 model not available      -> skip straight to next model
+      'other'      -> anything else                -> skip to next model
+    """
+    s = error_str.lower()
+    if '429' in s or 'resource_exhausted' in s or 'rate limit' in s:
+        return 'rate'
+    if any(k in s for k in ('503', 'unavailable', 'overload', 'high demand',
+                            '500', 'internal', 'deadline', 'timed out', 'timeout')):
+        return 'overloaded'
+    if '404' in s or 'not found' in s:
+        return 'missing'
+    return 'other'
+
+
+def run_model_chain(client, contents, label=""):
+    """
+    Try each Gemini model in priority order and return (data, model_name, error).
+
+    Transient overload (503/500) and rate-limit (429) errors are retried on the
+    SAME model with exponential backoff before moving on, because the whole Flash
+    fleet tends to be busy at the same instant — waiting out the spike beats
+    racing through every model in milliseconds and failing them all.
+
+    data is the parsed dict on success (model_name set, error None); on total
+    failure data is None and error holds the last message seen.
+    """
+    last_error = None
+
+    for model in GEMINI_MODELS:
+        model_name = get_model_display_name(model)
+
+        for attempt in range(MODEL_RETRIES):
+            try:
+                print(f"[*] Trying {model_name}{label}...")
+                data, parse_error = generate_and_parse(
+                    client, model, model_name, contents
+                )
+                if data is not None:
+                    return data, model_name, None
+
+                # Parseable-but-empty is not a transport blip — generate_and_parse
+                # already retried the empty case. Fall through to the next model.
+                print(f"[!] {model_name}{label}: {parse_error}")
+                last_error = parse_error
+                break
+
+            except Exception as e:
+                error_str = str(e)
+                last_error = error_str
+                kind = classify_error(error_str)
+
+                if kind in ('overloaded', 'rate') and attempt < MODEL_RETRIES - 1:
+                    wait = min(BACKOFF_BASE_SECONDS * (2 ** attempt),
+                               BACKOFF_MAX_SECONDS)
+                    tag = '503 overload' if kind == 'overloaded' else '429 rate limit'
+                    print(f"[!] {model_name}{label} {tag} — retry "
+                          f"{attempt + 1}/{MODEL_RETRIES - 1} in {wait:.1f}s...")
+                    time.sleep(wait)
+                    continue
+
+                if kind == 'missing':
+                    print(f"[!] {model_name}{label} not available, trying next...")
+                elif kind in ('overloaded', 'rate'):
+                    print(f"[!] {model_name}{label} still busy after "
+                          f"{MODEL_RETRIES} attempts, trying next model...")
+                else:
+                    print(f"[!] {model_name}{label} error: {e}")
+                break
+
+    return None, None, last_error
+
+
+# ============================================================================
+# OPENROUTER FALLBACK (non-Gemini, last resort)
+# ============================================================================
+# The retry/backoff above rescues transient Gemini SPIKES, but it cannot help
+# when the WHOLE Gemini fleet is down — every model in GEMINI_MODELS is Google,
+# so a Gemini-wide outage fails the entire chain no matter how often we retry.
+# As a true last resort — reached ONLY after every Gemini model has been tried
+# and the whole chain has failed for ANY reason (503, empty, parse, network) —
+# we fall back to a non-Google vision model via OpenRouter.
+#
+# OpenRouter speaks the OpenAI chat-completions API and accepts images as base64
+# data URLs. We send the SAME rasterized page images already produced for Gemini
+# (preserving page order/boundaries); if no images are available (e.g. PyMuPDF
+# missing and only raw PDF bytes exist) this fallback is skipped.
+
+def get_openrouter_models():
+    """
+    OpenRouter vision model id(s), overridable via env (comma-separated).
+    Default is a strong non-Google OCR/vision model so the fallback is immune to
+    a Gemini-wide outage.
+    """
+    raw = (os.environ.get('OPENROUTER_MODELS')
+           or os.environ.get('OPENROUTER_MODEL')
+           or 'qwen/qwen-2.5-vl-72b-instruct')
+    return [m.strip() for m in raw.split(',') if m.strip()]
+
+
+def _png_data_url(png_bytes):
+    """Encode raw PNG bytes as an OpenAI-style base64 data URL."""
+    b64 = base64.b64encode(png_bytes).decode('ascii')
+    return f"data:image/png;base64,{b64}"
+
+
+def extract_with_openrouter(images, prompt_text, label=""):
+    """
+    Last-resort extraction via a non-Gemini vision model on OpenRouter.
+
+    images: list of PNG byte strings (one per page, in order).
+    Returns (data, model_name, error), mirroring run_model_chain. Parsing reuses
+    the same clean/repair path as the Gemini calls. Skips cleanly (returns an
+    explanatory error, never raises) when the key/SDK/images are unavailable.
+    """
+    api_key = os.environ.get('OPENROUTER_API_KEY', '')
+    if not api_key:
+        return None, None, 'OPENROUTER_API_KEY not set — no non-Gemini fallback available'
+    if not images:
+        return None, None, 'No page images available for OpenRouter fallback'
+
+    try:
+        from openai import OpenAI
+    except ImportError:
+        return None, None, 'openai package not installed — OpenRouter fallback unavailable'
+
+    try:
+        client = OpenAI(
+            base_url='https://openrouter.ai/api/v1',
+            api_key=api_key,
+            timeout=90,
+        )
+    except Exception as e:
+        return None, None, f'Could not init OpenRouter client: {e}'
+
+    # One multimodal user message: the prompt followed by every page image.
+    content = [{'type': 'text', 'text': prompt_text}]
+    for png in images:
+        content.append({'type': 'image_url',
+                        'image_url': {'url': _png_data_url(png)}})
+    messages = [{'role': 'user', 'content': content}]
+
+    last_error = None
+    for model in get_openrouter_models():
+        for attempt in range(2):  # one transient retry, then next model
+            try:
+                print(f"[*] OpenRouter fallback{label}: trying {model}...")
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0,
+                    max_tokens=16000,
+                )
+                text = resp.choices[0].message.content if resp.choices else None
+                if not (text and text.strip()):
+                    last_error = 'Empty response from OpenRouter model'
+                    print(f"[!] {model}{label}: {last_error}")
+                    break
+
+                cleaned = clean_json_response(text)
+                try:
+                    return json.loads(cleaned), f"OpenRouter: {model}", None
+                except json.JSONDecodeError as e:
+                    repaired = repair_json(cleaned)
+                    if repaired is not None:
+                        print(f"[~] {model}{label} returned imperfect JSON — repaired")
+                        return repaired, f"OpenRouter: {model}", None
+                    last_error = f'Failed to parse OpenRouter response: {e}'
+                    print(f"[!] {model}{label}: {last_error}")
+                    break
+
+            except Exception as e:
+                last_error = str(e)
+                kind = classify_error(last_error)
+                if kind in ('overloaded', 'rate') and attempt == 0:
+                    print(f"[!] {model}{label} {kind} — retry in 2s...")
+                    time.sleep(2)
+                    continue
+                print(f"[!] {model}{label} error: {e}")
+                break
+
+    return None, None, last_error
+
+
 def get_pdf_page_count(pdf_path):
     """Get the number of pages in a PDF"""
     try:
@@ -443,40 +652,25 @@ def extract_from_image(image_path):
     if img.mode in ('RGBA', 'LA', 'P'):
         img = img.convert('RGB')
 
-    last_error = None
+    data, model_name, last_error = run_model_chain(client, [img, EXTRACTION_PROMPT])
 
-    for model in GEMINI_MODELS:
-        model_name = get_model_display_name(model)
-        try:
-            print(f"[*] Trying {model_name}...")
+    if data is not None:
+        line_items = data.get('line_items', [])
+        print(f"[+] {model_name} extracted {len(line_items)} line items successfully")
+        return {'success': True, 'data': data, 'model': model_name}
 
-            data, parse_error = generate_and_parse(
-                client, model, model_name, [img, EXTRACTION_PROMPT]
-            )
+    # Entire Gemini chain failed — last-resort non-Gemini fallback via OpenRouter.
+    print("[!] All Gemini models failed — trying OpenRouter fallback...")
+    buf = BytesIO()
+    img.save(buf, format='PNG')
+    or_data, or_model, or_error = extract_with_openrouter([buf.getvalue()], EXTRACTION_PROMPT)
+    if or_data is not None:
+        line_items = or_data.get('line_items', [])
+        print(f"[+] {or_model} extracted {len(line_items)} line items successfully")
+        return {'success': True, 'data': or_data, 'model': or_model}
 
-            if data is not None:
-                line_items = data.get('line_items', [])
-                print(f"[+] {model_name} extracted {len(line_items)} line items successfully")
-                return {'success': True, 'data': data, 'model': model_name}
-
-            # Empty / unparseable response — fall through to the next model.
-            print(f"[!] {model_name}: {parse_error}")
-            last_error = parse_error
-            continue
-
-        except Exception as e:
-            error_str = str(e)
-            if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'rate' in error_str.lower():
-                print(f"[!] {model_name} rate limited, trying next...")
-            elif '404' in error_str or 'not found' in error_str.lower():
-                print(f"[!] {model_name} not available, trying next...")
-            else:
-                print(f"[!] {model_name} error: {e}")
-            last_error = error_str
-            continue
-
-    print("[!] All Gemini models failed")
-    return {'success': False, 'error': last_error or 'All models failed'}
+    print("[!] All models failed (Gemini + OpenRouter)")
+    return {'success': False, 'error': or_error or last_error or 'All models failed'}
 
 
 def rasterize_pdf_pages(pdf_path, dpi=200):
@@ -538,6 +732,18 @@ def extract_from_pdf(pdf_path, page_count=None):
     if page_images:
         n = len(page_images)
         print(f"[*] Rasterized PDF into {n} page image(s) at 200 DPI")
+        pdf_prompt = EXTRACTION_PROMPT + (
+            f"\n\nThe {n} image(s) above are the pages of ONE invoice, in order "
+            f"(PAGE 1 of {n} ... PAGE {n} of {n}). Apply RULE 3: first decide "
+            "whether these pages are CONTINUATION pages (different goods rows, "
+            "one long invoice) or DUPLICATE/TRIPLICATE COPIES (same invoice "
+            "number/date/totals reprinted, or pages labelled Original/Duplicate/"
+            "Triplicate). If continuation, merge all line items in page order and "
+            f"take the FINAL totals from the LAST page (PAGE {n}). If they are "
+            "copies, extract ONLY the original copy ONCE and IGNORE the duplicate/"
+            "triplicate pages — never aggregate their line items or totals. "
+            "Return ONE invoice object."
+        )
         # Build ordered image parts, each tagged with its page position so the
         # model knows where the document ends and which page holds the totals.
         content_parts = []
@@ -546,73 +752,50 @@ def extract_from_pdf(pdf_path, page_count=None):
             content_parts.append(
                 types.Part.from_bytes(data=png_bytes, mime_type='image/png')
             )
-        content_parts.append(
-            EXTRACTION_PROMPT + (
-                f"\n\nThe {n} image(s) above are the pages of ONE invoice, in order "
-                f"(PAGE 1 of {n} ... PAGE {n} of {n}). Apply RULE 3: first decide "
-                "whether these pages are CONTINUATION pages (different goods rows, "
-                "one long invoice) or DUPLICATE/TRIPLICATE COPIES (same invoice "
-                "number/date/totals reprinted, or pages labelled Original/Duplicate/"
-                "Triplicate). If continuation, merge all line items in page order and "
-                f"take the FINAL totals from the LAST page (PAGE {n}). If they are "
-                "copies, extract ONLY the original copy ONCE and IGNORE the duplicate/"
-                "triplicate pages — never aggregate their line items or totals. "
-                "Return ONE invoice object."
-            )
-        )
+        content_parts.append(pdf_prompt)
+        # OpenRouter fallback can reuse these rasterized page images.
+        or_images = page_images
     else:
         # Fallback: hand Gemini the raw PDF (previous behaviour).
         with open(pdf_path, 'rb') as f:
             pdf_bytes = f.read()
+        pdf_prompt = EXTRACTION_PROMPT + (
+            "\n\nThis PDF spans "
+            f"{page_count or 'multiple'} page(s). Apply RULE 3: decide whether the "
+            "pages are CONTINUATION pages of one long invoice or DUPLICATE/"
+            "TRIPLICATE COPIES of the same invoice. If continuation, read every "
+            "page, merge all line items, and return the FINAL consolidated totals "
+            "(usually on the last page). If they are copies (same invoice number/"
+            "date/totals reprinted, or pages labelled Original/Duplicate/"
+            "Triplicate), extract ONLY the original copy ONCE and IGNORE the rest "
+            "— never aggregate duplicate line items or totals. Return ONE invoice object."
+        )
         content_parts = [
             types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf'),
-            EXTRACTION_PROMPT + (
-                "\n\nThis PDF spans "
-                f"{page_count or 'multiple'} page(s). Apply RULE 3: decide whether the "
-                "pages are CONTINUATION pages of one long invoice or DUPLICATE/"
-                "TRIPLICATE COPIES of the same invoice. If continuation, read every "
-                "page, merge all line items, and return the FINAL consolidated totals "
-                "(usually on the last page). If they are copies (same invoice number/"
-                "date/totals reprinted, or pages labelled Original/Duplicate/"
-                "Triplicate), extract ONLY the original copy ONCE and IGNORE the rest "
-                "— never aggregate duplicate line items or totals. Return ONE invoice object."
-            )
+            pdf_prompt,
         ]
+        # No rasterized images — OpenRouter (image-only) can't be used here.
+        or_images = None
 
-    last_error = None
+    data, model_name, last_error = run_model_chain(client, content_parts, label=" for PDF")
 
-    for model in GEMINI_MODELS:
-        model_name = get_model_display_name(model)
-        try:
-            print(f"[*] Trying {model_name} for PDF...")
+    if data is not None:
+        line_items = data.get('line_items', [])
+        print(f"[+] {model_name} extracted {len(line_items)} consolidated line items from PDF")
+        return {'success': True, 'data': data, 'model': model_name}
 
-            data, parse_error = generate_and_parse(
-                client, model, model_name, content_parts
-            )
+    # Entire Gemini chain failed — last-resort non-Gemini fallback via OpenRouter.
+    print("[!] All Gemini models failed for PDF — trying OpenRouter fallback...")
+    or_data, or_model, or_error = extract_with_openrouter(
+        or_images, pdf_prompt, label=" for PDF"
+    )
+    if or_data is not None:
+        line_items = or_data.get('line_items', [])
+        print(f"[+] {or_model} extracted {len(line_items)} consolidated line items from PDF")
+        return {'success': True, 'data': or_data, 'model': or_model}
 
-            if data is not None:
-                line_items = data.get('line_items', [])
-                print(f"[+] {model_name} extracted {len(line_items)} consolidated line items from PDF")
-                return {'success': True, 'data': data, 'model': model_name}
-
-            # Empty / unparseable response — fall through to the next model.
-            print(f"[!] {model_name} PDF: {parse_error}")
-            last_error = parse_error
-            continue
-
-        except Exception as e:
-            error_str = str(e)
-            if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'rate' in error_str.lower():
-                print(f"[!] {model_name} rate limited, trying next...")
-            elif '404' in error_str or 'not found' in error_str.lower():
-                print(f"[!] {model_name} not available, trying next...")
-            else:
-                print(f"[!] {model_name} PDF error: {e}")
-            last_error = error_str
-            continue
-
-    print("[!] All Gemini models failed for PDF")
-    return {'success': False, 'error': last_error or 'All models failed'}
+    print("[!] All models failed for PDF (Gemini + OpenRouter)")
+    return {'success': False, 'error': or_error or last_error or 'All models failed'}
 
 
 def process_bill_file(file_path, filename):
