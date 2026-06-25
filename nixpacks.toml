@@ -10,5 +10,16 @@ cmds = [
     "/opt/venv/bin/pip install -r requirements.txt",
 ]
 
+# --timeout 300: a single hard multi-page PDF can legitimately take a couple of
+#   minutes through the model + fallback chain. At the old 120s the worker was
+#   SIGKILLed mid-request and gunicorn returned an HTML 502/504 page, which the
+#   frontend then failed to JSON-parse ("Unexpected token '<'"). The per-call and
+#   overall deadlines in bill_processor.py keep extraction comfortably under this.
+# --graceful-timeout 300: give in-flight requests the same room on restart/deploy.
+# --threads 4: bill extraction is I/O-bound (it spends almost all its time waiting
+#   on the model API), and the frontend fires up to 5 uploads at once. With only 2
+#   sync workers, 3 of those requests queued — and queue-wait + processing blew the
+#   timeout. 2 workers x 4 threads = 8 concurrent requests, so uploads are served
+#   instead of queued. Threads share memory, so this is far cheaper than 8 workers.
 [start]
-cmd = "/opt/venv/bin/gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+cmd = "/opt/venv/bin/gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 300 --graceful-timeout 300"

@@ -1,6 +1,7 @@
 """Bill processor: /bill-processor + /api/bills/* endpoints."""
 
 import os
+import uuid
 
 from flask import (
     Blueprint, render_template, request, jsonify, send_file,
@@ -44,10 +45,17 @@ def process_bill():
         if ext not in allowed_extensions:
             return jsonify({'success': False, 'error': f'Unsupported file type: {ext}'}), 400
 
-        # Save file temporarily
+        # Save file temporarily. The timestamp alone only has 1-second resolution,
+        # so two concurrent uploads of the same filename within the same second
+        # produced an identical temp path — one request would overwrite (or
+        # interleave writes into) the other's file. With threading now enabled
+        # that race is live, so add a short random token for uniqueness. The
+        # original filename stays as the suffix, so serve_bill_file's
+        # "bill_*_{filename}" glob still locates the file for preview.
         filename = secure_filename(file.filename)
         timestamp = now_ist().strftime('%Y%m%d_%H%M%S')
-        temp_filename = f"bill_{timestamp}_{filename}"
+        unique = uuid.uuid4().hex[:8]
+        temp_filename = f"bill_{timestamp}_{unique}_{filename}"
         temp_path = os.path.join(Config.UPLOAD_FOLDER, temp_filename)
 
         file.save(temp_path)

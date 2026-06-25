@@ -233,12 +233,35 @@ Return ONLY valid JSON in this exact structure (no markdown, no explanation):
 """
 
 
+# ---------------------------------------------------------------------------
+# Latency guards (the difference between "fails cleanly as JSON" and "kills the
+# gunicorn worker -> HTML 502 -> 'Unexpected token <' in the browser").
+#
+# GEMINI_TIMEOUT_MS  — per-call HTTP timeout. Without this the SDK waits forever:
+#   one hung request blocks the worker until gunicorn SIGKILLs it. With it, a
+#   stuck call raises a normal (catchable) timeout that the retry/fallback chain
+#   already handles, and classify_error() buckets as 'overloaded'.
+# EXTRACTION_DEADLINE_SECONDS — overall wall-clock budget for ONE file across the
+#   ENTIRE model + fallback chain. Once exceeded we stop trying and return the
+#   error as JSON, so the response always lands well under gunicorn --timeout 300.
+# Both are env-overridable for tuning in production without a redeploy.
+# ---------------------------------------------------------------------------
+GEMINI_TIMEOUT_MS = int(os.environ.get('GEMINI_TIMEOUT_MS', '90000'))   # 90s/call
+EXTRACTION_DEADLINE_SECONDS = float(os.environ.get('EXTRACTION_DEADLINE_SECONDS', '240'))
+
+
 def get_gemini_client():
-    """Get configured Gemini client"""
+    """Get configured Gemini client with a per-call HTTP timeout."""
     api_key = os.environ.get('GEMINI_API_KEY', '')
     if not api_key:
         raise ValueError("GEMINI_API_KEY not found in environment variables")
-    return genai.Client(api_key=api_key)
+    # http_options.timeout is in MILLISECONDS and applies to every request made
+    # through this client — the key guard against a single hung call blocking the
+    # worker until the gunicorn timeout kills it.
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
+    )
 
 
 def clean_json_response(response_text):
@@ -440,7 +463,7 @@ def classify_error(error_str):
     return 'other'
 
 
-def run_model_chain(client, contents, label=""):
+def run_model_chain(client, contents, label="", deadline=None):
     """
     Try each Gemini model in priority order and return (data, model_name, error).
 
@@ -449,8 +472,11 @@ def run_model_chain(client, contents, label=""):
     fleet tends to be busy at the same instant — waiting out the spike beats
     racing through every model in milliseconds and failing them all.
 
-    data is the parsed dict on success (model_name set, error None); on total
-    failure data is None and error holds the last message seen.
+    `deadline` is an optional time.monotonic() value: once passed we stop trying
+    new models/retries and return the last error, so the caller can respond with
+    JSON before the gunicorn worker timeout fires. data is the parsed dict on
+    success (model_name set, error None); on total failure data is None and error
+    holds the last message seen.
     """
     last_error = None
 
@@ -458,6 +484,9 @@ def run_model_chain(client, contents, label=""):
         model_name = get_model_display_name(model)
 
         for attempt in range(MODEL_RETRIES):
+            if deadline is not None and time.monotonic() >= deadline:
+                print(f"[!] Extraction deadline reached{label} — stopping model chain")
+                return None, None, (last_error or 'Extraction timed out')
             try:
                 print(f"[*] Trying {model_name}{label}...")
                 data, parse_error = generate_and_parse(
@@ -480,6 +509,11 @@ def run_model_chain(client, contents, label=""):
                 if kind in ('overloaded', 'rate') and attempt < MODEL_RETRIES - 1:
                     wait = min(BACKOFF_BASE_SECONDS * (2 ** attempt),
                                BACKOFF_MAX_SECONDS)
+                    # Never sleep past the deadline — bail to the fallback instead
+                    # of burning the remaining budget waiting to retry.
+                    if deadline is not None and time.monotonic() + wait >= deadline:
+                        print(f"[!] {model_name}{label} overloaded but no time left to retry")
+                        break
                     tag = '503 overload' if kind == 'overloaded' else '429 rate limit'
                     print(f"[!] {model_name}{label} {tag} — retry "
                           f"{attempt + 1}/{MODEL_RETRIES - 1} in {wait:.1f}s...")
@@ -642,6 +676,8 @@ def extract_from_image(image_path):
     """
     print(f"\n[*] Processing image: {os.path.basename(image_path)}")
 
+    deadline = time.monotonic() + EXTRACTION_DEADLINE_SECONDS
+
     try:
         client = get_gemini_client()
     except ValueError as e:
@@ -652,14 +688,19 @@ def extract_from_image(image_path):
     if img.mode in ('RGBA', 'LA', 'P'):
         img = img.convert('RGB')
 
-    data, model_name, last_error = run_model_chain(client, [img, EXTRACTION_PROMPT])
+    data, model_name, last_error = run_model_chain(
+        client, [img, EXTRACTION_PROMPT], deadline=deadline)
 
     if data is not None:
         line_items = data.get('line_items', [])
         print(f"[+] {model_name} extracted {len(line_items)} line items successfully")
         return {'success': True, 'data': data, 'model': model_name}
 
-    # Entire Gemini chain failed — last-resort non-Gemini fallback via OpenRouter.
+    # Entire Gemini chain failed — last-resort non-Gemini fallback via OpenRouter,
+    # but only if there is still time left in the budget for a ~90s vision call.
+    if time.monotonic() >= deadline:
+        print("[!] No time left for OpenRouter fallback — returning Gemini error")
+        return {'success': False, 'error': last_error or 'Extraction timed out'}
     print("[!] All Gemini models failed — trying OpenRouter fallback...")
     buf = BytesIO()
     img.save(buf, format='PNG')
@@ -721,6 +762,8 @@ def extract_from_pdf(pdf_path, page_count=None):
     pages_note = f" ({page_count} pages)" if page_count else ""
     print(f"\n[*] Processing PDF as a single consolidated invoice{pages_note}")
 
+    deadline = time.monotonic() + EXTRACTION_DEADLINE_SECONDS
+
     try:
         client = get_gemini_client()
     except ValueError as e:
@@ -777,14 +820,19 @@ def extract_from_pdf(pdf_path, page_count=None):
         # No rasterized images — OpenRouter (image-only) can't be used here.
         or_images = None
 
-    data, model_name, last_error = run_model_chain(client, content_parts, label=" for PDF")
+    data, model_name, last_error = run_model_chain(
+        client, content_parts, label=" for PDF", deadline=deadline)
 
     if data is not None:
         line_items = data.get('line_items', [])
         print(f"[+] {model_name} extracted {len(line_items)} consolidated line items from PDF")
         return {'success': True, 'data': data, 'model': model_name}
 
-    # Entire Gemini chain failed — last-resort non-Gemini fallback via OpenRouter.
+    # Entire Gemini chain failed — last-resort non-Gemini fallback via OpenRouter,
+    # but only if there is still time left in the budget for a ~90s vision call.
+    if time.monotonic() >= deadline:
+        print("[!] No time left for OpenRouter fallback (PDF) — returning Gemini error")
+        return {'success': False, 'error': last_error or 'Extraction timed out'}
     print("[!] All Gemini models failed for PDF — trying OpenRouter fallback...")
     or_data, or_model, or_error = extract_with_openrouter(
         or_images, pdf_prompt, label=" for PDF"

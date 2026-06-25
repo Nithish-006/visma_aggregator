@@ -1737,21 +1737,76 @@ async function processFiles() {
     showProcessingResults();
 }
 
+// Client-side ceiling for a single file. Kept just above the server's gunicorn
+// --timeout (300s) so the browser waits out a legitimately slow extraction but
+// still gives a clean message instead of hanging forever on a dead connection.
+const UPLOAD_TIMEOUT_MS = 310000;
+
+// Read a response as JSON, but NEVER blindly call response.json(): when the
+// server times out, a proxy/gateway returns an HTML error page, and JSON.parse
+// on "<!DOCTYPE html>..." throws the cryptic "Unexpected token '<'". Surface a
+// human-readable reason instead, derived from the HTTP status.
+async function readJsonResponse(response) {
+    const raw = await response.text();
+    const looksLikeJson = raw.trim().startsWith('{') || raw.trim().startsWith('[');
+
+    if (looksLikeJson) {
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            // fall through to the friendly message below
+        }
+    }
+
+    // Non-JSON body (HTML error page, empty, or proxy text). Map the status to
+    // something the user can act on.
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+        throw new Error('Server timed out while reading this bill — it may be large or the AI service was slow. Try again, or split a multi-page PDF.');
+    }
+    if (response.status === 413) {
+        throw new Error('File too large for the server to accept.');
+    }
+    if (response.status === 401 || response.status === 403) {
+        throw new Error('Session expired — please log in again and retry.');
+    }
+    if (!response.ok) {
+        throw new Error(`Server error ${response.status} while processing this bill.`);
+    }
+    throw new Error('Server returned an unexpected (non-JSON) response.');
+}
+
 async function uploadAndProcessFile(file) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch('/api/bills/process', {
-        method: 'POST',
-        body: formData
-    });
+    // Abort a request that overruns the server budget so it fails cleanly
+    // instead of leaving the worker slot and the UI hanging indefinitely.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Upload failed');
+    let response;
+    try {
+        response = await fetch('/api/bills/process', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal
+        });
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            throw new Error('Timed out waiting for the server (over 5 minutes). The bill may be too large or the AI service is down.');
+        }
+        throw new Error(`Network error: ${err.message || 'could not reach the server'}`);
+    } finally {
+        clearTimeout(timer);
     }
 
-    return await response.json();
+    const data = await readJsonResponse(response);
+
+    if (!response.ok) {
+        throw new Error((data && data.error) || `Upload failed (HTTP ${response.status})`);
+    }
+
+    return data;
 }
 
 function updateProgress(current, total) {
