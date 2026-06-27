@@ -421,11 +421,6 @@
         detailUploadError.classList.add('hidden');
         detailUploadError.textContent = '';
         detailUploadForm.reset();
-        // Reset the optional export date range for each freshly opened project.
-        const exFrom = document.getElementById('detail-export-from');
-        const exTo = document.getElementById('detail-export-to');
-        if (exFrom) exFrom.value = '';
-        if (exTo) exTo.value = '';
 
         if (p.has_po) {
             detailPoExisting.classList.remove('hidden');
@@ -457,21 +452,6 @@
         setEditMode(turningOn);
     });
 
-    // ── Export this project as a pop-up-structured Excel workbook ──
-    const exportBtn = document.getElementById('detail-export-btn');
-    const exportFrom = document.getElementById('detail-export-from');
-    const exportTo = document.getElementById('detail-export-to');
-    if (exportBtn) {
-        exportBtn.addEventListener('click', () => {
-            if (!activeProjectId) return;
-            const params = new URLSearchParams();
-            if (exportFrom && exportFrom.value) params.set('start_date', exportFrom.value);
-            if (exportTo && exportTo.value) params.set('end_date', exportTo.value);
-            const qs = params.toString();
-            showToast('Preparing Excel…');
-            window.location.href = `/api/projects/${activeProjectId}/export${qs ? '?' + qs : ''}`;
-        });
-    }
 
     // ── Insight tabs ───────────────────────────────────
     function switchTab(key) {

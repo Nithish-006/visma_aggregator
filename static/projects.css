@@ -437,31 +437,6 @@ html, body {
     justify-content: flex-end;
 }
 
-/* Optional date range that feeds the Excel export */
-.proj-export-range {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-.proj-export-range-sep {
-    color: var(--proj-text-muted);
-    font-size: 0.8rem;
-}
-.proj-export-date {
-    background: var(--proj-surface-soft);
-    border: 1px solid var(--proj-border);
-    color: var(--proj-text);
-    border-radius: 6px;
-    padding: 0.28rem 0.4rem;
-    font-size: 0.78rem;
-    font-family: inherit;
-    color-scheme: dark;
-}
-.proj-export-date:focus {
-    outline: none;
-    border-color: var(--proj-accent);
-}
-
 /* Header "Edit" toggle â€” reveals the edit panel (type / reprocess / PO values) */
 .proj-edit-toggle {
     display: inline-flex;
