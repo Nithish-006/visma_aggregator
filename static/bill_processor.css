@@ -313,6 +313,70 @@ body {
     box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);
 }
 
+/* ── Bill search box ── */
+.bp-search-group {
+    flex: 1 1 260px;
+    min-width: 220px;
+}
+
+.bp-search-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.bp-search-icon {
+    position: absolute;
+    left: 10px;
+    color: var(--text-secondary);
+    pointer-events: none;
+}
+
+.bp-search-input {
+    width: 100%;
+    padding-left: 32px;
+    padding-right: 30px;
+}
+
+.bp-search-clear {
+    position: absolute;
+    right: 8px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--border-color);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.bp-search-clear:hover {
+    background: var(--accent-color);
+    color: #fff;
+}
+
+/* ── Sortable "Added" column header ── */
+.th-sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.th-sortable:hover {
+    color: var(--accent-color);
+}
+
+.sort-caret {
+    font-size: 0.7rem;
+    color: var(--accent-color);
+}
+
 .bp-filter-dropdown {
     min-width: 150px;
 }

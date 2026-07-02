@@ -5,6 +5,8 @@
 // State
 let storedBills = [];
 let flaggedOnly = false;        // review-queue filter: show only validation_status='review'
+let searchQuery = '';           // free-text search across invoice #, vendor, buyer, project, GSTIN
+let addedSort = null;           // sort by "Added" (created_at): null = server order, 'desc', 'asc'
 let allProjects = [];          // historical — filter dropdown only
 let canonicalProjects = [];    // canonical — per-row edit picker
 let canonicalProjectSet = new Set();
@@ -80,6 +82,14 @@ function init() {
         flaggedOnly = e.target.checked;
         renderInvoicesTable();
     });
+
+    // Free-text bill search (client-side, filters the already-loaded bills)
+    initBillSearch();
+
+    // Sort by "Added" column (client-side)
+    const addedHeader = document.getElementById('addedSortHeader');
+    if (addedHeader) addedHeader.addEventListener('click', toggleAddedSort);
+
     document.getElementById('closeReprocessModal').addEventListener('click', closeReprocessModal);
     document.getElementById('reprocessCancelBtn').addEventListener('click', closeReprocessModal);
 
@@ -434,9 +444,74 @@ function refreshData() {
 // ============================================================================
 
 function getVisibleBills() {
-    return flaggedOnly
+    let bills = flaggedOnly
         ? storedBills.filter(b => b.validation_status === 'review')
         : storedBills;
+    if (searchQuery) {
+        bills = bills.filter(b => billMatchesSearch(b, searchQuery));
+    }
+    if (addedSort) {
+        bills = bills.slice().sort((a, b) => {
+            const ta = new Date(a.created_at).getTime() || 0;
+            const tb = new Date(b.created_at).getTime() || 0;
+            return addedSort === 'asc' ? ta - tb : tb - ta;
+        });
+    }
+    return bills;
+}
+
+// Toggle the "Added" column sort: server order → newest first → oldest first.
+function toggleAddedSort() {
+    addedSort = addedSort === 'desc' ? 'asc' : 'desc';
+    updateAddedSortIndicator();
+    renderInvoicesTable();
+}
+
+function updateAddedSortIndicator() {
+    const caret = document.getElementById('addedSortCaret');
+    if (caret) caret.textContent = addedSort === 'asc' ? ' ▲' : addedSort === 'desc' ? ' ▼' : '';
+}
+
+// True if any of the bill's key fields contains the (already lower-cased) query.
+function billMatchesSearch(bill, q) {
+    const fields = [
+        bill.invoice_number, bill.vendor_name, bill.vendor_gstin,
+        bill.buyer_name, bill.buyer_gstin, bill.project,
+        bill.invoice_date, bill.total_amount
+    ];
+    return fields.some(f => f != null && String(f).toLowerCase().includes(q));
+}
+
+// Wire the search input: filter as the user types, with a clear (×) button.
+function initBillSearch() {
+    const input = document.getElementById('billSearchInput');
+    const clearBtn = document.getElementById('billSearchClear');
+    if (!input) return;
+
+    input.addEventListener('input', () => {
+        searchQuery = input.value.trim().toLowerCase();
+        if (clearBtn) clearBtn.style.display = input.value ? 'flex' : 'none';
+        renderInvoicesTable();
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            input.value = '';
+            searchQuery = '';
+            if (clearBtn) clearBtn.style.display = 'none';
+            renderInvoicesTable();
+        }
+    });
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            searchQuery = '';
+            clearBtn.style.display = 'none';
+            renderInvoicesTable();
+            input.focus();
+        });
+    }
 }
 
 // Clickable: a flagged bill can be manually marked OK; a manually-approved

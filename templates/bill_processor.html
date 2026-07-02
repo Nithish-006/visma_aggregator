@@ -172,6 +172,21 @@
         <!-- Filter Bar -->
         <div class="bp-filter-bar">
             <div class="bp-filters">
+                <div class="bp-filter-group bp-search-group">
+                    <label>Search</label>
+                    <div class="bp-search-wrapper">
+                        <svg class="bp-search-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14"
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                        <input type="text" id="billSearchInput" class="bp-filter-input bp-search-input"
+                            placeholder="Invoice #, vendor, buyer, project, GSTIN..." autocomplete="off">
+                        <button type="button" class="bp-search-clear" id="billSearchClear" title="Clear search"
+                            style="display:none;">&times;</button>
+                    </div>
+                </div>
                 <div class="bp-filter-group">
                     <label>From</label>
                     <input type="date" id="filterDateFrom" class="bp-filter-input">
@@ -311,7 +326,9 @@
                                 <th>Total</th>
                                 <th title="Reconciliation check">Check</th>
                                 <th>Project</th>
-                                <th>Added</th>
+                                <th class="th-sortable" id="addedSortHeader" title="Click to sort by date added">
+                                    Added <span class="sort-caret" id="addedSortCaret"></span>
+                                </th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
