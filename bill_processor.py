@@ -10,6 +10,7 @@ import json
 import re
 import time
 import base64
+import threading
 from io import BytesIO
 from datetime import datetime
 
@@ -250,18 +251,70 @@ GEMINI_TIMEOUT_MS = int(os.environ.get('GEMINI_TIMEOUT_MS', '90000'))   # 90s/ca
 EXTRACTION_DEADLINE_SECONDS = float(os.environ.get('EXTRACTION_DEADLINE_SECONDS', '240'))
 
 
+# ----------------------------------------------------------------------------
+# API KEY ROTATION (free-tier friendly)
+# ----------------------------------------------------------------------------
+# The free tier enforces per-key/per-project quotas (requests-per-minute plus a
+# daily cap). Configuring several keys and rotating between them multiplies the
+# effective free-tier throughput AND lets a single request that gets a 429 on
+# one key fail over to the next key instead of dying.
+#
+# Keys are read from GEMINI_API_KEY (primary) + GEMINI_API_KEY_1..N, order
+# preserved and duplicates dropped. A module-level round-robin counter spreads
+# the STARTING key across requests so no single key absorbs every first hit.
+# Clients are cached per key (each holds the same per-call HTTP timeout).
+_client_cache = {}
+_key_rotation_lock = threading.Lock()
+_key_rotation_index = 0
+
+
+def get_gemini_api_keys():
+    """Ordered, de-duplicated list of configured Gemini API keys."""
+    raw = [os.environ.get('GEMINI_API_KEY', '')]
+    for i in range(1, 10):
+        raw.append(os.environ.get(f'GEMINI_API_KEY_{i}', ''))
+    keys, seen = [], set()
+    for k in (s.strip() for s in raw):
+        if k and k not in seen:
+            seen.add(k)
+            keys.append(k)
+    return keys
+
+
+def _client_for_key(api_key):
+    """Build (once, then cache) a Gemini client for a specific key.
+
+    http_options.timeout is in MILLISECONDS and applies to every request made
+    through the client — the guard against a single hung call blocking the
+    worker until the gunicorn timeout kills it.
+    """
+    client = _client_cache.get(api_key)
+    if client is None:
+        client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
+        )
+        _client_cache[api_key] = client
+    return client
+
+
+def _next_rotation_start(n):
+    """Round-robin starting offset so requests spread across the keys."""
+    global _key_rotation_index
+    if n <= 0:
+        return 0
+    with _key_rotation_lock:
+        idx = _key_rotation_index % n
+        _key_rotation_index = (_key_rotation_index + 1) % n
+    return idx
+
+
 def get_gemini_client():
-    """Get configured Gemini client with a per-call HTTP timeout."""
-    api_key = os.environ.get('GEMINI_API_KEY', '')
-    if not api_key:
+    """Client for the primary key (kept for callers that need a single one)."""
+    keys = get_gemini_api_keys()
+    if not keys:
         raise ValueError("GEMINI_API_KEY not found in environment variables")
-    # http_options.timeout is in MILLISECONDS and applies to every request made
-    # through this client — the key guard against a single hung call blocking the
-    # worker until the gunicorn timeout kills it.
-    return genai.Client(
-        api_key=api_key,
-        http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
-    )
+    return _client_for_key(keys[0])
 
 
 def clean_json_response(response_text):
@@ -447,14 +500,20 @@ BACKOFF_MAX_SECONDS = 8.0
 def classify_error(error_str):
     """
     Bucket an API exception so the model loop knows how to react:
-      'overloaded' -> 503/500 server overload     -> retry same model (backoff)
-      'rate'       -> 429 rate limit               -> retry same model (backoff)
-      'missing'    -> 404 model not available      -> skip straight to next model
-      'other'      -> anything else                -> skip to next model
+      'rate'       -> 429 rate limit / quota       -> fail over to next KEY
+      'auth'       -> 401/403 invalid/blocked key  -> fail over to next KEY
+      'overloaded' -> 503/500 server overload      -> retry same model (backoff)
+      'missing'    -> 404 model not available       -> skip straight to next model
+      'other'      -> anything else                 -> skip to next model
     """
     s = error_str.lower()
-    if '429' in s or 'resource_exhausted' in s or 'rate limit' in s:
+    if '429' in s or 'resource_exhausted' in s or 'rate limit' in s or 'quota' in s:
         return 'rate'
+    if any(k in s for k in ('api key not valid', 'api_key_invalid', 'invalid api key',
+                            'invalid_argument api key', 'permission denied',
+                            'permission_denied', 'unauthenticated', 'unauthorized',
+                            '401', '403')):
+        return 'auth'
     if any(k in s for k in ('503', 'unavailable', 'overload', 'high demand',
                             '500', 'internal', 'deadline', 'timed out', 'timeout')):
         return 'overloaded'
@@ -463,14 +522,16 @@ def classify_error(error_str):
     return 'other'
 
 
-def run_model_chain(client, contents, label="", deadline=None):
+def run_model_chain(contents, label="", deadline=None):
     """
-    Try each Gemini model in priority order and return (data, model_name, error).
+    Try each Gemini model in priority order, rotating across all configured API
+    keys, and return (data, model_name, error).
 
-    Transient overload (503/500) and rate-limit (429) errors are retried on the
-    SAME model with exponential backoff before moving on, because the whole Flash
-    fleet tends to be busy at the same instant — waiting out the spike beats
-    racing through every model in milliseconds and failing them all.
+    Key rotation: each request starts on a round-robin key, and WITHIN a model a
+    429 rate-limit/quota or an auth error on one key fails over IMMEDIATELY to the
+    next key (no wait). Only when every key is throttled — or the model is
+    server-side overloaded (503/500, where switching keys can't help) — do we
+    back off and retry the model with exponential backoff.
 
     `deadline` is an optional time.monotonic() value: once passed we stop trying
     new models/retries and return the last error, so the caller can respond with
@@ -478,6 +539,12 @@ def run_model_chain(client, contents, label="", deadline=None):
     success (model_name set, error None); on total failure data is None and error
     holds the last message seen.
     """
+    keys = get_gemini_api_keys()
+    if not keys:
+        return None, None, 'No Gemini API keys configured'
+    n = len(keys)
+    start = _next_rotation_start(n)
+    ordered = [keys[(start + i) % n] for i in range(n)]
     last_error = None
 
     for model in GEMINI_MODELS:
@@ -487,47 +554,86 @@ def run_model_chain(client, contents, label="", deadline=None):
             if deadline is not None and time.monotonic() >= deadline:
                 print(f"[!] Extraction deadline reached{label} — stopping model chain")
                 return None, None, (last_error or 'Extraction timed out')
-            try:
-                print(f"[*] Trying {model_name}{label}...")
-                data, parse_error = generate_and_parse(
-                    client, model, model_name, contents
-                )
-                if data is not None:
-                    return data, model_name, None
 
-                # Parseable-but-empty is not a transport blip — generate_and_parse
-                # already retried the empty case. Fall through to the next model.
-                print(f"[!] {model_name}{label}: {parse_error}")
-                last_error = parse_error
-                break
+            # One pass over every key. A rate-limited/bad key fails over to the
+            # next key immediately; a hard error jumps straight to the next model.
+            next_model = False        # 404/parse/other -> stop trying this model
+            saw_rate = False          # a backoff round may free per-minute quota
+            got_overloaded = False    # 503 -> backoff on the same key/model
 
-            except Exception as e:
-                error_str = str(e)
-                last_error = error_str
-                kind = classify_error(error_str)
+            for k_off in range(n):
+                api_key = ordered[k_off]
+                key_tag = f" [key {k_off + 1}/{n}]" if n > 1 else ""
+                try:
+                    print(f"[*] Trying {model_name}{key_tag}{label}...")
+                    data, parse_error = generate_and_parse(
+                        _client_for_key(api_key), model, model_name, contents
+                    )
+                    if data is not None:
+                        return data, model_name, None
 
-                if kind in ('overloaded', 'rate') and attempt < MODEL_RETRIES - 1:
-                    wait = min(BACKOFF_BASE_SECONDS * (2 ** attempt),
-                               BACKOFF_MAX_SECONDS)
-                    # Never sleep past the deadline — bail to the fallback instead
-                    # of burning the remaining budget waiting to retry.
-                    if deadline is not None and time.monotonic() + wait >= deadline:
-                        print(f"[!] {model_name}{label} overloaded but no time left to retry")
+                    # Parseable-but-empty is not a transport blip — already
+                    # retried inside generate_and_parse. Move to the next model.
+                    print(f"[!] {model_name}{label}: {parse_error}")
+                    last_error = parse_error
+                    next_model = True
+                    break
+
+                except Exception as e:
+                    error_str = str(e)
+                    last_error = error_str
+                    kind = classify_error(error_str)
+
+                    if kind in ('rate', 'auth'):
+                        saw_rate = saw_rate or (kind == 'rate')
+                        reason = '429 rate/quota' if kind == 'rate' else 'auth/invalid key'
+                        if k_off < n - 1:
+                            print(f"[!] {model_name}{key_tag}{label} {reason} — "
+                                  f"failing over to next key...")
+                        else:
+                            print(f"[!] {model_name}{key_tag}{label} {reason} — "
+                                  f"all {n} key(s) exhausted this round")
+                        continue  # try the next key
+
+                    if kind == 'overloaded':
+                        # Server-side overload is the same across keys — don't
+                        # burn the other keys on it; back off on this model.
+                        got_overloaded = True
+                        print(f"[!] {model_name}{key_tag}{label} 503/overload")
                         break
-                    tag = '503 overload' if kind == 'overloaded' else '429 rate limit'
-                    print(f"[!] {model_name}{label} {tag} — retry "
-                          f"{attempt + 1}/{MODEL_RETRIES - 1} in {wait:.1f}s...")
-                    time.sleep(wait)
-                    continue
 
-                if kind == 'missing':
-                    print(f"[!] {model_name}{label} not available, trying next...")
-                elif kind in ('overloaded', 'rate'):
-                    print(f"[!] {model_name}{label} still busy after "
-                          f"{MODEL_RETRIES} attempts, trying next model...")
-                else:
-                    print(f"[!] {model_name}{label} error: {e}")
+                    if kind == 'missing':
+                        print(f"[!] {model_name}{key_tag}{label} not available, "
+                              f"trying next model...")
+                        next_model = True
+                        break
+
+                    # 'other' — unknown error; don't hammer every key with it.
+                    print(f"[!] {model_name}{key_tag}{label} error: {e}")
+                    next_model = True
+                    break
+
+            if next_model:
                 break
+
+            # No key succeeded and it wasn't a hard error. Backoff only helps a
+            # transient overload or a per-minute rate cap — not stable failures.
+            if not (saw_rate or got_overloaded):
+                break
+            if attempt < MODEL_RETRIES - 1:
+                wait = min(BACKOFF_BASE_SECONDS * (2 ** attempt),
+                           BACKOFF_MAX_SECONDS)
+                # Never sleep past the deadline — bail to the fallback instead of
+                # burning the remaining budget waiting to retry.
+                if deadline is not None and time.monotonic() + wait >= deadline:
+                    print(f"[!] {model_name}{label} throttled but no time left to retry")
+                    break
+                tag = '503 overload' if got_overloaded else 'all keys rate-limited'
+                print(f"[!] {model_name}{label} {tag} — backoff "
+                      f"{attempt + 1}/{MODEL_RETRIES - 1} in {wait:.1f}s...")
+                time.sleep(wait)
+                continue
+            break
 
     return None, None, last_error
 
@@ -678,10 +784,9 @@ def extract_from_image(image_path):
 
     deadline = time.monotonic() + EXTRACTION_DEADLINE_SECONDS
 
-    try:
-        client = get_gemini_client()
-    except ValueError as e:
-        return {'success': False, 'error': str(e)}
+    if not get_gemini_api_keys():
+        return {'success': False,
+                'error': 'GEMINI_API_KEY not found in environment variables'}
 
     # Load and prepare image
     img = Image.open(image_path)
@@ -689,7 +794,7 @@ def extract_from_image(image_path):
         img = img.convert('RGB')
 
     data, model_name, last_error = run_model_chain(
-        client, [img, EXTRACTION_PROMPT], deadline=deadline)
+        [img, EXTRACTION_PROMPT], deadline=deadline)
 
     if data is not None:
         line_items = data.get('line_items', [])
@@ -711,7 +816,13 @@ def extract_from_image(image_path):
         return {'success': True, 'data': or_data, 'model': or_model}
 
     print("[!] All models failed (Gemini + OpenRouter)")
-    return {'success': False, 'error': or_error or last_error or 'All models failed'}
+    # Surface BOTH errors — returning only the OpenRouter one hides the real
+    # Gemini failure (the primary chain) and makes the fallback look primary.
+    combined = ' | '.join(
+        p for p in (f"Gemini: {last_error}" if last_error else None,
+                    f"OpenRouter: {or_error}" if or_error else None) if p
+    ) or 'All models failed'
+    return {'success': False, 'error': combined}
 
 
 def rasterize_pdf_pages(pdf_path, dpi=200):
@@ -764,10 +875,9 @@ def extract_from_pdf(pdf_path, page_count=None):
 
     deadline = time.monotonic() + EXTRACTION_DEADLINE_SECONDS
 
-    try:
-        client = get_gemini_client()
-    except ValueError as e:
-        return {'success': False, 'error': str(e)}
+    if not get_gemini_api_keys():
+        return {'success': False,
+                'error': 'GEMINI_API_KEY not found in environment variables'}
 
     # Prefer an ordered page-image sequence; fall back to raw PDF bytes.
     page_images = rasterize_pdf_pages(pdf_path)
@@ -821,7 +931,7 @@ def extract_from_pdf(pdf_path, page_count=None):
         or_images = None
 
     data, model_name, last_error = run_model_chain(
-        client, content_parts, label=" for PDF", deadline=deadline)
+        content_parts, label=" for PDF", deadline=deadline)
 
     if data is not None:
         line_items = data.get('line_items', [])
@@ -843,7 +953,13 @@ def extract_from_pdf(pdf_path, page_count=None):
         return {'success': True, 'data': or_data, 'model': or_model}
 
     print("[!] All models failed for PDF (Gemini + OpenRouter)")
-    return {'success': False, 'error': or_error or last_error or 'All models failed'}
+    # Surface BOTH errors — returning only the OpenRouter one hides the real
+    # Gemini failure (the primary chain) and makes the fallback look primary.
+    combined = ' | '.join(
+        p for p in (f"Gemini: {last_error}" if last_error else None,
+                    f"OpenRouter: {or_error}" if or_error else None) if p
+    ) or 'All models failed'
+    return {'success': False, 'error': combined}
 
 
 def process_bill_file(file_path, filename):
