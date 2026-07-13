@@ -12,30 +12,18 @@
 # ============================================================================
 
 import os
-import re
-import json
 
-from google import genai
 from google.genai import types
 from PIL import Image
 
-# Model-fallback chain (same as bill_processor.py). Ordered for document OCR:
-# all Flash-tier — fast + cheap + strong at reading invoices/POs. gemini-3-pro
-# is intentionally NOT here: it's a reasoning model (slow + costly) with no
-# quality edge on straightforward field/table extraction, and was the main
-# cause of latency when the primary throttled to it on the free tier.
-GEMINI_MODELS = [
-    "gemini-3-flash",        # primary: best vision quality at flash speed
-    "gemini-2.5-flash",      # fallback: proven on GST/PO tables
-    "gemini-2.5-flash-lite", # last resort: cheap/fast, lower accuracy
-]
-
-_MODEL_DISPLAY_NAMES = {
-    "gemini-3-flash": "Gemini 3 Flash",
-    "gemini-3-pro": "Gemini 3 Pro",
-    "gemini-2.5-flash": "Gemini 2.5 Flash",
-    "gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
-}
+# PO extraction reuses bill_processor's hardened extraction runner wholesale:
+# the verified model-fallback chain (GEMINI_MODELS), multi-key round-robin,
+# per-call timeout, transient-overload backoff, and the key-specific-404
+# failover fix all live there. Importing it means PO and bill extraction can
+# never again drift apart (this module previously pinned nonexistent models and
+# used a SINGLE, now-banned API key with no rotation, so PO extraction failed
+# 100% of the time). See bill_processor.GEMINI_MODELS for the chain rationale.
+from bill_processor import run_model_chain, get_gemini_api_keys
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'}
 
@@ -129,27 +117,6 @@ Return ONLY valid JSON in EXACTLY this structure (no markdown, no commentary):
 """
 
 
-def get_gemini_client():
-    """Get configured Gemini client (mirrors bill_processor.get_gemini_client)."""
-    api_key = os.environ.get('GEMINI_API_KEY', '')
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY not found in environment variables")
-    return genai.Client(api_key=api_key)
-
-
-def _clean_json_response(response_text):
-    """Strip markdown code fences if present."""
-    text = (response_text or '').strip()
-    if text.startswith('```'):
-        text = re.sub(r'^```(?:json)?\s*', '', text)
-        text = re.sub(r'\s*```$', '', text)
-    return text
-
-
-def _model_display_name(model):
-    return _MODEL_DISPLAY_NAMES.get(model, model)
-
-
 def _normalize_po_data(data):
     """Coerce extracted values into the gist shape with safe types."""
     def num(v):
@@ -237,41 +204,30 @@ def extract_po(file_path, filename=None):
     if not os.path.exists(file_path):
         return {'success': False, 'error': f'File not found: {file_path}'}
 
-    try:
-        client = get_gemini_client()
-    except ValueError as e:
-        return {'success': False, 'error': str(e)}
+    if not get_gemini_api_keys():
+        return {'success': False,
+                'error': 'GEMINI_API_KEY not found in environment variables'}
 
     try:
         contents = _build_contents(file_path, ext)
     except Exception as e:
         return {'success': False, 'error': f'Could not read file: {e}'}
 
-    last_error = None
-    for model in GEMINI_MODELS:
-        name = _model_display_name(model)
+    # Delegate to bill_processor's hardened runner: verified model chain,
+    # multi-key round-robin with per-key-404 failover, timeout and backoff.
+    # It returns already-parsed JSON (run in JSON mode), which we normalize into
+    # the PO gist shape.
+    data, model_name, last_error = run_model_chain(
+        contents, label=f" for PO {filename}")
+
+    if data is not None:
         try:
-            print(f"[*] PO extraction: trying {name} on {filename}...")
-            response = client.models.generate_content(model=model, contents=contents)
-            data = json.loads(_clean_json_response(response.text))
             gist = _normalize_po_data(data)
-            print(f"[+] {name} extracted PO: total_value={gist['total_value']}, "
-                  f"client={gist['client_name']!r}")
-            return {'success': True, 'data': gist, 'model': name}
-        except json.JSONDecodeError as e:
-            print(f"[!] {name} JSON parse error: {e}")
-            last_error = f'Failed to parse response: {e}'
-            continue
         except Exception as e:
-            err = str(e)
-            if '429' in err or 'RESOURCE_EXHAUSTED' in err or 'rate' in err.lower():
-                print(f"[!] {name} rate limited, trying next...")
-            elif '404' in err or 'not found' in err.lower():
-                print(f"[!] {name} not available, trying next...")
-            else:
-                print(f"[!] {name} error: {e}")
-            last_error = err
-            continue
+            return {'success': False, 'error': f'Could not normalize PO data: {e}'}
+        print(f"[+] {model_name} extracted PO: total_value={gist['total_value']}, "
+              f"client={gist['client_name']!r}")
+        return {'success': True, 'data': gist, 'model': model_name}
 
     print("[!] All Gemini models failed for PO extraction")
     return {'success': False, 'error': last_error or 'All models failed'}

@@ -23,18 +23,28 @@ from extraction_validator import validate_extraction
 
 # Model configuration - Gemini models via direct API (in priority order).
 # All Flash-tier: fast, cheap, and strong at invoice OCR + table extraction.
-# gemini-3-pro is intentionally excluded — it's a reasoning model (slow + costly)
-# with no accuracy edge on this OCR/extraction task, and falling through to it on
-# every free-tier throttle was the main source of latency.
+#
+# These model IDs were chosen by testing every candidate against the LIVE API
+# with all configured keys — NOT from documentation, which lags reality. The
+# hard-won rules that shaped this chain:
+#   * "gemini-3-flash" DOES NOT EXIST (the real id is gemini-3-flash-preview);
+#     the old primary 404'd on every request and the chain silently limped on
+#     the 2.5 fallback.
+#   * "gemini-2.5-flash-lite" AND "gemini-2.5-flash" return 404 "no longer
+#     available to new users" on newer API-key projects — they only work on an
+#     older key, so neither can be a reliable primary.
+#   * "gemini-3.5-flash" works on ALL current keys and is the newest capable
+#     Flash, so it leads.
+#   * "gemini-flash-latest" is an ALIAS that Google keeps pointed at the current
+#     Flash model — it can never 404 for being renamed/retired, so it is the
+#     self-healing safety net that survives the next model shuffle.
+# gemini-3-pro / gemini-3.1-pro are intentionally excluded — reasoning models
+# (slow + costly) with no accuracy edge on this OCR/extraction task.
 GEMINI_MODELS = [
-    "gemini-3-flash",        # primary: best vision quality at flash speed, cheaper than 3.5
-    "gemini-2.5-flash",      # fallback: proven on GST tables
-    "gemini-2.5-flash-lite", # last resort: cheap/fast, lower accuracy
+    "gemini-3.5-flash",      # primary: newest capable Flash, available on ALL keys
+    "gemini-flash-latest",   # net: alias always pointing at the current Flash (rename-proof)
+    "gemini-2.5-flash",      # last Gemini resort: proven on GST tables (older-project keys only)
 ]
-# Note: gemini-3.5-flash is the newest/most capable Flash but costs more than
-# gemini-3-flash with no meaningful accuracy edge on this OCR/extraction task,
-# so it is intentionally NOT in the chain. (Display name kept below in case it
-# is reintroduced.)
 
 # Extraction prompt
 EXTRACTION_PROMPT = """
@@ -500,15 +510,27 @@ BACKOFF_MAX_SECONDS = 8.0
 def classify_error(error_str):
     """
     Bucket an API exception so the model loop knows how to react:
-      'rate'       -> 429 rate limit / quota       -> fail over to next KEY
-      'auth'       -> 401/403 invalid/blocked key  -> fail over to next KEY
-      'overloaded' -> 503/500 server overload      -> retry same model (backoff)
-      'missing'    -> 404 model not available       -> skip straight to next model
-      'other'      -> anything else                 -> skip to next model
+      'rate'       -> 429 rate limit / quota          -> fail over to next KEY
+      'auth'       -> 401/403 invalid/blocked/denied  -> fail over to next KEY
+      'overloaded' -> 503/500 server overload         -> retry same model (backoff)
+      'missing'    -> 404 model genuinely nonexistent  -> skip straight to next model
+      'other'      -> anything else                    -> skip to next model
+
+    KEY-SPECIFIC 404s are the subtle case. Google returns 404 "no longer
+    available to new users" for a model that a NEWER key's project can't access
+    but an OLDER key still can (this is exactly what breaks gemini-2.5-flash /
+    -lite across our key set). That is an ACCESS problem for THIS key, not a
+    missing model — so it must fail over to the next KEY ('auth'), NOT abandon
+    the model for every key ('missing'). We detect that phrasing FIRST.
     """
     s = error_str.lower()
     if '429' in s or 'resource_exhausted' in s or 'rate limit' in s or 'quota' in s:
         return 'rate'
+    # Per-key access denial (project banned, or model gated to existing users).
+    # Checked before the generic 404 branch so it routes to key-failover.
+    if ('no longer available' in s or 'available to new users' in s
+            or 'denied access' in s or 'has been denied' in s):
+        return 'auth'
     if any(k in s for k in ('api key not valid', 'api_key_invalid', 'invalid api key',
                             'invalid_argument api key', 'permission denied',
                             'permission_denied', 'unauthenticated', 'unauthorized',
@@ -653,15 +675,26 @@ def run_model_chain(contents, label="", deadline=None):
 # (preserving page order/boundaries); if no images are available (e.g. PyMuPDF
 # missing and only raw PDF bytes exist) this fallback is skipped.
 
+# Cap on OpenRouter completion tokens. The old hard-coded 16000 was the direct
+# cause of the "402 requires more credits" failure: OpenRouter reserves the full
+# max_tokens up front, so on a low/zero-credit account the request is rejected
+# before it runs. 8000 comfortably fits an invoice JSON and lets a near-empty
+# account still complete. Env-tunable for large multi-page bills.
+OPENROUTER_MAX_TOKENS = int(os.environ.get('OPENROUTER_MAX_TOKENS', '8000'))
+
+
 def get_openrouter_models():
     """
     OpenRouter vision model id(s), overridable via env (comma-separated).
     Default is a strong non-Google OCR/vision model so the fallback is immune to
-    a Gemini-wide outage.
+    a Gemini-wide outage. We default to the ":free" variant so this true
+    last-resort keeps working even when the OpenRouter account has no credits
+    (a paid model there returns 402 and defeats the whole point of a fallback).
+    Set OPENROUTER_MODELS to a paid id if you want higher throughput/quality.
     """
     raw = (os.environ.get('OPENROUTER_MODELS')
            or os.environ.get('OPENROUTER_MODEL')
-           or 'qwen/qwen-2.5-vl-72b-instruct')
+           or 'qwen/qwen-2.5-vl-72b-instruct:free')
     return [m.strip() for m in raw.split(',') if m.strip()]
 
 
@@ -716,7 +749,7 @@ def extract_with_openrouter(images, prompt_text, label=""):
                     model=model,
                     messages=messages,
                     temperature=0,
-                    max_tokens=16000,
+                    max_tokens=OPENROUTER_MAX_TOKENS,
                 )
                 text = resp.choices[0].message.content if resp.choices else None
                 if not (text and text.strip()):
@@ -763,7 +796,8 @@ def get_model_display_name(model):
     """Get a friendly display name for the model"""
     names = {
         "gemini-3.5-flash": "Gemini 3.5 Flash",
-        "gemini-3-flash": "Gemini 3 Flash",
+        "gemini-flash-latest": "Gemini Flash (latest)",
+        "gemini-3-flash-preview": "Gemini 3 Flash (preview)",
         "gemini-3-pro": "Gemini 3 Pro",
         "gemini-2.5-flash": "Gemini 2.5 Flash",
         "gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
