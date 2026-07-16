@@ -11,6 +11,7 @@ from datetime import timedelta
 from flask import Flask
 
 from config import Config
+from extensions import db_manager
 from helpers.dataframe import reload_data
 
 
@@ -35,6 +36,14 @@ def create_app():
     for bp in (auth_bp, personal_bp, sales_bp, bills_bp, banks_bp,
                legacy_bp, projects_bp, project_summary_bp):
         app.register_blueprint(bp)
+
+    # Run the projects schema migrations at startup, not on first registry hit.
+    # `_PROJECT_SELECT` names every column (including newer ones like overhead),
+    # so any reader that runs before the migration gets "Unknown column" —
+    # which list_projects swallows into an empty list, and an empty registry
+    # makes validate_project_value reject every project tag on bill/transaction
+    # saves. Doing it here means the schema is ready before the first request.
+    db_manager.ensure_projects_table()
 
     # Load legacy data at startup (populates extensions.state.df_global)
     reload_data()

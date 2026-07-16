@@ -1380,7 +1380,10 @@ class DatabaseManager:
         normalize-projects writes / proper ingestion uses).
 
         kind: 'purchase' (bill_invoices) or 'sales' (sales_invoices).
-        Returns (rows, {'count', 'total_amount', 'total_gst'}).
+        Returns (rows, {'count', 'total_taxable', 'total_gst', 'total_amount'}).
+
+        total_taxable is the pre-tax basic value; total_amount is gross. The
+        three form the basic / GST / total ladder the registry modal shows.
         """
         if kind == 'sales':
             table, items_table = 'sales_invoices', 'sales_line_items'
@@ -1391,13 +1394,15 @@ class DatabaseManager:
         params = [f"{project_id} -%", f"{project_id}-%"]
         where_clause = " OR ".join(conds)
 
-        empty_summary = {'count': 0, 'total_amount': 0.0, 'total_gst': 0.0}
+        empty_summary = {'count': 0, 'total_taxable': 0.0,
+                         'total_gst': 0.0, 'total_amount': 0.0}
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
 
                 cursor.execute(
                     f"SELECT COUNT(*) AS cnt, "
+                    f"COALESCE(SUM(b.subtotal), 0) AS total_taxable, "
                     f"COALESCE(SUM(b.total_amount), 0) AS total_amount, "
                     f"COALESCE(SUM(COALESCE(b.total_cgst, 0) + COALESCE(b.total_sgst, 0) + COALESCE(b.total_igst, 0)), 0) AS total_gst "
                     f"FROM {table} b WHERE {where_clause}",
@@ -1406,8 +1411,9 @@ class DatabaseManager:
                 agg = cursor.fetchone() or {}
                 summary = {
                     'count': int(agg.get('cnt') or 0),
-                    'total_amount': float(agg.get('total_amount') or 0),
+                    'total_taxable': float(agg.get('total_taxable') or 0),
                     'total_gst': float(agg.get('total_gst') or 0),
+                    'total_amount': float(agg.get('total_amount') or 0),
                 }
 
                 cursor.execute(
@@ -2378,6 +2384,7 @@ class DatabaseManager:
                         is_project   TINYINT(1) NOT NULL DEFAULT 1,
                         project_type VARCHAR(16) NOT NULL DEFAULT 'project',
                         is_inactive  TINYINT(1) NOT NULL DEFAULT 0,
+                        overhead     DECIMAL(15, 2) NOT NULL DEFAULT 0,
                         created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         UNIQUE KEY uk_stem_ci (stem_name)
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -2429,6 +2436,19 @@ class DatabaseManager:
                     cursor.execute(
                         "ALTER TABLE projects "
                         "ADD COLUMN is_inactive TINYINT(1) NOT NULL DEFAULT 0 AFTER project_type"
+                    )
+                # Additive migration: overhead is a manually entered cost the bank
+                # data can't know about (the client types it into their sheet). It
+                # feeds the project's cost total alongside material/labour/GST.
+                cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'projects' "
+                    "AND COLUMN_NAME = 'overhead'"
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute(
+                        "ALTER TABLE projects "
+                        "ADD COLUMN overhead DECIMAL(15, 2) NOT NULL DEFAULT 0 AFTER is_inactive"
                     )
                 cursor.close()
             # The PO gist table is joined by list/get; keep it alongside.
@@ -2522,8 +2542,9 @@ class DatabaseManager:
     # SELECT that augments each project row with a compact PO summary (the
     # gist columns the cards/detail need) via a LEFT JOIN on project_pos.
     _PROJECT_SELECT = (
-        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.is_project, p.project_type, p.is_inactive, p.created_at, "
+        "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.is_project, p.project_type, p.is_inactive, p.overhead, p.created_at, "
         "       pp.po_number AS po_number, pp.total_value AS po_total_value, "
+        "       pp.taxable_value AS po_taxable_value, pp.total_tax AS po_total_tax, "
         "       pp.extraction_status AS po_extraction_status "
         "FROM projects p LEFT JOIN project_pos pp ON pp.project_id = p.id"
     )
@@ -2548,8 +2569,12 @@ class DatabaseManager:
         if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
             r['created_at'] = r['created_at'].isoformat()
         # Coerce DECIMAL -> float for JSON
-        if r.get('po_total_value') is not None:
-            r['po_total_value'] = float(r['po_total_value'])
+        for key in ('po_total_value', 'po_taxable_value', 'po_total_tax'):
+            if r.get(key) is not None:
+                r[key] = float(r[key])
+        # overhead is NOT NULL DEFAULT 0, but older rows read through a cached
+        # connection can still surface None — normalise to a plain float.
+        r['overhead'] = float(r.get('overhead') or 0)
         return r
 
     def list_projects(self) -> List[Dict]:
@@ -2775,6 +2800,34 @@ class DatabaseManager:
                 cursor.close()
                 if affected == 0:
                     return False, 'not_found'
+                return True, None
+        except Exception as e:
+            return False, str(e)
+
+    def set_project_overhead(self, project_id: int, overhead: float) -> Tuple[bool, Optional[str]]:
+        """Set a project's manually entered overhead cost.
+
+        Overhead is money the bank/bill data can't account for (the client
+        types it into their own sheet), so it is entered by hand and feeds the
+        project's cost total.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                # Existence is checked via SELECT rather than rowcount: MySQL
+                # reports 0 affected rows when the value written equals the one
+                # already stored, so re-saving an unchanged overhead would
+                # otherwise look like a missing project.
+                cursor.execute("SELECT 1 FROM projects WHERE id = %s", (project_id,))
+                if cursor.fetchone() is None:
+                    cursor.close()
+                    return False, 'not_found'
+                cursor.execute(
+                    "UPDATE projects SET overhead = %s WHERE id = %s",
+                    (overhead, project_id)
+                )
+                conn.commit()
+                cursor.close()
                 return True, None
         except Exception as e:
             return False, str(e)

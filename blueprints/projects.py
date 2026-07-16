@@ -4,6 +4,7 @@ and extraction, and admin normalize/uppercase endpoints."""
 import os
 import re
 import json
+import math
 import traceback
 
 import pandas as pd
@@ -17,6 +18,9 @@ from config import Config, now_ist, VALID_BANK_CODES
 from extensions import db_manager
 from helpers.formatting import format_indian_number
 from helpers.bankdata import get_bank_df
+from helpers.project_finance import (
+    compute_project_finance, is_other_expense_category,
+)
 import po_processor
 import salary_api
 from auth import login_required
@@ -259,6 +263,7 @@ def api_update_project(project_id):
 
     JSON body: { "project_type": "project"|"design"|"other" }
             or: { "is_inactive": true|false }
+            or: { "overhead": <number> }
     (legacy: { "is_project": true|false } is still accepted)
     """
     project = db_manager.get_project(project_id)
@@ -266,6 +271,24 @@ def api_update_project(project_id):
         return jsonify({'error': 'not_found'}), 404
 
     data = request.get_json(silent=True) or {}
+
+    # Overhead: a manually entered cost, independent of type/closed state.
+    if 'overhead' in data:
+        raw = data['overhead']
+        try:
+            overhead = float(raw if raw not in ('', None) else 0)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'invalid_overhead',
+                            'message': 'Overhead must be a number.'}), 400
+        if overhead < 0 or not math.isfinite(overhead):
+            return jsonify({'error': 'invalid_overhead',
+                            'message': 'Overhead must be zero or more.'}), 400
+        ok, err = db_manager.set_project_overhead(project_id, overhead)
+        if not ok:
+            if err == 'not_found':
+                return jsonify({'error': 'not_found'}), 404
+            return jsonify({'error': 'update_failed', 'message': err}), 500
+        return jsonify({'success': True, 'project': db_manager.get_project(project_id)})
 
     # Closed/active toggle is independent of the type buckets.
     if 'is_inactive' in data:
@@ -430,13 +453,13 @@ def api_project_insights(project_id):
     received_total = bank_total + cash_total
 
     # ── Expenses: debit transactions tagged with this project, all banks ──
-    LABOUR_CATS = {'LABOUR PAYMENT', 'LABOR PAYMENT', 'LABOUR', 'LABOR'}
-    OTHER_EXCLUDE_CATS = {'MATERIAL PURCHASE', 'AMOUNT RECEIVED', 'SALARY AC',
-                          'BANK CHARGES', 'DUTIES & TAX'}
     expense_rows = []
     expense_total = 0.0
     other_expense_total = 0.0
     cat_totals = {}
+    # Same buckets as cat_totals but only the categories that feed the cost
+    # total, so the cost breakdown below is guaranteed to sum to spend_total.
+    other_cat_totals = {}
     for bank_code in VALID_BANK_CODES:
         df = get_bank_df(bank_code)
         if df.empty or 'DR Amount' not in df.columns:
@@ -449,9 +472,13 @@ def api_project_insights(project_id):
             bucket = cat_totals.setdefault(category, {'amount': 0.0, 'count': 0})
             bucket['amount'] += amount
             bucket['count'] += 1
-            cat_upper = category.upper().strip()
-            if cat_upper not in OTHER_EXCLUDE_CATS and cat_upper not in LABOUR_CATS:
+            if is_other_expense_category(category):
                 other_expense_total += amount
+                # Keyed on the normalised category: the membership test above is
+                # case-insensitive, so keying raw would split "Site Expenses"
+                # and "SITE EXPENSES" into two cost lines for the same head.
+                key = category.upper().strip()
+                other_cat_totals[key] = other_cat_totals.get(key, 0.0) + amount
             expense_rows.append({
                 'date': r['date'].strftime('%Y-%m-%d') if pd.notna(r['date']) else '',
                 'bank': bank_code,
@@ -480,12 +507,25 @@ def api_project_insights(project_id):
 
     po_value = float(project.get('po_total_value') or 0)
     labour_total = float(labour.get('total_cost') or 0)
-    # Same composition as the project-summary page: material from purchase
-    # bills, "other" bank debits (excluding material/labour/internal heads so
-    # bills and the attendance DB aren't double counted), labour from
-    # attendance. Bank-debit material/labour rows are still visible in the
-    # Expenses tab — they just don't add into this headline twice.
-    spend_total = purchase_summary['total_amount'] + other_expense_total + labour_total
+
+    # The whole money model lives in helpers/project_finance so this endpoint
+    # and the Excel export can't drift apart. See that module for the formulas.
+    fin = compute_project_finance(
+        sales={'taxable': sales_summary['total_taxable'],
+               'gst': sales_summary['total_gst'],
+               'total': sales_summary['total_amount']},
+        purchase={'taxable': purchase_summary['total_taxable'],
+                  'gst': purchase_summary['total_gst'],
+                  'total': purchase_summary['total_amount']},
+        po={'taxable': project.get('po_taxable_value'),
+            'gst': project.get('po_total_tax'),
+            'total': po_value},
+        received_total=received_total,
+        other_expense_total=other_expense_total,
+        labour_total=labour_total,
+        overhead=project.get('overhead'),
+        other_cat_totals=other_cat_totals,
+    )
 
     return jsonify({
         'project': project,
@@ -494,11 +534,10 @@ def api_project_insights(project_id):
             'received_bank': bank_total,
             'received_cash': cash_total,
             'received_total': received_total,
+            # Kept for backward compatibility with existing readers; equals
+            # `receivable` when the ladder is PO-sourced.
             'balance': po_value - received_total,
-            'material_total': purchase_summary['total_amount'],
-            'other_expense_total': other_expense_total,
-            'labour_total': labour_total,
-            'spend_total': spend_total,
+            **fin,
         },
         'payments': {
             'bank': bank_payments,

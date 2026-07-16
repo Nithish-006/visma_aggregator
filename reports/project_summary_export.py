@@ -19,6 +19,7 @@ import salary_api
 from helpers.bankdata import get_bank_df
 from helpers.dataframe import filter_by_date_range
 from helpers.projects import parse_project_selection
+from helpers.project_finance import compute_project_finance
 
 
 def export_project_summary():
@@ -361,8 +362,62 @@ def export_single_project_summary(project_id):
         keep = ~(up.isin(_OTHER_EXCLUDE_CATS) | up.isin(_LABOUR_CATS))
         other_expense_total = float(expense_df[keep]['DR Amount'].sum())
 
-    spend_total = material_total + other_expense_total + labour_total
-    balance = po_value - received_total
+    # ── Value ladder + GST position ──
+    # Shared with the registry detail pop-up via helpers/project_finance so the
+    # sheet and the pop-up can't drift; this workbook is that pop-up in Excel.
+    def _bill_sums(bills):
+        return {
+            'taxable': sum(float(b.get('subtotal') or 0) for b in bills),
+            'gst': sum(float(b.get('total_cgst') or 0) + float(b.get('total_sgst') or 0)
+                       + float(b.get('total_igst') or 0) for b in bills),
+            'total': sum(float(b.get('total_amount') or 0) for b in bills),
+        }
+
+    sales = _bill_sums(sales_bills)
+    purchase = _bill_sums(purchase_bills)
+
+    # These lists are date-filtered. Whether the project HAS sales bills is not
+    # a question about the period, so ask it unfiltered — otherwise a range that
+    # excludes every sales bill would silently fall back to the full PO value
+    # and report it against period-scoped costs as a fabricated profit.
+    try:
+        _, all_sales_summary = db_manager.get_bills_for_canonical_project(
+            project_id, kind='sales', limit=1)
+        has_sales_bills = all_sales_summary['total_amount'] > 0
+    except Exception as e:
+        print(f"[!] Error checking sales bills for project {project_id}: {e}")
+        has_sales_bills = sales['total'] > 0
+
+    fin = compute_project_finance(
+        sales=sales,
+        purchase=purchase,
+        # po_gist is the fuller record; the joined columns are the fallback,
+        # matching how po_value itself is resolved above.
+        po={'taxable': po_gist.get('taxable_value') or project.get('po_taxable_value'),
+            'gst': po_gist.get('total_tax') or project.get('po_total_tax'),
+            'total': po_value},
+        received_total=received_total,
+        other_expense_total=other_expense_total,
+        labour_total=labour_total,
+        overhead=project.get('overhead'),
+        has_sales_bills=has_sales_bills,
+    )
+    value_basic = fin['value']['basic']
+    value_gst = fin['value']['gst']
+    value_total = fin['value']['total']
+    sales_taxable, sales_gst = sales['taxable'], sales['gst']
+    purchase_taxable, purchase_gst = purchase['taxable'], purchase['gst']
+    gst_extra = fin['gst']['extra']
+    gst_extra_cost = fin['gst']['extra_cost']
+    overhead = fin['overhead']
+    spend_total = fin['spend_total']
+    profit = fin['profit']
+    # What the client still owes against the project's value.
+    balance = fin['receivable']
+    # Sheet 1 reconciles against the PO specifically (it prints PO Value and a
+    # "% Received" computed from it), so it keeps its own PO-based balance
+    # rather than the value-ladder one.
+    po_balance = po_value - received_total
 
     wb = Workbook()
     wb.remove(wb.active)
@@ -430,7 +485,11 @@ def export_single_project_summary(project_id):
     ws = wb.create_sheet('PO Value')
     ws.cell(row=1, column=1, value=f'PO Value — {display}').font = st['title_font']
     pct = (received_total / po_value) if po_value > 0 else 0
-    bal_label = 'Excess Received' if balance < -0.5 else 'Balance Due'
+    # This sheet reconciles against the PO alone, so its balance and % are both
+    # PO-based. The value-ladder balance (which may be sales-bill sourced) is
+    # reported on the Consolidated Summary instead — mixing the two here would
+    # print a "Balance Due" that contradicts the "% Received" beside it.
+    bal_label = 'Excess Received (vs PO)' if po_balance < -0.5 else 'Balance Due (vs PO)'
 
     r = 3
     ws.cell(row=r, column=1, value='PO TERMS').font = st['subtitle_font']; r += 1
@@ -495,8 +554,8 @@ def export_single_project_summary(project_id):
     kv_row(ws, r, 'Received — Bank (KVB)', received_bank, fmt=currency_fmt, font=st['income_font']); r += 1
     kv_row(ws, r, 'Received — Cash', received_cash, fmt=currency_fmt, font=st['income_font']); r += 1
     kv_row(ws, r, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font']); r += 1
-    kv_row(ws, r, bal_label, abs(balance), fmt=currency_fmt,
-           font=(st['red_amount'] if balance > 0.5 else st['green_amount'])); r += 1
+    kv_row(ws, r, bal_label, abs(po_balance), fmt=currency_fmt,
+           font=(st['red_amount'] if po_balance > 0.5 else st['green_amount'])); r += 1
     kv_row(ws, r, '% Received', pct, fmt=pct_fmt); r += 1
 
     # ──────────────────────────────────────── SHEET 2: Client Payments ──
@@ -757,23 +816,37 @@ def export_single_project_summary(project_id):
             ws.cell(row=row, column=c).fill = st['green_fill']
         return row + 1
 
-    cr = section(ws, cr, 'CLIENT PAYMENTS')
-    kv_row(ws, cr, 'PO Value', po_value, fmt=currency_fmt, font=st['blue_amount']); cr += 1
+    cr = section(ws, cr, 'PROJECT VALUE')
+    kv_row(ws, cr, 'Project Basic Value', value_basic, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'GST', value_gst, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Total Value', value_total, fmt=currency_fmt, font=st['blue_amount']); cr += 1
     kv_row(ws, cr, 'Received — Bank (KVB)', received_bank, fmt=currency_fmt, font=st['income_font']); cr += 1
     kv_row(ws, cr, 'Received — Cash', received_cash, fmt=currency_fmt, font=st['income_font']); cr += 1
     kv_row(ws, cr, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font']); cr += 1
-    kv_row(ws, cr, ('Excess Received' if balance < -0.5 else 'Balance Due'), abs(balance),
-           fmt=currency_fmt, font=(st['red_amount'] if balance > 0.5 else st['green_amount'])); cr += 2
+    kv_row(ws, cr, ('Excess Received' if balance < -0.5 else 'Current Balance'), abs(balance),
+           fmt=currency_fmt, font=(st['red_amount'] if balance > 0.5 else st['green_amount'])); cr += 1
+    kv_row(ws, cr, 'PO Value (contract)', po_value, fmt=currency_fmt); cr += 2
+
+    cr = section(ws, cr, 'GST POSITION')
+    kv_row(ws, cr, 'Purchase — Basic', purchase_taxable, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Purchase — GST', purchase_gst, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Sales — Basic', sales_taxable, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Sales — GST', sales_gst, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, ('GST Credit (carried forward)' if gst_extra < -0.5 else 'GST Extra (payable)'),
+           abs(gst_extra), fmt=currency_fmt,
+           font=(st['green_amount'] if gst_extra < -0.5 else st['red_amount'])); cr += 2
 
     cr = section(ws, cr, 'SPEND COMPOSITION')
     kv_row(ws, cr, 'Material Purchase (bills)', material_total, fmt=currency_fmt); cr += 1
     kv_row(ws, cr, 'Other Expense', other_expense_total, fmt=currency_fmt); cr += 1
     kv_row(ws, cr, 'Labour Payment', labour_total, fmt=currency_fmt, font=st['blue_amount']); cr += 1
-    kv_row(ws, cr, 'Total Spend', spend_total, fmt=currency_fmt, font=st['expense_font']); cr += 2
+    kv_row(ws, cr, 'GST Payable', gst_extra_cost, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Overhead', overhead, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Total Cost', spend_total, fmt=currency_fmt, font=st['expense_font']); cr += 2
 
     cr = section(ws, cr, 'NET POSITION')
-    kv_row(ws, cr, 'Received − Spend', received_total - spend_total, fmt=currency_fmt,
-           font=(st['green_amount'] if received_total - spend_total >= 0 else st['red_amount'])); cr += 1
+    kv_row(ws, cr, 'Balance (Total Value − Total Cost)', profit, fmt=currency_fmt,
+           font=(st['green_amount'] if profit >= 0 else st['red_amount'])); cr += 1
     ws.column_dimensions['A'].width = 30
     ws.column_dimensions['B'].width = 22
 

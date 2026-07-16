@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=3">
 </head>
 
 <body>
@@ -115,21 +115,160 @@
                 </div>
             </div>
             <div class="proj-modal-body">
-                <!-- Always-visible overview: PO value / received / spent / balance -->
-                <div id="detail-payments" class="proj-payments hidden"></div>
-
                 <!-- Tab bar -->
                 <nav id="detail-tabs" class="proj-tabs" role="tablist" aria-label="Project insights">
-                    <button type="button" class="proj-tab active" data-tab="po" role="tab">PO</button>
-                    <button type="button" class="proj-tab" data-tab="payments" role="tab">Client Payments<span class="proj-tab-count hidden" data-tab-count="payments"></span></button>
-                    <button type="button" class="proj-tab" data-tab="expenses" role="tab">Expenses<span class="proj-tab-count hidden" data-tab-count="expenses"></span></button>
-                    <button type="button" class="proj-tab" data-tab="purchase" role="tab">Purchase Bills<span class="proj-tab-count hidden" data-tab-count="purchase"></span></button>
-                    <button type="button" class="proj-tab" data-tab="sales" role="tab">Sales Bills<span class="proj-tab-count hidden" data-tab-count="sales"></span></button>
-                    <button type="button" class="proj-tab" data-tab="labour" role="tab">Labour<span class="proj-tab-count hidden" data-tab-count="labour"></span></button>
+                    <button type="button" class="proj-tab active" data-tab="overview" role="tab">Overview</button>
+                    <button type="button" class="proj-tab" data-tab="bills" role="tab">Bills<span class="proj-tab-count hidden" data-tab-count="bills"></span></button>
+                    <button type="button" class="proj-tab" data-tab="ledger" role="tab">Ledger<span class="proj-tab-count hidden" data-tab-count="ledger"></span></button>
                 </nav>
 
-                <!-- ===== Tab: Client payments (bank credits + cash ledger) ===== -->
-                <section class="proj-tab-panel hidden" data-tab-panel="payments">
+                <!-- ===== Tab: Overview (default) — the whole project in one look ===== -->
+                <section class="proj-tab-panel" data-tab-panel="overview">
+                    <!-- Hero + value ladder + GST position + cost breakdown -->
+                    <div id="detail-overview" class="proj-overview"></div>
+
+                    <!-- PO gist, folded away — it's reference, not a headline -->
+                    <details id="detail-po-block" class="proj-fold hidden">
+                        <summary class="proj-fold-summary">
+                            <span>Purchase order</span>
+                            <span id="detail-po-filename" class="proj-po-filename"></span>
+                        </summary>
+                        <div class="proj-fold-body">
+                            <div class="proj-po-row">
+                                <a id="detail-po-link" class="proj-secondary-btn" href="#" target="_blank" rel="noopener">View PO document</a>
+                            </div>
+                            <div id="detail-po-gist" class="proj-po-gist">
+                                <div class="proj-gist-loading">Loading PO details…</div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <!-- ==== Edit panel (hidden until "Edit" clicked) ==== -->
+                    <div id="detail-edit-panel" class="proj-edit-panel hidden">
+                        <div class="proj-edit-row">
+                            <div class="proj-edit-row-head">
+                                <span class="proj-field-label">Type</span>
+                                <span id="detail-type-status" class="proj-type-status"></span>
+                            </div>
+                            <div class="proj-type-toggle proj-type-toggle--full" role="radiogroup" aria-label="Entry type">
+                                <label class="proj-type-option">
+                                    <input type="radio" name="detail_project_type" value="project">
+                                    <span>Project</span>
+                                </label>
+                                <label class="proj-type-option">
+                                    <input type="radio" name="detail_project_type" value="design">
+                                    <span>Design</span>
+                                </label>
+                                <label class="proj-type-option">
+                                    <input type="radio" name="detail_project_type" value="other">
+                                    <span>Other</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="proj-edit-row">
+                            <div class="proj-edit-row-head">
+                                <span class="proj-field-label">Status</span>
+                                <span id="detail-status-status" class="proj-type-status"></span>
+                            </div>
+                            <label class="proj-status-toggle">
+                                <input type="checkbox" id="detail-is-inactive">
+                                <span class="proj-status-switch" aria-hidden="true"></span>
+                                <span class="proj-status-text">Closed (inactive) — moves to the bottom of the registry</span>
+                            </label>
+                        </div>
+
+                        <!-- Overhead: a cost the bank and bill data can't know about -->
+                        <div class="proj-edit-row">
+                            <div class="proj-edit-row-head">
+                                <span class="proj-field-label">Overhead</span>
+                                <span id="detail-overhead-status" class="proj-type-status"></span>
+                            </div>
+                            <form id="detail-overhead-form" class="proj-overhead-form">
+                                <input id="detail-overhead-input" class="proj-input proj-overhead-input"
+                                       type="number" step="0.01" min="0" placeholder="0.00" autocomplete="off"
+                                       aria-label="Overhead amount in rupees">
+                                <button type="submit" class="proj-secondary-btn">Save</button>
+                            </form>
+                            <p class="proj-note">Costs not captured by bills or the bank statement. Counts toward this project's total cost and profit.</p>
+                        </div>
+
+                        <!-- PO admin (only when a PO exists) -->
+                        <div id="detail-po-admin" class="proj-edit-row proj-po-admin hidden">
+                            <span class="proj-field-label">Purchase order</span>
+                            <!-- Inline edit form (hidden until "Edit values" clicked) -->
+                            <form id="detail-po-edit-form" class="proj-po-edit hidden">
+                                <div class="proj-gist-grid">
+                                    <label>Total project value (₹)
+                                        <input name="total_value" type="number" step="0.01" min="0" class="proj-input">
+                                    </label>
+                                    <label>PO number
+                                        <input name="po_number" type="text" class="proj-input">
+                                    </label>
+                                    <label>PO date
+                                        <input name="po_date" type="text" placeholder="DD-MMM-YYYY" class="proj-input">
+                                    </label>
+                                    <label>Client
+                                        <input name="client_name" type="text" class="proj-input">
+                                    </label>
+                                    <label>Taxable value (₹)
+                                        <input name="taxable_value" type="number" step="0.01" min="0" class="proj-input">
+                                    </label>
+                                    <label>Total tax (₹)
+                                        <input name="total_tax" type="number" step="0.01" min="0" class="proj-input">
+                                    </label>
+                                </div>
+                                <div class="proj-modal-footer">
+                                    <button type="button" id="detail-po-edit-cancel" class="proj-secondary-btn">Cancel</button>
+                                    <button type="submit" class="proj-primary-btn">Save changes</button>
+                                </div>
+                                <p id="detail-po-edit-error" class="proj-error hidden"></p>
+                            </form>
+
+                            <div id="detail-po-actions" class="proj-po-actions">
+                                <button type="button" id="detail-po-reprocess" class="proj-secondary-btn">Reprocess PO</button>
+                                <button type="button" id="detail-po-edit-btn" class="proj-primary-btn">Edit PO values</button>
+                            </div>
+                            <p class="proj-note">PO file is locked to keep naming consistent. You can reprocess the file or correct the extracted values.</p>
+                        </div>
+                    </div>
+
+                    <div id="detail-po-upload">
+                        <p class="proj-field-label" id="detail-upload-label">Upload PO document</p>
+                        <form id="detail-upload-form">
+                            <input id="detail-po-input" name="po_file" class="proj-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.docx,.doc" required>
+                            <div class="proj-modal-footer">
+                                <button type="button" class="proj-secondary-btn" data-close="project-detail-modal">Close</button>
+                                <button type="submit" class="proj-primary-btn">Upload PO</button>
+                            </div>
+                            <p id="detail-upload-error" class="proj-error hidden"></p>
+                        </form>
+                    </div>
+                </section>
+
+                <!-- ===== Tab: Bills (purchase / sales) ===== -->
+                <section class="proj-tab-panel hidden" data-tab-panel="bills">
+                    <div class="proj-subtabs" role="tablist" aria-label="Bill type">
+                        <button type="button" class="proj-subtab active" data-subtab="purchase" role="tab">Purchase<span class="proj-subtab-count" data-subtab-count="purchase"></span></button>
+                        <button type="button" class="proj-subtab" data-subtab="sales" role="tab">Sales<span class="proj-subtab-count" data-subtab-count="sales"></span></button>
+                    </div>
+                    <div id="detail-purchase-bills" class="proj-tab-content" data-subtab-panel="purchase">
+                        <p class="proj-tab-loading">Loading…</p>
+                    </div>
+                    <div id="detail-sales-bills" class="proj-tab-content hidden" data-subtab-panel="sales">
+                        <p class="proj-tab-loading">Loading…</p>
+                    </div>
+                </section>
+
+                <!-- ===== Tab: Ledger (client payments / expenses / labour) ===== -->
+                <section class="proj-tab-panel hidden" data-tab-panel="ledger">
+                    <div class="proj-subtabs" role="tablist" aria-label="Ledger section">
+                        <button type="button" class="proj-subtab active" data-subtab="payments" role="tab">Client payments<span class="proj-subtab-count" data-subtab-count="payments"></span></button>
+                        <button type="button" class="proj-subtab" data-subtab="expenses" role="tab">Expenses<span class="proj-subtab-count" data-subtab-count="expenses"></span></button>
+                        <button type="button" class="proj-subtab" data-subtab="labour" role="tab">Labour<span class="proj-subtab-count" data-subtab-count="labour"></span></button>
+                    </div>
+
+                    <div data-subtab-panel="payments">
                     <div id="detail-pay-modes" class="proj-pay-modes"></div>
                     <div id="detail-cash" class="proj-cash">
                         <div class="proj-cash-head">
@@ -151,138 +290,17 @@
                         </form>
                         <div id="detail-cash-list" class="proj-cash-list"></div>
                     </div>
-                </section>
+                    </div><!-- /subtab: payments -->
 
-                <!-- ===== Tab: Expenses (bank debits tagged to this project) ===== -->
-                <section class="proj-tab-panel hidden" data-tab-panel="expenses">
-                    <div id="detail-expenses" class="proj-tab-content">
+                    <div id="detail-expenses" class="proj-tab-content hidden" data-subtab-panel="expenses">
+                        <p class="proj-tab-loading">Loading…</p>
+                    </div>
+
+                    <div id="detail-labour" class="proj-tab-content hidden" data-subtab-panel="labour">
                         <p class="proj-tab-loading">Loading…</p>
                     </div>
                 </section>
 
-                <!-- ===== Tab: Purchase bills ===== -->
-                <section class="proj-tab-panel hidden" data-tab-panel="purchase">
-                    <div id="detail-purchase-bills" class="proj-tab-content">
-                        <p class="proj-tab-loading">Loading…</p>
-                    </div>
-                </section>
-
-                <!-- ===== Tab: Sales bills ===== -->
-                <section class="proj-tab-panel hidden" data-tab-panel="sales">
-                    <div id="detail-sales-bills" class="proj-tab-content">
-                        <p class="proj-tab-loading">Loading…</p>
-                    </div>
-                </section>
-
-                <!-- ===== Tab: Labour (attendance app DB) ===== -->
-                <section class="proj-tab-panel hidden" data-tab-panel="labour">
-                    <div id="detail-labour" class="proj-tab-content">
-                        <p class="proj-tab-loading">Loading…</p>
-                    </div>
-                </section>
-
-                <!-- ===== Tab: PO (default) ===== -->
-                <section class="proj-tab-panel" data-tab-panel="po">
-                <div id="detail-po-existing" class="hidden">
-                    <p class="proj-field-label">Purchase Order</p>
-                    <div class="proj-po-row">
-                        <span id="detail-po-filename" class="proj-po-filename"></span>
-                        <a id="detail-po-link" class="proj-secondary-btn" href="#" target="_blank" rel="noopener">View</a>
-                    </div>
-
-                    <!-- Extracted PO gist -->
-                    <div id="detail-po-gist" class="proj-po-gist">
-                        <div class="proj-gist-loading">Loading PO details…</div>
-                    </div>
-                </div>
-
-                <!-- ==== Edit panel (hidden until "Edit" clicked) ==== -->
-                <div id="detail-edit-panel" class="proj-edit-panel hidden">
-                    <div class="proj-edit-row">
-                        <div class="proj-edit-row-head">
-                            <span class="proj-field-label">Type</span>
-                            <span id="detail-type-status" class="proj-type-status"></span>
-                        </div>
-                        <div class="proj-type-toggle proj-type-toggle--full" role="radiogroup" aria-label="Entry type">
-                            <label class="proj-type-option">
-                                <input type="radio" name="detail_project_type" value="project">
-                                <span>Project</span>
-                            </label>
-                            <label class="proj-type-option">
-                                <input type="radio" name="detail_project_type" value="design">
-                                <span>Design</span>
-                            </label>
-                            <label class="proj-type-option">
-                                <input type="radio" name="detail_project_type" value="other">
-                                <span>Other</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="proj-edit-row">
-                        <div class="proj-edit-row-head">
-                            <span class="proj-field-label">Status</span>
-                            <span id="detail-status-status" class="proj-type-status"></span>
-                        </div>
-                        <label class="proj-status-toggle">
-                            <input type="checkbox" id="detail-is-inactive">
-                            <span class="proj-status-switch" aria-hidden="true"></span>
-                            <span class="proj-status-text">Closed (inactive) — moves to the bottom of the registry</span>
-                        </label>
-                    </div>
-
-                    <!-- PO admin (only when a PO exists) -->
-                    <div id="detail-po-admin" class="proj-edit-row proj-po-admin hidden">
-                        <span class="proj-field-label">Purchase order</span>
-                        <!-- Inline edit form (hidden until "Edit values" clicked) -->
-                        <form id="detail-po-edit-form" class="proj-po-edit hidden">
-                            <div class="proj-gist-grid">
-                                <label>Total project value (₹)
-                                    <input name="total_value" type="number" step="0.01" min="0" class="proj-input">
-                                </label>
-                                <label>PO number
-                                    <input name="po_number" type="text" class="proj-input">
-                                </label>
-                                <label>PO date
-                                    <input name="po_date" type="text" placeholder="DD-MMM-YYYY" class="proj-input">
-                                </label>
-                                <label>Client
-                                    <input name="client_name" type="text" class="proj-input">
-                                </label>
-                                <label>Taxable value (₹)
-                                    <input name="taxable_value" type="number" step="0.01" min="0" class="proj-input">
-                                </label>
-                                <label>Total tax (₹)
-                                    <input name="total_tax" type="number" step="0.01" min="0" class="proj-input">
-                                </label>
-                            </div>
-                            <div class="proj-modal-footer">
-                                <button type="button" id="detail-po-edit-cancel" class="proj-secondary-btn">Cancel</button>
-                                <button type="submit" class="proj-primary-btn">Save changes</button>
-                            </div>
-                            <p id="detail-po-edit-error" class="proj-error hidden"></p>
-                        </form>
-
-                        <div id="detail-po-actions" class="proj-po-actions">
-                            <button type="button" id="detail-po-reprocess" class="proj-secondary-btn">Reprocess PO</button>
-                            <button type="button" id="detail-po-edit-btn" class="proj-primary-btn">Edit PO values</button>
-                        </div>
-                        <p class="proj-note">PO file is locked to keep naming consistent. You can reprocess the file or correct the extracted values.</p>
-                    </div>
-                </div>
-
-                <div id="detail-po-upload">
-                    <p class="proj-field-label" id="detail-upload-label">Upload PO document</p>
-                    <form id="detail-upload-form">
-                        <input id="detail-po-input" name="po_file" class="proj-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.docx,.doc" required>
-                        <div class="proj-modal-footer">
-                            <button type="button" class="proj-secondary-btn" data-close="project-detail-modal">Close</button>
-                            <button type="submit" class="proj-primary-btn">Upload PO</button>
-                        </div>
-                        <p id="detail-upload-error" class="proj-error hidden"></p>
-                    </form>
-                </div>
-                </section>
             </div>
         </div>
     </div>
@@ -290,7 +308,7 @@
     <!-- Toast -->
     <div id="proj-toast" class="proj-toast hidden"></div>
 
-    <script src="{{ url_for('static', filename='projects.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='projects.js') }}?v=3"></script>
 </body>
 
 </html>
