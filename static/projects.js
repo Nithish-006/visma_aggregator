@@ -645,7 +645,8 @@
         }
         const ladder = `
             <div class="proj-ov-panel">
-                <h4 class="proj-ov-title">Project value</h4>
+                <div class="proj-ov-head"><h4 class="proj-ov-title">Project value</h4></div>
+                <div class="proj-ov-body">
                 <dl class="proj-ladder">
                     <div class="proj-ladder-row"><dt>Basic value</dt><dd>${formatINR(val.basic)}</dd></div>
                     <div class="proj-ladder-row"><dt>GST</dt><dd>${formatINR(val.gst)}</dd></div>
@@ -654,6 +655,7 @@
                     <div class="proj-ladder-row is-balance"><dt>${dueLabel === 'To collect' ? 'Current balance' : 'Overpaid by'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}</dd></div>
                 </dl>
                 <p class="proj-ov-note">${SOURCE_NOTE[val.source] || ''}${poNote}</p>
+                </div>
             </div>`;
 
         // ── GST position ──
@@ -665,7 +667,8 @@
             const isCredit = g.extra < -0.5;
             gstPanel = `
             <div class="proj-ov-panel">
-                <h4 class="proj-ov-title">GST position</h4>
+                <div class="proj-ov-head"><h4 class="proj-ov-title">GST position</h4></div>
+                <div class="proj-ov-body">
                 ${hasBills ? `
                 <table class="proj-gst-table">
                     <thead><tr><th></th><th>Basic</th><th>GST</th><th>Total</th></tr></thead>
@@ -690,6 +693,7 @@
                 </div>
                 ${isCredit ? `<p class="proj-ov-note">Input GST exceeds output GST — carried forward as credit, not counted as a cost.</p>` : ''}
                 ` : `<p class="proj-tab-empty">No bills tagged to this project yet.</p>`}
+                </div>
             </div>`;
         }
 
@@ -704,10 +708,16 @@
         const s = insights && insights.summary;
         if (!s) return '';
         const lines = s.cost_lines || [];
-        if (!lines.length) {
-            return `<div class="proj-ov-panel proj-ov-costs">
+        // "Expenses" doubles as the head of the left column, so the band reads
+        // as a table header rather than a title stacked on one.
+        const head = `
+            <div class="proj-ov-head">
                 <h4 class="proj-ov-title">Expenses</h4>
-                <p class="proj-tab-empty">No costs recorded for this project yet.</p>
+                <span class="proj-cost-head-amt">Amount</span>
+            </div>`;
+        if (!lines.length) {
+            return `<div class="proj-ov-panel proj-ov-costs">${head}
+                <p class="proj-tab-empty proj-cost-empty">No costs recorded for this project yet.</p>
             </div>`;
         }
         const total = Number(s.spend_total) || 0;
@@ -730,9 +740,16 @@
             </li>`;
         }).join('');
         const profitCls = s.profit >= 0 ? 'profit' : 'loss';
+        // Labour comes from the attendance app. If that's unreachable it counts
+        // as 0, so the total is short and the profit correspondingly flattering
+        // — say so rather than presenting an incomplete figure as final.
+        const labourWarning = s.labour_available === false
+            ? `<p class="proj-cost-warn">Labour is missing — the attendance app
+               couldn't be reached, so the total and profit below exclude it.</p>`
+            : '';
         return `
-            <div class="proj-ov-panel proj-ov-costs">
-                <h4 class="proj-ov-title">Expenses</h4>
+            <div class="proj-ov-panel proj-ov-costs">${head}
+                ${labourWarning}
                 <ul class="proj-cost-list">${rows}</ul>
                 <div class="proj-cost-foot">
                     <div class="proj-cost-foot-row is-total">

@@ -537,6 +537,10 @@ def api_project_insights(project_id):
             # Kept for backward compatibility with existing readers; equals
             # `receivable` when the ladder is PO-sourced.
             'balance': po_value - received_total,
+            # When the attendance app is unreachable, labour comes back as 0 and
+            # the cost total quietly loses it — which overstates profit. The UI
+            # needs to know the figure is incomplete rather than just low.
+            'labour_available': labour.get('available') is not False,
             **fin,
         },
         'payments': {

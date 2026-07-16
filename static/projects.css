@@ -782,13 +782,27 @@ html, body {
     margin-top: 0.7rem;
 }
 .proj-ov-panel {
-    padding: 0.85rem 0.95rem;
     background: var(--proj-surface);
     border: 1px solid var(--proj-border);
     border-radius: 10px;
+    /* Bands run edge to edge, so the padding lives on .proj-ov-body. */
+    padding: 0;
+    overflow: hidden;
 }
+/* Tinted title band, same flattened accent-soft as the bills table header, so
+   every panel on this tab reads as part of one system. */
+.proj-ov-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0.95rem;
+    background: #FAEFEB;
+    border-bottom: 1px solid var(--proj-border-strong);
+}
+.proj-ov-body { padding: 0.85rem 0.95rem; }
 .proj-ov-title {
-    margin: 0 0 0.6rem;
+    margin: 0;
     font-size: 0.72rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -898,24 +912,48 @@ html, body {
 /* Input GST above output GST is money back, not money owed. */
 .proj-gst-extra.is-credit .proj-gst-extra-v { color: var(--proj-success); }
 
-/* Cost breakdown, highest first. */
+/* Expenses: a two-column tabulation banded like the bills table — tinted
+   header, hairline rows, tinted totals. */
 .proj-ov-costs { margin-top: 0.7rem; }
+.proj-cost-head-amt {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--proj-text-muted);
+}
+.proj-cost-empty { padding: 0.9rem 0.95rem; }
+/* Shown when labour is missing from the total — the figures below are short. */
+.proj-cost-warn {
+    margin: 0;
+    padding: 0.5rem 0.95rem;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--proj-warning);
+    background: var(--proj-warning-soft);
+    border-bottom: 1px solid var(--proj-border);
+}
 .proj-cost-list {
     margin: 0;
     padding: 0;
     list-style: none;
 }
-/* A plain two-column tabulation: head on the left, amount on the right.
-   Hairline separators carry the row rhythm instead of bars. */
 .proj-cost-row {
     display: grid;
     grid-template-columns: 1fr auto;
-    align-items: baseline;
+    align-items: center;
     gap: 1rem;
-    padding: 0.42rem 0;
+    padding: 0.4rem 0.95rem;
     border-bottom: 1px solid var(--proj-border);
 }
 .proj-cost-row:last-child { border-bottom: none; }
+/* The hand-entered row sits apart from the bill/bank-derived ones above it. */
+.proj-cost-row.is-editable {
+    background: var(--proj-surface-soft);
+    border-top: 1px solid var(--proj-border-strong);
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+}
 .proj-cost-k {
     font-size: 0.78rem;
     font-weight: 600;
@@ -932,22 +970,22 @@ html, body {
     font-variant-numeric: tabular-nums;
 }
 
-/* Overhead is edited in place. It should read as one of the figures in the
-   column, not a form field dropped into a table — so it stays borderless
-   until hovered or focused. */
+/* Overhead is edited in place. The box is always drawn so the field reads as
+   editable at a glance, and firms up on hover/focus. */
 .proj-cost-input {
-    width: 8.5rem;
-    padding: 0.15rem 0.4rem;
+    width: 9rem;
+    padding: 0.22rem 0.45rem;
     font-family: inherit;
     font-size: 0.82rem;
     font-weight: 600;
     color: var(--proj-text);
     text-align: right;
     font-variant-numeric: tabular-nums;
-    background: transparent;
-    border: 1px solid transparent;
+    background: var(--proj-surface);
+    border: 1px solid var(--proj-border-strong);
     border-radius: 6px;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    cursor: text;
+    transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 .proj-cost-input::placeholder {
     color: var(--proj-text-muted);
@@ -955,39 +993,23 @@ html, body {
     opacity: 0.7;
 }
 .proj-cost-input:hover:not(:disabled) {
-    border-color: var(--proj-border-strong);
-    background: var(--proj-surface-soft);
+    border-color: var(--proj-accent);
+    box-shadow: 0 0 0 3px var(--proj-accent-soft);
 }
 .proj-cost-input:focus {
     outline: none;
     border-color: var(--proj-accent);
-    background: var(--proj-surface);
     box-shadow: 0 0 0 3px var(--proj-accent-soft);
 }
-.proj-cost-input:disabled { opacity: 0.5; }
+.proj-cost-input:disabled { opacity: 0.55; cursor: default; }
 .proj-cost-input.error {
     border-color: var(--proj-danger);
     background: var(--proj-danger-soft);
 }
-/* Spinners fight the right-alignment and add nothing here. */
-.proj-cost-input::-webkit-outer-spin-button,
-.proj-cost-input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-.proj-cost-input { -moz-appearance: textfield; appearance: textfield; }
-
-/* The editable row keeps the pencil affordance visible without hover on
-   touch, where there is no hover state to discover it with. */
-.proj-cost-row.is-editable .proj-cost-k::after {
-    content: ' ✎';
-    font-size: 0.7rem;
-    color: var(--proj-text-muted);
-    opacity: 0.75;
-}
+/* Totals band, bookending the header. */
 .proj-cost-foot {
-    margin-top: 0.55rem;
-    padding-top: 0.5rem;
+    padding: 0.5rem 0.95rem 0.6rem;
+    background: #FAEFEB;
     border-top: 1px solid var(--proj-border-strong);
 }
 .proj-cost-foot-row {
