@@ -837,6 +837,36 @@ html, body {
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
+/* The PO opens the ladder — the agreed figure everything else is measured
+   against — so it gets weight and a rule under it, separating "contract" from
+   the billed block below. */
+.proj-ladder-row.is-po {
+    align-items: baseline;
+    padding-top: 0;
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.35rem;
+    border-bottom: 1px solid var(--proj-border-strong);
+}
+.proj-ladder-row.is-po dt {
+    font-weight: 700;
+    color: var(--proj-text);
+}
+.proj-ladder-row.is-po dd {
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--proj-accent-strong);
+}
+/* Quiet qualifier next to a ladder label ("contract" / "billed"). */
+.proj-ladder-hint {
+    margin-left: 0.35rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--proj-text-muted);
+    opacity: 0.8;
+}
+
 /* The two lines that carry the weight get a rule above them, mirroring the
    way the source sheet separates its totals. */
 .proj-ladder-row.is-total {

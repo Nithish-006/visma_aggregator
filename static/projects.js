@@ -231,6 +231,14 @@
         });
     }
 
+    // Signed: the minus goes before the ₹ ("-₹5,000.00"), not after it, which
+    // is what toLocaleString would do. Used where a figure can legitimately go
+    // negative and the sign is the whole point.
+    function formatSignedINR(value) {
+        const n = Number(value) || 0;
+        return (n < 0 ? '-' : '') + formatINR(Math.abs(n));
+    }
+
     // Compact Indian-format for the card finance strip so values stay on a
     // single line (e.g. 22165179 -> ₹2.22 Cr, 6640450 -> ₹66.40 L).
     function formatINRCompact(value) {
@@ -598,18 +606,21 @@
 
         const receivable = total - rec;
         const pct = total > 0 ? Math.min(100, Math.round((rec / total) * 100)) : null;
-        const dueLabel = receivable < -0.5 ? 'Overpaid by' : 'To collect';
+        const dueLabel = receivable < -0.5 ? 'Client overpaid by' : 'Client yet to pay';
         const dueCls = receivable > 0.5 ? 'due' : 'settled';
 
         // ── Hero: the two questions people open this for ──
-        const profitCell = s ? `
+        // "Balance" here is total value minus total cost — what's left of the
+        // project. The ladder's "Current balance" is what the client still owes;
+        // the two hero labels are what keep them apart.
+        const balanceCell = s ? `
             <div class="proj-hero-cell">
-                <span class="proj-hero-k">Profit</span>
-                <span class="proj-hero-v ${s.profit >= 0 ? 'profit' : 'loss'}">${formatINR(Math.abs(s.profit))}${s.profit < 0 ? ' loss' : ''}</span>
-                <span class="proj-hero-sub">${s.margin_pct != null ? `${s.margin_pct.toFixed(1)}% margin` : '&nbsp;'}</span>
+                <span class="proj-hero-k">Balance</span>
+                <span class="proj-hero-v ${s.profit >= 0 ? 'profit' : 'loss'}">${formatSignedINR(s.profit)}</span>
+                <span class="proj-hero-sub">${s.margin_pct != null ? `${s.margin_pct.toFixed(1)}% of total value` : '&nbsp;'}</span>
             </div>` : `
             <div class="proj-hero-cell">
-                <span class="proj-hero-k">Profit</span>
+                <span class="proj-hero-k">Balance</span>
                 <span class="proj-hero-v is-loading">…</span>
                 <span class="proj-hero-sub">&nbsp;</span>
             </div>`;
@@ -620,7 +631,7 @@
                     <span class="proj-hero-v ${dueCls}">${formatINR(Math.abs(receivable))}</span>
                     <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(total)} received` : '&nbsp;'}</span>
                 </div>
-                ${profitCell}
+                ${balanceCell}
             </div>
             ${pct != null ? `<div class="proj-pay-bar"><div class="proj-pay-bar-fill" style="width:${pct}%"></div></div>` : ''}`;
 
@@ -633,26 +644,37 @@
             po: 'From the purchase order — no sales bills tagged yet',
             none: 'No sales bills or PO value yet',
         };
-        // The PO is the contract, the sales bills are what we billed. Showing
-        // the gap matters: it's either work not yet invoiced or billing over PO.
+        // The PO is the contract, the sales bills are what we billed. The gap
+        // between them matters: it's either work not yet invoiced or billing
+        // over the PO.
         let poNote = '';
         if (val.source === 'sales_bills' && po > 0) {
             const diff = total - po;
-            const billedPct = Math.round((total / po) * 100);
-            poNote = Math.abs(diff) < 1
-                ? ` · matches the PO exactly`
-                : ` · PO ${formatINRCompact(po)}, billed ${billedPct}%`;
+            if (Math.abs(diff) < 1) {
+                poNote = ' · billed exactly to the PO';
+            } else {
+                const billedPct = Math.round((total / po) * 100);
+                poNote = ` · billed ${billedPct}% of the PO, ${diff > 0 ? 'over' : 'under'} by ${formatINRCompact(Math.abs(diff))}`;
+            }
         }
+        // The PO opens the ladder: it's the agreed figure every other number on
+        // this panel is measured against, so the panel reads
+        // agreed -> billed -> received -> outstanding, top to bottom.
+        const poRow = po > 0 ? `
+                    <div class="proj-ladder-row is-po">
+                        <dt>PO value<span class="proj-ladder-hint">contract</span></dt>
+                        <dd>${formatINR(po)}</dd>
+                    </div>` : '';
         const ladder = `
             <div class="proj-ov-panel">
                 <div class="proj-ov-head"><h4 class="proj-ov-title">Project value</h4></div>
                 <div class="proj-ov-body">
-                <dl class="proj-ladder">
+                <dl class="proj-ladder">${poRow}
                     <div class="proj-ladder-row"><dt>Basic value</dt><dd>${formatINR(val.basic)}</dd></div>
                     <div class="proj-ladder-row"><dt>GST</dt><dd>${formatINR(val.gst)}</dd></div>
-                    <div class="proj-ladder-row is-total"><dt>Total value</dt><dd>${formatINR(total)}</dd></div>
+                    <div class="proj-ladder-row is-total"><dt>Total value<span class="proj-ladder-hint">billed</span></dt><dd>${formatINR(total)}</dd></div>
                     <div class="proj-ladder-row"><dt>Received</dt><dd>${formatINR(rec)}${splitNote}</dd></div>
-                    <div class="proj-ladder-row is-balance"><dt>${dueLabel === 'To collect' ? 'Current balance' : 'Overpaid by'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}</dd></div>
+                    <div class="proj-ladder-row is-balance"><dt>${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}</dd></div>
                 </dl>
                 <p class="proj-ov-note">${SOURCE_NOTE[val.source] || ''}${poNote}</p>
                 </div>
@@ -753,11 +775,11 @@
                 <ul class="proj-cost-list">${rows}</ul>
                 <div class="proj-cost-foot">
                     <div class="proj-cost-foot-row is-total">
-                        <span>Total cost</span><span>${formatINR(total)}</span>
+                        <span>Total expenses</span><span>${formatINR(total)}</span>
                     </div>
                     <div class="proj-cost-foot-row is-profit">
-                        <span>Balance (${s.profit >= 0 ? 'profit' : 'loss'})</span>
-                        <span class="${profitCls}">${formatINR(Math.abs(s.profit))}</span>
+                        <span>Balance</span>
+                        <span class="${profitCls}">${formatSignedINR(s.profit)}</span>
                     </div>
                 </div>
             </div>`;
