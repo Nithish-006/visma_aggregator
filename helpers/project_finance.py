@@ -98,12 +98,16 @@ def compute_project_finance(*, sales, purchase, po, received_total,
         {'label': 'MATERIAL PURCHASE', 'amount': material_total, 'source': 'purchase_bills'},
         {'label': 'LABOUR PAYMENT', 'amount': labour_total, 'source': 'labour'},
         {'label': 'GST PAYABLE', 'amount': gst_extra_cost, 'source': 'gst'},
-        {'label': 'OVERHEAD', 'amount': overhead, 'source': 'manual'},
     ]
     cost_lines += [{'label': cat, 'amount': amt, 'source': 'expenses'}
                    for cat, amt in (other_cat_totals or {}).items()]
-    cost_lines = sorted([l for l in cost_lines if l['amount'] > 0],
-                        key=lambda l: l['amount'], reverse=True)
+    cost_lines = [l for l in cost_lines if l['amount'] > 0]
+    # Overhead is the one line entered by hand, so it is always listed even at
+    # zero — it is edited in place in the breakdown, and a filtered-out row
+    # would leave nothing to click on for a project that has none yet.
+    cost_lines.append({'label': 'OVERHEAD', 'amount': overhead,
+                       'source': 'manual', 'editable': True})
+    cost_lines.sort(key=lambda l: l['amount'], reverse=True)
 
     return {
         'value': {

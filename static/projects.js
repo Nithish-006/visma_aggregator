@@ -35,9 +35,6 @@
 
     const detailOverview = document.getElementById('detail-overview');
     const detailPoBlock = document.getElementById('detail-po-block');
-    const overheadForm = document.getElementById('detail-overhead-form');
-    const overheadInput = document.getElementById('detail-overhead-input');
-    const overheadStatus = document.getElementById('detail-overhead-status');
 
     // Insight tabs (PO / payments / expenses / bills / labour)
     const tabsBar = document.getElementById('detail-tabs');
@@ -223,24 +220,15 @@
         return `<span class="proj-bank-badge ${cls}">${label}</span>`;
     }
 
-    // Indian-format a number with a ₹ prefix (e.g. 2325190 -> ₹23,25,190).
-    // Paise are shown in full or not at all: a bare maximumFractionDigits
-    // renders 3491054.50 as "₹34,91,054.5", and money with a single decimal
-    // place reads as a rounding bug.
+    // Indian-format a number with a ₹ prefix (e.g. 2325190 -> ₹23,25,190.00).
+    // Always two decimals: mixing ₹2,00,000 with ₹5,505.90 in one column makes
+    // the figures hard to scan, and a lone ".5" reads as a rounding bug.
     function formatINR(value) {
         const n = Number(value) || 0;
-        const hasPaise = Math.abs(n * 100 - Math.round(n) * 100) > 0.5;
         return '₹' + n.toLocaleString('en-IN', {
-            minimumFractionDigits: hasPaise ? 2 : 0,
+            minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
-    }
-
-    // Whole rupees, no paise — for dense tables where the exact figure still
-    // matters but the decimals only add noise (the source sheet rounds here too).
-    function formatINRWhole(value) {
-        const n = Math.round(Number(value) || 0);
-        return '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
     }
 
     // Compact Indian-format for the card finance strip so values stay on a
@@ -421,10 +409,9 @@
         labourEl.innerHTML = loading;
         renderOverview(p);
         // Start in read-only view; editing is opt-in via the header Edit button.
+        // (Overhead is the exception — it's edited in place in the Expenses
+        // list, so it isn't gated behind Edit mode.)
         setEditMode(false);
-        overheadInput.value = Number(p.overhead) > 0 ? Number(p.overhead) : '';
-        overheadStatus.textContent = '';
-        overheadStatus.classList.remove('error');
         // Cash client payments ledger — form is collapsed until "+ Add".
         setCashFormOpen(false);
         cashForm.reset();
@@ -685,15 +672,15 @@
                     <tbody>
                         <tr>
                             <th scope="row">Purchase</th>
-                            <td data-label="Basic">${formatINRWhole(g.purchase_basic)}</td>
-                            <td data-label="GST">${formatINRWhole(g.purchase_gst)}</td>
-                            <td data-label="Total">${formatINRWhole(g.purchase_total)}</td>
+                            <td data-label="Basic">${formatINR(g.purchase_basic)}</td>
+                            <td data-label="GST">${formatINR(g.purchase_gst)}</td>
+                            <td data-label="Total">${formatINR(g.purchase_total)}</td>
                         </tr>
                         <tr>
                             <th scope="row">Sales</th>
-                            <td data-label="Basic">${formatINRWhole(g.sales_basic)}</td>
-                            <td data-label="GST">${formatINRWhole(g.sales_gst)}</td>
-                            <td data-label="Total">${formatINRWhole(g.sales_total)}</td>
+                            <td data-label="Basic">${formatINR(g.sales_basic)}</td>
+                            <td data-label="GST">${formatINR(g.sales_gst)}</td>
+                            <td data-label="Total">${formatINR(g.sales_total)}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -710,26 +697,42 @@
         detailOverview.classList.remove('hidden');
     }
 
-    // ── Cost breakdown, highest first ─────────────────
+    // ── Expenses, highest first ───────────────────────
     // Lines and totals come from the server so they always sum to spend_total.
+    // Overhead is the one hand-entered line and is edited in place here.
     function renderCostPanel() {
         const s = insights && insights.summary;
         if (!s) return '';
         const lines = s.cost_lines || [];
         if (!lines.length) {
             return `<div class="proj-ov-panel proj-ov-costs">
+                <h4 class="proj-ov-title">Expenses</h4>
                 <p class="proj-tab-empty">No costs recorded for this project yet.</p>
             </div>`;
         }
         const total = Number(s.spend_total) || 0;
-        const rows = lines.map(l => `
-            <li class="proj-cost-row" data-source="${escapeHtml(l.source)}">
+        const rows = lines.map(l => {
+            // A number input can't render "₹2,00,000.00", and a bare 200000 in a
+            // column of formatted figures looks broken. So it's a text field
+            // showing the formatted value at rest, swapped to the raw number on
+            // focus (see the focusin/focusout handlers).
+            const cell = l.editable
+                ? `<input class="proj-cost-input" type="text" inputmode="decimal"
+                          value="${l.amount ? formatINR(l.amount) : ''}" placeholder="${formatINR(0)}"
+                          data-overhead-input data-raw="${l.amount || 0}"
+                          aria-label="Overhead amount in rupees"
+                          title="Costs no bill or bank row covers. Counts toward the total and profit.">`
+                : formatINR(l.amount);
+            return `
+            <li class="proj-cost-row${l.editable ? ' is-editable' : ''}" data-source="${escapeHtml(l.source)}">
                 <span class="proj-cost-k">${escapeHtml(l.label)}</span>
-                <span class="proj-cost-v">${formatINR(l.amount)}</span>
-            </li>`).join('');
+                <span class="proj-cost-v">${cell}</span>
+            </li>`;
+        }).join('');
         const profitCls = s.profit >= 0 ? 'profit' : 'loss';
         return `
             <div class="proj-ov-panel proj-ov-costs">
+                <h4 class="proj-ov-title">Expenses</h4>
                 <ul class="proj-cost-list">${rows}</ul>
                 <div class="proj-cost-foot">
                     <div class="proj-cost-foot-row is-total">
@@ -1308,21 +1311,41 @@
         }
     });
 
-    // ── Overhead ───────────────────────────────────────
+    // ── Overhead (edited in place in the Expenses list) ─
     // A cost bills and bank statements can't see, so it's typed in by hand and
-    // feeds the project's cost total and profit.
-    overheadForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    // feeds the project's cost total and profit. Delegated, because the panel
+    // is re-rendered wholesale whenever the numbers change.
+    // "₹2,50,000.00" / "250000" / "2,50,000" -> 250000.
+    // Cleared field -> 0 (a deliberate "no overhead"); anything with content but
+    // no number in it -> NaN, so junk is rejected rather than silently zeroing.
+    function parseMoney(text) {
+        const s = String(text ?? '').trim();
+        if (!s) return 0;
+        const cleaned = s.replace(/[^0-9.-]/g, '');
+        if (!cleaned) return NaN;
+        return Number(cleaned);
+    }
+
+    async function saveOverhead(input) {
         if (!activeProjectId) return;
-        const raw = overheadInput.value.trim();
-        const value = raw === '' ? 0 : Number(raw);
+        const value = parseMoney(input.value);
+        const original = Number(input.dataset.raw) || 0;
         if (!Number.isFinite(value) || value < 0) {
-            overheadStatus.textContent = 'Enter zero or more';
-            overheadStatus.classList.add('error');
+            input.classList.add('error');
+            showToast('Overhead must be a number, zero or more.', 'error');
+            input.value = original ? formatINR(original) : '';
             return;
         }
-        overheadStatus.classList.remove('error');
-        overheadStatus.textContent = 'Saving…';
+        input.classList.remove('error');
+        // Unchanged? Reformat and leave it alone — no request, and no repaint
+        // churning the panel for nothing.
+        if (Math.abs(original - value) < 0.005) {
+            input.value = value ? formatINR(value) : '';
+            return;
+        }
+        input.value = formatINR(value); // show the committed value while saving
+        input.disabled = true;
+        const cached = projects.find(x => x.id === activeProjectId);
         try {
             const res = await fetch(`/api/projects/${activeProjectId}`, {
                 method: 'PATCH',
@@ -1332,20 +1355,49 @@
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
-                overheadStatus.textContent = data.message || data.error || `Failed (HTTP ${res.status})`;
-                overheadStatus.classList.add('error');
+                input.classList.add('error');
+                input.disabled = false;
+                showToast(data.message || data.error || `Failed (HTTP ${res.status})`, 'error');
                 return;
             }
-            overheadStatus.textContent = 'Saved';
-            const cached = projects.find(x => x.id === activeProjectId);
             if (cached) cached.overhead = value;
             // Overhead is a cost input, so the glance is now stale: refetch so
-            // the cost list, total and profit all move together.
+            // the list, total cost and profit all move together. This re-renders
+            // the panel, replacing the (disabled) input with a fresh one.
             loadInsights(activeProjectId);
             showToast('Overhead updated.');
         } catch (err) {
-            overheadStatus.textContent = `Network error: ${err.message}`;
-            overheadStatus.classList.add('error');
+            input.disabled = false;
+            input.classList.add('error');
+            showToast(`Network error: ${err.message}`, 'error');
+        }
+    }
+
+    // Editing shows the plain number; at rest it shows the formatted figure so
+    // the column stays symmetrical.
+    detailOverview.addEventListener('focusin', (e) => {
+        const input = e.target.closest('[data-overhead-input]');
+        if (!input) return;
+        const raw = Number(input.dataset.raw) || 0;
+        input.value = raw ? String(raw) : '';
+        input.select();
+    });
+    // focusout is the single commit path — it covers blur, Tab and Enter (which
+    // blurs below). Wiring 'change' as well would PATCH twice.
+    detailOverview.addEventListener('focusout', (e) => {
+        const input = e.target.closest('[data-overhead-input]');
+        if (input && !input.disabled) saveOverhead(input);
+    });
+    detailOverview.addEventListener('keydown', (e) => {
+        const input = e.target.closest('[data-overhead-input]');
+        if (!input) return;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            const raw = Number(input.dataset.raw) || 0;
+            input.value = raw ? String(raw) : ''; // discard, then let focusout no-op
+            input.blur();
         }
     });
 

@@ -931,6 +931,60 @@ html, body {
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
+
+/* Overhead is edited in place. It should read as one of the figures in the
+   column, not a form field dropped into a table — so it stays borderless
+   until hovered or focused. */
+.proj-cost-input {
+    width: 8.5rem;
+    padding: 0.15rem 0.4rem;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--proj-text);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.proj-cost-input::placeholder {
+    color: var(--proj-text-muted);
+    font-weight: 500;
+    opacity: 0.7;
+}
+.proj-cost-input:hover:not(:disabled) {
+    border-color: var(--proj-border-strong);
+    background: var(--proj-surface-soft);
+}
+.proj-cost-input:focus {
+    outline: none;
+    border-color: var(--proj-accent);
+    background: var(--proj-surface);
+    box-shadow: 0 0 0 3px var(--proj-accent-soft);
+}
+.proj-cost-input:disabled { opacity: 0.5; }
+.proj-cost-input.error {
+    border-color: var(--proj-danger);
+    background: var(--proj-danger-soft);
+}
+/* Spinners fight the right-alignment and add nothing here. */
+.proj-cost-input::-webkit-outer-spin-button,
+.proj-cost-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.proj-cost-input { -moz-appearance: textfield; appearance: textfield; }
+
+/* The editable row keeps the pencil affordance visible without hover on
+   touch, where there is no hover state to discover it with. */
+.proj-cost-row.is-editable .proj-cost-k::after {
+    content: ' ✎';
+    font-size: 0.7rem;
+    color: var(--proj-text-muted);
+    opacity: 0.75;
+}
 .proj-cost-foot {
     margin-top: 0.55rem;
     padding-top: 0.5rem;
@@ -1585,16 +1639,6 @@ html, body {
     border-top: 1px solid var(--proj-border);
 }
 
-/* Overhead entry (edit panel). */
-.proj-overhead-form {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-}
-.proj-overhead-input {
-    max-width: 200px;
-    font-variant-numeric: tabular-nums;
-}
 
 .proj-tab-loading,
 .proj-tab-empty {
@@ -1837,6 +1881,6 @@ html, body {
     /* Long category heads wrap rather than truncate on a narrow screen. */
     .proj-cost-k { white-space: normal; }
 
-    .proj-overhead-form { flex-wrap: wrap; }
-    .proj-overhead-input { max-width: none; flex: 1 1 140px; }
+    /* Give the in-place overhead field a comfortable tap target. */
+    .proj-cost-input { width: 7.5rem; padding: 0.3rem 0.4rem; }
 }

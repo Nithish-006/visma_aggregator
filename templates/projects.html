@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=5">
 </head>
 
 <body>
@@ -178,21 +178,6 @@
                             </label>
                         </div>
 
-                        <!-- Overhead: a cost the bank and bill data can't know about -->
-                        <div class="proj-edit-row">
-                            <div class="proj-edit-row-head">
-                                <span class="proj-field-label">Overhead</span>
-                                <span id="detail-overhead-status" class="proj-type-status"></span>
-                            </div>
-                            <form id="detail-overhead-form" class="proj-overhead-form">
-                                <input id="detail-overhead-input" class="proj-input proj-overhead-input"
-                                       type="number" step="0.01" min="0" placeholder="0.00" autocomplete="off"
-                                       aria-label="Overhead amount in rupees">
-                                <button type="submit" class="proj-secondary-btn">Save</button>
-                            </form>
-                            <p class="proj-note">Costs not captured by bills or the bank statement. Counts toward this project's total cost and profit.</p>
-                        </div>
-
                         <!-- PO admin (only when a PO exists) -->
                         <div id="detail-po-admin" class="proj-edit-row proj-po-admin hidden">
                             <span class="proj-field-label">Purchase order</span>
@@ -308,7 +293,7 @@
     <!-- Toast -->
     <div id="proj-toast" class="proj-toast hidden"></div>
 
-    <script src="{{ url_for('static', filename='projects.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='projects.js') }}?v=5"></script>
 </body>
 
 </html>
