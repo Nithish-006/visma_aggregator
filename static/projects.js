@@ -701,9 +701,7 @@
                     <span class="proj-gst-extra-k">${isCredit ? 'GST credit' : 'GST extra'}</span>
                     <span class="proj-gst-extra-v">${formatINR(Math.abs(g.extra))}</span>
                 </div>
-                <p class="proj-ov-note">${isCredit
-                    ? 'Input GST exceeds output GST — carried forward as credit, not counted as a cost.'
-                    : 'Sales GST minus purchase GST — the amount remitted, counted as a cost below.'}</p>
+                ${isCredit ? `<p class="proj-ov-note">Input GST exceeds output GST — carried forward as credit, not counted as a cost.</p>` : ''}
                 ` : `<p class="proj-tab-empty">No bills tagged to this project yet.</p>`}
             </div>`;
         }
@@ -720,23 +718,18 @@
         const lines = s.cost_lines || [];
         if (!lines.length) {
             return `<div class="proj-ov-panel proj-ov-costs">
-                <h4 class="proj-ov-title">Where the money went</h4>
                 <p class="proj-tab-empty">No costs recorded for this project yet.</p>
             </div>`;
         }
-        const max = Math.max(...lines.map(l => l.amount));
         const total = Number(s.spend_total) || 0;
         const rows = lines.map(l => `
             <li class="proj-cost-row" data-source="${escapeHtml(l.source)}">
                 <span class="proj-cost-k">${escapeHtml(l.label)}</span>
-                <span class="proj-cost-bar"><span class="proj-cost-bar-fill" style="width:${max > 0 ? (l.amount / max * 100).toFixed(1) : 0}%"></span></span>
                 <span class="proj-cost-v">${formatINR(l.amount)}</span>
-                <span class="proj-cost-pct">${total > 0 ? (l.amount / total * 100).toFixed(1) : '0.0'}%</span>
             </li>`).join('');
         const profitCls = s.profit >= 0 ? 'profit' : 'loss';
         return `
             <div class="proj-ov-panel proj-ov-costs">
-                <h4 class="proj-ov-title">Where the money went</h4>
                 <ul class="proj-cost-list">${rows}</ul>
                 <div class="proj-cost-foot">
                     <div class="proj-cost-foot-row is-total">
@@ -999,7 +992,7 @@
             // leaving the half-painted PO-only numbers looking authoritative.
             const costsFail = detailOverview.querySelector('.proj-ov-costs');
             if (costsFail) {
-                costsFail.innerHTML = `<h4 class="proj-ov-title">Where the money went</h4>${fail}`;
+                costsFail.innerHTML = fail;
             }
         }
     }

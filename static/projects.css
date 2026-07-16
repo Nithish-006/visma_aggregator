@@ -905,13 +905,17 @@ html, body {
     padding: 0;
     list-style: none;
 }
+/* A plain two-column tabulation: head on the left, amount on the right.
+   Hairline separators carry the row rhythm instead of bars. */
 .proj-cost-row {
     display: grid;
-    grid-template-columns: minmax(90px, 1.15fr) minmax(40px, 1fr) auto 42px;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.28rem 0;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.42rem 0;
+    border-bottom: 1px solid var(--proj-border);
 }
+.proj-cost-row:last-child { border-bottom: none; }
 .proj-cost-k {
     font-size: 0.78rem;
     font-weight: 600;
@@ -920,35 +924,10 @@ html, body {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.proj-cost-bar {
-    height: 6px;
-    border-radius: 999px;
-    background: var(--proj-border);
-    overflow: hidden;
-}
-.proj-cost-bar-fill {
-    display: block;
-    height: 100%;
-    border-radius: 999px;
-    background: var(--proj-accent);
-}
-/* Tint the lines that don't come from bank debits, so it's obvious at a
-   glance which costs are derived (GST) or hand-entered (overhead). */
-.proj-cost-row[data-source="purchase_bills"] .proj-cost-bar-fill { background: var(--proj-accent-strong); }
-.proj-cost-row[data-source="labour"] .proj-cost-bar-fill { background: var(--proj-accent-2); }
-.proj-cost-row[data-source="gst"] .proj-cost-bar-fill { background: var(--proj-warning); }
-.proj-cost-row[data-source="manual"] .proj-cost-bar-fill { background: var(--c-text-soft); }
 .proj-cost-v {
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 600;
     color: var(--proj-text);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
-.proj-cost-pct {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: var(--proj-text-muted);
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
@@ -1855,11 +1834,7 @@ html, body {
         color: var(--proj-text-muted);
     }
 
-    /* Cost rows: drop the bar and the percent column — the label and the
-       amount are what matter on a narrow screen. */
-    .proj-cost-row { grid-template-columns: 1fr auto; }
-    .proj-cost-bar,
-    .proj-cost-pct { display: none; }
+    /* Long category heads wrap rather than truncate on a narrow screen. */
     .proj-cost-k { white-space: normal; }
 
     .proj-overhead-form { flex-wrap: wrap; }
