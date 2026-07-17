@@ -10,6 +10,10 @@
         // The page is project-scoped: the landing shows registry-fed cards
         // and every detail view is pinned to one canonical project.
         currentProject: null,      // canonical display, e.g. "659 - JAMUNA"
+        // The numeric id behind that display. The filtered endpoints match on the
+        // display string, but the glance reads /api/projects/<id>/insights — the
+        // registry's own endpoint — so it needs the id.
+        currentProjectId: null,
         registryCards: [],
         defaultDates: { min: '', max: '' },
         // month: '' = all months; otherwise 'YYYY-MM' (mapped to a date range when querying)
@@ -375,7 +379,7 @@
         return dd ? dd.hasValue(value) : false;
     }
 
-    /** Render active cross-filter chips above KPI cards */
+    /** Render active cross-filter chips, under the glance and above the sections they filter */
     function renderCrossFilterChips() {
         let container = document.getElementById('cross-filter-chips');
         const hasFilters = state.filters.project.length > 0 ||
@@ -392,8 +396,16 @@
             container = document.createElement('div');
             container.id = 'cross-filter-chips';
             container.className = 'ps-cross-filter-bar';
-            const kpiGrid = document.querySelector('.ps-kpi-grid');
-            kpiGrid.parentNode.insertBefore(container, kpiGrid);
+            // Below the glance, not above it: these chips describe what the
+            // sections underneath are filtered to, and the glance deliberately
+            // ignores them. Anchoring above would claim it was filtered too.
+            const glance = document.getElementById('ps-glance');
+            if (glance && glance.parentNode) {
+                glance.parentNode.insertBefore(container, glance.nextSibling);
+            } else {
+                const left = document.querySelector('.ps-left');
+                if (left) left.insertBefore(container, left.firstChild);
+            }
         }
 
         container.classList.remove('hidden');
@@ -507,8 +519,18 @@
         window.scrollTo(0, 0);
     }
 
+    // The canonical tag is "<id> - NAME", so the id is readable straight off the
+    // display string. That matters for the deep-link case, where the registry
+    // card may not be in the landing set (e.g. an inactive project).
+    function projectIdFromDisplay(display) {
+        const m = /^\s*(\d+)\s*-/.exec(String(display || ''));
+        return m ? Number(m[1]) : null;
+    }
+
     async function openProject(display, title) {
         state.currentProject = display;
+        const card = state.registryCards.find(c => c.display === display);
+        state.currentProjectId = (card && card.id) || projectIdFromDisplay(display);
         document.getElementById('ps-title').textContent = title || display;
         document.getElementById('ps-landing').classList.add('hidden');
         document.getElementById('ps-detail').classList.remove('hidden');
@@ -522,7 +544,9 @@
         window.scrollTo(0, 0);
         showLoading();
         try {
-            await refreshAll();
+            // Painted once per open, alongside the filtered sections rather than
+            // inside refreshAll — the filters don't reach it.
+            await Promise.all([renderGlance(state.currentProjectId), refreshAll()]);
         } finally {
             hideLoading();
         }
@@ -636,9 +660,11 @@
                 dropdowns['dropdown-vendor']?.setOptions(filterOpts.vendors || []);
             }
 
-            // Render all sections
+            // Render all sections. The glance is not among them: it describes
+            // the whole project and is painted once per open, so a month pill
+            // can't quietly reshape the contract.
             renderCrossFilterChips();
-            renderKPI(combined.summary);
+            renderTrend(combined.monthly_trend);
             renderCategoryBars(combined.category_breakdown);
             renderLabourMonthly();
             renderVendorTable();
@@ -653,13 +679,135 @@
     }
 
     // ── Render: KPI Cards ──────────────────────────────────────────────
-    function renderKPI(summary) {
-        if (!summary) return;
-        $('#kpi-po-value').textContent = summary.po_value_formatted || '\u20B90';
-        $('#kpi-client-payments').textContent = summary.client_payments_formatted || '\u20B90';
-        // Reset bill KPIs (will be updated when bills data loads)
-        $('#kpi-purchase-bills').textContent = '\u20B90';
-        $('#kpi-sales-bills').textContent = '\u20B90';
+    // The same panels as the registry pop-up, from the same module and the same
+    // endpoint -- /api/projects/<id>/insights, the one place the money model
+    // (helpers/project_finance) is computed. This page used to sum its own
+    // figures, which is how it came to show a different picture than its own
+    // Export button produced.
+    //
+    // Whole-project by design: /insights takes no date range, and the filter bar
+    // drives only the tables below. The four KPI tiles this replaced mixed
+    // period-scoped bill totals with a whole-contract PO value, so any month
+    // filter left them mutually incomparable.
+    async function renderGlance(projectId) {
+        const el = document.getElementById('ps-glance');
+        if (!el) return;
+        if (!projectId) { el.innerHTML = ''; return; }
+        el.innerHTML = '<div class="ps-glance-loading">Loading project figures\u2026</div>';
+        try {
+            // The project row carries the PO baseline/variation splits the
+            // panels derive from; insights carries the money model.
+            const insights = await fetchJSON(`/api/projects/${projectId}/insights`);
+            if (state.currentProjectId !== projectId) return; // navigated away
+            const html = ProjectGlance.render({
+                project: insights.project || {},
+                insights: insights,
+                // Overhead is edited in the registry, where the handlers live.
+                editableOverhead: false,
+            });
+            el.innerHTML = html === null
+                ? '<div class="ps-empty">Nothing to show for this project yet.</div>'
+                : html;
+        } catch (err) {
+            console.error('Glance error:', err);
+            el.innerHTML = '<div class="ps-empty">Couldn\'t load the project figures.</div>';
+        }
+    }
+
+    // ── Render: Monthly trend ──────────────────────────────────────────
+    // Money in against money out, per month. Grouped bars on ONE axis: both
+    // series are rupees, so a second scale would let the eye compare two
+    // measures that were never comparable.
+    //
+    // Drawn as inline SVG rather than pulling in a chart library — the app ships
+    // no charting dependency (CLAUDE.md claims Chart.js; nothing here uses it),
+    // and this is two series of a handful of bars. Colours are the page's own
+    // income/expense tokens, validated for colour-blind separation.
+    const TREND = { h: 220, padT: 14, padB: 30, padL: 62, padR: 8, gap: 2 };
+
+    // A round top that actually covers the data: `nice` is the top gridline, so
+    // it has to clear max, not merely be a quarter of something that does —
+    // otherwise the tallest bar grows straight through the last line.
+    function trendTicks(max) {
+        if (max <= 0) return [0];
+        const step = Math.pow(10, Math.floor(Math.log10(max)));
+        const nice = [1, 2, 2.5, 5, 10].map(m => m * step).find(v => v >= max) || max;
+        // Drop a top line that leaves the tallest bar stranded near the floor;
+        // the axis then ends on the next line down, still above the data.
+        return [0, 1, 2, 3, 4].map(i => (nice * i) / 4).filter(v => v <= max * 1.35);
+    }
+
+    function renderTrend(trend) {
+        const el = document.getElementById('trend-chart');
+        if (!el) return;
+        const months = (trend && trend.months) || [];
+        if (!months.length) {
+            el.innerHTML = '<div class="ps-empty">No monthly activity in this period</div>';
+            return;
+        }
+        const income = trend.income || [];
+        const expense = trend.expense || [];
+        const max = Math.max(0, ...income, ...expense);
+        const ticks = trendTicks(max);
+        const top = ticks.length ? Math.max(max, ticks[ticks.length - 1]) : max;
+
+        // A viewBox keeps it responsive without a resize listener; the band maths
+        // works in viewBox units.
+        const W = 900, H = TREND.h;
+        const plotW = W - TREND.padL - TREND.padR;
+        const plotH = H - TREND.padT - TREND.padB;
+        const band = plotW / months.length;
+        const barW = Math.max(3, Math.min(26, (band - TREND.gap * 3) / 2));
+        const y = v => TREND.padT + plotH - (top > 0 ? (v / top) * plotH : 0);
+
+        const grid = ticks.map(t => `
+            <line class="ps-trend-grid" x1="${TREND.padL}" x2="${W - TREND.padR}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/>
+            <text class="ps-trend-tick" x="${TREND.padL - 8}" y="${(y(t) + 3.5).toFixed(1)}" text-anchor="end">${formatCompact(t)}</text>`).join('');
+
+        const bars = months.map((m, i) => {
+            const cx = TREND.padL + band * i + band / 2;
+            const pair = [
+                { v: Number(income[i]) || 0, cls: 'in', label: 'Received', x: cx - barW - TREND.gap / 2 },
+                { v: Number(expense[i]) || 0, cls: 'out', label: 'Spent', x: cx + TREND.gap / 2 },
+            ];
+            return pair.map(b => {
+                const h = Math.max(0, TREND.padT + plotH - y(b.v));
+                // Rounded data-end only: the bar is anchored to the baseline, so
+                // rounding the foot too would lift it off its own axis.
+                return h < 0.5 ? '' : `
+                <rect class="ps-trend-bar is-${b.cls}" x="${b.x.toFixed(1)}" y="${y(b.v).toFixed(1)}"
+                      width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="3"
+                      data-label="${escapeHtml(m)}" data-series="${b.label}" data-value="${b.v}"><title>${escapeHtml(m)} — ${b.label}: ${formatIndianNumber(b.v)}</title></rect>`;
+            }).join('') + `
+                <text class="ps-trend-xlabel" x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle">${escapeHtml(m)}</text>`;
+        }).join('');
+
+        // Two series, so a legend is not optional — identity must never rest on
+        // colour alone.
+        el.innerHTML = `
+            <div class="ps-trend-legend">
+                <span class="ps-trend-key"><i class="is-in"></i>Received</span>
+                <span class="ps-trend-key"><i class="is-out"></i>Spent</span>
+            </div>
+            <svg class="ps-trend-svg" viewBox="0 0 ${W} ${H}" role="img"
+                 aria-label="Monthly received against spent">
+                ${grid}
+                <line class="ps-trend-axis" x1="${TREND.padL}" x2="${W - TREND.padR}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}"/>
+                ${bars}
+            </svg>`;
+    }
+
+    // Compact rupee for axis ticks — a full ₹12,10,000.00 on every gridline is
+    // noise the eye has to step over to read the bars.
+    function formatCompact(v) {
+        const n = Number(v) || 0;
+        if (n >= 1e7) return '₹' + (n / 1e7).toFixed(n % 1e7 ? 1 : 0) + 'Cr';
+        if (n >= 1e5) return '₹' + (n / 1e5).toFixed(n % 1e5 ? 1 : 0) + 'L';
+        // A decimal where the step needs one, same as the lakh/crore steps:
+        // rounding quarters of 5,000 to "1k 3k 4k" makes evenly spaced
+        // gridlines read as uneven.
+        if (n >= 1e3) return '₹' + (n / 1e3).toFixed(n % 1e3 ? 1 : 0) + 'k';
+        return '₹' + Math.round(n);
     }
 
     // ── Render: Category Horizontal Bars ───────────────────────────────
@@ -946,8 +1094,6 @@
             renderPaginationControls('bills-pagination', 1, 0, () => {});
             const summaryEl = document.getElementById('bills-summary');
             if (summaryEl) summaryEl.textContent = '';
-            const kpiEl = $('#kpi-purchase-bills');
-            if (kpiEl) kpiEl.textContent = '\u20B90';
             return;
         }
 
@@ -980,11 +1126,6 @@
             summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}`;
         }
 
-        // Update KPI card
-        const kpiEl = $('#kpi-purchase-bills');
-        if (kpiEl && data.summary) {
-            kpiEl.textContent = formatIndianNumber(data.summary.total_amount || 0);
-        }
     }
 
     // ── Render: Sales Bills Table (server-side pagination) ──────────────
@@ -1015,8 +1156,6 @@
             renderPaginationControls('sales-bills-pagination', 1, 0, () => {});
             const summaryEl = document.getElementById('sales-bills-summary');
             if (summaryEl) summaryEl.textContent = '';
-            const kpiEl = $('#kpi-sales-bills');
-            if (kpiEl) kpiEl.textContent = '\u20B90';
             return;
         }
 
@@ -1049,11 +1188,6 @@
             summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}`;
         }
 
-        // Update KPI card
-        const kpiEl = $('#kpi-sales-bills');
-        if (kpiEl && data.summary) {
-            kpiEl.textContent = formatIndianNumber(data.summary.total_amount || 0);
-        }
     }
 
     async function viewSalesBillDetail(id) {

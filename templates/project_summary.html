@@ -10,7 +10,9 @@
     <title>Project Summary | VISMA Financial</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=17">
+    <!-- Shared with the registry; must load before the page's own sheet. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_glance.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=18">
 </head>
 
 <body>
@@ -94,24 +96,20 @@
     <div class="ps-layout">
         <!-- LEFT PANEL -->
         <div class="ps-left">
-            <!-- KPI Cards -->
-            <div class="ps-kpi-grid">
-                <div class="ps-kpi-card kpi-po-value">
-                    <div class="ps-kpi-label">PO Value</div>
-                    <div class="ps-kpi-value" id="kpi-po-value">₹0</div>
-                </div>
-                <div class="ps-kpi-card kpi-client-payments">
-                    <div class="ps-kpi-label">Client Payments</div>
-                    <div class="ps-kpi-value" id="kpi-client-payments">₹0</div>
-                </div>
-                <div class="ps-kpi-card kpi-purchase-bills">
-                    <div class="ps-kpi-label">Purchase Bills Value</div>
-                    <div class="ps-kpi-value" id="kpi-purchase-bills">₹0</div>
-                </div>
-                <div class="ps-kpi-card kpi-sales-bills">
-                    <div class="ps-kpi-label">Sales Bills Value</div>
-                    <div class="ps-kpi-value" id="kpi-sales-bills">₹0</div>
-                </div>
+            <!-- The same glance the registry pop-up shows, rendered by the same
+                 module from the same endpoint (project_glance.js). It describes
+                 the whole project, so the filter bar above deliberately does not
+                 reach it — a contract has no month, and pairing a whole contract
+                 with one month of bills is what the old KPI tiles got wrong.
+                 The filters drive everything below it. -->
+            <div id="ps-glance" class="ps-glance"></div>
+
+            <!-- Monthly trend: money in vs money out, per month -->
+            <div class="ps-section" id="trend-section">
+                <h2 class="ps-section-title">Monthly Trend
+                    <span class="ps-section-note">follows the filters above</span>
+                </h2>
+                <div id="trend-chart"></div>
             </div>
 
             <!-- Expense by Category -->
@@ -259,7 +257,8 @@
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='project_glance.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=16"></script>
 <script>
 function hardRefresh() {
     if ('caches' in window) {

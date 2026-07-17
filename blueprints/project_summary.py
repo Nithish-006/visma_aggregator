@@ -23,7 +23,6 @@ from helpers.projects import (
 )
 # project_summary consumes the projects blueprint's PO/payments resolver.
 # One-directional: blueprints.projects never imports project_summary.
-from blueprints.projects import _po_and_payments_for_project
 from auth import login_required
 
 bp = Blueprint('project_summary', __name__)
@@ -61,8 +60,6 @@ def get_project_summary_combined():
     category = request.args.get('category', None)
     vendor = request.args.get('vendor', None)
 
-    po_value, client_payments = _po_and_payments_for_project(project)
-
     # Labour salary (monthly) for the open project — sourced from the salary API.
     labour_monthly = _labour_monthly_for_project(project, start_date, end_date)
 
@@ -91,10 +88,6 @@ def get_project_summary_combined():
                 'total_bank_transfer': 0, 'total_bank_transfer_formatted': '₹0',
                 'total_expense': 0, 'total_expense_formatted': '₹0',
                 'total_transactions': 0,
-                'po_value': po_value,
-                'po_value_formatted': format_indian_number(po_value),
-                'client_payments': client_payments,
-                'client_payments_formatted': format_indian_number(client_payments),
             },
             'category_breakdown': [],
             'labour_monthly': labour_monthly,
@@ -121,10 +114,6 @@ def get_project_summary_combined():
         'total_expense': total_expense,
         'total_expense_formatted': format_indian_number(total_expense),
         'total_transactions': len(combined),
-        'po_value': po_value,
-        'po_value_formatted': format_indian_number(po_value),
-        'client_payments': client_payments,
-        'client_payments_formatted': format_indian_number(client_payments),
     }
 
     # Category breakdown (expenses only)

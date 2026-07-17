@@ -454,81 +454,23 @@ body {
     min-width: 0;
 }
 
-/* ============================================================================
-   KPI CARDS
-   ============================================================================ */
+/* =============================================================
+   PROJECT AT A GLANCE
+   =============================================================
+   The panels themselves are styled by project_glance.css, shared with the
+   registry so the two screens can't drift apart. Only the seam is local: the
+   glance sits above the filtered sections and needs the same gap they use.
+   ============================================================= */
 
-.ps-kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
+.ps-glance {
+    margin-bottom: 1.25rem;
 }
 
-.ps-kpi-card {
-    background: var(--bg-card);
-    border-radius: 12px;
-    padding: 20px;
-    border: 1px solid var(--border-color);
-    position: relative;
-    overflow: hidden;
-}
-
-.ps-kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-}
-
-.kpi-po-value::before {
-    background: linear-gradient(90deg, #E08B6F, #D97757);
-}
-
-.kpi-client-payments::before {
-    background: linear-gradient(90deg, #10b981, #059669);
-}
-
-.kpi-purchase-bills::before {
-    background: linear-gradient(90deg, #E08B6F, #D97757);
-}
-
-.kpi-sales-bills::before {
-    background: linear-gradient(90deg, #10b981, #059669);
-}
-
-.ps-kpi-label {
-    font-size: 0.75rem;
-    font-weight: 600;
+.ps-glance-loading {
+    padding: 2rem 1rem;
+    text-align: center;
     color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 8px;
-}
-
-.ps-kpi-value {
-    font-size: 1.375rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-}
-
-.kpi-po-value .ps-kpi-value {
-    color: var(--accent-color);
-}
-
-.kpi-client-payments .ps-kpi-value {
-    color: var(--income-color);
-}
-
-.kpi-purchase-bills .ps-kpi-value {
-    color: var(--accent-color);
-}
-
-.kpi-sales-bills .ps-kpi-value {
-    color: var(--income-color);
+    font-size: 0.9rem;
 }
 
 /* ============================================================================
@@ -552,6 +494,85 @@ body {
     align-items: center;
     justify-content: space-between;
 }
+
+/* Quiet qualifier on a section heading, e.g. "follows the filters above". */
+.ps-section-note {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    opacity: 0.75;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ============================================================================
+   MONTHLY TREND
+   =============================================================================
+   Two series of rupees on one axis. The bars carry the colour; every word on
+   the chart stays in text ink, so identity never rests on hue alone -- hence
+   the legend, which is not optional for two series.
+   ============================================================================ */
+
+.ps-trend-legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 8px;
+}
+
+.ps-trend-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.ps-trend-key i {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    display: inline-block;
+}
+
+.ps-trend-key i.is-in  { background: var(--income-color); }
+.ps-trend-key i.is-out { background: var(--expense-color); }
+
+.ps-trend-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+}
+
+/* Recessive: the grid is a reading aid, not a subject. */
+.ps-trend-grid {
+    stroke: var(--border-color);
+    stroke-width: 1;
+}
+
+.ps-trend-axis {
+    stroke: var(--border-color);
+    stroke-width: 1.5;
+}
+
+.ps-trend-tick,
+.ps-trend-xlabel {
+    fill: var(--text-muted);
+    font-size: 10px;
+    font-family: inherit;
+}
+
+.ps-trend-bar {
+    transition: opacity 0.15s ease;
+}
+
+.ps-trend-bar.is-in  { fill: var(--income-color); }
+.ps-trend-bar.is-out { fill: var(--expense-color); }
+
+/* Hovering one bar recedes the rest, so the pair being read stands out
+   without moving anything. */
+.ps-trend-svg:hover .ps-trend-bar { opacity: 0.45; }
+.ps-trend-svg .ps-trend-bar:hover { opacity: 1; }
 
 /* ============================================================================
    BANK BREAKDOWN
@@ -1516,9 +1537,6 @@ tr.ps-cf-active td:first-child {
    ============================================================================ */
 
 @media (max-width: 1200px) {
-    .ps-kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
 
     .ps-layout {
         gap: 16px;
@@ -1604,18 +1622,6 @@ tr.ps-cf-active td:first-child {
         padding: 16px;
     }
 
-    .ps-kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-    }
-
-    .ps-kpi-card {
-        padding: 14px;
-    }
-
-    .ps-kpi-value {
-        font-size: 1.125rem;
-    }
 
     .ps-export-btn span {
         display: none;
@@ -1660,18 +1666,6 @@ tr.ps-cf-active td:first-child {
         justify-content: center;
     }
 
-    .ps-kpi-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-    }
-
-    .ps-kpi-card {
-        padding: 12px;
-    }
-
-    .ps-kpi-value {
-        font-size: 1rem;
-    }
 
     .ps-table {
         font-size: 0.75rem;

@@ -10,7 +10,10 @@
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=9">
+    <!-- project_glance.* is shared with the project summary page and must load
+         first: it owns the --proj-* aliases projects.css builds on. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_glance.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=10">
 </head>
 
 <body>
@@ -293,7 +296,8 @@
     <!-- Toast -->
     <div id="proj-toast" class="proj-toast hidden"></div>
 
-    <script src="{{ url_for('static', filename='projects.js') }}?v=9"></script>
+    <script src="{{ url_for('static', filename='project_glance.js') }}?v=1"></script>
+    <script src="{{ url_for('static', filename='projects.js') }}?v=10"></script>
 </body>
 
 </html>
