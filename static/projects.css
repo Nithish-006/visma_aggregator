@@ -838,25 +838,7 @@ html, body {
     font-variant-numeric: tabular-nums;
 }
 /* The PO opens the ladder — the agreed figure everything else is measured
-   against — so it gets weight and a rule under it, separating "contract" from
-   the billed block below. */
-.proj-ladder-row.is-po {
-    align-items: baseline;
-    padding-top: 0;
-    padding-bottom: 0.5rem;
-    margin-bottom: 0.35rem;
-    border-bottom: 1px solid var(--proj-border-strong);
-}
-.proj-ladder-row.is-po dt {
-    font-weight: 700;
-    color: var(--proj-text);
-}
-.proj-ladder-row.is-po dd {
-    font-size: 1.02rem;
-    font-weight: 700;
-    color: var(--proj-accent-strong);
-}
-/* Quiet qualifier next to a ladder label ("contract" / "billed"). */
+/* Quiet qualifier next to a section heading ("as per PO" / "bills in"). */
 .proj-ladder-hint {
     margin-left: 0.4rem;
     font-size: 0.62rem;
@@ -922,33 +904,13 @@ html, body {
     color: var(--proj-text-muted);
 }
 
-/* GST position: purchase vs sales, and the difference we remit. */
-.proj-gst-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.8rem;
-}
-.proj-gst-table th,
-.proj-gst-table td {
-    padding: 0.35rem 0.25rem;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-.proj-gst-table thead th {
-    font-size: 0.68rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--proj-text-muted);
-    border-bottom: 1px solid var(--proj-border);
-}
-.proj-gst-table tbody th[scope="row"] {
-    text-align: left;
-    font-weight: 600;
-    color: var(--proj-text-dim);
-}
-.proj-gst-table tbody td { font-weight: 600; color: var(--proj-text); }
+/* GST position: purchase vs sales, and the difference we remit. The two blocks
+   reuse .proj-ladder — see the value panel — so only the remittance line below
+   needs styling of its own. */
+/* Follows the sales block it is drawn from rather than being pinned to the
+   panel floor: this panel runs a couple of rows shorter than the value ladder
+   beside it, and floating the line down to align with "Current balance" would
+   trade a tidy margin at the bottom for a hole in the middle. */
 .proj-gst-extra {
     display: flex;
     align-items: baseline;
@@ -2074,45 +2036,9 @@ html, body {
     }
     .proj-hero-v { font-size: 1.45rem; }
 
-    /* GST table -> stacked cards, same idiom as the line-item tables. */
-    .proj-gst-table,
-    .proj-gst-table tbody,
-    .proj-gst-table tbody tr,
-    .proj-gst-table tbody th,
-    .proj-gst-table tbody td { display: block; width: 100%; }
-
-    .proj-gst-table thead { display: none; }
-
-    .proj-gst-table tbody tr {
-        background: var(--proj-surface-soft);
-        border: 1px solid var(--proj-border);
-        border-radius: 10px;
-        padding: 8px 12px;
-        margin-bottom: 8px;
-    }
-    .proj-gst-table tbody th[scope="row"] {
-        padding: 0 0 6px;
-        margin-bottom: 4px;
-        border-bottom: 1px solid var(--proj-border);
-    }
-    .proj-gst-table tbody td {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        gap: 12px;
-        padding: 3px 0;
-        text-align: right;
-    }
-    .proj-gst-table tbody td::before {
-        content: attr(data-label);
-        flex: 0 0 auto;
-        text-align: left;
-        font-size: 0.68rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        color: var(--proj-text-muted);
-    }
+    /* The GST panel used to be a table that needed collapsing into cards here.
+       It is a .proj-ladder now, which is label-and-figure rows already and
+       needs nothing on a phone. */
 
     /* Long category heads wrap rather than truncate on a narrow screen. */
     .proj-cost-k { white-space: normal; }

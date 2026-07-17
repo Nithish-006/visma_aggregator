@@ -709,6 +709,11 @@
             </div>`;
 
         // ── GST position ──
+        // Laid out like the value ladder beside it — same heads, same indented
+        // basic/GST/total under each — rather than a 2x3 grid of its own. Two
+        // panels side by side that tabulate the same three figures should read
+        // the same way, and the grid left this one standing half the height of
+        // its neighbour.
         let gstPanel = '';
         if (s) {
             const g = s.gst;
@@ -720,23 +725,16 @@
                 <div class="proj-ov-head"><h4 class="proj-ov-title">GST position</h4></div>
                 <div class="proj-ov-body">
                 ${hasBills ? `
-                <table class="proj-gst-table">
-                    <thead><tr><th></th><th>Basic</th><th>GST</th><th>Total</th></tr></thead>
-                    <tbody>
-                        <tr>
-                            <th scope="row">Purchase</th>
-                            <td data-label="Basic">${formatINR(g.purchase_basic)}</td>
-                            <td data-label="GST">${formatINR(g.purchase_gst)}</td>
-                            <td data-label="Total">${formatINR(g.purchase_total)}</td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Sales</th>
-                            <td data-label="Basic">${formatINR(g.sales_basic)}</td>
-                            <td data-label="GST">${formatINR(g.sales_gst)}</td>
-                            <td data-label="Total">${formatINR(g.sales_total)}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <dl class="proj-ladder">
+                    ${lHead('Purchase', 'bills in')}
+                    ${lRow('Basic value', g.purchase_basic, 'is-sub')}
+                    ${lRow('GST', g.purchase_gst, 'is-sub')}
+                    ${lRow('Total', g.purchase_total, 'is-sub is-total')}
+                    ${lHead('Sales', 'bills out')}
+                    ${lRow('Basic value', g.sales_basic, 'is-sub')}
+                    ${lRow('GST', g.sales_gst, 'is-sub')}
+                    ${lRow('Total', g.sales_total, 'is-sub is-total')}
+                </dl>
                 <div class="proj-gst-extra ${isCredit ? 'is-credit' : ''}">
                     <span class="proj-gst-extra-k">${isCredit ? 'GST credit' : 'GST extra'}</span>
                     <span class="proj-gst-extra-v">${formatINR(Math.abs(g.extra))}</span>
