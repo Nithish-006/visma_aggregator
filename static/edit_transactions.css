@@ -517,6 +517,21 @@
     text-decoration: underline;
 }
 
+.combobox-item.combobox-clear {
+    color: var(--text-muted, #94a3b8);
+    font-style: italic;
+}
+
+.combobox-item.combobox-empty {
+    color: var(--text-muted, #94a3b8);
+    font-style: italic;
+    cursor: default;
+}
+
+.combobox-item.combobox-empty:hover {
+    background: transparent;
+}
+
 /* Save button for editable cells */
 .cell-save-btn {
     display: inline-block;

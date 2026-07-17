@@ -638,89 +638,177 @@
     }
 
     /**
-     * Render a canonical-only project picker (native <select>) inside the cell.
-     * Only canonical projects from /api/projects can be set. The current value, if
-     * legacy, is shown as a disabled option so the auditor can see what's there but
-     * cannot re-save it without picking a canonical alternative.
+     * Render a canonical-only project picker as a filterable combobox inside the cell.
+     * A text input filters the canonical project list as you type (same feel as the
+     * bill/sales modules). Only canonical projects from /api/projects can be committed —
+     * free text is never saved: on blur/Enter without a canonical match the cell reverts.
+     * A legacy (non-canonical) current value is left untouched unless a canonical pick
+     * replaces it, and an explicit "(none)" row clears the project.
      */
-    function renderCanonicalProjectSelect(cell, currentValue, txnId) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'project-select-wrapper';
-
-        const select = document.createElement('select');
-        select.className = 'project-select';
-
-        // "(none)" — clears the project
-        select.appendChild(Object.assign(document.createElement('option'), {
-            value: '',
-            textContent: '(none)'
-        }));
-
+    function renderCanonicalProjectCombobox(cell, currentValue, txnId) {
         const currentLower = (currentValue || '').toLowerCase();
         const isCurrentCanonical = !currentValue || canonicalProjectSet.has(currentLower);
 
-        // If the current cell value is a legacy (non-canonical) value, surface it as a
-        // disabled option so the auditor sees it on open but is forced to pick canonical.
-        if (currentValue && !isCurrentCanonical) {
-            const legacyOpt = document.createElement('option');
-            legacyOpt.value = currentValue;
-            legacyOpt.textContent = `${currentValue} — legacy, pick canonical`;
-            legacyOpt.disabled = true;
-            legacyOpt.selected = true;
-            select.appendChild(legacyOpt);
-        }
+        const wrapper = document.createElement('div');
+        wrapper.className = 'combobox-wrapper';
 
-        canonicalProjects.forEach(disp => {
-            const opt = document.createElement('option');
-            opt.value = disp;
-            opt.textContent = disp;
-            if (isCurrentCanonical && disp.toLowerCase() === currentLower) {
-                opt.selected = true;
-            }
-            select.appendChild(opt);
-        });
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'combobox-input';
+        input.setAttribute('autocomplete', 'off');
+        input.placeholder = 'Type to filter projects...';
 
-        wrapper.appendChild(select);
+        const dropdown = document.createElement('div');
+        dropdown.className = 'combobox-dropdown';
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(dropdown);
         cell.innerHTML = '';
         cell.appendChild(wrapper);
-        select.focus();
+        input.focus();
 
         let finished = false;
-        const finish = (newValue, direction = null) => {
+        let highlightedIndex = -1;
+        let currentItems = [];  // {value, label} in render order
+
+        function restoreDisplay() {
+            finished = true;
+            cell.classList.remove('editing');
+            const isEmpty = !currentValue;
+            const isLegacy = !!currentValue && !isCurrentCanonical;
+            cell.innerHTML = `<span class="project-badge ${isEmpty ? 'empty' : ''} ${isLegacy ? 'legacy' : ''}"
+                ${isLegacy ? 'title="Legacy free-text — click to standardize"' : ''}>
+                ${isLegacy ? '<span class="legacy-dot"></span>' : ''}${currentValue || '-'}</span>`;
+            setFocusedCell(cell);
+        }
+
+        function commit(value, direction) {
             if (finished) return;
             finished = true;
-            // Hand off to the existing finish path so modification tracking + re-render works
-            const fakeInput = { value: newValue };
-            finishCellEdit(cell, fakeInput, 'project', txnId, direction);
-        };
+            // Hand off to the existing finish path so modification tracking + re-render works.
+            finishCellEdit(cell, { value: value }, 'project', txnId, direction);
+        }
 
-        select.addEventListener('change', () => finish(select.value, 'down'));
-        select.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
+        function renderDropdown(filter = '') {
+            dropdown.innerHTML = '';
+            const lowerFilter = filter.trim().toLowerCase();
+            const filtered = lowerFilter
+                ? canonicalProjects.filter(p => p.toLowerCase().includes(lowerFilter))
+                : canonicalProjects.slice();
+            highlightedIndex = -1;
+            currentItems = [];
+
+            // "(none)" clear row — always offered when unfiltered or when typing "none".
+            if (!lowerFilter || 'none'.includes(lowerFilter)) {
+                currentItems.push({ value: '', label: '(none)' });
+            }
+            filtered.forEach(p => currentItems.push({ value: p, label: p }));
+
+            if (currentItems.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'combobox-item combobox-empty';
+                empty.textContent = 'No matching projects';
+                dropdown.appendChild(empty);
+                dropdown.style.display = 'block';
+                return;
+            }
+
+            currentItems.forEach((it) => {
+                const item = document.createElement('div');
+                item.className = 'combobox-item';
+                if (it.value === '') item.classList.add('combobox-clear');
+                else if (it.value === currentValue) item.classList.add('combobox-current');
+
+                if (it.value && lowerFilter) {
+                    const matchIdx = it.label.toLowerCase().indexOf(lowerFilter);
+                    if (matchIdx >= 0) {
+                        item.innerHTML = it.label.substring(0, matchIdx) +
+                            '<strong>' + it.label.substring(matchIdx, matchIdx + lowerFilter.length) + '</strong>' +
+                            it.label.substring(matchIdx + lowerFilter.length);
+                    } else {
+                        item.textContent = it.label;
+                    }
+                } else {
+                    item.textContent = it.label;
+                }
+
+                item.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // keep input from blurring first
+                    commit(it.value, 'down');
+                });
+                dropdown.appendChild(item);
+            });
+            dropdown.style.display = 'block';
+        }
+
+        function updateHighlight() {
+            const items = dropdown.querySelectorAll('.combobox-item');
+            items.forEach((item, idx) => {
+                item.classList.toggle('combobox-highlighted', idx === highlightedIndex);
+                if (idx === highlightedIndex) item.scrollIntoView({ block: 'nearest' });
+            });
+        }
+
+        // Resolve a keyboard commit: highlighted row wins; else an exact canonical match
+        // of the typed text; else the sole remaining canonical match. Empty/ambiguous
+        // input reverts rather than clearing, so an accidental blur never wipes a value.
+        function selectFromKeyboard(direction) {
+            if (highlightedIndex >= 0 && highlightedIndex < currentItems.length) {
+                commit(currentItems[highlightedIndex].value, direction);
+                return;
+            }
+            const typed = input.value.trim();
+            if (!typed) { restoreDisplay(); return; }
+            const exact = canonicalProjects.find(p => p.toLowerCase() === typed.toLowerCase());
+            if (exact) { commit(exact, direction); return; }
+            const canonicalMatches = currentItems.filter(it => it.value !== '');
+            if (canonicalMatches.length === 1) { commit(canonicalMatches[0].value, direction); return; }
+            restoreDisplay();
+        }
+
+        renderDropdown('');
+
+        input.addEventListener('input', () => renderDropdown(input.value));
+        input.addEventListener('focus', () => renderDropdown(input.value));
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                finish(select.value, 'down');
-            } else if (e.key === 'Escape') {
+                if (currentItems.length > 0) {
+                    highlightedIndex = Math.min(highlightedIndex + 1, currentItems.length - 1);
+                    updateHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                finished = true;
-                cell.classList.remove('editing');
-                // Restore display
-                const projectBadge = `<span class="project-badge ${currentValue ? '' : 'empty'} ${(!isCurrentCanonical && currentValue) ? 'legacy' : ''}">${currentValue || '-'}</span>`;
-                cell.innerHTML = projectBadge;
-                setFocusedCell(cell);
+                if (currentItems.length > 0) {
+                    highlightedIndex = Math.max(highlightedIndex - 1, 0);
+                    updateHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                selectFromKeyboard('down');
             } else if (e.key === 'Tab') {
                 e.preventDefault();
-                finish(select.value, e.shiftKey ? 'left' : 'right');
+                selectFromKeyboard(e.shiftKey ? 'left' : 'right');
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                restoreDisplay();
             }
         });
-        select.addEventListener('blur', () => {
+
+        // On blur only an exact canonical match (or nothing) is honoured; free text reverts.
+        input.addEventListener('blur', () => {
             setTimeout(() => {
-                if (cell.classList.contains('editing') && !finished) {
-                    finish(select.value);
-                }
-            }, 60);
+                if (finished || !cell.classList.contains('editing')) return;
+                const typed = input.value.trim();
+                if (!typed) { restoreDisplay(); return; }
+                const exact = canonicalProjects.find(p => p.toLowerCase() === typed.toLowerCase());
+                if (exact) { commit(exact, null); return; }
+                restoreDisplay();
+            }, 120);
         });
 
-        return select;
+        return input;
     }
 
     /**
@@ -938,9 +1026,10 @@
         let input;
 
         if (field === 'project') {
-            // Canonical-only picker: native <select> populated from /api/projects.
-            // No free-text "add new" — auditors must register new projects on /projects.
-            input = renderCanonicalProjectSelect(cell, currentValue, txnId);
+            // Canonical-only picker: filterable combobox over /api/projects. Type to
+            // narrow the list; free-text is never saved — new projects are registered
+            // on /projects.
+            input = renderCanonicalProjectCombobox(cell, currentValue, txnId);
             return;
         }
 
@@ -1805,7 +1894,7 @@
 
             // Build canonical-only project <select> options. No free-text — the project
             // for every split must be chosen from the registered (canonical) projects,
-            // matching the inline edit picker (renderCanonicalProjectSelect).
+            // matching the inline edit picker (renderCanonicalProjectCombobox).
             const currentProj = row.project || '';
             const currentProjLower = currentProj.toLowerCase();
             const isProjCanonical = !currentProj || canonicalProjectSet.has(currentProjLower);
