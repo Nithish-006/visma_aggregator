@@ -297,13 +297,22 @@ def export_single_project_summary(project_id):
     # down to zero — the receivable rule below turns on that distinction.
     has_po = _first_present(project.get('po_total_value'), po_gist.get('total_value')) is not None
     try:
-        variations = db_manager.list_po_variations(project_id)
+        variations = db_manager.list_po_ledger(project_id, 'variation')
     except Exception as e:
         print(f"[!] Error fetching PO variations for project export: {e}")
         variations = []
+    try:
+        actuals = db_manager.list_po_ledger(project_id, 'actual')
+    except Exception as e:
+        print(f"[!] Error fetching PO actuals for project export: {e}")
+        actuals = []
     var_taxable = sum(float(v.get('basic_amount') or 0) for v in variations)
     var_tax = sum(float(v.get('tax_amount') or 0) for v in variations)
     var_total = sum(float(v.get('total_amount') or 0) for v in variations)
+    act_taxable = sum(float(a.get('basic_amount') or 0) for a in actuals)
+    act_tax = sum(float(a.get('tax_amount') or 0) for a in actuals)
+    act_total = sum(float(a.get('total_amount') or 0) for a in actuals)
+    has_actuals = bool(actuals)
     # The PO as extracted, before any variation. Read here rather than inside the
     # PO Value sheet: the Consolidated Summary needs it too, and a figure that
     # only exists if some other sheet happened to run first is a trap.
@@ -421,11 +430,13 @@ def export_single_project_summary(project_id):
     fin = compute_project_finance(
         sales=sales,
         purchase=purchase,
-        # The joined columns lead, because they carry the agreed variations
-        # folded in; po_gist holds only the baseline as extracted, so reading it
-        # first would export the contract at its signed value and quietly drop
-        # every change since. It stays as the fallback for a project whose gist
-        # row exists but never made it into the join.
+        # The joined columns lead, because they carry the contract actually in
+        # force — both ledgers folded in, so the actuals if the work has been
+        # measured, else the PO plus variations; po_gist holds only the baseline
+        # as extracted, so reading it first would export the contract at its
+        # signed value and quietly drop every change since. It stays as the
+        # fallback for a project whose gist row exists but never made it into
+        # the join.
         po={'taxable': _first_present(project.get('po_taxable_value'), po_gist.get('taxable_value')),
             'gst': _first_present(project.get('po_total_tax'), po_gist.get('total_tax')),
             'total': po_value},
@@ -543,18 +554,30 @@ def export_single_project_summary(project_id):
 
     # ── Value split (taxable → tax → total) ──
     # Baseline figures, matching the scope line items printed below and the PO
-    # document itself. Where variations exist they are shown as their own lines
-    # rather than folded silently into these: po_value carries them, so printing
-    # a variation-inclusive total over a baseline-only split would give the
+    # document itself. The two ledgers are shown as their own lines rather than
+    # folded silently into these: po_value carries whichever is in force, so
+    # printing a ledger-inclusive total over a baseline-only split would give the
     # client a breakdown that contradicts its own arithmetic with nothing on the
-    # sheet to explain the gap.
+    # sheet to explain the gap. Actuals *replace* the PO and its variations
+    # (see resolve_contract), so once they exist the revised figure is shown as
+    # the superseded rung and the actuals total becomes the headline.
     ws.cell(row=r, column=1, value='VALUE BREAKDOWN').font = st['subtitle_font']; r += 1
     kv_row(ws, r, 'Taxable Value', base_taxable, fmt=currency_fmt); r += 1
     kv_row(ws, r, 'Total Tax', base_tax, fmt=currency_fmt); r += 1
     if variations:
         kv_row(ws, r, 'PO Value (as extracted)', base_taxable + base_tax, fmt=currency_fmt); r += 1
         kv_row(ws, r, f'Variations ({len(variations)})', var_total, fmt=currency_fmt); r += 1
-    kv_row(ws, r, 'PO Value (Total)', po_value, fmt=currency_fmt, font=st['blue_amount']); r += 1
+    if has_actuals:
+        # The pre-actuals figure, kept for the record and clearly not the total.
+        if variations:
+            kv_row(ws, r, 'Revised PO Value (superseded)',
+                   base_taxable + base_tax + var_total, fmt=currency_fmt); r += 1
+        else:
+            kv_row(ws, r, 'PO Value (superseded)', base_taxable + base_tax, fmt=currency_fmt); r += 1
+        kv_row(ws, r, f'Actuals ({len(actuals)})', act_total, fmt=currency_fmt); r += 1
+        kv_row(ws, r, 'Final PO Value (Total)', po_value, fmt=currency_fmt, font=st['blue_amount']); r += 1
+    else:
+        kv_row(ws, r, 'PO Value (Total)', po_value, fmt=currency_fmt, font=st['blue_amount']); r += 1
     if po_gist.get('amount_in_words'):
         kv_row(ws, r, 'Amount in Words', str(po_gist.get('amount_in_words'))); r += 1
     if po_gist.get('payment_terms'):
@@ -621,6 +644,32 @@ def export_single_project_summary(project_id):
         nc = ws.cell(row=r, column=8, value=var_total)
         nc.font = Font(bold=True)
         nc.number_format = currency_fmt
+        r += 2
+
+    # ── Actuals: the work as finally measured ──
+    # These replace the PO and its variations outright — the figure the project
+    # actually came to. Listed in full for the same reason as the variations:
+    # so the client can reconcile the headline total to the lines behind it.
+    if actuals:
+        ws.cell(row=r, column=1, value=f'ACTUALS ({len(actuals)})').font = st['subtitle_font']; r += 1
+        a_headers = ['SL.NO', 'Item', 'Weight', 'Unit', 'Rate', 'Basic', 'GST', 'Total']
+        for ci, h in enumerate(a_headers, 1):
+            ws.cell(row=r, column=ci, value=h)
+        style_header_row(ws, r, len(a_headers))
+        r += 1
+        for idx, a in enumerate(actuals, 1):
+            ws.cell(row=r, column=1, value=idx)
+            ws.cell(row=r, column=2, value=str(a.get('description') or '—'))
+            ws.cell(row=r, column=3, value=float(a.get('quantity') or 0)).number_format = '#,##0.###'
+            ws.cell(row=r, column=4, value=str(a.get('unit') or '—'))
+            ws.cell(row=r, column=5, value=float(a.get('rate') or 0)).number_format = currency_fmt
+            for col, key in ((6, 'basic_amount'), (7, 'tax_amount'), (8, 'total_amount')):
+                ws.cell(row=r, column=col, value=float(a.get(key) or 0)).number_format = currency_fmt
+            r += 1
+        ws.cell(row=r, column=2, value='Final PO Value').font = Font(bold=True)
+        ac = ws.cell(row=r, column=8, value=act_total)
+        ac.font = Font(bold=True)
+        ac.number_format = currency_fmt
         r += 2
 
     # ── Received / balance roll-up ──
@@ -891,8 +940,10 @@ def export_single_project_summary(project_id):
         return row + 1
 
     # Laid out like the app's Project value panel, so the sheet and the screen
-    # can be read side by side: the PO as signed, the changes agreed since, and
-    # the revised contract the balance is measured against.
+    # can be read side by side: the PO as signed, the changes agreed since, the
+    # work as finally measured, and the contract figure the balance is measured
+    # against. Actuals replace the PO and its variations (see resolve_contract),
+    # so when they exist the balance turns on the actuals total, not the revised.
     cr = section(ws, cr, 'CONTRACT')
     kv_row(ws, cr, 'Basic Value (as per PO)', base_taxable, fmt=currency_fmt); cr += 1
     kv_row(ws, cr, 'GST (as per PO)', base_tax, fmt=currency_fmt); cr += 1
@@ -901,7 +952,15 @@ def export_single_project_summary(project_id):
         kv_row(ws, cr, f'Variations ({len(variations)}) — Basic', var_taxable, fmt=currency_fmt); cr += 1
         kv_row(ws, cr, 'Variations — GST', var_tax, fmt=currency_fmt); cr += 1
         kv_row(ws, cr, 'Variations — Total', var_total, fmt=currency_fmt); cr += 1
-    kv_row(ws, cr, 'Revised PO Value', po_value, fmt=currency_fmt, font=st['blue_amount']); cr += 2
+    if has_actuals:
+        label = 'Revised PO Value (superseded)' if variations else 'PO Value (superseded)'
+        kv_row(ws, cr, label, base_taxable + base_tax + var_total, fmt=currency_fmt); cr += 1
+        kv_row(ws, cr, f'Actuals ({len(actuals)}) — Basic', act_taxable, fmt=currency_fmt); cr += 1
+        kv_row(ws, cr, 'Actuals — GST', act_tax, fmt=currency_fmt); cr += 1
+        kv_row(ws, cr, 'Actuals — Total', act_total, fmt=currency_fmt); cr += 1
+        kv_row(ws, cr, 'Final PO Value', po_value, fmt=currency_fmt, font=st['blue_amount']); cr += 2
+    else:
+        kv_row(ws, cr, 'Revised PO Value', po_value, fmt=currency_fmt, font=st['blue_amount']); cr += 2
 
     cr = section(ws, cr, 'PAYMENTS RECEIVED')
     kv_row(ws, cr, 'Received — Bank (KVB)', received_bank, fmt=currency_fmt, font=st['income_font']); cr += 1

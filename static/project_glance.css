@@ -199,6 +199,15 @@
 .proj-ladder-row.is-revised dt { font-weight: 700; color: var(--proj-text); }
 .proj-ladder-row.is-revised dd { font-size: 1rem; font-weight: 700; }
 
+/* Actuals replace the PO and its variations, so the rungs they supersede stay
+   on the ladder as history — dimmed and struck, plainly not the live figure. */
+.proj-ladder-row.is-superseded dt,
+.proj-ladder-row.is-superseded dd {
+    color: var(--proj-text-muted);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+
 /* The line that carries the weight gets a rule above it, mirroring the way the
    source sheet separates its totals. */
 .proj-ladder-row.is-balance {

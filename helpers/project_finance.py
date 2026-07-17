@@ -21,17 +21,22 @@ The model (verified against the client's own summary sheet):
 
 `receivable` and `profit` are different questions and must not be conflated,
 and they deliberately read off different figures. The client committed to the
-contract — the PO plus any agreed variations — so what they still owe is the
+contract — the PO plus any agreed variations, or the actuals once the work has
+been finally measured (see resolve_contract) — so what they still owe is the
 contract less what they've paid, however much of it we've invoiced so far.
 Profit stays on the sales bills: the PO is the promise, the bills are the
 revenue. A project with no PO has no contract to measure against, so its
 receivable falls back to the billed total.
+
+Callers hand `compute_project_finance` the contract already resolved, as `po`.
+It does not know the ledgers exist.
 """
 
-# Variations are quoted at a flat 18% — the rate every contract this app has
-# seen runs at. Kept as one named constant so a project at some other rate is a
-# one-line change rather than a hunt for scattered literals.
-PO_VARIATION_GST_RATE = 18.0
+# Both PO ledgers — variations and actuals — are quoted at a flat 18%, the rate
+# every contract this app has seen runs at. Kept as one named constant so a
+# project at some other rate is a one-line change rather than a hunt for
+# scattered literals.
+PO_LEDGER_GST_RATE = 18.0
 
 # Categories excluded from the "other" bank-debit bucket: material and labour
 # arrive from bills and the attendance API respectively, so counting the bank
@@ -47,18 +52,65 @@ def is_other_expense_category(category) -> bool:
     return cat not in OTHER_EXCLUDE_CATS and cat not in LABOUR_CATS
 
 
-def compute_variation_amounts(quantity, rate, gst_rate=PO_VARIATION_GST_RATE):
-    """Price one PO variation: (basic, tax, total), each rounded to paise.
+def compute_ledger_amounts(quantity, rate, gst_rate=PO_LEDGER_GST_RATE):
+    """Price one PO ledger line — variation or actual: (basic, tax, total),
+    each rounded to paise.
 
-    A reduction is just a negative quantity, so every figure flips sign together
-    and a reduction subtracts exactly what the same addition would have added.
-    Rounding basic before taxing it keeps the three figures self-consistent —
-    tax is charged on the amount actually shown, so basic + tax == total to the
-    paisa rather than drifting by half a unit.
+    Both ledgers price identically; they differ only in what the sum *means*
+    (see compute_contract). For a variation, a reduction is just a negative
+    quantity, so every figure flips sign together and a reduction subtracts
+    exactly what the same addition would have added. Rounding basic before
+    taxing it keeps the three figures self-consistent — tax is charged on the
+    amount actually shown, so basic + tax == total to the paisa rather than
+    drifting by half a unit.
     """
     basic = round(float(quantity or 0) * float(rate or 0), 2)
     tax = round(basic * float(gst_rate or 0) / 100.0, 2)
     return basic, tax, round(basic + tax, 2)
+
+
+# The three keys every contract figure comes in. Named once so the folds below
+# and their callers can't disagree about them.
+CONTRACT_KEYS = ('taxable', 'tax', 'total')
+
+
+def resolve_contract(base, variations, actuals, *, has_actuals):
+    """Resolve the PO and its two ledgers into the contract actually in force.
+
+    base / variations / actuals: {'taxable', 'tax', 'total'}. Missing keys read
+    as zero, so a project with no PO gist can still be varied or measured.
+
+    Two ledgers sit on top of the extracted PO and they compose differently:
+
+      * **Variations are deltas.** Each is a change agreed after signing, so
+        they *add* — revised = PO + variations, a reduction being a negative
+        quantity that subtracts exactly what the same addition would add.
+
+      * **Actuals are an absolute restatement.** They are the work as finally
+        measured, so they *replace* — final = actuals, full stop. This exists
+        because a project that comes in under its PO can't honestly be
+        expressed as a delta: a large negative variation reads as a credit
+        note against work that was never done, rather than as "this is what we
+        actually built". Actuals supersede the variations too, not just the
+        baseline — they measure everything executed, variation work included.
+
+    The superseded rungs are still returned as `revised` because the PO section
+    and the Excel export show the whole ladder: what was signed, what was
+    agreed since, and what it finally came to. They are history, not inputs.
+
+    `has_actuals` is passed rather than inferred from a non-zero total: a
+    project genuinely measured at zero (cancelled after signing, nothing built)
+    still has actuals in force, and testing `total > 0` would silently hand it
+    back to the PO it never delivered against.
+
+    Returns {'revised': {...}, 'final': {...}, 'source': 'actuals' | 'po'}.
+    """
+    revised = {k: round(float(base.get(k) or 0) + float(variations.get(k) or 0), 2)
+               for k in CONTRACT_KEYS}
+    if not has_actuals:
+        return {'revised': revised, 'final': revised, 'source': 'po'}
+    final = {k: round(float(actuals.get(k) or 0), 2) for k in CONTRACT_KEYS}
+    return {'revised': revised, 'final': final, 'source': 'actuals'}
 
 
 def compute_project_finance(*, sales, purchase, po, received_total,

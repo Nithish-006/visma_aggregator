@@ -19,7 +19,8 @@ from extensions import db_manager
 from helpers.formatting import format_indian_number
 from helpers.bankdata import get_bank_df
 from helpers.project_finance import (
-    compute_project_finance, is_other_expense_category, PO_VARIATION_GST_RATE,
+    compute_project_finance, is_other_expense_category, resolve_contract,
+    PO_LEDGER_GST_RATE,
 )
 import po_processor
 import salary_api
@@ -38,35 +39,56 @@ def _project_po_allowed(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in PROJECT_PO_EXTENSIONS
 
 
+def _ledger_totals(rows):
+    """Roll one ledger's rows up into the {taxable, tax, total} the ladder wants."""
+    return {
+        'count': len(rows),
+        'taxable': round(sum(r['basic_amount'] for r in rows), 2),
+        'tax': round(sum(r['tax_amount'] for r in rows), 2),
+        'total': round(sum(r['total_amount'] for r in rows), 2),
+    }
+
+
 def _po_summary_for_response(project_id):
     """Compact PO gist for inclusion in JSON responses (or None).
 
-    Carries the extracted baseline *and* the agreed variations side by side:
-    the PO section shows the document as read, the changes made to it, and the
-    revised contract the rest of the app works from. A project with variations
-    but no gist row still answers, so a hand-entered contract can be varied too.
+    Carries the extracted baseline and both contract ledgers side by side, so
+    the PO section can show the whole ladder: the document as read, the changes
+    agreed to it, the work as finally measured, and the contract the rest of the
+    app works from. A project with ledger rows but no gist row still answers, so
+    a hand-entered contract can be varied and measured too.
+
+    `revised` is the PO plus its variations; `final` is what is actually in
+    force, which is the actuals once any exist (see resolve_contract). When
+    there are none the two are equal, and every pre-actuals caller reading
+    `revised` still gets the right number.
     """
     po = db_manager.get_project_po(project_id)
-    variations = db_manager.list_po_variations(project_id)
-    if not po and not variations:
+    variations = db_manager.list_po_ledger(project_id, 'variation')
+    actuals = db_manager.list_po_ledger(project_id, 'actual')
+    if not po and not variations and not actuals:
         return None
     po = po or {'project_id': project_id, 'line_items': [],
                 'taxable_value': 0, 'total_tax': 0, 'total_value': 0}
-    base = {k: float(po.get(k) or 0) for k in ('taxable_value', 'total_tax', 'total_value')}
     po['variations'] = variations
-    po['variation_totals'] = {
-        'count': len(variations),
-        'taxable': round(sum(v['basic_amount'] for v in variations), 2),
-        'tax': round(sum(v['tax_amount'] for v in variations), 2),
-        'total': round(sum(v['total_amount'] for v in variations), 2),
-    }
-    po['revised'] = {
-        'taxable_value': round(base['taxable_value'] + po['variation_totals']['taxable'], 2),
-        'total_tax': round(base['total_tax'] + po['variation_totals']['tax'], 2),
-        'total_value': round(base['total_value'] + po['variation_totals']['total'], 2),
-    }
-    po['gst_rate'] = PO_VARIATION_GST_RATE
-    po['total_value_formatted'] = format_indian_number(po['revised']['total_value'])
+    po['variation_totals'] = _ledger_totals(variations)
+    po['actuals'] = actuals
+    po['actual_totals'] = _ledger_totals(actuals)
+    contract = resolve_contract(
+        {'taxable': po.get('taxable_value'), 'tax': po.get('total_tax'),
+         'total': po.get('total_value')},
+        po['variation_totals'], po['actual_totals'],
+        has_actuals=bool(actuals),
+    )
+    # Keyed as the PO columns are (taxable_value/total_tax/total_value) because
+    # that is what the panel and the registry cache read elsewhere.
+    def _as_po_keys(c):
+        return {'taxable_value': c['taxable'], 'total_tax': c['tax'],
+                'total_value': c['total']}
+    po['revised'] = _as_po_keys(contract['revised'])
+    po['final'] = _as_po_keys(contract['final'])
+    po['gst_rate'] = PO_LEDGER_GST_RATE
+    po['total_value_formatted'] = format_indian_number(po['final']['total_value'])
     return po
 
 
@@ -528,10 +550,12 @@ def api_project_insights(project_id):
     labour = salary_api.get_labour_summary_for_project(
         project_id, project_display=project.get('display'))
 
-    # Revised: _decorate_project_row has already folded any agreed variations
-    # into the po_* figures, so the contract this measures against is the one
-    # the user last agreed, not the one the PDF was signed at. None there means
-    # no contract exists; a 0.00 means one exists and was varied away to nothing.
+    # Resolved: _decorate_project_row has already folded both ledgers into the
+    # po_* figures, so the contract this measures against is the one actually in
+    # force — the actuals if the work has been measured, otherwise the PO plus
+    # any agreed variations — not the figure the PDF was signed at. None there
+    # means no contract exists at all; a 0.00 means one exists and came to
+    # nothing (varied away, or measured at zero).
     po_value = float(project.get('po_total_value') or 0)
     has_po = project.get('po_total_value') is not None
     labour_total = float(labour.get('total_cost') or 0)
@@ -870,43 +894,64 @@ def api_update_project_po_data(project_id):
     return jsonify({'success': True, 'po': _po_summary_for_response(project_id)})
 
 
-# ── PO variations ───────────────────────────────────────────────────────────
-# Scope changes after signing: extra tonnage agreed, or work that came in under
-# the quote. Each is its own row on top of the untouched extracted PO, so the
-# contract value moves without the stored gist drifting from the PDF behind it.
+# ── PO ledgers: variations and actuals ──────────────────────────────────────
+# Two ways a signed contract moves, sharing one set of routes because they share
+# one row shape (see DatabaseManager.PO_LEDGERS):
+#
+#   po-variations  changes agreed after signing — extra tonnage, or scope
+#                  dropped. Deltas, added to the PO.
+#   po-actuals     the work as finally measured. An absolute restatement that
+#                  replaces the PO and its variations outright, because a
+#                  project that came in under its PO can't honestly be written
+#                  as a big negative variation.
+#
+# Either way the extracted gist stays untouched, so the contract value moves
+# without the stored PO drifting from the PDF behind "View PO document".
 
-@bp.route('/api/projects/<int:project_id>/po-variations', methods=['POST'])
+# The URL slug is the only thing a caller controls, and it is a fixed set here
+# — `kind` never reaches the ledger CRUD as free text.
+_LEDGER_SLUGS = {'po-variations': 'variation', 'po-actuals': 'actual'}
+_LEDGER_SLUG_RULE = '<any("po-variations", "po-actuals"):slug>'
+_LEDGER_GONE = {'variation': 'That variation no longer exists.',
+                'actual': 'That actuals entry no longer exists.'}
+
+
+@bp.route(f'/api/projects/<int:project_id>/{_LEDGER_SLUG_RULE}', methods=['POST'])
 @login_required
-def api_add_po_variation(project_id):
-    """Record one agreed change to the contract."""
+def api_add_po_ledger_row(project_id, slug):
+    """Record one variation, or one line of the work as actually measured."""
+    kind = _LEDGER_SLUGS[slug]
     if not db_manager.get_project(project_id):
         return jsonify({'error': 'not_found'}), 404
-    row, err = db_manager.add_po_variation(project_id, request.get_json(silent=True) or {})
+    row, err = db_manager.add_po_ledger_row(
+        project_id, kind, request.get_json(silent=True) or {})
     if err:
         return jsonify({'error': 'invalid', 'message': err}), 400
-    return jsonify({'success': True, 'variation': row,
+    return jsonify({'success': True, 'row': row,
                     'po': _po_summary_for_response(project_id)})
 
 
-@bp.route('/api/projects/<int:project_id>/po-variations/<int:variation_id>', methods=['PUT'])
+@bp.route(f'/api/projects/<int:project_id>/{_LEDGER_SLUG_RULE}/<int:row_id>', methods=['PUT'])
 @login_required
-def api_update_po_variation(project_id, variation_id):
-    row, err = db_manager.update_po_variation(
-        project_id, variation_id, request.get_json(silent=True) or {})
+def api_update_po_ledger_row(project_id, slug, row_id):
+    kind = _LEDGER_SLUGS[slug]
+    row, err = db_manager.update_po_ledger_row(
+        project_id, kind, row_id, request.get_json(silent=True) or {})
     if err == 'not_found':
-        return jsonify({'error': 'not_found', 'message': 'That variation no longer exists.'}), 404
+        return jsonify({'error': 'not_found', 'message': _LEDGER_GONE[kind]}), 404
     if err:
         return jsonify({'error': 'invalid', 'message': err}), 400
-    return jsonify({'success': True, 'variation': row,
+    return jsonify({'success': True, 'row': row,
                     'po': _po_summary_for_response(project_id)})
 
 
-@bp.route('/api/projects/<int:project_id>/po-variations/<int:variation_id>', methods=['DELETE'])
+@bp.route(f'/api/projects/<int:project_id>/{_LEDGER_SLUG_RULE}/<int:row_id>', methods=['DELETE'])
 @login_required
-def api_delete_po_variation(project_id, variation_id):
-    ok, err = db_manager.delete_po_variation(project_id, variation_id)
+def api_delete_po_ledger_row(project_id, slug, row_id):
+    kind = _LEDGER_SLUGS[slug]
+    ok, err = db_manager.delete_po_ledger_row(project_id, kind, row_id)
     if err == 'not_found':
-        return jsonify({'error': 'not_found', 'message': 'That variation no longer exists.'}), 404
+        return jsonify({'error': 'not_found', 'message': _LEDGER_GONE[kind]}), 404
     if not ok:
         return jsonify({'error': 'delete_failed', 'message': err}), 400
     return jsonify({'success': True, 'po': _po_summary_for_response(project_id)})

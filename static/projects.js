@@ -1012,27 +1012,47 @@
             </div>
             <div class="proj-gist-rows" data-gist-rows>${poGistRowsHtml(po)}</div>
             ${renderPoLineItems(po.line_items)}
-            ${renderPoVariations(po)}`;
+            ${renderLedger(LEDGERS.variation, po)}
+            ${renderLedger(LEDGERS.actual, po)}`;
     }
 
-    // Split out from renderPoGist because a variation edit has to refresh these
-    // figures without re-rendering the variations table underneath — that table
-    // holds the input the user is currently tabbing out of.
+    // Split out from renderPoGist because a ledger edit has to refresh these
+    // figures without re-rendering the grid underneath — that grid holds the
+    // input the user is currently tabbing out of.
     function poGistRowsHtml(po) {
         const rev = po.revised || {
             taxable_value: po.taxable_value, total_tax: po.total_tax, total_value: po.total_value,
         };
+        const fin = po.final || rev;
         const vt = po.variation_totals || { count: 0, total: 0 };
-        // Two decompositions of one headline, each internally consistent:
+        const at = po.actual_totals || { count: 0, total: 0 };
+        // Decompositions of one headline, each internally consistent:
         // contract = as-per-PO + variations (right under it), and
-        // as-per-PO = taxable + tax (down with the document facts).
-        // Only worth the extra rows once the contract has actually moved; an
-        // unvaried PO shouldn't pay for a feature it isn't using.
-        const rows = [[vt.count ? 'Contract value' : 'Total project value',
-                       formatINR(rev.total_value), 'headline']];
-        if (vt.count) {
-            rows.push(['As per PO', formatINR(po.total_value)]);
-            rows.push(['Variations', `${formatDeltaINR(vt.total)} <span class="proj-gist-sub">${vt.count} change${vt.count > 1 ? 's' : ''}</span>`]);
+        // as-per-PO = taxable + tax (down with the document facts). Once the
+        // work has been measured the actuals *replace* that whole sub-ladder
+        // rather than extending it, so the rung it used to end on is struck
+        // through and kept as history — see resolve_contract. Only worth the
+        // extra rows once the contract has actually moved; an untouched PO
+        // shouldn't pay for a feature it isn't using.
+        const headline = at.count ? 'Final PO value'
+                       : vt.count ? 'Contract value'
+                       : 'Total project value';
+        const rows = [[headline, formatINR(fin.total_value), 'headline']];
+        if (vt.count || at.count) {
+            // Once actuals exist they replace the PO and its variations
+            // outright, so every rung above them is struck as one — matching the
+            // glance ladder, which strikes the whole pre-actuals sub-ladder. A
+            // struck "As per PO" over a live "Variations" over a struck subtotal
+            // would state that the components govern but their own sum does not.
+            const supAbove = at.count ? 'is-superseded' : '';
+            rows.push(['As per PO', formatINR(po.total_value), supAbove]);
+            if (vt.count) {
+                rows.push(['Variations', `${formatDeltaINR(vt.total)} <span class="proj-gist-sub">${vt.count} change${vt.count > 1 ? 's' : ''}</span>`, supAbove]);
+                if (at.count) rows.push(['Revised PO value', formatINR(rev.total_value), 'is-superseded']);
+            }
+            if (at.count) {
+                rows.push(['Actuals', `${formatINR(at.total)} <span class="proj-gist-sub">${at.count} ${at.count > 1 ? 'entries' : 'entry'} measured</span>`]);
+            }
         }
         rows.push(
             ['PO number', po.po_number ? escapeHtml(po.po_number) : '—'],
@@ -1050,7 +1070,7 @@
         if (po.payment_terms) rows.push(['Payment terms', escapeHtml(po.payment_terms)]);
         if (po.amount_in_words) rows.push(['In words', escapeHtml(po.amount_in_words)]);
         return rows.map(([k, v, cls]) => `
-            <div class="proj-gist-row ${cls === 'headline' ? 'headline' : ''}">
+            <div class="proj-gist-row ${cls || ''}">
                 <span class="proj-gist-k">${k}</span>
                 <span class="proj-gist-v">${v}</span>
             </div>`).join('');
@@ -1091,27 +1111,75 @@
             </div>`;
     }
 
-    // ── PO variations: the contract's agreed changes ───────────────────────
-    // Scope moves after signing — extra tonnage agreed, or work that came in
-    // under the quote. The extracted PO above is left exactly as the document
-    // reads; each change is a row here, and the contract is the two added up.
-    // That's what keeps "View PO document" honest: the gist never claims the
-    // PDF says something it doesn't.
+    // ── PO ledgers: variations and actuals ─────────────────────────────────
+    // A signed contract moves two ways, and each is an editable grid of priced
+    // lines that share this one implementation (see blueprints PO_LEDGERS):
     //
-    // Amounts are computed server-side (helpers/project_finance) and only
-    // previewed here, so the figure that lands in the ladder is never a number
-    // this file invented.
-    const VAR_GST_RATE = 18; // last-resort default; the server sends po.gst_rate
-    const varFields = ['description', 'quantity', 'unit', 'rate'];
+    //   variation  a change agreed after signing — extra tonnage, or scope
+    //              dropped. A delta added to the PO; a reduction is a negative
+    //              weight, so the figures run signed (formatDeltaINR).
+    //   actual     the work as finally measured. An absolute restatement that
+    //              replaces the PO and its variations outright, because a
+    //              project that came in under its PO can't honestly be written
+    //              as one big negative variation. Plain figures — a measurement
+    //              has no sign to show.
+    //
+    // Either way the extracted PO above is left exactly as the document reads,
+    // which is what keeps "View PO document" honest. Amounts are computed
+    // server-side (helpers/project_finance) and only previewed here, so the
+    // figure that lands in the ladder is never a number this file invented.
+    const LED_GST_RATE = 18; // last-resort default; the server sends po.gst_rate
+    const ledFields = ['description', 'quantity', 'unit', 'rate'];
     let insightsRefreshTimer = null;
 
+    // The two grids, differing only in wording, sign convention and endpoint.
+    // `fmt` is how a total is shown; `signed` is whether a reduction is allowed
+    // (matched by the server's allow_negative_qty).
+    const LEDGERS = {
+        variation: {
+            kind: 'variation', slug: 'po-variations', signed: true,
+            label: 'Variations', addLabel: '+ Add variation',
+            listKey: 'variations', totalsKey: 'variation_totals',
+            changeCol: 'Change', weightCol: 'Weight',
+            descPlaceholder: 'e.g. Additional structural steel',
+            footTitle: 'Net change',
+            emptyText: 'No changes to the contract yet.',
+            note: `Agreed changes to the contract. Enter a reduction as a negative weight —
+                   <strong>-2</strong> subtracts exactly what <strong>2</strong> would add.`,
+            addedMsg: 'Variation added.', updatedMsg: 'Variation updated.',
+            removeConfirm: (l) => `Remove "${l}" from the contract?`,
+            removedMsg: 'Variation removed.',
+            fmt: (v) => formatDeltaINR(v),
+        },
+        actual: {
+            kind: 'actual', slug: 'po-actuals', signed: false,
+            label: 'Actuals', addLabel: '+ Add actuals',
+            listKey: 'actuals', totalsKey: 'actual_totals',
+            changeCol: 'Item', weightCol: 'Weight',
+            descPlaceholder: 'e.g. MS angle fabrication',
+            footTitle: 'Final PO value',
+            emptyText: 'No actuals recorded — the contract stands at the PO plus variations.',
+            note: `The work as finally measured. These <strong>replace</strong> the PO value
+                   above — use this when the project finished under its PO, where a big negative
+                   variation would read as a credit note rather than the real total.`,
+            addedMsg: 'Actuals entry added.', updatedMsg: 'Actuals entry updated.',
+            removeConfirm: (l) => `Remove "${l}" from the actuals?`,
+            removedMsg: 'Actuals entry removed.',
+            fmt: (v) => formatINR(v),
+        },
+    };
+
+    function ledgerOf(tr) {
+        const block = tr.closest('[data-led-block]');
+        return LEDGERS[block ? block.dataset.ledKind : 'variation'] || LEDGERS.variation;
+    }
 
     function trimQty(v) {
         if (v === '' || v == null) return '';
         return String(Number(v)); // 20.000 -> 20, -2.500 -> -2.5
     }
 
-    function variationRowHtml(v, draft) {
+    function ledgerRowHtml(cfg, v, draft) {
         const snap = JSON.stringify({
             description: v.description || '', quantity: trimQty(v.quantity || 0),
             unit: v.unit || '', rate: trimQty(v.rate || 0),
@@ -1122,102 +1190,108 @@
         // is a grid of inputs, where a value that rewrites itself on every blur
         // is just noise mid-entry.
         const cell = (field, extra, placeholder) => `
-            <input class="proj-var-input ${extra}" type="text" data-var-field="${field}"
+            <input class="proj-led-input ${extra}" type="text" data-led-field="${field}"
                    value="${escapeHtml(String(v[field] == null ? '' : v[field]))}"
                    placeholder="${placeholder}" autocomplete="off">`;
         return `
-            <tr data-var-id="${draft ? 'new' : v.id}" class="${draft ? 'is-draft' : ''}" data-var-snapshot='${escapeHtml(snap)}'>
-                <td>${cell('description', '', 'e.g. Additional structural steel')}</td>
-                <td class="proj-li-num"><input class="proj-var-input proj-var-num" type="text"
-                        inputmode="decimal" data-var-field="quantity"
+            <tr data-led-id="${draft ? 'new' : v.id}" class="${draft ? 'is-draft' : ''}" data-led-snapshot='${escapeHtml(snap)}'>
+                <td>${cell('description', '', cfg.descPlaceholder)}</td>
+                <td class="proj-li-num"><input class="proj-led-input proj-led-num" type="text"
+                        inputmode="decimal" data-led-field="quantity"
                         value="${trimQty(v.quantity || '')}" placeholder="0" autocomplete="off"></td>
-                <td>${cell('unit', 'proj-var-unit', 'MT')}</td>
-                <td class="proj-li-num"><input class="proj-var-input proj-var-num" type="text"
-                        inputmode="decimal" data-var-field="rate"
+                <td>${cell('unit', 'proj-led-unit', 'MT')}</td>
+                <td class="proj-li-num"><input class="proj-led-input proj-led-num" type="text"
+                        inputmode="decimal" data-led-field="rate"
                         value="${trimQty(v.rate || '')}" placeholder="0" autocomplete="off"></td>
-                <td class="proj-li-num" data-var-out="basic">${formatDeltaINR(v.basic_amount || 0)}</td>
-                <td class="proj-li-num" data-var-out="tax">${formatDeltaINR(v.tax_amount || 0)}</td>
-                <td class="proj-li-num proj-var-total" data-var-out="total">${formatDeltaINR(v.total_amount || 0)}</td>
-                <td class="proj-var-actions">${draft
-                    ? `<button type="button" class="proj-var-btn is-save" data-var-save title="Add this change">✓</button>
-                       <button type="button" class="proj-var-btn" data-var-discard title="Discard">×</button>`
-                    : `<button type="button" class="proj-var-btn" data-var-delete title="Remove this change">×</button>`}
+                <td class="proj-li-num" data-led-out="basic">${cfg.fmt(v.basic_amount || 0)}</td>
+                <td class="proj-li-num" data-led-out="tax">${cfg.fmt(v.tax_amount || 0)}</td>
+                <td class="proj-li-num proj-led-total" data-led-out="total">${cfg.fmt(v.total_amount || 0)}</td>
+                <td class="proj-led-actions">${draft
+                    ? `<button type="button" class="proj-led-btn is-save" data-led-save title="Save this entry">✓</button>
+                       <button type="button" class="proj-led-btn" data-led-discard title="Discard">×</button>`
+                    : `<button type="button" class="proj-led-btn" data-led-delete title="Remove this entry">×</button>`}
                 </td>
             </tr>`;
     }
 
-    const VAR_EMPTY_ROW = `<tr class="proj-var-empty-row" data-var-empty>
-            <td colspan="8">No changes to the contract yet.</td></tr>`;
+    function ledgerEmptyRow(cfg) {
+        return `<tr class="proj-led-empty-row" data-led-empty>
+            <td colspan="8">${cfg.emptyText}</td></tr>`;
+    }
 
-    function variationFootHtml(vt) {
+    function ledgerFootHtml(cfg, vt) {
         if (!vt || !vt.count) return '';
         // data-label is stamped by hand here: decorateProjLiTables only walks
         // tbody, so on a phone — where this becomes a card like the rows above —
         // these cells would otherwise lose their headings along with the thead.
         return `<tfoot><tr>
-                <td colspan="4" class="proj-var-foot-title">Net change</td>
-                <td class="proj-li-num" data-label="Basic">${formatDeltaINR(vt.taxable)}</td>
-                <td class="proj-li-num" data-label="GST">${formatDeltaINR(vt.tax)}</td>
-                <td class="proj-li-num proj-var-total" data-label="Total">${formatDeltaINR(vt.total)}</td>
-                <td class="proj-var-foot-pad"></td>
+                <td colspan="4" class="proj-led-foot-title">${cfg.footTitle}</td>
+                <td class="proj-li-num" data-label="Basic">${cfg.fmt(vt.taxable)}</td>
+                <td class="proj-li-num" data-label="GST">${cfg.fmt(vt.tax)}</td>
+                <td class="proj-li-num proj-led-total" data-label="Total">${cfg.fmt(vt.total)}</td>
+                <td class="proj-led-foot-pad"></td>
             </tr></tfoot>`;
     }
 
-    function renderPoVariations(po) {
-        const list = (po && po.variations) || [];
-        const vt = (po && po.variation_totals) || { count: 0, taxable: 0, tax: 0, total: 0 };
-        const rate = (po && po.gst_rate != null) ? po.gst_rate : VAR_GST_RATE;
+    function renderLedger(cfg, po) {
+        const list = (po && po[cfg.listKey]) || [];
+        const vt = (po && po[cfg.totalsKey]) || { count: 0, taxable: 0, tax: 0, total: 0 };
+        const rate = (po && po.gst_rate != null) ? po.gst_rate : LED_GST_RATE;
+        // The supersede badge earns its place only once actuals actually exist:
+        // it's how the block says the ladder above no longer governs.
+        const badge = (cfg.kind === 'actual' && vt.count)
+            ? `<span class="proj-led-supersede">supersedes PO</span>` : '';
+        const blockCls = cfg.kind === 'actual' && vt.count ? ' is-actuals' : '';
         return `
-            <div class="proj-gist-items proj-var-block" data-var-block>
-                <div class="proj-var-head">
-                    <span class="proj-field-label">Variations${vt.count ? ` (${vt.count})` : ''}</span>
-                    <button type="button" class="proj-secondary-btn proj-var-add" data-var-add>+ Add variation</button>
+            <div class="proj-gist-items proj-led-block${blockCls}" data-led-block data-led-kind="${cfg.kind}">
+                <div class="proj-led-head">
+                    <span class="proj-field-label">${cfg.label}${vt.count ? ` (${vt.count})` : ''}${badge}</span>
+                    <button type="button" class="proj-secondary-btn proj-led-add" data-led-add>${cfg.addLabel}</button>
                 </div>
-                <p class="proj-note proj-var-note">Agreed changes to the contract. Enter a reduction as a
-                    negative weight — <strong>-2</strong> subtracts exactly what <strong>2</strong> would add.
-                    GST is applied at ${rate}%.</p>
+                <p class="proj-note proj-led-note">${cfg.note} GST is applied at ${rate}%.</p>
                 <div class="proj-li-scroll">
-                    <table class="proj-li-table proj-var-table">
+                    <table class="proj-li-table proj-led-table">
                         <thead>
                             <tr>
-                                <th>Change</th><th class="proj-li-num">Weight</th><th>Unit</th>
+                                <th>${cfg.changeCol}</th><th class="proj-li-num">${cfg.weightCol}</th><th>Unit</th>
                                 <th class="proj-li-num">Rate</th><th class="proj-li-num">Basic</th>
                                 <th class="proj-li-num">GST</th><th class="proj-li-num">Total</th><th></th>
                             </tr>
                         </thead>
-                        <tbody data-var-body>${list.length ? list.map(v => variationRowHtml(v, false)).join('') : VAR_EMPTY_ROW}</tbody>
-                        ${variationFootHtml(vt)}
+                        <tbody data-led-body>${list.length ? list.map(v => ledgerRowHtml(cfg, v, false)).join('') : ledgerEmptyRow(cfg)}</tbody>
+                        ${ledgerFootHtml(cfg, vt)}
                     </table>
                 </div>
             </div>`;
     }
 
-    // ── Variation edit plumbing ────────────────────────
-    function varRowValues(tr) {
+    // ── Ledger edit plumbing ────────────────────────
+    function ledRowValues(tr) {
         const out = {};
-        varFields.forEach(f => {
-            const el = tr.querySelector(`[data-var-field="${f}"]`);
+        ledFields.forEach(f => {
+            const el = tr.querySelector(`[data-led-field="${f}"]`);
             out[f] = el ? el.value.trim() : '';
         });
         return out;
     }
 
-    // Mirrors compute_variation_amounts server-side so the figures move as you
+    // Mirrors compute_ledger_amounts server-side so the figures move as you
     // type. Purely a preview — the row repaints from the server's answer on save.
-    function previewVariation(tr) {
-        const v = varRowValues(tr);
+    function previewLedgerRow(tr) {
+        const cfg = ledgerOf(tr);
+        const v = ledRowValues(tr);
         const qty = parseMoney(v.quantity);
         const rate = parseMoney(v.rate);
         const ok = Number.isFinite(qty) && Number.isFinite(rate);
         const basic = ok ? Math.round(qty * rate * 100) / 100 : 0;
-        // The server's rate, not the local constant, so PO_VARIATION_GST_RATE
+        // The server's rate, not the local constant, so PO_LEDGER_GST_RATE
         // stays the single place it's set — otherwise changing it there would
         // leave the preview quoting the old rate right up until save.
-        const gst = (currentPo && currentPo.gst_rate != null) ? currentPo.gst_rate : VAR_GST_RATE;
+        const gst = (currentPo && currentPo.gst_rate != null) ? currentPo.gst_rate : LED_GST_RATE;
         const tax = Math.round(basic * gst) / 100;
         const set = (key, val) => {
-            const cell = tr.querySelector(`[data-var-out="${key}"]`);
-            if (cell) cell.textContent = formatDeltaINR(val);
+            const cell = tr.querySelector(`[data-led-out="${key}"]`);
+            if (cell) cell.textContent = cfg.fmt(val);
         };
         set('basic', basic);
         set('tax', tax);
@@ -1230,35 +1304,47 @@
         currentPo = po || null;
         const rowsEl = gistEl.querySelector('[data-gist-rows]');
         if (rowsEl && po) rowsEl.innerHTML = poGistRowsHtml(po);
-        const vt = (po && po.variation_totals) || { count: 0 };
-        const foot = gistEl.querySelector('.proj-var-table tfoot');
-        const footHtml = variationFootHtml(vt);
-        // Replacing with '' removes the node outright, so re-adding it later
-        // needs the table, not the (now detached) tfoot, as the anchor.
-        if (foot) foot.outerHTML = footHtml;
-        else if (footHtml) {
-            const table = gistEl.querySelector('.proj-var-table');
-            if (table) table.insertAdjacentHTML('beforeend', footHtml);
-        }
-        const head = gistEl.querySelector('.proj-var-head .proj-field-label');
-        if (head) head.textContent = `Variations${vt.count ? ` (${vt.count})` : ''}`;
+        // Refresh each ledger's foot + head in place, without touching its
+        // tbody (which may hold the input the user just tabbed out of). Same
+        // reasoning for both grids, so it runs once per ledger.
+        Object.values(LEDGERS).forEach(cfg => {
+            const block = gistEl.querySelector(`[data-led-block][data-led-kind="${cfg.kind}"]`);
+            if (!block) return;
+            const vt = (po && po[cfg.totalsKey]) || { count: 0 };
+            const table = block.querySelector('.proj-led-table');
+            const foot = table && table.querySelector('tfoot');
+            const footHtml = ledgerFootHtml(cfg, vt);
+            // Replacing with '' removes the node outright, so re-adding it later
+            // needs the table, not the (now detached) tfoot, as the anchor.
+            if (foot) foot.outerHTML = footHtml;
+            else if (footHtml && table) table.insertAdjacentHTML('beforeend', footHtml);
+            const head = block.querySelector('.proj-led-head .proj-field-label');
+            if (head) {
+                const badge = (cfg.kind === 'actual' && vt.count)
+                    ? ' <span class="proj-led-supersede">supersedes PO</span>' : '';
+                head.innerHTML = `${cfg.label}${vt.count ? ` (${vt.count})` : ''}${badge}`;
+            }
+            block.classList.toggle('is-actuals', cfg.kind === 'actual' && !!vt.count);
+        });
         // The glance ladder reads the *cached* registry row, not insights, so
         // the cache has to move too or the panel repaints to a stale contract.
         const cached = projects.find(x => x.id === activeProjectId);
         if (cached) {
-            // po === null means nothing is left to show — no gist row and no
-            // variations. Skipping the cache then left the card advertising a
-            // contract that no longer exists, and renderList() below would
+            const vt = (po && po.variation_totals) || { count: 0 };
+            const at = (po && po.actual_totals) || { count: 0 };
+            const fin = po && po.final;
+            // po === null means nothing is left to show — no gist row and
+            // neither ledger. Skipping the cache then left the card advertising
+            // a contract that no longer exists, and renderList() below would
             // repaint it straight back.
-            const rev = po && po.revised;
-            cached.po_total_value = rev ? rev.total_value : null;
-            cached.po_taxable_value = rev ? rev.taxable_value : null;
-            cached.po_total_tax = rev ? rev.total_tax : null;
-            // Every field the ladder reads, not just the revised totals: it
-            // derives its Contract and Variations blocks from the baseline and
-            // rollup splits, so refreshing only the totals left it announcing
-            // "2 changes agreed" above a Revised PO value still showing the
-            // unvaried figure.
+            cached.po_total_value = fin ? fin.total_value : null;
+            cached.po_taxable_value = fin ? fin.taxable_value : null;
+            cached.po_total_tax = fin ? fin.total_tax : null;
+            // Every field the ladder reads, not just the final totals: it
+            // derives its Contract / Variations / Actuals blocks from the
+            // baseline and both rollups, so refreshing only the totals left it
+            // announcing "3 entries measured" above a value still showing the
+            // pre-actuals figure.
             cached.po_base_taxable_value = po ? po.taxable_value : null;
             cached.po_base_total_tax = po ? po.total_tax : null;
             cached.po_base_total_value = po ? po.total_value : null;
@@ -1266,6 +1352,10 @@
             cached.po_var_tax = vt.tax || 0;
             cached.po_var_total = vt.total || 0;
             cached.po_var_count = vt.count;
+            cached.po_act_taxable = at.taxable || 0;
+            cached.po_act_tax = at.tax || 0;
+            cached.po_act_total = at.total || 0;
+            cached.po_act_count = at.count;
         }
         // Contract value feeds the ladder and what the client still owes, so the
         // glance is now stale. Debounced because insights is the heaviest query
@@ -1280,44 +1370,54 @@
         renderList();
     }
 
-    function varRowError(tr, msg) {
+    function ledRowError(tr, msg) {
         tr.classList.add('error');
         showToast(msg, 'error');
     }
 
-    async function saveVariationRow(tr) {
+    async function saveLedgerRow(tr) {
+        const cfg = ledgerOf(tr);
         // A save already in flight for this row: remember that the row moved on
         // and re-run once it lands. Returning here without this dropped the
         // edit silently AND let the in-flight save stamp a snapshot taken
         // before it, so the row looked saved and wasn't.
         if (tr.classList.contains('is-saving')) {
-            tr.dataset.varPending = '1';
+            tr.dataset.ledPending = '1';
             return;
         }
-        const v = varRowValues(tr);
-        const isDraft = tr.dataset.varId === 'new';
+        const v = ledRowValues(tr);
+        const isDraft = tr.dataset.ledId === 'new';
         if (!v.description) {
             // Says so for saved rows too, not just drafts: blanking the
             // description while editing the weight used to bail out here with
             // no request and no message, silently discarding every later edit
             // to that row for as long as it stayed blank.
-            varRowError(tr, 'A change needs a description.');
+            ledRowError(tr, 'This entry needs a description.');
             return;
         }
         const qty = parseMoney(v.quantity);
         const rate = parseMoney(v.rate);
         if (!Number.isFinite(qty) || !Number.isFinite(rate)) {
-            varRowError(tr, 'Weight and rate must be numbers.');
+            ledRowError(tr, 'Weight and rate must be numbers.');
             return;
         }
         if (rate < 0) {
-            varRowError(tr, 'Rate must be zero or more — use a negative weight to reduce scope.');
+            ledRowError(tr, 'Rate must be zero or more' +
+                (cfg.signed ? ' — use a negative weight to reduce scope.' : '.'));
+            return;
+        }
+        // Actuals are a measurement: a negative weight is how a variations habit
+        // would (wrongly) reach for an under-run, which the smaller total
+        // already expresses. Caught here so the message lands before the round
+        // trip, though the server refuses it too.
+        if (!cfg.signed && qty < 0) {
+            ledRowError(tr, 'Weight must be zero or more — a project under its PO is just a smaller total.');
             return;
         }
         // Unchanged? Leave it be — no request, no repaint. Same guard as the
         // overhead field, since focusout fires on every field the user tabs out
         // of, changed or not.
-        const snap = tr.dataset.varSnapshot;
+        const snap = tr.dataset.ledSnapshot;
         const now = JSON.stringify({
             description: v.description, quantity: trimQty(qty), unit: v.unit, rate: trimQty(rate),
         });
@@ -1325,15 +1425,15 @@
 
         tr.classList.remove('error');
         tr.classList.add('is-saving');
-        delete tr.dataset.varPending;
+        delete tr.dataset.ledPending;
         const body = JSON.stringify({ ...v, quantity: qty, rate });
         // Pinned for the round trip: blurring a cell can close the modal, and
         // the response must not be applied to whichever project is open by the
         // time it lands. Same reason loadPoGist guards its own response.
         const pid = activeProjectId;
-        const base = `/api/projects/${pid}/po-variations`;
+        const base = `/api/projects/${pid}/${cfg.slug}`;
         try {
-            const res = await fetch(isDraft ? base : `${base}/${tr.dataset.varId}`, {
+            const res = await fetch(isDraft ? base : `${base}/${tr.dataset.ledId}`, {
                 method: isDraft ? 'POST' : 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
@@ -1343,70 +1443,73 @@
             tr.classList.remove('is-saving');
             if (pid !== activeProjectId) return; // modal changed under us
             if (!res.ok) {
-                varRowError(tr, data.message || data.error || `Failed (HTTP ${res.status})`);
+                ledRowError(tr, data.message || data.error || `Failed (HTTP ${res.status})`);
                 return;
             }
             if (isDraft) {
                 // A new row shifts the table anyway, so a full repaint costs
                 // nothing here and leaves the grid ready for the next entry.
                 renderPoGist(data.po);
-                showToast('Variation added.');
+                showToast(cfg.addedMsg);
             } else {
-                tr.dataset.varSnapshot = now;
-                const v2 = data.variation || {};
+                tr.dataset.ledSnapshot = now;
+                const v2 = data.row || {};
                 ['basic', 'tax', 'total'].forEach(k => {
-                    const cell = tr.querySelector(`[data-var-out="${k}"]`);
-                    if (cell) cell.textContent = formatDeltaINR(v2[`${k}_amount`] || 0);
+                    const cell = tr.querySelector(`[data-led-out="${k}"]`);
+                    if (cell) cell.textContent = cfg.fmt(v2[`${k}_amount`] || 0);
                 });
-                showToast('Variation updated.');
+                showToast(cfg.updatedMsg);
             }
             applyPoChange(data.po);
             // Edited again while that was in flight — the row on screen is
             // ahead of what the server just stored, so send the difference.
-            if (tr.dataset.varPending && tr.isConnected) {
-                delete tr.dataset.varPending;
-                saveVariationRow(tr);
+            if (tr.dataset.ledPending && tr.isConnected) {
+                delete tr.dataset.ledPending;
+                saveLedgerRow(tr);
             }
         } catch (err) {
             tr.classList.remove('is-saving');
-            varRowError(tr, `Network error: ${err.message}`);
+            ledRowError(tr, `Network error: ${err.message}`);
         }
     }
 
-    async function deleteVariation(tr) {
-        const label = (tr.querySelector('[data-var-field="description"]') || {}).value || 'this change';
-        if (!confirm(`Remove "${label}" from the contract?`)) return;
+    async function deleteLedgerRow(tr) {
+        const cfg = ledgerOf(tr);
+        const label = (tr.querySelector('[data-led-field="description"]') || {}).value || 'this entry';
+        if (!confirm(cfg.removeConfirm(label))) return;
         tr.classList.add('is-saving');
-        const pid = activeProjectId; // see saveVariationRow
+        const pid = activeProjectId; // see saveLedgerRow
         try {
             const res = await fetch(
-                `/api/projects/${pid}/po-variations/${tr.dataset.varId}`,
+                `/api/projects/${pid}/${cfg.slug}/${tr.dataset.ledId}`,
                 { method: 'DELETE', credentials: 'same-origin' });
             const data = await res.json().catch(() => ({}));
             if (pid !== activeProjectId) return; // modal changed under us
             if (!res.ok) {
                 tr.classList.remove('is-saving');
-                varRowError(tr, data.message || data.error || `Failed (HTTP ${res.status})`);
+                ledRowError(tr, data.message || data.error || `Failed (HTTP ${res.status})`);
                 return;
             }
             renderPoGist(data.po);
             applyPoChange(data.po);
-            showToast('Variation removed.');
+            showToast(cfg.removedMsg);
         } catch (err) {
             tr.classList.remove('is-saving');
-            varRowError(tr, `Network error: ${err.message}`);
+            ledRowError(tr, `Network error: ${err.message}`);
         }
     }
 
     // Delegated: the gist is re-rendered wholesale whenever the contract moves.
     gistEl.addEventListener('click', (e) => {
-        const addBtn = e.target.closest('[data-var-add]');
+        const addBtn = e.target.closest('[data-led-add]');
         if (addBtn) {
-            const body = gistEl.querySelector('[data-var-body]');
+            const block = addBtn.closest('[data-led-block]');
+            const cfg = LEDGERS[block ? block.dataset.ledKind : 'variation'];
+            const body = block.querySelector('[data-led-body]');
             if (!body || body.querySelector('.is-draft')) return; // one draft at a time
-            const empty = body.querySelector('[data-var-empty]');
+            const empty = body.querySelector('[data-led-empty]');
             if (empty) empty.remove();
-            body.insertAdjacentHTML('beforeend', variationRowHtml({}, true));
+            body.insertAdjacentHTML('beforeend', ledgerRowHtml(cfg, {}, true));
             // decorateProjLiTables skips tables it has already stamped, so a row
             // added after that first pass would reach a phone with no
             // data-label on any cell — four unlabelled boxes you can't tell
@@ -1416,47 +1519,49 @@
                 table.removeAttribute('data-mobi');
                 decorateProjLiTables(gistEl);
             }
-            const first = body.querySelector('.is-draft [data-var-field="description"]');
+            const first = body.querySelector('.is-draft [data-led-field="description"]');
             if (first) first.focus();
             return;
         }
-        const saveBtn = e.target.closest('[data-var-save]');
-        if (saveBtn) { saveVariationRow(saveBtn.closest('tr')); return; }
-        const discardBtn = e.target.closest('[data-var-discard]');
+        const saveBtn = e.target.closest('[data-led-save]');
+        if (saveBtn) { saveLedgerRow(saveBtn.closest('tr')); return; }
+        const discardBtn = e.target.closest('[data-led-discard]');
         if (discardBtn) {
-            const body = gistEl.querySelector('[data-var-body]');
+            const block = discardBtn.closest('[data-led-block]');
+            const cfg = LEDGERS[block ? block.dataset.ledKind : 'variation'];
+            const body = block.querySelector('[data-led-body]');
             discardBtn.closest('tr').remove();
-            if (body && !body.children.length) body.innerHTML = VAR_EMPTY_ROW;
+            if (body && !body.children.length) body.innerHTML = ledgerEmptyRow(cfg);
             return;
         }
-        const delBtn = e.target.closest('[data-var-delete]');
-        if (delBtn) deleteVariation(delBtn.closest('tr'));
+        const delBtn = e.target.closest('[data-led-delete]');
+        if (delBtn) deleteLedgerRow(delBtn.closest('tr'));
     });
 
     gistEl.addEventListener('input', (e) => {
-        const field = e.target.closest('[data-var-field]');
-        if (field) previewVariation(field.closest('tr'));
+        const field = e.target.closest('[data-led-field]');
+        if (field) previewLedgerRow(field.closest('tr'));
     });
 
     // focusout is the single commit path for saved rows, matching the overhead
     // field. A draft row is explicitly *not* committed on blur: clicking away
-    // from a half-typed change would post a variation the user never agreed to.
+    // from a half-typed entry would post one the user never confirmed.
     gistEl.addEventListener('focusout', (e) => {
-        const field = e.target.closest('[data-var-field]');
+        const field = e.target.closest('[data-led-field]');
         if (!field) return;
         const tr = field.closest('tr');
-        // saveVariationRow owns the in-flight case now — it queues rather than
+        // saveLedgerRow owns the in-flight case now — it queues rather than
         // drops, so blurring mid-save no longer loses the edit.
-        if (tr && tr.dataset.varId !== 'new') saveVariationRow(tr);
+        if (tr && tr.dataset.ledId !== 'new') saveLedgerRow(tr);
     });
 
     gistEl.addEventListener('keydown', (e) => {
-        const field = e.target.closest('[data-var-field]');
+        const field = e.target.closest('[data-led-field]');
         if (!field) return;
         const tr = field.closest('tr');
         if (e.key === 'Enter') {
             e.preventDefault();
-            if (tr.dataset.varId === 'new') saveVariationRow(tr);
+            if (tr.dataset.ledId === 'new') saveLedgerRow(tr);
             else field.blur();
         } else if (e.key === 'Escape') {
             e.preventDefault();
@@ -1464,19 +1569,21 @@
             // "undo this cell" — without stopping it, discarding a typo would
             // also shut the whole project pop-up and lose the user's place.
             e.stopPropagation();
-            if (tr.dataset.varId === 'new') {
-                const body = gistEl.querySelector('[data-var-body]');
+            if (tr.dataset.ledId === 'new') {
+                const block = tr.closest('[data-led-block]');
+                const cfg = LEDGERS[block ? block.dataset.ledKind : 'variation'];
+                const body = block.querySelector('[data-led-body]');
                 tr.remove();
-                if (body && !body.children.length) body.innerHTML = VAR_EMPTY_ROW;
+                if (body && !body.children.length) body.innerHTML = ledgerEmptyRow(cfg);
                 return;
             }
             // Restore from the snapshot, then let focusout no-op.
-            const snap = JSON.parse(tr.dataset.varSnapshot || '{}');
-            varFields.forEach(f => {
-                const el = tr.querySelector(`[data-var-field="${f}"]`);
+            const snap = JSON.parse(tr.dataset.ledSnapshot || '{}');
+            ledFields.forEach(f => {
+                const el = tr.querySelector(`[data-led-field="${f}"]`);
                 if (el) el.value = snap[f] == null ? '' : snap[f];
             });
-            previewVariation(tr);
+            previewLedgerRow(tr);
             field.blur();
         }
     });
