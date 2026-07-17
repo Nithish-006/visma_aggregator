@@ -1872,6 +1872,13 @@
             e.preventDefault();
             input.blur();
         } else if (e.key === 'Escape') {
+            // Escape on the document closes every open modal. Inside a field it
+            // means "undo this cell", so the event stops here — otherwise
+            // discarding a typo also shut the whole project pop-up and threw the
+            // user out of the panel they were working in. preventDefault alone
+            // wouldn't do it: bubbling is what reaches the document listener.
+            e.preventDefault();
+            e.stopPropagation();
             const raw = Number(input.dataset.raw) || 0;
             input.value = raw ? String(raw) : ''; // discard, then let focusout no-op
             input.blur();
