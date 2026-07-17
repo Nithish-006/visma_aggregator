@@ -92,7 +92,6 @@ def get_project_summary_combined():
             'category_breakdown': [],
             'labour_monthly': labour_monthly,
             'vendor_breakdown': [],
-            'monthly_trend': {'months': [], 'income': [], 'expense': [], 'net': []},
             'transactions': [],
             'bank_transactions': {}
         })
@@ -137,20 +136,6 @@ def get_project_summary_combined():
     # salary is fetched up front via _labour_monthly_for_project() and
     # returned to the page as `labour_monthly` (per-month, for this project).
 
-    # Monthly trend
-    monthly_trend = {'months': [], 'income': [], 'expense': [], 'net': []}
-    if not combined.empty and 'month_name' in combined.columns:
-        monthly = combined.groupby('month_name').agg({
-            'CR Amount': 'sum',
-            'DR Amount': 'sum',
-            'date': 'first'
-        }).reset_index().sort_values('date')
-        monthly_trend = {
-            'months': monthly['month_name'].tolist(),
-            'income': [float(x) for x in monthly['CR Amount'].tolist()],
-            'expense': [float(x) for x in monthly['DR Amount'].tolist()],
-            'net': [float(i - e) for i, e in zip(monthly['CR Amount'], monthly['DR Amount'])]
-        }
 
     # Vendor breakdown (top vendors by expense)
     vendor_col = 'Client/Vendor' if 'Client/Vendor' in combined.columns else 'client_vendor'
@@ -215,7 +200,6 @@ def get_project_summary_combined():
         'category_breakdown': category_breakdown,
         'labour_monthly': labour_monthly,
         'vendor_breakdown': vendor_breakdown,
-        'monthly_trend': monthly_trend,
         'transactions': transactions_list,
         'bank_transactions': bank_transactions
     })

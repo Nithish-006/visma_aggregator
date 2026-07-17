@@ -301,7 +301,14 @@ def export_single_project_summary(project_id):
     except Exception as e:
         print(f"[!] Error fetching PO variations for project export: {e}")
         variations = []
+    var_taxable = sum(float(v.get('basic_amount') or 0) for v in variations)
+    var_tax = sum(float(v.get('tax_amount') or 0) for v in variations)
     var_total = sum(float(v.get('total_amount') or 0) for v in variations)
+    # The PO as extracted, before any variation. Read here rather than inside the
+    # PO Value sheet: the Consolidated Summary needs it too, and a figure that
+    # only exists if some other sheet happened to run first is a trap.
+    base_taxable = float(po_gist.get('taxable_value') or 0)
+    base_tax = float(po_gist.get('total_tax') or 0)
 
     st = _make_styles()
     currency_fmt = st['currency_fmt']
@@ -432,6 +439,11 @@ def export_single_project_summary(project_id):
     value_basic = fin['value']['basic']
     value_gst = fin['value']['gst']
     value_total = fin['value']['total']
+    # Where the value came from. A project with no sales bills falls back to the
+    # PO, and the section that prints these figures has to say so — calling the
+    # contract "billed" would report invoicing that never happened, and the
+    # profit below is struck against whichever of the two this is.
+    value_source = fin['value']['source']
     sales_taxable, sales_gst = sales['taxable'], sales['gst']
     purchase_taxable, purchase_gst = purchase['taxable'], purchase['gst']
     gst_extra = fin['gst']['extra']
@@ -537,8 +549,6 @@ def export_single_project_summary(project_id):
     # client a breakdown that contradicts its own arithmetic with nothing on the
     # sheet to explain the gap.
     ws.cell(row=r, column=1, value='VALUE BREAKDOWN').font = st['subtitle_font']; r += 1
-    base_taxable = float(po_gist.get('taxable_value') or 0)
-    base_tax = float(po_gist.get('total_tax') or 0)
     kv_row(ws, r, 'Taxable Value', base_taxable, fmt=currency_fmt); r += 1
     kv_row(ws, r, 'Total Tax', base_tax, fmt=currency_fmt); r += 1
     if variations:
@@ -880,16 +890,40 @@ def export_single_project_summary(project_id):
             ws.cell(row=row, column=c).fill = st['green_fill']
         return row + 1
 
-    cr = section(ws, cr, 'PROJECT VALUE')
-    kv_row(ws, cr, 'Project Basic Value', value_basic, fmt=currency_fmt); cr += 1
-    kv_row(ws, cr, 'GST', value_gst, fmt=currency_fmt); cr += 1
-    kv_row(ws, cr, 'Total Value', value_total, fmt=currency_fmt, font=st['blue_amount']); cr += 1
+    # Laid out like the app's Project value panel, so the sheet and the screen
+    # can be read side by side: the PO as signed, the changes agreed since, and
+    # the revised contract the balance is measured against.
+    cr = section(ws, cr, 'CONTRACT')
+    kv_row(ws, cr, 'Basic Value (as per PO)', base_taxable, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'GST (as per PO)', base_tax, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Total (as per PO)', base_taxable + base_tax, fmt=currency_fmt); cr += 1
+    if variations:
+        kv_row(ws, cr, f'Variations ({len(variations)}) — Basic', var_taxable, fmt=currency_fmt); cr += 1
+        kv_row(ws, cr, 'Variations — GST', var_tax, fmt=currency_fmt); cr += 1
+        kv_row(ws, cr, 'Variations — Total', var_total, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Revised PO Value', po_value, fmt=currency_fmt, font=st['blue_amount']); cr += 2
+
+    cr = section(ws, cr, 'PAYMENTS RECEIVED')
     kv_row(ws, cr, 'Received — Bank (KVB)', received_bank, fmt=currency_fmt, font=st['income_font']); cr += 1
     kv_row(ws, cr, 'Received — Cash', received_cash, fmt=currency_fmt, font=st['income_font']); cr += 1
     kv_row(ws, cr, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font']); cr += 1
+    # Measured against the contract, not the invoices — see helpers/project_finance.
     kv_row(ws, cr, ('Excess Received' if balance < -0.5 else 'Current Balance'), abs(balance),
-           fmt=currency_fmt, font=(st['red_amount'] if balance > 0.5 else st['green_amount'])); cr += 1
-    kv_row(ws, cr, 'PO Value (contract)', po_value, fmt=currency_fmt); cr += 2
+           fmt=currency_fmt, font=(st['red_amount'] if balance > 0.5 else st['green_amount'])); cr += 2
+
+    # What we actually invoiced — a different question from the contract, and the
+    # one the profit below is struck against. With no sales bills there is
+    # nothing invoiced and this falls back to the PO, so the heading names its
+    # real source rather than reporting the contract as billed.
+    VALUE_HEAD = {
+        'sales_bills': 'BILLED VALUE  (sales bills)',
+        'po': 'PROJECT VALUE  (from the PO — no sales bills tagged)',
+        'none': 'PROJECT VALUE  (no sales bills or PO)',
+    }
+    cr = section(ws, cr, VALUE_HEAD.get(value_source, 'PROJECT VALUE'))
+    kv_row(ws, cr, 'Basic Value', value_basic, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'GST', value_gst, fmt=currency_fmt); cr += 1
+    kv_row(ws, cr, 'Total Value', value_total, fmt=currency_fmt, font=st['blue_amount']); cr += 2
 
     cr = section(ws, cr, 'GST POSITION')
     kv_row(ws, cr, 'Purchase — Basic', purchase_taxable, fmt=currency_fmt); cr += 1
@@ -909,10 +943,19 @@ def export_single_project_summary(project_id):
     kv_row(ws, cr, 'Total Cost', spend_total, fmt=currency_fmt, font=st['expense_font']); cr += 2
 
     cr = section(ws, cr, 'NET POSITION')
-    kv_row(ws, cr, 'Balance (Total Value − Total Cost)', profit, fmt=currency_fmt,
+    kv_row(ws, cr,
+           ('Balance (Billed Value − Total Cost)' if value_source == 'sales_bills'
+            else 'Balance (Project Value − Total Cost)'),
+           profit, fmt=currency_fmt,
            font=(st['green_amount'] if profit >= 0 else st['red_amount'])); cr += 1
     ws.column_dimensions['A'].width = 30
     ws.column_dimensions['B'].width = 22
+
+    # Built last so every figure above is in scope, but it opens the workbook:
+    # it's the whole project on one page, and the sheets behind it are the
+    # evidence for it. Moving rather than reordering the code keeps the other
+    # sheets exactly as they were.
+    wb.move_sheet(ws, offset=-(len(wb.worksheets) - 1))
 
     # Expand every sheet's columns to fit their content so the workbook opens
     # fully readable — no manual column-widening needed. Runs last so it sizes
