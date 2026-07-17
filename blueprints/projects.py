@@ -19,7 +19,7 @@ from extensions import db_manager
 from helpers.formatting import format_indian_number
 from helpers.bankdata import get_bank_df
 from helpers.project_finance import (
-    compute_project_finance, is_other_expense_category,
+    compute_project_finance, is_other_expense_category, PO_VARIATION_GST_RATE,
 )
 import po_processor
 import salary_api
@@ -39,11 +39,34 @@ def _project_po_allowed(filename):
 
 
 def _po_summary_for_response(project_id):
-    """Compact PO gist for inclusion in JSON responses (or None)."""
+    """Compact PO gist for inclusion in JSON responses (or None).
+
+    Carries the extracted baseline *and* the agreed variations side by side:
+    the PO section shows the document as read, the changes made to it, and the
+    revised contract the rest of the app works from. A project with variations
+    but no gist row still answers, so a hand-entered contract can be varied too.
+    """
     po = db_manager.get_project_po(project_id)
-    if not po:
+    variations = db_manager.list_po_variations(project_id)
+    if not po and not variations:
         return None
-    po['total_value_formatted'] = format_indian_number(po.get('total_value') or 0)
+    po = po or {'project_id': project_id, 'line_items': [],
+                'taxable_value': 0, 'total_tax': 0, 'total_value': 0}
+    base = {k: float(po.get(k) or 0) for k in ('taxable_value', 'total_tax', 'total_value')}
+    po['variations'] = variations
+    po['variation_totals'] = {
+        'count': len(variations),
+        'taxable': round(sum(v['basic_amount'] for v in variations), 2),
+        'tax': round(sum(v['tax_amount'] for v in variations), 2),
+        'total': round(sum(v['total_amount'] for v in variations), 2),
+    }
+    po['revised'] = {
+        'taxable_value': round(base['taxable_value'] + po['variation_totals']['taxable'], 2),
+        'total_tax': round(base['total_tax'] + po['variation_totals']['tax'], 2),
+        'total_value': round(base['total_value'] + po['variation_totals']['total'], 2),
+    }
+    po['gst_rate'] = PO_VARIATION_GST_RATE
+    po['total_value_formatted'] = format_indian_number(po['revised']['total_value'])
     return po
 
 
@@ -505,7 +528,12 @@ def api_project_insights(project_id):
     labour = salary_api.get_labour_summary_for_project(
         project_id, project_display=project.get('display'))
 
+    # Revised: _decorate_project_row has already folded any agreed variations
+    # into the po_* figures, so the contract this measures against is the one
+    # the user last agreed, not the one the PDF was signed at. None there means
+    # no contract exists; a 0.00 means one exists and was varied away to nothing.
     po_value = float(project.get('po_total_value') or 0)
+    has_po = project.get('po_total_value') is not None
     labour_total = float(labour.get('total_cost') or 0)
 
     # The whole money model lives in helpers/project_finance so this endpoint
@@ -525,6 +553,7 @@ def api_project_insights(project_id):
         labour_total=labour_total,
         overhead=project.get('overhead'),
         other_cat_totals=other_cat_totals,
+        has_po=has_po,
     )
 
     return jsonify({
@@ -534,9 +563,13 @@ def api_project_insights(project_id):
             'received_bank': bank_total,
             'received_cash': cash_total,
             'received_total': received_total,
-            # Kept for backward compatibility with existing readers; equals
-            # `receivable` when the ladder is PO-sourced.
-            'balance': po_value - received_total,
+            # Kept for backward compatibility with existing readers. Aliases
+            # `receivable` outright rather than recomputing `po_value -
+            # received`: the two agree whenever a PO exists, but a project with
+            # no PO (or one varied down to zero) measures against the billed
+            # total, and recomputing here would ship two contradictory balances
+            # in one response.
+            'balance': fin['receivable'],
             # When the attendance app is unreachable, labour comes back as 0 and
             # the cost total quietly loses it — which overstates profit. The UI
             # needs to know the figure is incomplete rather than just low.
@@ -834,4 +867,46 @@ def api_update_project_po_data(project_id):
         if err == 'no_editable_fields':
             return jsonify({'error': err, 'message': 'No editable fields supplied.'}), 400
         return jsonify({'error': 'update_failed', 'message': err}), 400
+    return jsonify({'success': True, 'po': _po_summary_for_response(project_id)})
+
+
+# ── PO variations ───────────────────────────────────────────────────────────
+# Scope changes after signing: extra tonnage agreed, or work that came in under
+# the quote. Each is its own row on top of the untouched extracted PO, so the
+# contract value moves without the stored gist drifting from the PDF behind it.
+
+@bp.route('/api/projects/<int:project_id>/po-variations', methods=['POST'])
+@login_required
+def api_add_po_variation(project_id):
+    """Record one agreed change to the contract."""
+    if not db_manager.get_project(project_id):
+        return jsonify({'error': 'not_found'}), 404
+    row, err = db_manager.add_po_variation(project_id, request.get_json(silent=True) or {})
+    if err:
+        return jsonify({'error': 'invalid', 'message': err}), 400
+    return jsonify({'success': True, 'variation': row,
+                    'po': _po_summary_for_response(project_id)})
+
+
+@bp.route('/api/projects/<int:project_id>/po-variations/<int:variation_id>', methods=['PUT'])
+@login_required
+def api_update_po_variation(project_id, variation_id):
+    row, err = db_manager.update_po_variation(
+        project_id, variation_id, request.get_json(silent=True) or {})
+    if err == 'not_found':
+        return jsonify({'error': 'not_found', 'message': 'That variation no longer exists.'}), 404
+    if err:
+        return jsonify({'error': 'invalid', 'message': err}), 400
+    return jsonify({'success': True, 'variation': row,
+                    'po': _po_summary_for_response(project_id)})
+
+
+@bp.route('/api/projects/<int:project_id>/po-variations/<int:variation_id>', methods=['DELETE'])
+@login_required
+def api_delete_po_variation(project_id, variation_id):
+    ok, err = db_manager.delete_po_variation(project_id, variation_id)
+    if err == 'not_found':
+        return jsonify({'error': 'not_found', 'message': 'That variation no longer exists.'}), 404
+    if not ok:
+        return jsonify({'error': 'delete_failed', 'message': err}), 400
     return jsonify({'success': True, 'po': _po_summary_for_response(project_id)})

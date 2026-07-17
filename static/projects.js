@@ -589,35 +589,45 @@
         const cash = Number((s ? s.received_cash : p.received_cash)) || 0;
         const po = Number(p.po_total_value) || 0;
 
-        // Before insights arrive, the PO is all we have to show a ladder from.
-        const val = s ? s.value : { basic: 0, gst: 0, total: po, source: po > 0 ? 'po' : 'none' };
-        const total = Number(val.total) || 0;
+        // What the client owes is measured against the contract — the PO plus
+        // any agreed variations, GST included — not against what we've invoiced
+        // so far. The server settles that (helpers/project_finance); before
+        // insights land, the cached row's PO value is already
+        // variation-inclusive, and a project with no PO falls back to the
+        // billed total because that is the only promise on record.
+        const billed = s ? (Number(s.value && s.value.total) || 0) : 0;
+        const contract = s ? (Number(s.contract && s.contract.total) || 0)
+                           : (po > 0 ? po : billed);
+        const receivable = s ? (Number(s.receivable) || 0) : contract - rec;
 
         // Only bail when there is genuinely nothing to say. This guard predates
         // the cost breakdown, and a project can have real costs (bills, labour,
         // overhead) with no PO, no sales bills and nothing received yet —
         // hiding on value alone would blank out its spend and loss entirely.
         const hasCosts = !!(s && Number(s.spend_total) > 0);
-        if (total <= 0 && rec <= 0 && !hasCosts) {
+        if (contract <= 0 && rec <= 0 && !hasCosts) {
             detailOverview.classList.add('hidden');
             detailOverview.innerHTML = '';
             return;
         }
-
-        const receivable = total - rec;
-        const pct = total > 0 ? Math.min(100, Math.round((rec / total) * 100)) : null;
+        // Percentages track the same denominator as the figure above them,
+        // otherwise the hero states a balance the bar underneath contradicts.
+        const pct = contract > 0 ? Math.min(100, Math.round((rec / contract) * 100)) : null;
         const dueLabel = receivable < -0.5 ? 'Client overpaid by' : 'Client yet to pay';
         const dueCls = receivable > 0.5 ? 'due' : 'settled';
 
         // ── Hero: the two questions people open this for ──
-        // "Balance" here is total value minus total cost — what's left of the
-        // project. The ladder's "Current balance" is what the client still owes;
-        // the two hero labels are what keep them apart.
+        // "Balance" here is billed value minus total cost — what's left of the
+        // project. The ladder's "Client yet to pay" is what the client still
+        // owes against the contract; the two hero labels are what keep them
+        // apart. The margin is against what we billed, not the contract, and
+        // says so — the billed figure is no longer a row on this panel, so
+        // "of total value" would point at nothing.
         const balanceCell = s ? `
             <div class="proj-hero-cell">
                 <span class="proj-hero-k">Balance</span>
                 <span class="proj-hero-v ${s.profit >= 0 ? 'profit' : 'loss'}">${formatSignedINR(s.profit)}</span>
-                <span class="proj-hero-sub">${s.margin_pct != null ? `${s.margin_pct.toFixed(1)}% of total value` : '&nbsp;'}</span>
+                <span class="proj-hero-sub">${s.margin_pct != null ? `${s.margin_pct.toFixed(1)}% of ${formatINRCompact(billed)} billed` : '&nbsp;'}</span>
             </div>` : `
             <div class="proj-hero-cell">
                 <span class="proj-hero-k">Balance</span>
@@ -629,54 +639,72 @@
                 <div class="proj-hero-cell">
                     <span class="proj-hero-k">${dueLabel}</span>
                     <span class="proj-hero-v ${dueCls}">${formatINR(Math.abs(receivable))}</span>
-                    <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(total)} received` : '&nbsp;'}</span>
+                    <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received` : '&nbsp;'}</span>
                 </div>
                 ${balanceCell}
             </div>
             ${pct != null ? `<div class="proj-pay-bar"><div class="proj-pay-bar-fill" style="width:${pct}%"></div></div>` : ''}`;
 
         // ── Value ladder ──
+        // The contract, derived in full: the PO as signed, the changes agreed
+        // since, and the revised figure the client is measured against. Every
+        // row here is the PO's own — the sales bills are a different question
+        // (what we've invoiced) and answer it on the Bills tab and in the
+        // hero's Balance, not in the middle of this subtraction.
         const splitNote = cash > 0
             ? `<span class="proj-ladder-split">${formatINRCompact(bank)} bank + ${formatINRCompact(cash)} cash</span>`
             : '';
-        const SOURCE_NOTE = {
-            sales_bills: 'From sales bills',
-            po: 'From the purchase order — no sales bills tagged yet',
-            none: 'No sales bills or PO value yet',
-        };
-        // The PO is the contract, the sales bills are what we billed. The gap
-        // between them matters: it's either work not yet invoiced or billing
-        // over the PO.
-        let poNote = '';
-        if (val.source === 'sales_bills' && po > 0) {
-            const diff = total - po;
-            if (Math.abs(diff) < 1) {
-                poNote = ' · billed exactly to the PO';
-            } else {
-                const billedPct = Math.round((total / po) * 100);
-                poNote = ` · billed ${billedPct}% of the PO, ${diff > 0 ? 'over' : 'under'} by ${formatINRCompact(Math.abs(diff))}`;
+        // The baseline split and the variation rollup both ride on the project
+        // row (_decorate_project_row), so the whole ladder paints from the
+        // cached registry entry and doesn't wait on insights.
+        const baseBasic = Number(p.po_base_taxable_value) || 0;
+        const baseGst = Number(p.po_base_total_tax) || 0;
+        const baseTotal = Number(p.po_base_total_value) || 0;
+        const varBasic = Number(p.po_var_taxable) || 0;
+        const varGst = Number(p.po_var_tax) || 0;
+        const varTotal = Number(p.po_var_total) || 0;
+        const varCount = Number(p.po_var_count) || 0;
+        // With no PO there is no contract, so the receivable falls back to what
+        // we billed (see helpers/project_finance). Labelling that "Contract"
+        // would state an agreement that doesn't exist, so the row names its
+        // real source instead.
+        const fromPo = s ? (s.contract && s.contract.source === 'po') : po > 0;
+
+        const lRow = (label, value, cls = '', fmt = formatINR, suffix = '') => `
+                    <div class="proj-ladder-row ${cls}"><dt>${label}</dt><dd>${fmt(value)}${suffix}</dd></div>`;
+        const lHead = (label, hint = '') => `
+                    <div class="proj-ladder-head"><span>${label}</span>${hint ? `<span class="proj-ladder-hint">${hint}</span>` : ''}</div>`;
+
+        let ladderRows = '';
+        if (fromPo) {
+            ladderRows += lHead('Contract', 'as per PO');
+            ladderRows += lRow('Basic value', baseBasic, 'is-sub');
+            ladderRows += lRow('GST', baseGst, 'is-sub');
+            ladderRows += lRow('Total', baseTotal, 'is-sub is-total');
+            // Only once something has actually been agreed: with no changes the
+            // block would be three zeros and "Revised PO value" would just
+            // restate the Total directly above it.
+            if (varCount) {
+                ladderRows += lHead('Variations', `${varCount} change${varCount > 1 ? 's' : ''} agreed`);
+                ladderRows += lRow('Basic value', varBasic, 'is-sub', formatDeltaINR);
+                ladderRows += lRow('GST', varGst, 'is-sub', formatDeltaINR);
+                ladderRows += lRow('Total', varTotal, 'is-sub is-total', formatDeltaINR);
+                ladderRows += lRow('Revised PO value', baseTotal + varTotal, 'is-revised');
             }
+        } else if (contract > 0) {
+            ladderRows += lHead('Billed', 'no PO yet — from sales bills');
+            ladderRows += lRow('Total', contract, 'is-sub is-total');
         }
-        // The PO opens the ladder: it's the agreed figure every other number on
-        // this panel is measured against, so the panel reads
-        // agreed -> billed -> received -> outstanding, top to bottom.
-        const poRow = po > 0 ? `
-                    <div class="proj-ladder-row is-po">
-                        <dt>PO value<span class="proj-ladder-hint">contract</span></dt>
-                        <dd>${formatINR(po)}</dd>
-                    </div>` : '';
+        ladderRows += lRow('Payments received', rec, '', formatINR, splitNote);
+        ladderRows += `
+                    <div class="proj-ladder-row is-balance"><dt>${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}</dd></div>`;
+
         const ladder = `
             <div class="proj-ov-panel">
                 <div class="proj-ov-head"><h4 class="proj-ov-title">Project value</h4></div>
                 <div class="proj-ov-body">
-                <dl class="proj-ladder">${poRow}
-                    <div class="proj-ladder-row"><dt>Basic value</dt><dd>${formatINR(val.basic)}</dd></div>
-                    <div class="proj-ladder-row"><dt>GST</dt><dd>${formatINR(val.gst)}</dd></div>
-                    <div class="proj-ladder-row is-total"><dt>Total value<span class="proj-ladder-hint">billed</span></dt><dd>${formatINR(total)}</dd></div>
-                    <div class="proj-ladder-row"><dt>Received</dt><dd>${formatINR(rec)}${splitNote}</dd></div>
-                    <div class="proj-ladder-row is-balance"><dt>${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}</dd></div>
+                <dl class="proj-ladder">${ladderRows}
                 </dl>
-                <p class="proj-ov-note">${SOURCE_NOTE[val.source] || ''}${poNote}</p>
                 </div>
             </div>`;
 
@@ -1217,18 +1245,6 @@
             </div>`;
             return;
         }
-        const rows = [
-            ['Total project value', formatINR(po.total_value), 'headline'],
-            ['PO number', po.po_number ? escapeHtml(po.po_number) : '—'],
-            ['PO date', po.po_date ? escapeHtml(po.po_date) : '—'],
-            ['Client', po.client_name ? escapeHtml(po.client_name) : '—'],
-            ['Taxable value', formatINR(po.taxable_value)],
-            ['Total tax', formatINR(po.total_tax)],
-            ['Scope items', po.line_item_count != null ? po.line_item_count : '—'],
-        ];
-        if (po.payment_terms) rows.push(['Payment terms', escapeHtml(po.payment_terms)]);
-        if (po.amount_in_words) rows.push(['In words', escapeHtml(po.amount_in_words)]);
-
         const manualTag = po.extraction_status === 'manual'
             ? `<span class="proj-gist-tag">manually edited</span>` : '';
 
@@ -1236,14 +1252,50 @@
             <div class="proj-gist-header">
                 <span class="proj-field-label">Extracted PO gist</span>${manualTag}
             </div>
-            <div class="proj-gist-rows">
-                ${rows.map(([k, v, cls]) => `
-                    <div class="proj-gist-row ${cls === 'headline' ? 'headline' : ''}">
-                        <span class="proj-gist-k">${k}</span>
-                        <span class="proj-gist-v">${v}</span>
-                    </div>`).join('')}
-            </div>
-            ${renderPoLineItems(po.line_items)}`;
+            <div class="proj-gist-rows" data-gist-rows>${poGistRowsHtml(po)}</div>
+            ${renderPoLineItems(po.line_items)}
+            ${renderPoVariations(po)}`;
+    }
+
+    // Split out from renderPoGist because a variation edit has to refresh these
+    // figures without re-rendering the variations table underneath — that table
+    // holds the input the user is currently tabbing out of.
+    function poGistRowsHtml(po) {
+        const rev = po.revised || {
+            taxable_value: po.taxable_value, total_tax: po.total_tax, total_value: po.total_value,
+        };
+        const vt = po.variation_totals || { count: 0, total: 0 };
+        // Two decompositions of one headline, each internally consistent:
+        // contract = as-per-PO + variations (right under it), and
+        // as-per-PO = taxable + tax (down with the document facts).
+        // Only worth the extra rows once the contract has actually moved; an
+        // unvaried PO shouldn't pay for a feature it isn't using.
+        const rows = [[vt.count ? 'Contract value' : 'Total project value',
+                       formatINR(rev.total_value), 'headline']];
+        if (vt.count) {
+            rows.push(['As per PO', formatINR(po.total_value)]);
+            rows.push(['Variations', `${formatDeltaINR(vt.total)} <span class="proj-gist-sub">${vt.count} change${vt.count > 1 ? 's' : ''}</span>`]);
+        }
+        rows.push(
+            ['PO number', po.po_number ? escapeHtml(po.po_number) : '—'],
+            ['PO date', po.po_date ? escapeHtml(po.po_date) : '—'],
+            ['Client', po.client_name ? escapeHtml(po.client_name) : '—'],
+            // Baseline, not revised: these sit above the scope line items, which
+            // sum to the baseline taxable, and the whole panel is checked
+            // against the PDF behind "View PO document". Showing the revised
+            // split here made the gist state a taxable value that matched
+            // neither the document nor the items directly beneath it.
+            ['Taxable value', formatINR(po.taxable_value)],
+            ['Total tax', formatINR(po.total_tax)],
+            ['Scope items', po.line_item_count != null ? po.line_item_count : '—'],
+        );
+        if (po.payment_terms) rows.push(['Payment terms', escapeHtml(po.payment_terms)]);
+        if (po.amount_in_words) rows.push(['In words', escapeHtml(po.amount_in_words)]);
+        return rows.map(([k, v, cls]) => `
+            <div class="proj-gist-row ${cls === 'headline' ? 'headline' : ''}">
+                <span class="proj-gist-k">${k}</span>
+                <span class="proj-gist-v">${v}</span>
+            </div>`).join('');
     }
 
     // ── Core line-item breakdown (description / qty / unit / rate / amount) ──
@@ -1280,6 +1332,392 @@
                 </div>
             </div>`;
     }
+
+    // ── PO variations: the contract's agreed changes ───────────────────────
+    // Scope moves after signing — extra tonnage agreed, or work that came in
+    // under the quote. The extracted PO above is left exactly as the document
+    // reads; each change is a row here, and the contract is the two added up.
+    // That's what keeps "View PO document" honest: the gist never claims the
+    // PDF says something it doesn't.
+    //
+    // Amounts are computed server-side (helpers/project_finance) and only
+    // previewed here, so the figure that lands in the ladder is never a number
+    // this file invented.
+    const VAR_GST_RATE = 18; // last-resort default; the server sends po.gst_rate
+    const varFields = ['description', 'quantity', 'unit', 'rate'];
+    let insightsRefreshTimer = null;
+
+    // Variations are deltas, so the sign is the point: formatSignedINR marks
+    // negatives but leaves additions bare, which in a column that runs both ways
+    // reads as an absolute figure rather than an increase.
+    function formatDeltaINR(value) {
+        const n = Number(value) || 0;
+        return (n > 0 ? '+' : '') + formatSignedINR(n);
+    }
+
+    function trimQty(v) {
+        if (v === '' || v == null) return '';
+        return String(Number(v)); // 20.000 -> 20, -2.500 -> -2.5
+    }
+
+    function variationRowHtml(v, draft) {
+        const snap = JSON.stringify({
+            description: v.description || '', quantity: trimQty(v.quantity || 0),
+            unit: v.unit || '', rate: trimQty(v.rate || 0),
+        });
+        // Unlike the overhead field, qty/rate stay as raw numbers at rest rather
+        // than swapping formatted<->raw on focus. Overhead is a lone input
+        // inside a read-only tabulation, where a bare 250000 looked broken; this
+        // is a grid of inputs, where a value that rewrites itself on every blur
+        // is just noise mid-entry.
+        const cell = (field, extra, placeholder) => `
+            <input class="proj-var-input ${extra}" type="text" data-var-field="${field}"
+                   value="${escapeHtml(String(v[field] == null ? '' : v[field]))}"
+                   placeholder="${placeholder}" autocomplete="off">`;
+        return `
+            <tr data-var-id="${draft ? 'new' : v.id}" class="${draft ? 'is-draft' : ''}" data-var-snapshot='${escapeHtml(snap)}'>
+                <td>${cell('description', '', 'e.g. Additional structural steel')}</td>
+                <td class="proj-li-num"><input class="proj-var-input proj-var-num" type="text"
+                        inputmode="decimal" data-var-field="quantity"
+                        value="${trimQty(v.quantity || '')}" placeholder="0" autocomplete="off"></td>
+                <td>${cell('unit', 'proj-var-unit', 'MT')}</td>
+                <td class="proj-li-num"><input class="proj-var-input proj-var-num" type="text"
+                        inputmode="decimal" data-var-field="rate"
+                        value="${trimQty(v.rate || '')}" placeholder="0" autocomplete="off"></td>
+                <td class="proj-li-num" data-var-out="basic">${formatDeltaINR(v.basic_amount || 0)}</td>
+                <td class="proj-li-num" data-var-out="tax">${formatDeltaINR(v.tax_amount || 0)}</td>
+                <td class="proj-li-num proj-var-total" data-var-out="total">${formatDeltaINR(v.total_amount || 0)}</td>
+                <td class="proj-var-actions">${draft
+                    ? `<button type="button" class="proj-var-btn is-save" data-var-save title="Add this change">✓</button>
+                       <button type="button" class="proj-var-btn" data-var-discard title="Discard">×</button>`
+                    : `<button type="button" class="proj-var-btn" data-var-delete title="Remove this change">×</button>`}
+                </td>
+            </tr>`;
+    }
+
+    const VAR_EMPTY_ROW = `<tr class="proj-var-empty-row" data-var-empty>
+            <td colspan="8">No changes to the contract yet.</td></tr>`;
+
+    function variationFootHtml(vt) {
+        if (!vt || !vt.count) return '';
+        // data-label is stamped by hand here: decorateProjLiTables only walks
+        // tbody, so on a phone — where this becomes a card like the rows above —
+        // these cells would otherwise lose their headings along with the thead.
+        return `<tfoot><tr>
+                <td colspan="4" class="proj-var-foot-title">Net change</td>
+                <td class="proj-li-num" data-label="Basic">${formatDeltaINR(vt.taxable)}</td>
+                <td class="proj-li-num" data-label="GST">${formatDeltaINR(vt.tax)}</td>
+                <td class="proj-li-num proj-var-total" data-label="Total">${formatDeltaINR(vt.total)}</td>
+                <td class="proj-var-foot-pad"></td>
+            </tr></tfoot>`;
+    }
+
+    function renderPoVariations(po) {
+        const list = (po && po.variations) || [];
+        const vt = (po && po.variation_totals) || { count: 0, taxable: 0, tax: 0, total: 0 };
+        const rate = (po && po.gst_rate != null) ? po.gst_rate : VAR_GST_RATE;
+        return `
+            <div class="proj-gist-items proj-var-block" data-var-block>
+                <div class="proj-var-head">
+                    <span class="proj-field-label">Variations${vt.count ? ` (${vt.count})` : ''}</span>
+                    <button type="button" class="proj-secondary-btn proj-var-add" data-var-add>+ Add variation</button>
+                </div>
+                <p class="proj-note proj-var-note">Agreed changes to the contract. Enter a reduction as a
+                    negative weight — <strong>-2</strong> subtracts exactly what <strong>2</strong> would add.
+                    GST is applied at ${rate}%.</p>
+                <div class="proj-li-scroll">
+                    <table class="proj-li-table proj-var-table">
+                        <thead>
+                            <tr>
+                                <th>Change</th><th class="proj-li-num">Weight</th><th>Unit</th>
+                                <th class="proj-li-num">Rate</th><th class="proj-li-num">Basic</th>
+                                <th class="proj-li-num">GST</th><th class="proj-li-num">Total</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody data-var-body>${list.length ? list.map(v => variationRowHtml(v, false)).join('') : VAR_EMPTY_ROW}</tbody>
+                        ${variationFootHtml(vt)}
+                    </table>
+                </div>
+            </div>`;
+    }
+
+    // ── Variation edit plumbing ────────────────────────
+    function varRowValues(tr) {
+        const out = {};
+        varFields.forEach(f => {
+            const el = tr.querySelector(`[data-var-field="${f}"]`);
+            out[f] = el ? el.value.trim() : '';
+        });
+        return out;
+    }
+
+    // Mirrors compute_variation_amounts server-side so the figures move as you
+    // type. Purely a preview — the row repaints from the server's answer on save.
+    function previewVariation(tr) {
+        const v = varRowValues(tr);
+        const qty = parseMoney(v.quantity);
+        const rate = parseMoney(v.rate);
+        const ok = Number.isFinite(qty) && Number.isFinite(rate);
+        const basic = ok ? Math.round(qty * rate * 100) / 100 : 0;
+        // The server's rate, not the local constant, so PO_VARIATION_GST_RATE
+        // stays the single place it's set — otherwise changing it there would
+        // leave the preview quoting the old rate right up until save.
+        const gst = (currentPo && currentPo.gst_rate != null) ? currentPo.gst_rate : VAR_GST_RATE;
+        const tax = Math.round(basic * gst) / 100;
+        const set = (key, val) => {
+            const cell = tr.querySelector(`[data-var-out="${key}"]`);
+            if (cell) cell.textContent = formatDeltaINR(val);
+        };
+        set('basic', basic);
+        set('tax', tax);
+        set('total', Math.round((basic + tax) * 100) / 100);
+    }
+
+    // Repaint everything a variation change moves *except* the variations table
+    // itself, whose inputs the user may still be inside.
+    function applyPoChange(po) {
+        currentPo = po || null;
+        const rowsEl = gistEl.querySelector('[data-gist-rows]');
+        if (rowsEl && po) rowsEl.innerHTML = poGistRowsHtml(po);
+        const vt = (po && po.variation_totals) || { count: 0 };
+        const foot = gistEl.querySelector('.proj-var-table tfoot');
+        const footHtml = variationFootHtml(vt);
+        // Replacing with '' removes the node outright, so re-adding it later
+        // needs the table, not the (now detached) tfoot, as the anchor.
+        if (foot) foot.outerHTML = footHtml;
+        else if (footHtml) {
+            const table = gistEl.querySelector('.proj-var-table');
+            if (table) table.insertAdjacentHTML('beforeend', footHtml);
+        }
+        const head = gistEl.querySelector('.proj-var-head .proj-field-label');
+        if (head) head.textContent = `Variations${vt.count ? ` (${vt.count})` : ''}`;
+        // The glance ladder reads the *cached* registry row, not insights, so
+        // the cache has to move too or the panel repaints to a stale contract.
+        const cached = projects.find(x => x.id === activeProjectId);
+        if (cached) {
+            // po === null means nothing is left to show — no gist row and no
+            // variations. Skipping the cache then left the card advertising a
+            // contract that no longer exists, and renderList() below would
+            // repaint it straight back.
+            const rev = po && po.revised;
+            cached.po_total_value = rev ? rev.total_value : null;
+            cached.po_taxable_value = rev ? rev.taxable_value : null;
+            cached.po_total_tax = rev ? rev.total_tax : null;
+            cached.po_var_count = vt.count;
+        }
+        // Contract value feeds the ladder and what the client still owes, so the
+        // glance is now stale. Debounced because insights is the heaviest query
+        // in the app — bills, bank rows and the external salary API — and
+        // tabbing across a row would otherwise fire it once per field, flicker
+        // the panel through stale numbers, and risk the API returning 0 labour.
+        clearTimeout(insightsRefreshTimer);
+        const pid = activeProjectId;
+        insightsRefreshTimer = setTimeout(() => {
+            if (pid === activeProjectId) loadInsights(pid);
+        }, 400);
+        renderList();
+    }
+
+    function varRowError(tr, msg) {
+        tr.classList.add('error');
+        showToast(msg, 'error');
+    }
+
+    async function saveVariationRow(tr) {
+        // A save already in flight for this row: remember that the row moved on
+        // and re-run once it lands. Returning here without this dropped the
+        // edit silently AND let the in-flight save stamp a snapshot taken
+        // before it, so the row looked saved and wasn't.
+        if (tr.classList.contains('is-saving')) {
+            tr.dataset.varPending = '1';
+            return;
+        }
+        const v = varRowValues(tr);
+        const isDraft = tr.dataset.varId === 'new';
+        if (!v.description) {
+            // Says so for saved rows too, not just drafts: blanking the
+            // description while editing the weight used to bail out here with
+            // no request and no message, silently discarding every later edit
+            // to that row for as long as it stayed blank.
+            varRowError(tr, 'A change needs a description.');
+            return;
+        }
+        const qty = parseMoney(v.quantity);
+        const rate = parseMoney(v.rate);
+        if (!Number.isFinite(qty) || !Number.isFinite(rate)) {
+            varRowError(tr, 'Weight and rate must be numbers.');
+            return;
+        }
+        if (rate < 0) {
+            varRowError(tr, 'Rate must be zero or more — use a negative weight to reduce scope.');
+            return;
+        }
+        // Unchanged? Leave it be — no request, no repaint. Same guard as the
+        // overhead field, since focusout fires on every field the user tabs out
+        // of, changed or not.
+        const snap = tr.dataset.varSnapshot;
+        const now = JSON.stringify({
+            description: v.description, quantity: trimQty(qty), unit: v.unit, rate: trimQty(rate),
+        });
+        if (!isDraft && snap === now) return;
+
+        tr.classList.remove('error');
+        tr.classList.add('is-saving');
+        delete tr.dataset.varPending;
+        const body = JSON.stringify({ ...v, quantity: qty, rate });
+        // Pinned for the round trip: blurring a cell can close the modal, and
+        // the response must not be applied to whichever project is open by the
+        // time it lands. Same reason loadPoGist guards its own response.
+        const pid = activeProjectId;
+        const base = `/api/projects/${pid}/po-variations`;
+        try {
+            const res = await fetch(isDraft ? base : `${base}/${tr.dataset.varId}`, {
+                method: isDraft ? 'POST' : 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body,
+            });
+            const data = await res.json().catch(() => ({}));
+            tr.classList.remove('is-saving');
+            if (pid !== activeProjectId) return; // modal changed under us
+            if (!res.ok) {
+                varRowError(tr, data.message || data.error || `Failed (HTTP ${res.status})`);
+                return;
+            }
+            if (isDraft) {
+                // A new row shifts the table anyway, so a full repaint costs
+                // nothing here and leaves the grid ready for the next entry.
+                renderPoGist(data.po);
+                showToast('Variation added.');
+            } else {
+                tr.dataset.varSnapshot = now;
+                const v2 = data.variation || {};
+                ['basic', 'tax', 'total'].forEach(k => {
+                    const cell = tr.querySelector(`[data-var-out="${k}"]`);
+                    if (cell) cell.textContent = formatDeltaINR(v2[`${k}_amount`] || 0);
+                });
+                showToast('Variation updated.');
+            }
+            applyPoChange(data.po);
+            // Edited again while that was in flight — the row on screen is
+            // ahead of what the server just stored, so send the difference.
+            if (tr.dataset.varPending && tr.isConnected) {
+                delete tr.dataset.varPending;
+                saveVariationRow(tr);
+            }
+        } catch (err) {
+            tr.classList.remove('is-saving');
+            varRowError(tr, `Network error: ${err.message}`);
+        }
+    }
+
+    async function deleteVariation(tr) {
+        const label = (tr.querySelector('[data-var-field="description"]') || {}).value || 'this change';
+        if (!confirm(`Remove "${label}" from the contract?`)) return;
+        tr.classList.add('is-saving');
+        const pid = activeProjectId; // see saveVariationRow
+        try {
+            const res = await fetch(
+                `/api/projects/${pid}/po-variations/${tr.dataset.varId}`,
+                { method: 'DELETE', credentials: 'same-origin' });
+            const data = await res.json().catch(() => ({}));
+            if (pid !== activeProjectId) return; // modal changed under us
+            if (!res.ok) {
+                tr.classList.remove('is-saving');
+                varRowError(tr, data.message || data.error || `Failed (HTTP ${res.status})`);
+                return;
+            }
+            renderPoGist(data.po);
+            applyPoChange(data.po);
+            showToast('Variation removed.');
+        } catch (err) {
+            tr.classList.remove('is-saving');
+            varRowError(tr, `Network error: ${err.message}`);
+        }
+    }
+
+    // Delegated: the gist is re-rendered wholesale whenever the contract moves.
+    gistEl.addEventListener('click', (e) => {
+        const addBtn = e.target.closest('[data-var-add]');
+        if (addBtn) {
+            const body = gistEl.querySelector('[data-var-body]');
+            if (!body || body.querySelector('.is-draft')) return; // one draft at a time
+            const empty = body.querySelector('[data-var-empty]');
+            if (empty) empty.remove();
+            body.insertAdjacentHTML('beforeend', variationRowHtml({}, true));
+            // decorateProjLiTables skips tables it has already stamped, so a row
+            // added after that first pass would reach a phone with no
+            // data-label on any cell — four unlabelled boxes you can't tell
+            // apart. Clear the stamp so the new row gets decorated too.
+            const table = body.closest('.proj-li-table');
+            if (table) {
+                table.removeAttribute('data-mobi');
+                decorateProjLiTables(gistEl);
+            }
+            const first = body.querySelector('.is-draft [data-var-field="description"]');
+            if (first) first.focus();
+            return;
+        }
+        const saveBtn = e.target.closest('[data-var-save]');
+        if (saveBtn) { saveVariationRow(saveBtn.closest('tr')); return; }
+        const discardBtn = e.target.closest('[data-var-discard]');
+        if (discardBtn) {
+            const body = gistEl.querySelector('[data-var-body]');
+            discardBtn.closest('tr').remove();
+            if (body && !body.children.length) body.innerHTML = VAR_EMPTY_ROW;
+            return;
+        }
+        const delBtn = e.target.closest('[data-var-delete]');
+        if (delBtn) deleteVariation(delBtn.closest('tr'));
+    });
+
+    gistEl.addEventListener('input', (e) => {
+        const field = e.target.closest('[data-var-field]');
+        if (field) previewVariation(field.closest('tr'));
+    });
+
+    // focusout is the single commit path for saved rows, matching the overhead
+    // field. A draft row is explicitly *not* committed on blur: clicking away
+    // from a half-typed change would post a variation the user never agreed to.
+    gistEl.addEventListener('focusout', (e) => {
+        const field = e.target.closest('[data-var-field]');
+        if (!field) return;
+        const tr = field.closest('tr');
+        // saveVariationRow owns the in-flight case now — it queues rather than
+        // drops, so blurring mid-save no longer loses the edit.
+        if (tr && tr.dataset.varId !== 'new') saveVariationRow(tr);
+    });
+
+    gistEl.addEventListener('keydown', (e) => {
+        const field = e.target.closest('[data-var-field]');
+        if (!field) return;
+        const tr = field.closest('tr');
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (tr.dataset.varId === 'new') saveVariationRow(tr);
+            else field.blur();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            // Escape on the document closes every open modal. Here it means
+            // "undo this cell" — without stopping it, discarding a typo would
+            // also shut the whole project pop-up and lose the user's place.
+            e.stopPropagation();
+            if (tr.dataset.varId === 'new') {
+                const body = gistEl.querySelector('[data-var-body]');
+                tr.remove();
+                if (body && !body.children.length) body.innerHTML = VAR_EMPTY_ROW;
+                return;
+            }
+            // Restore from the snapshot, then let focusout no-op.
+            const snap = JSON.parse(tr.dataset.varSnapshot || '{}');
+            varFields.forEach(f => {
+                const el = tr.querySelector(`[data-var-field="${f}"]`);
+                if (el) el.value = snap[f] == null ? '' : snap[f];
+            });
+            previewVariation(tr);
+            field.blur();
+        }
+    });
 
     // ── Type toggle (project / design / other) ─────────
     const TYPE_LABELS = { project: 'a project', design: 'a design', other: 'an internal “other”' };

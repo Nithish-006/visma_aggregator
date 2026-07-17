@@ -69,6 +69,19 @@ _OTHER_EXCLUDE_CATS = {'MATERIAL PURCHASE', 'AMOUNT RECEIVED', 'SALARY AC',
                        'BANK CHARGES', 'DUTIES & TAX'}
 
 
+def _first_present(*values):
+    """First value that isn't None — zero and 0.00 are answers, not absences.
+
+    A plain `a or b` reaches for the fallback whenever the leading value is a
+    legitimate zero, which for PO figures means silently reporting a different
+    contract than the one asked for.
+    """
+    for v in values:
+        if v is not None:
+            return v
+    return None
+
+
 def _make_styles():
     """Build the shared openpyxl style set (lazy import, as elsewhere)."""
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -268,8 +281,6 @@ def export_single_project_summary(project_id):
 
     display = project.get('display') or f"{project_id} - {project.get('stem_name', '')}"
     stem_name = project.get('stem_name', '') or display
-    po_value = float(project.get('po_total_value') or 0)
-
     # Full PO gist (terms, tax split, payment terms, scope line items) so the
     # PO Value sheet mirrors everything we persist — nothing dropped to a headline.
     try:
@@ -277,8 +288,20 @@ def export_single_project_summary(project_id):
     except Exception as e:
         print(f"[!] Error fetching PO gist for project export: {e}")
         po_gist = {}
-    if po_gist.get('total_value') is not None and not po_value:
-        po_value = float(po_gist.get('total_value') or 0)
+    # The joined column already includes agreed variations, so it wins outright.
+    # Testing it for falsiness rather than None would hand the baseline back to a
+    # contract whose variations happen to cancel its PO out to zero.
+    po_value = float(_first_present(project.get('po_total_value'),
+                                    po_gist.get('total_value')) or 0)
+    # None here means no PO at all, which is not the same as a contract varied
+    # down to zero — the receivable rule below turns on that distinction.
+    has_po = _first_present(project.get('po_total_value'), po_gist.get('total_value')) is not None
+    try:
+        variations = db_manager.list_po_variations(project_id)
+    except Exception as e:
+        print(f"[!] Error fetching PO variations for project export: {e}")
+        variations = []
+    var_total = sum(float(v.get('total_amount') or 0) for v in variations)
 
     st = _make_styles()
     currency_fmt = st['currency_fmt']
@@ -391,16 +414,20 @@ def export_single_project_summary(project_id):
     fin = compute_project_finance(
         sales=sales,
         purchase=purchase,
-        # po_gist is the fuller record; the joined columns are the fallback,
-        # matching how po_value itself is resolved above.
-        po={'taxable': po_gist.get('taxable_value') or project.get('po_taxable_value'),
-            'gst': po_gist.get('total_tax') or project.get('po_total_tax'),
+        # The joined columns lead, because they carry the agreed variations
+        # folded in; po_gist holds only the baseline as extracted, so reading it
+        # first would export the contract at its signed value and quietly drop
+        # every change since. It stays as the fallback for a project whose gist
+        # row exists but never made it into the join.
+        po={'taxable': _first_present(project.get('po_taxable_value'), po_gist.get('taxable_value')),
+            'gst': _first_present(project.get('po_total_tax'), po_gist.get('total_tax')),
             'total': po_value},
         received_total=received_total,
         other_expense_total=other_expense_total,
         labour_total=labour_total,
         overhead=project.get('overhead'),
         has_sales_bills=has_sales_bills,
+        has_po=has_po,
     )
     value_basic = fin['value']['basic']
     value_gst = fin['value']['gst']
@@ -503,9 +530,20 @@ def export_single_project_summary(project_id):
     r += 1
 
     # ── Value split (taxable → tax → total) ──
+    # Baseline figures, matching the scope line items printed below and the PO
+    # document itself. Where variations exist they are shown as their own lines
+    # rather than folded silently into these: po_value carries them, so printing
+    # a variation-inclusive total over a baseline-only split would give the
+    # client a breakdown that contradicts its own arithmetic with nothing on the
+    # sheet to explain the gap.
     ws.cell(row=r, column=1, value='VALUE BREAKDOWN').font = st['subtitle_font']; r += 1
-    kv_row(ws, r, 'Taxable Value', float(po_gist.get('taxable_value') or 0), fmt=currency_fmt); r += 1
-    kv_row(ws, r, 'Total Tax', float(po_gist.get('total_tax') or 0), fmt=currency_fmt); r += 1
+    base_taxable = float(po_gist.get('taxable_value') or 0)
+    base_tax = float(po_gist.get('total_tax') or 0)
+    kv_row(ws, r, 'Taxable Value', base_taxable, fmt=currency_fmt); r += 1
+    kv_row(ws, r, 'Total Tax', base_tax, fmt=currency_fmt); r += 1
+    if variations:
+        kv_row(ws, r, 'PO Value (as extracted)', base_taxable + base_tax, fmt=currency_fmt); r += 1
+        kv_row(ws, r, f'Variations ({len(variations)})', var_total, fmt=currency_fmt); r += 1
     kv_row(ws, r, 'PO Value (Total)', po_value, fmt=currency_fmt, font=st['blue_amount']); r += 1
     if po_gist.get('amount_in_words'):
         kv_row(ws, r, 'Amount in Words', str(po_gist.get('amount_in_words'))); r += 1
@@ -548,6 +586,32 @@ def export_single_project_summary(project_id):
         scope_n = po_gist.get('line_item_count')
         if scope_n:
             kv_row(ws, r, 'Scope Items', int(scope_n)); r += 2
+
+    # ── Variations: the agreed changes between the PO and the contract ──
+    # The scope items above are the PO as signed; these are what moved since.
+    # Without them the sheet shows a total the client can't reconcile to the
+    # document, so they are listed in full rather than netted into a figure.
+    if variations:
+        ws.cell(row=r, column=1, value=f'VARIATIONS ({len(variations)})').font = st['subtitle_font']; r += 1
+        v_headers = ['SL.NO', 'Change', 'Weight', 'Unit', 'Rate', 'Basic', 'GST', 'Total']
+        for ci, h in enumerate(v_headers, 1):
+            ws.cell(row=r, column=ci, value=h)
+        style_header_row(ws, r, len(v_headers))
+        r += 1
+        for idx, v in enumerate(variations, 1):
+            ws.cell(row=r, column=1, value=idx)
+            ws.cell(row=r, column=2, value=str(v.get('description') or '—'))
+            ws.cell(row=r, column=3, value=float(v.get('quantity') or 0)).number_format = '#,##0.###'
+            ws.cell(row=r, column=4, value=str(v.get('unit') or '—'))
+            ws.cell(row=r, column=5, value=float(v.get('rate') or 0)).number_format = currency_fmt
+            for col, key in ((6, 'basic_amount'), (7, 'tax_amount'), (8, 'total_amount')):
+                ws.cell(row=r, column=col, value=float(v.get(key) or 0)).number_format = currency_fmt
+            r += 1
+        ws.cell(row=r, column=2, value='Net Change').font = Font(bold=True)
+        nc = ws.cell(row=r, column=8, value=var_total)
+        nc.font = Font(bold=True)
+        nc.number_format = currency_fmt
+        r += 2
 
     # ── Received / balance roll-up ──
     ws.cell(row=r, column=1, value='RECEIVED vs PO').font = st['subtitle_font']; r += 1

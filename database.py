@@ -20,6 +20,7 @@ from config import (
     IST_MYSQL_OFFSET,
 )
 from extraction_validator import validate_extraction, validate_db_row, notes_from_result
+from helpers.project_finance import PO_VARIATION_GST_RATE, compute_variation_amounts
 
 
 def _parse_invoice_date(date_str):
@@ -2455,6 +2456,8 @@ class DatabaseManager:
             self.ensure_project_pos_table()
             # Cash client payments live in their own ledger table.
             self.ensure_project_cash_table()
+            # Agreed changes to the contract, joined by list/get the same way.
+            self.ensure_project_po_variations_table()
             return True
         except Exception as e:
             print(f"[!] Error ensuring projects table: {e}")
@@ -2508,6 +2511,46 @@ class DatabaseManager:
             print(f"[!] Error ensuring project_pos table: {e}")
             return False
 
+    def ensure_project_po_variations_table(self):
+        """Create the project_po_variations ledger (N:1 with projects).
+
+        Scope moves after a PO is signed — extra tonnage gets added, or the work
+        comes in under what was quoted. The extracted gist in project_pos is
+        left alone as the baseline, because it mirrors the PO document the user
+        can still open; each agreed change is recorded here as its own row, so
+        the contract value is the baseline plus these and *why* it moved is
+        answerable. A reduction is a negative quantity, which makes every
+        derived amount negative too — no separate credit-note concept.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS project_po_variations (
+                        id             INT AUTO_INCREMENT PRIMARY KEY,
+                        project_id     INT NOT NULL,
+                        description    VARCHAR(500) DEFAULT NULL,
+                        quantity       DECIMAL(15, 3) NOT NULL DEFAULT 0,
+                        unit           VARCHAR(32) DEFAULT NULL,
+                        rate           DECIMAL(15, 2) NOT NULL DEFAULT 0,
+                        gst_rate       DECIMAL(5, 2) NOT NULL DEFAULT 18.00,
+                        basic_amount   DECIMAL(15, 2) NOT NULL DEFAULT 0,
+                        tax_amount     DECIMAL(15, 2) NOT NULL DEFAULT 0,
+                        total_amount   DECIMAL(15, 2) NOT NULL DEFAULT 0,
+                        variation_date DATE DEFAULT NULL,
+                        created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        INDEX idx_ppv_project (project_id),
+                        CONSTRAINT fk_ppv_project FOREIGN KEY (project_id)
+                            REFERENCES projects(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring project_po_variations table: {e}")
+            return False
+
     def ensure_project_cash_table(self):
         """Create the project_cash_payments ledger (N:1 with projects).
 
@@ -2540,13 +2583,31 @@ class DatabaseManager:
             return False
 
     # SELECT that augments each project row with a compact PO summary (the
-    # gist columns the cards/detail need) via a LEFT JOIN on project_pos.
+    # gist columns the cards/detail need) via a LEFT JOIN on project_pos, plus
+    # the agreed variations rolled up from project_po_variations.
+    #
+    # The variation sums are folded into po_total_value & friends by
+    # _decorate_project_row, so every caller — registry list, detail insights,
+    # Excel export — reads the *revised* contract without having to know
+    # variations exist. The untouched baseline stays addressable as
+    # po_base_* for the one place that wants it (the PO section).
     _PROJECT_SELECT = (
         "SELECT p.id, p.stem_name, p.po_filename, p.po_path, p.description, p.is_project, p.project_type, p.is_inactive, p.overhead, p.created_at, "
-        "       pp.po_number AS po_number, pp.total_value AS po_total_value, "
-        "       pp.taxable_value AS po_taxable_value, pp.total_tax AS po_total_tax, "
-        "       pp.extraction_status AS po_extraction_status "
-        "FROM projects p LEFT JOIN project_pos pp ON pp.project_id = p.id"
+        "       pp.po_number AS po_number, pp.total_value AS po_base_total_value, "
+        "       pp.taxable_value AS po_base_taxable_value, pp.total_tax AS po_base_total_tax, "
+        "       pp.extraction_status AS po_extraction_status, "
+        "       COALESCE(pv.var_taxable, 0) AS po_var_taxable, "
+        "       COALESCE(pv.var_tax, 0) AS po_var_tax, "
+        "       COALESCE(pv.var_total, 0) AS po_var_total, "
+        "       COALESCE(pv.var_count, 0) AS po_var_count "
+        "FROM projects p LEFT JOIN project_pos pp ON pp.project_id = p.id "
+        "LEFT JOIN (SELECT project_id, "
+        "                  SUM(basic_amount) AS var_taxable, "
+        "                  SUM(tax_amount)   AS var_tax, "
+        "                  SUM(total_amount) AS var_total, "
+        "                  COUNT(*)          AS var_count "
+        "           FROM project_po_variations GROUP BY project_id) pv "
+        "  ON pv.project_id = p.id"
     )
 
     # The three registry buckets. is_project is kept for backward compatibility
@@ -2569,9 +2630,24 @@ class DatabaseManager:
         if r.get('created_at') and hasattr(r['created_at'], 'isoformat'):
             r['created_at'] = r['created_at'].isoformat()
         # Coerce DECIMAL -> float for JSON
-        for key in ('po_total_value', 'po_taxable_value', 'po_total_tax'):
+        for key in ('po_base_total_value', 'po_base_taxable_value', 'po_base_total_tax',
+                    'po_var_taxable', 'po_var_tax', 'po_var_total'):
             if r.get(key) is not None:
                 r[key] = float(r[key])
+        r['po_var_count'] = int(r.get('po_var_count') or 0)
+        # Fold the variations into the headline PO figures. None means "no PO
+        # here at all" and has to survive — callers lean on `or 0`, but the
+        # export tells a missing PO apart from a zero one — so a project with
+        # neither a gist row nor a variation keeps its Nones rather than
+        # acquiring a spurious 0.00 contract.
+        for key, base_key, var_key in (
+            ('po_total_value', 'po_base_total_value', 'po_var_total'),
+            ('po_taxable_value', 'po_base_taxable_value', 'po_var_taxable'),
+            ('po_total_tax', 'po_base_total_tax', 'po_var_tax'),
+        ):
+            base = r.get(base_key)
+            var = r.get(var_key) or 0
+            r[key] = None if (base is None and not r['po_var_count']) else (base or 0) + var
         # overhead is NOT NULL DEFAULT 0, but older rows read through a cached
         # connection can still surface None — normalise to a plain float.
         r['overhead'] = float(r.get('overhead') or 0)
@@ -3032,6 +3108,161 @@ class DatabaseManager:
                 conn.commit()
                 cursor.close()
                 return True, None
+        except Exception as e:
+            return False, str(e)
+
+    # ── PO variations: agreed changes on top of the extracted contract ──────
+
+    @staticmethod
+    def _variation_row(r: Dict) -> Dict:
+        for k in ('quantity', 'rate', 'gst_rate', 'basic_amount', 'tax_amount', 'total_amount'):
+            if r.get(k) is not None:
+                r[k] = float(r[k])
+        for k in ('variation_date', 'created_at', 'updated_at'):
+            if r.get(k) is not None and hasattr(r[k], 'isoformat'):
+                r[k] = r[k].isoformat()
+        return r
+
+    _VARIATION_SELECT = (
+        "SELECT id, project_id, description, quantity, unit, rate, gst_rate, "
+        "       basic_amount, tax_amount, total_amount, variation_date, created_at, updated_at "
+        "FROM project_po_variations"
+    )
+
+    def list_po_variations(self, project_id: int) -> List[Dict]:
+        """Every agreed change for a project, oldest first (the order signed)."""
+        self.ensure_project_po_variations_table()
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    self._VARIATION_SELECT + " WHERE project_id = %s ORDER BY id",
+                    (project_id,)
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return [self._variation_row(r) for r in rows]
+        except Exception as e:
+            print(f"[!] Error listing PO variations for {project_id}: {e}")
+            return []
+
+    def _coerce_variation(self, fields: dict) -> Tuple[Optional[Dict], Optional[str]]:
+        """Validate + price a variation payload. Returns (values, error)."""
+        try:
+            quantity = float(fields.get('quantity') or 0)
+            rate = float(fields.get('rate') or 0)
+        except (ValueError, TypeError):
+            return None, 'quantity and rate must be numbers'
+        gst_rate = fields.get('gst_rate')
+        try:
+            gst_rate = PO_VARIATION_GST_RATE if gst_rate in (None, '') else float(gst_rate)
+        except (ValueError, TypeError):
+            return None, 'gst_rate must be a number'
+        # A rate below zero would make a reduction read as an addition (two
+        # negatives). Direction is the quantity's job and only the quantity's.
+        if rate < 0:
+            return None, 'rate must be zero or more — use a negative quantity to reduce scope'
+        description = str(fields.get('description') or '').strip()
+        if not description:
+            return None, 'description is required'
+        basic, tax, total = compute_variation_amounts(quantity, rate, gst_rate)
+        return {
+            'description': description[:500],
+            'quantity': quantity,
+            'unit': (str(fields.get('unit') or '').strip() or None),
+            'rate': rate,
+            'gst_rate': gst_rate,
+            'basic_amount': basic,
+            'tax_amount': tax,
+            'total_amount': total,
+            'variation_date': self._parse_po_date(fields.get('variation_date')),
+        }, None
+
+    def add_po_variation(self, project_id: int, fields: dict) -> Tuple[Optional[Dict], Optional[str]]:
+        """Record one agreed change. Returns (row, error)."""
+        self.ensure_project_po_variations_table()
+        values, err = self._coerce_variation(fields)
+        if err:
+            return None, err
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO project_po_variations "
+                    "(project_id, description, quantity, unit, rate, gst_rate, "
+                    " basic_amount, tax_amount, total_amount, variation_date) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (project_id, values['description'], values['quantity'], values['unit'],
+                     values['rate'], values['gst_rate'], values['basic_amount'],
+                     values['tax_amount'], values['total_amount'], values['variation_date'])
+                )
+                new_id = cursor.lastrowid
+                conn.commit()
+                cursor.close()
+        except Exception as e:
+            return None, str(e)
+        return self.get_po_variation(new_id), None
+
+    def get_po_variation(self, variation_id: int) -> Optional[Dict]:
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(self._VARIATION_SELECT + " WHERE id = %s", (variation_id,))
+                row = cursor.fetchone()
+                cursor.close()
+                return self._variation_row(row) if row else None
+        except Exception as e:
+            print(f"[!] Error fetching PO variation {variation_id}: {e}")
+            return None
+
+    def update_po_variation(self, project_id: int, variation_id: int,
+                            fields: dict) -> Tuple[Optional[Dict], Optional[str]]:
+        """Re-price and save one variation. Scoped by project_id so a stale
+        modal can't reach a row belonging to some other project."""
+        self.ensure_project_po_variations_table()
+        existing = self.get_po_variation(variation_id)
+        if not existing or existing['project_id'] != project_id:
+            return None, 'not_found'
+        # Merge over the stored row: the grid sends one field at a time, and the
+        # amounts have to be re-derived from the *combined* qty/rate, not from
+        # whichever half happens to be in this request.
+        merged = {**existing, **fields}
+        values, err = self._coerce_variation(merged)
+        if err:
+            return None, err
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE project_po_variations SET description = %s, quantity = %s, "
+                    "unit = %s, rate = %s, gst_rate = %s, basic_amount = %s, "
+                    "tax_amount = %s, total_amount = %s, variation_date = %s "
+                    "WHERE id = %s AND project_id = %s",
+                    (values['description'], values['quantity'], values['unit'], values['rate'],
+                     values['gst_rate'], values['basic_amount'], values['tax_amount'],
+                     values['total_amount'], values['variation_date'], variation_id, project_id)
+                )
+                conn.commit()
+                cursor.close()
+        except Exception as e:
+            return None, str(e)
+        return self.get_po_variation(variation_id), None
+
+    def delete_po_variation(self, project_id: int, variation_id: int) -> Tuple[bool, Optional[str]]:
+        self.ensure_project_po_variations_table()
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM project_po_variations WHERE id = %s AND project_id = %s",
+                    (variation_id, project_id)
+                )
+                deleted = cursor.rowcount
+                conn.commit()
+                cursor.close()
+                # Unlike an UPDATE, a DELETE's rowcount is unambiguous: 0 rows
+                # means the row genuinely wasn't there.
+                return (True, None) if deleted else (False, 'not_found')
         except Exception as e:
             return False, str(e)
 
