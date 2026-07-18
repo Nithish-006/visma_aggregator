@@ -369,6 +369,7 @@ def get_project_summary_project_cards():
             'stem_name': p['stem_name'],
             'display': p['display'],
             'project_type': p.get('project_type', 'project'),
+            'is_inactive': bool(p.get('is_inactive', False)),
             'income': t['income'],
             'income_formatted': format_indian_number(t['income']),
             'expense': t['expense'],

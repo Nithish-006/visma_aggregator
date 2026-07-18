@@ -461,37 +461,93 @@
         { key: 'other', title: 'Others', sub: 'Internal heads (office, factory, KVB…)', variant: 'others' },
     ];
 
+    // Landing filter — mirrors the registry page: one bucket at a time.
+    // "ongoing/designs/others" are the active type buckets, "closed" is every
+    // inactive entry regardless of type (closed wins over a row's type), and
+    // "all" restores the full grouped view.
+    const FILTER_LABELS = { ongoing: 'ongoing', closed: 'closed', designs: 'design', others: 'other' };
+    const isCardClosed = (c) => c.is_inactive === true || c.is_inactive === 1;
+    const cardTypeOf = (c) => c.project_type || 'project';
+    let activeTypeFilter = 'all';
+
+    function cardsForFilter(filter) {
+        switch (filter) {
+            case 'ongoing': return state.registryCards.filter(c => !isCardClosed(c) && cardTypeOf(c) === 'project');
+            case 'designs': return state.registryCards.filter(c => !isCardClosed(c) && cardTypeOf(c) === 'design');
+            case 'others':  return state.registryCards.filter(c => !isCardClosed(c) && cardTypeOf(c) === 'other');
+            case 'closed':  return state.registryCards.filter(isCardClosed);
+            default:        return state.registryCards.slice();
+        }
+    }
+
+    function updateTypeFilterCounts() {
+        const counts = {
+            all: state.registryCards.length,
+            ongoing: cardsForFilter('ongoing').length,
+            closed: cardsForFilter('closed').length,
+            designs: cardsForFilter('designs').length,
+            others: cardsForFilter('others').length,
+        };
+        Object.keys(counts).forEach(k => {
+            const el = document.querySelector(`[data-filter-count="${k}"]`);
+            if (el) el.textContent = counts[k];
+        });
+    }
+
+    function landingCardHtml(c) {
+        return `
+            <button type="button" class="ps-proj-card${isCardClosed(c) ? ' is-closed' : ''}" data-display="${escapeHtml(c.display)}"
+                    data-title="${c.id} − ${escapeHtml(c.stem_name)}">
+                <div class="ps-proj-card-main">
+                    <span class="ps-proj-card-id">${c.id}</span>
+                    <span class="ps-proj-card-name">${escapeHtml(c.stem_name)}</span>
+                </div>
+                <div class="ps-proj-fin">
+                    <div class="ps-proj-fin-cell"><span class="k">Income</span><span class="v income" title="${escapeHtml(c.income_formatted)}">${formatINRCompact(c.income)}</span></div>
+                    <div class="ps-proj-fin-cell"><span class="k">Expense</span><span class="v expense" title="${escapeHtml(c.expense_formatted)}">${formatINRCompact(c.expense)}</span></div>
+                    <div class="ps-proj-fin-cell"><span class="k">Txns</span><span class="v">${(c.txn_count || 0).toLocaleString()}</span></div>
+                </div>
+            </button>`;
+    }
+
+    function landingSectionHtml(title, sub, variant, items) {
+        return `<section class="ps-proj-section ps-proj-section--${variant}">
+            <div class="ps-proj-section-head">
+                <h2 class="ps-proj-section-title">${title} <span class="ps-proj-count">${items.length}</span></h2>
+                <span class="ps-proj-sub">${sub}</span>
+            </div>
+            <div class="ps-proj-grid">${items.map(landingCardHtml).join('')}</div>
+        </section>`;
+    }
+
     function renderLanding() {
+        updateTypeFilterCounts();
         const wrap = document.getElementById('ps-cards');
         if (!state.registryCards.length) {
             wrap.innerHTML = '<div class="ps-empty">No projects in the registry yet. Add them on the Projects page first.</div>';
             return;
         }
-        wrap.innerHTML = TYPE_SECTIONS.map(sec => {
-            const items = state.registryCards.filter(c => (c.project_type || 'project') === sec.key);
-            if (!items.length) return '';
-            return `<section class="ps-proj-section ps-proj-section--${sec.variant}">
-                <div class="ps-proj-section-head">
-                    <h2 class="ps-proj-section-title">${sec.title} <span class="ps-proj-count">${items.length}</span></h2>
-                    <span class="ps-proj-sub">${sec.sub}</span>
-                </div>
-                <div class="ps-proj-grid">
-                    ${items.map(c => `
-                    <button type="button" class="ps-proj-card" data-display="${escapeHtml(c.display)}"
-                            data-title="${c.id} − ${escapeHtml(c.stem_name)}">
-                        <div class="ps-proj-card-main">
-                            <span class="ps-proj-card-id">${c.id}</span>
-                            <span class="ps-proj-card-name">${escapeHtml(c.stem_name)}</span>
-                        </div>
-                        <div class="ps-proj-fin">
-                            <div class="ps-proj-fin-cell"><span class="k">Income</span><span class="v income" title="${escapeHtml(c.income_formatted)}">${formatINRCompact(c.income)}</span></div>
-                            <div class="ps-proj-fin-cell"><span class="k">Expense</span><span class="v expense" title="${escapeHtml(c.expense_formatted)}">${formatINRCompact(c.expense)}</span></div>
-                            <div class="ps-proj-fin-cell"><span class="k">Txns</span><span class="v">${(c.txn_count || 0).toLocaleString()}</span></div>
-                        </div>
-                    </button>`).join('')}
-                </div>
-            </section>`;
-        }).join('');
+        const showType = (key) =>
+            activeTypeFilter === 'all' ||
+            (activeTypeFilter === 'ongoing' && key === 'project') ||
+            (activeTypeFilter === 'designs' && key === 'design') ||
+            (activeTypeFilter === 'others' && key === 'other');
+        const showClosed = activeTypeFilter === 'all' || activeTypeFilter === 'closed';
+
+        // Active entries grouped by type bucket…
+        let html = '';
+        TYPE_SECTIONS.forEach(sec => {
+            if (!showType(sec.key)) return;
+            const items = state.registryCards.filter(c => !isCardClosed(c) && cardTypeOf(c) === sec.key);
+            if (items.length) html += landingSectionHtml(sec.title, sec.sub, sec.variant, items);
+        });
+        // …then a single Closed section for every inactive entry.
+        if (showClosed) {
+            const closed = state.registryCards.filter(isCardClosed);
+            if (closed.length) html += landingSectionHtml('Closed', 'Inactive / completed — kept for reference', 'closed', closed);
+        }
+        wrap.innerHTML = html
+            || `<div class="ps-empty">No ${FILTER_LABELS[activeTypeFilter] || ''} projects to show.</div>`;
     }
 
     function bindLandingEvents() {
@@ -499,6 +555,21 @@
             const card = e.target.closest('.ps-proj-card');
             if (card) openProject(card.dataset.display, card.dataset.title);
         });
+        // Type/status filter pills — single select, re-renders the cards.
+        const typeFilter = document.getElementById('ps-type-filter');
+        if (typeFilter) {
+            typeFilter.addEventListener('click', (e) => {
+                const pill = e.target.closest('.ps-type-pill');
+                if (!pill || pill.dataset.filter === activeTypeFilter) return;
+                activeTypeFilter = pill.dataset.filter;
+                typeFilter.querySelectorAll('.ps-type-pill').forEach(b => {
+                    const on = b === pill;
+                    b.classList.toggle('active', on);
+                    b.setAttribute('aria-selected', on ? 'true' : 'false');
+                });
+                renderLanding();
+            });
+        }
         // Header back: from a project detail return to the cards; from the
         // landing it keeps its normal link behaviour (back to the hub).
         document.getElementById('ps-back-btn').addEventListener('click', (e) => {

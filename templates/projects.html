@@ -41,6 +41,13 @@
     </header>
 
     <main class="proj-main">
+        <div id="proj-filter-bar" class="proj-filter-bar" role="tablist" aria-label="Filter projects by type">
+            <button type="button" class="proj-filter-pill active" data-filter="all" role="tab" aria-selected="true">All <span class="proj-filter-count" data-filter-count="all"></span></button>
+            <button type="button" class="proj-filter-pill" data-filter="ongoing" role="tab" aria-selected="false">Ongoing <span class="proj-filter-count" data-filter-count="ongoing"></span></button>
+            <button type="button" class="proj-filter-pill" data-filter="closed" role="tab" aria-selected="false">Closed <span class="proj-filter-count" data-filter-count="closed"></span></button>
+            <button type="button" class="proj-filter-pill" data-filter="designs" role="tab" aria-selected="false">Designs <span class="proj-filter-count" data-filter-count="designs"></span></button>
+            <button type="button" class="proj-filter-pill" data-filter="others" role="tab" aria-selected="false">Others <span class="proj-filter-count" data-filter-count="others"></span></button>
+        </div>
         <div id="projects-list" class="projects-list">
             <div class="proj-loading">Loading…</div>
         </div>

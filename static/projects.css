@@ -124,6 +124,53 @@ html, body {
     padding: 2rem 1.75rem 4rem;
 }
 
+/* Segmented filter — All / Ongoing / Closed / Designs / Others. Single
+   select; narrows the list to one bucket (see projects.js). */
+.proj-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.75rem;
+}
+.proj-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.95rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--proj-text-dim);
+    background: var(--proj-surface);
+    border: 1px solid var(--proj-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.proj-filter-pill:hover {
+    color: var(--proj-text);
+    border-color: var(--proj-border-strong);
+}
+.proj-filter-pill.active {
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+    border-color: var(--proj-accent);
+}
+.proj-filter-count {
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--proj-text-muted);
+    background: var(--proj-surface-soft);
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    min-width: 1.1rem;
+    text-align: center;
+}
+.proj-filter-pill.active .proj-filter-count {
+    color: var(--proj-accent-strong);
+    background: rgba(255, 255, 255, 0.14);
+}
+
 /* Top-level list is now a vertical stack of sections (Projects / Others).
    The card grid lives on .proj-section-grid below. */
 .projects-list {

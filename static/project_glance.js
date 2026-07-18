@@ -303,14 +303,16 @@ window.ProjectGlance = (function () {
                 <span class="proj-cost-v">${cell}</span>
             </li>`;
         }).join('');
-        const profitCls = s.profit >= 0 ? 'profit' : 'loss';
         // Labour comes from the attendance app. If that's unreachable it counts
-        // as 0, so the total is short and the profit correspondingly flattering
-        // — say so rather than presenting an incomplete figure as final.
+        // as 0, so the total is short — say so rather than presenting an
+        // incomplete figure as final.
         const labourWarning = s.labour_available === false
             ? `<p class="proj-cost-warn">Labour is missing — the attendance app
-               couldn't be reached, so the total and profit below exclude it.</p>`
+               couldn't be reached, so the total below excludes it.</p>`
             : '';
+        // No profit/balance line here: the hero owns the money position (Net
+        // Balance = paid − spent), and a second "Balance" against billed value
+        // beside it only invited the reader to mix the two up.
         return `
             <div class="proj-ov-panel proj-ov-costs">${head}
                 ${labourWarning}
@@ -318,10 +320,6 @@ window.ProjectGlance = (function () {
                 <div class="proj-cost-foot">
                     <div class="proj-cost-foot-row is-total">
                         <span>Total expenses</span><span>${formatINR(total)}</span>
-                    </div>
-                    <div class="proj-cost-foot-row is-profit">
-                        <span>Balance</span>
-                        <span class="${profitCls}">${formatSignedINR(s.profit)}</span>
                     </div>
                 </div>
             </div>`;

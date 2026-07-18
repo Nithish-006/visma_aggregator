@@ -80,6 +80,25 @@
     const projectTypeOf = (p) => p.project_type || (p.is_project === false ? 'other' : 'project');
     const isClosed = (p) => p.is_inactive === true || p.is_inactive === 1;
 
+    // Top-of-page filter. One bucket at a time, mapped onto the same sections
+    // renderList already builds: "ongoing/designs/others" are the active
+    // type buckets, "closed" is every inactive entry regardless of type, and
+    // "all" restores the full grouped view. A closed design counts as closed,
+    // not as a design — closed wins, matching where the row is shown.
+    const FILTER_LABELS = { ongoing: 'ongoing', closed: 'closed', designs: 'design', others: 'other' };
+    let activeFilter = 'all';
+    // The subset a given filter shows. Kept beside renderList so the pill
+    // counts and the rendered sections can't disagree about a bucket.
+    function projectsForFilter(filter) {
+        switch (filter) {
+            case 'ongoing': return projects.filter(p => !isClosed(p) && projectTypeOf(p) === 'project');
+            case 'designs': return projects.filter(p => !isClosed(p) && projectTypeOf(p) === 'design');
+            case 'others':  return projects.filter(p => !isClosed(p) && projectTypeOf(p) === 'other');
+            case 'closed':  return projects.filter(isClosed);
+            default:        return projects.slice();
+        }
+    }
+
     let projects = [];
     let activeProjectId = null;
     let insights = null;        // /insights payload for the open project
@@ -182,15 +201,42 @@
         return section;
     }
 
+    // Keep the filter pills' counts in step with the loaded set. Called from
+    // renderList so an add/close/type-change reflects in the pills too.
+    function updateFilterCounts() {
+        const counts = {
+            all: projects.length,
+            ongoing: projectsForFilter('ongoing').length,
+            closed: projectsForFilter('closed').length,
+            designs: projectsForFilter('designs').length,
+            others: projectsForFilter('others').length,
+        };
+        Object.keys(counts).forEach(k => {
+            const el = document.querySelector(`[data-filter-count="${k}"]`);
+            if (el) el.textContent = counts[k];
+        });
+    }
+
     function renderList() {
+        updateFilterCounts();
         if (!projects.length) {
             listEl.innerHTML = `<div class="proj-empty">No projects yet. Click <strong>+ New Project</strong> to create the first one.</div>`;
             return;
         }
 
         listEl.innerHTML = '';
+        // Which sections a filter reveals: "all" shows the whole grouped view,
+        // each other filter narrows to its one bucket.
+        const showType = (key) =>
+            activeFilter === 'all' ||
+            (activeFilter === 'ongoing' && key === 'project') ||
+            (activeFilter === 'designs' && key === 'design') ||
+            (activeFilter === 'others' && key === 'other');
+        const showClosed = activeFilter === 'all' || activeFilter === 'closed';
+
         // Active entries first, grouped by type bucket…
         TYPE_SECTIONS.forEach(sec => {
+            if (!showType(sec.key)) return;
             const items = projects.filter(p => !isClosed(p) && projectTypeOf(p) === sec.key);
             if (items.length) {
                 listEl.appendChild(renderSection(sec.title, sec.sub, items, sec.variant));
@@ -198,11 +244,34 @@
         });
         // …then a single "Closed" section at the very bottom for every inactive
         // entry, regardless of its type bucket.
-        const closed = projects.filter(isClosed);
-        if (closed.length) {
-            listEl.appendChild(renderSection(
-                'Closed', 'Inactive / completed — kept for reference', closed, 'closed'));
+        if (showClosed) {
+            const closed = projects.filter(isClosed);
+            if (closed.length) {
+                listEl.appendChild(renderSection(
+                    'Closed', 'Inactive / completed — kept for reference', closed, 'closed'));
+            }
         }
+        // A filter can legitimately match nothing (e.g. no designs yet) — say so
+        // rather than leaving a blank page that reads as a load failure.
+        if (!listEl.children.length) {
+            listEl.innerHTML = `<div class="proj-empty">No ${FILTER_LABELS[activeFilter] || ''} projects to show.</div>`;
+        }
+    }
+
+    // Filter pills — single select, re-rendering the list in place.
+    const filterBar = document.getElementById('proj-filter-bar');
+    if (filterBar) {
+        filterBar.addEventListener('click', (e) => {
+            const pill = e.target.closest('.proj-filter-pill');
+            if (!pill || pill.dataset.filter === activeFilter) return;
+            activeFilter = pill.dataset.filter;
+            filterBar.querySelectorAll('.proj-filter-pill').forEach(b => {
+                const on = b === pill;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-selected', on ? 'true' : 'false');
+            });
+            renderList();
+        });
     }
 
     // Defined once in project_glance.js — the glance and this page format the

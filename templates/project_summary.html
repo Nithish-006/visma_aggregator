@@ -58,6 +58,13 @@
 
     <!-- ==== Landing: registry-fed project cards ==== -->
     <div id="ps-landing" class="ps-landing">
+        <div id="ps-type-filter" class="ps-type-filter" role="tablist" aria-label="Filter projects by type">
+            <button type="button" class="ps-type-pill active" data-filter="all" role="tab" aria-selected="true">All <span class="ps-type-count" data-filter-count="all"></span></button>
+            <button type="button" class="ps-type-pill" data-filter="ongoing" role="tab" aria-selected="false">Ongoing <span class="ps-type-count" data-filter-count="ongoing"></span></button>
+            <button type="button" class="ps-type-pill" data-filter="closed" role="tab" aria-selected="false">Closed <span class="ps-type-count" data-filter-count="closed"></span></button>
+            <button type="button" class="ps-type-pill" data-filter="designs" role="tab" aria-selected="false">Designs <span class="ps-type-count" data-filter-count="designs"></span></button>
+            <button type="button" class="ps-type-pill" data-filter="others" role="tab" aria-selected="false">Others <span class="ps-type-count" data-filter-count="others"></span></button>
+        </div>
         <div id="ps-cards" class="ps-cards">
             <div class="ps-empty">Loading projects…</div>
         </div>
