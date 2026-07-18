@@ -22,6 +22,9 @@ from helpers.project_finance import (
     compute_project_finance, is_other_expense_category, resolve_contract,
     PO_LEDGER_GST_RATE,
 )
+from helpers.bill_reconcile import (
+    build_bill_vendor_index, is_unbilled_material_purchase,
+)
 import po_processor
 import salary_api
 from auth import login_required
@@ -546,6 +549,20 @@ def api_project_insights(project_id):
     sales_bills, sales_summary = db_manager.get_bills_for_canonical_project(
         project_id, kind='sales')
 
+    # ── Flag KVB material-purchase debits with no matching purchase bill ──
+    # Reuses the bills just fetched, so no extra query. The tag is synthesised
+    # from project_id since every expense row here already belongs to it. Count
+    # is over the (capped) rows shown, which for real projects is all of them.
+    bill_index = build_bill_vendor_index(purchase_bills)
+    no_bill_tag = f"{project_id} -"
+    no_bill_count = 0
+    for er in expense_rows:
+        flag = er['amount'] > 0 and is_unbilled_material_purchase(
+            er['category'], no_bill_tag, er['vendor'], bill_index, er['bank'])
+        er['no_bill_warning'] = flag
+        if flag:
+            no_bill_count += 1
+
     # ── Labour from the external salary API (attendance-priced server-side) ──
     labour = salary_api.get_labour_summary_for_project(
         project_id, project_display=project.get('display'))
@@ -612,6 +629,7 @@ def api_project_insights(project_id):
             'total': expense_total,
             'count': expense_count,
             'by_category': by_category,
+            'no_bill_count': no_bill_count,
         },
         'purchase_bills': {'bills': purchase_bills, **purchase_summary},
         'sales_bills': {'bills': sales_bills, **sales_summary},

@@ -5,6 +5,10 @@
 (function () {
     'use strict';
 
+    // Soft heads-up for a MATERIAL PURCHASE debit with no matching purchase
+    // bill (set server-side, helpers/bill_reconcile). Full reason in the title.
+    const NO_BILL_BADGE = '<span class="no-bill-flag" title="NO CORRESPONDING PURCHASE BILL FOUND — no purchase bill from this vendor is tagged to this project. Worth verifying the project tag.">no bill</span>';
+
     // ── State ──────────────────────────────────────────────────────────
     const state = {
         // The page is project-scoped: the landing shows registry-fed cards
@@ -1020,7 +1024,7 @@
                 tbody.innerHTML = result.transactions.map(t => `<tr>
                     <td>${t.date}</td>
                     <td>${t.vendor}</td>
-                    <td>${t.category}</td>
+                    <td>${t.category}${t.no_bill_warning ? NO_BILL_BADGE : ''}</td>
                     <td>${t.project || '-'}</td>
                     <td class="text-right ${t.dr_amount > 0 ? 'text-expense' : ''}">${t.dr_formatted}</td>
                     <td class="text-right ${t.cr_amount > 0 ? 'text-income' : ''}">${t.cr_formatted}</td>

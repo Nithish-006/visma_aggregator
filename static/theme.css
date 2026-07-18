@@ -88,6 +88,31 @@
 }
 
 /* =========================================================================
+   Shared flag — a KVB MATERIAL PURCHASE bank debit tagged to a project that
+   no purchase bill accounts for (helpers/bill_reconcile). Deliberately soft:
+   a nudge to verify, not an error. Reused on the dashboard, edit grid, and
+   project-summary transaction tables. Hover the badge for the full reason.
+   ========================================================================= */
+.no-bill-flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-left: 6px;
+    padding: 1px 7px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    vertical-align: middle;
+    color: var(--c-warning-deep);
+    background: var(--c-warning-soft);
+    border: 1px solid rgba(245, 158, 11, 0.30);
+    border-radius: 999px;
+    cursor: help;
+}
+.no-bill-flag::before { content: "\26A0"; font-size: 0.72rem; line-height: 1; }
+
+/* =========================================================================
    DARK THEME — scaffold for next run.
    Activated by <html data-theme="dark">. Empty today (no visual effect).
    To enable: uncomment and tune the overrides below. Only the --c-* color

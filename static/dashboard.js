@@ -492,6 +492,10 @@ function isMobileView() {
 }
 
 /** Render all transactions as scrollable list **/
+// Soft heads-up for a MATERIAL PURCHASE debit with no matching purchase bill.
+// Set server-side (helpers/bill_reconcile); the full reason lives in the title.
+const NO_BILL_BADGE = '<span class="no-bill-flag" title="NO CORRESPONDING PURCHASE BILL FOUND — no purchase bill from this vendor is tagged to this project. Worth verifying the project tag.">no bill</span>';
+
 function renderTransactionsPage() {
     const tbody = document.getElementById('transactions-body');
     if (!tbody) return;
@@ -522,7 +526,7 @@ function renderTransactionsPage() {
                 <span class="vendor-name">${txn.vendor}</span>
                 ${metaText ? `<span class="vendor-meta">${metaText}</span>` : ''}
             </td>
-            <td data-label="Category"><span class="${categoryClass}">${category}</span></td>
+            <td data-label="Category"><span class="${categoryClass}">${category}</span>${txn.no_bill_warning ? NO_BILL_BADGE : ''}</td>
             <td data-label="Description">${txn.description || ''}</td>
             <td data-label="Project"><span class="${projectClass}">${projectDisplay}</span></td>
             <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>

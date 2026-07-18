@@ -24,6 +24,9 @@ from helpers.dataframe import (
     filter_by_project,
 )
 from helpers.projects import validate_project_value
+from helpers.bill_reconcile import (
+    build_bill_vendor_index, is_unbilled_material_purchase,
+)
 from auth import login_required
 
 bp = Blueprint('banks', __name__)
@@ -384,8 +387,16 @@ def get_bank_transactions(bank_code):
     else:
         df_sorted = df.sort_values('date', ascending=ascending).head(limit)
 
+    # Cross-check MATERIAL PURCHASE debits against purchase bills (kvb only).
+    bill_index = build_bill_vendor_index(
+        db_manager.get_purchase_bill_vendors_by_project()) if bank_code == 'kvb' else {}
+
     transactions = []
     for idx, row in df_sorted.iterrows():
+        dr_amount = float(row['DR Amount'])
+        project = row.get('Project', '')
+        no_bill_warning = dr_amount > 0 and is_unbilled_material_purchase(
+            row['Category'], project, row['Client/Vendor'], bill_index, bank_code)
         transactions.append({
             'id': int(idx) if hasattr(idx, '__int__') else idx,
             'date': row['date'].strftime('%d %b %Y'),
@@ -394,13 +405,14 @@ def get_bank_transactions(bank_code):
             'vendor': row['Client/Vendor'],
             'category': row['Category'],
             'code': row.get('Code', ''),
-            'dr_amount': float(row['DR Amount']),
+            'dr_amount': dr_amount,
             'dr_amount_formatted': format_indian_number(row['DR Amount']) if row['DR Amount'] > 0 else '',
             'cr_amount': float(row['CR Amount']),
             'cr_amount_formatted': format_indian_number(row['CR Amount']) if row['CR Amount'] > 0 else '',
             'net': float(row['net']),
             'net_formatted': format_indian_number(row['net']),
-            'project': row.get('Project', ''),
+            'project': project,
+            'no_bill_warning': no_bill_warning,
             'dd': row.get('DD', ''),
             'notes': row.get('Notes', '')
         })
@@ -444,6 +456,10 @@ def get_bank_transactions_paginated(bank_code):
         sort_order=sort_order
     )
 
+    # Cross-check MATERIAL PURCHASE debits against purchase bills (kvb only).
+    bill_index = build_bill_vendor_index(
+        db_manager.get_purchase_bill_vendors_by_project()) if bank_code == 'kvb' else {}
+
     # Format transactions for frontend
     transactions = []
     for row in result['transactions']:
@@ -456,6 +472,9 @@ def get_bank_transactions_paginated(bank_code):
         dr_amount = float(row['DR Amount'] or 0)
         cr_amount = float(row['CR Amount'] or 0)
         net = cr_amount - dr_amount
+        project = row['Project'] or ''
+        no_bill_warning = dr_amount > 0 and is_unbilled_material_purchase(
+            row['Category'], project, row['Client/Vendor'], bill_index, bank_code)
 
         transactions.append({
             'id': row['id'],
@@ -471,7 +490,8 @@ def get_bank_transactions_paginated(bank_code):
             'cr_amount_formatted': format_indian_number(cr_amount) if cr_amount > 0 else '',
             'net': net,
             'net_formatted': format_indian_number(net),
-            'project': row['Project'] or ''
+            'project': project,
+            'no_bill_warning': no_bill_warning
         })
 
     # Also return filtered options so dropdowns can update in the same response

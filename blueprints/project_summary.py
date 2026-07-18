@@ -21,6 +21,9 @@ from helpers.dataframe import (
 from helpers.projects import (
     build_smart_project_groups, parse_project_selection,
 )
+from helpers.bill_reconcile import (
+    build_bill_vendor_index, is_unbilled_material_purchase,
+)
 # project_summary consumes the projects blueprint's PO/payments resolver.
 # One-directional: blueprints.projects never imports project_summary.
 from auth import login_required
@@ -238,18 +241,29 @@ def get_project_summary_bank_transactions():
     end_idx = start_idx + per_page
     page_df = df.iloc[start_idx:end_idx]
 
+    # Cross-check MATERIAL PURCHASE debits against purchase bills (kvb only).
+    bill_index = build_bill_vendor_index(
+        db_manager.get_purchase_bill_vendors_by_project()) if bank_code == 'kvb' else {}
+
     transactions = []
     for _, row in page_df.iterrows():
+        dr_amount = float(row.get('DR Amount', 0))
+        vendor = str(row.get('Client/Vendor', row.get('client_vendor', 'Unknown')))
+        category = str(row.get('Category', 'Uncategorized'))
+        project = str(row.get('Project', row.get('project', ''))) if pd.notna(row.get('Project', row.get('project', ''))) else ''
+        no_bill_warning = dr_amount > 0 and is_unbilled_material_purchase(
+            category, project, vendor, bill_index, bank_code)
         transactions.append({
             'date': row['date'].strftime('%Y-%m-%d') if pd.notna(row['date']) else '',
             'description': str(row.get('Description', row.get('transaction_description', ''))),
-            'vendor': str(row.get('Client/Vendor', row.get('client_vendor', 'Unknown'))),
-            'category': str(row.get('Category', 'Uncategorized')),
-            'dr_amount': float(row.get('DR Amount', 0)),
+            'vendor': vendor,
+            'category': category,
+            'dr_amount': dr_amount,
             'cr_amount': float(row.get('CR Amount', 0)),
-            'dr_formatted': format_indian_number(float(row.get('DR Amount', 0))) if float(row.get('DR Amount', 0)) > 0 else '',
+            'dr_formatted': format_indian_number(dr_amount) if dr_amount > 0 else '',
             'cr_formatted': format_indian_number(float(row.get('CR Amount', 0))) if float(row.get('CR Amount', 0)) > 0 else '',
-            'project': str(row.get('Project', row.get('project', ''))) if pd.notna(row.get('Project', row.get('project', ''))) else ''
+            'project': project,
+            'no_bill_warning': no_bill_warning
         })
 
     return jsonify({

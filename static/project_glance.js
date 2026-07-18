@@ -310,12 +310,21 @@ window.ProjectGlance = (function () {
             ? `<p class="proj-cost-warn">Labour is missing — the attendance app
                couldn't be reached, so the total below excludes it.</p>`
             : '';
+        // Material-purchase payments here that no purchase bill accounts for —
+        // a likely project mis-tag on the bank side. A gentle nudge to verify.
+        const noBillCount = (opts && opts.insights && opts.insights.expenses
+            && opts.insights.expenses.no_bill_count) || 0;
+        const noBillWarning = noBillCount > 0
+            ? `<p class="proj-cost-warn">${noBillCount} material-purchase payment${noBillCount > 1 ? 's have' : ' has'}
+               no matching purchase bill — worth verifying the project tag on the KVB statement.</p>`
+            : '';
         // No profit/balance line here: the hero owns the money position (Net
         // Balance = paid − spent), and a second "Balance" against billed value
         // beside it only invited the reader to mix the two up.
         return `
             <div class="proj-ov-panel proj-ov-costs">${head}
                 ${labourWarning}
+                ${noBillWarning}
                 <ul class="proj-cost-list">${rows}</ul>
                 <div class="proj-cost-foot">
                     <div class="proj-cost-foot-row is-total">
