@@ -677,7 +677,8 @@ body {
     padding: 0.4rem 0.6rem;
 }
 
-.filter-toolbar .btn-reset {
+.filter-toolbar .btn-reset,
+.actions-toolbar .btn-reset {
     height: 36px;
     padding: 0.4rem 0.75rem;
     font-size: 0.8rem;
@@ -2270,6 +2271,12 @@ body {
     .actions-toolbar .download-btn {
         height: 44px;
         padding: 0 0.75rem;
+        flex-shrink: 0;
+    }
+
+    /* Reset now lives in the actions row — match the 44px controls beside it. */
+    .actions-toolbar .btn-reset {
+        height: 44px;
         flex-shrink: 0;
     }
 
