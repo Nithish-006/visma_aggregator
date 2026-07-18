@@ -50,6 +50,10 @@
     border: 1px solid var(--proj-border);
     border-radius: 12px;
 }
+/* Client yet to pay + Total Expenses + Net Balance sit three across. */
+.proj-hero.proj-hero-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+}
 .proj-hero-cell {
     display: flex;
     flex-direction: column;
@@ -73,7 +77,7 @@
     line-height: 1.15;
     letter-spacing: -0.02em;
     color: var(--proj-text);
-    /* Long rupee figures must not shove the two cells out of alignment. */
+    /* Long rupee figures must not shove the cells out of alignment. */
     overflow-wrap: anywhere;
 }
 .proj-hero-v.due     { color: var(--proj-danger); }
@@ -395,7 +399,8 @@
 
     /* Hero stacks: two big rupee figures side by side get unreadably narrow.
        The divider moves from the left edge to the top with them. */
-    .proj-hero {
+    .proj-hero,
+    .proj-hero.proj-hero-3 {
         grid-template-columns: 1fr;
         gap: 0.85rem;
         padding: 0.85rem 0.9rem;

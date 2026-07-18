@@ -103,32 +103,46 @@ window.ProjectGlance = (function () {
         const dueLabel = receivable < -0.5 ? 'Client overpaid by' : 'Client yet to pay';
         const dueCls = receivable > 0.5 ? 'due' : 'settled';
 
-        // ── Hero: the two questions people open this for ──
-        // "Balance" here is billed value minus total cost — what's left of the
-        // project. The ladder's "Client yet to pay" is what the client still
-        // owes against the contract; the two hero labels are what keep them
-        // apart. The margin is against what we billed, not the contract, and
-        // says so — the billed figure is no longer a row on this panel, so
-        // "of total value" would point at nothing.
-        const balanceCell = s ? `
+        // ── Hero: the three questions people open this for ──
+        // "Client yet to pay" is what the client still owes against the contract;
+        // "Total Expenses" is everything the project has cost; "Net Balance" is
+        // cash actually in hand against that spend — what the client has *paid*
+        // minus what has gone out, not billed value minus cost. Billing is a
+        // promise; this line is the money position, so a project can be in the
+        // black on profit and still short here until the client pays.
+        const spend = s ? (Number(s.spend_total) || 0) : 0;
+        const netBalance = rec - spend;
+        const expensesCell = s ? `
             <div class="proj-hero-cell">
-                <span class="proj-hero-k">Balance</span>
-                <span class="proj-hero-v ${s.profit >= 0 ? 'profit' : 'loss'}">${formatSignedINR(s.profit)}</span>
-                <span class="proj-hero-sub">${s.margin_pct != null ? `${s.margin_pct.toFixed(1)}% of ${formatINRCompact(billed)} billed` : '&nbsp;'}</span>
+                <span class="proj-hero-k">Total Expenses</span>
+                <span class="proj-hero-v">${formatINR(spend)}</span>
+                <span class="proj-hero-sub">&nbsp;</span>
             </div>` : `
             <div class="proj-hero-cell">
-                <span class="proj-hero-k">Balance</span>
+                <span class="proj-hero-k">Total Expenses</span>
+                <span class="proj-hero-v is-loading">…</span>
+                <span class="proj-hero-sub">&nbsp;</span>
+            </div>`;
+        const netCell = s ? `
+            <div class="proj-hero-cell">
+                <span class="proj-hero-k">Net Balance</span>
+                <span class="proj-hero-v ${netBalance >= 0 ? 'profit' : 'loss'}">${formatSignedINR(netBalance)}</span>
+                <span class="proj-hero-sub">${formatINRCompact(rec)} paid − ${formatINRCompact(spend)} spent</span>
+            </div>` : `
+            <div class="proj-hero-cell">
+                <span class="proj-hero-k">Net Balance</span>
                 <span class="proj-hero-v is-loading">…</span>
                 <span class="proj-hero-sub">&nbsp;</span>
             </div>`;
         const hero = `
-            <div class="proj-hero">
+            <div class="proj-hero proj-hero-3">
                 <div class="proj-hero-cell">
                     <span class="proj-hero-k">${dueLabel}</span>
                     <span class="proj-hero-v ${dueCls}">${formatINR(Math.abs(receivable))}</span>
                     <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received` : '&nbsp;'}</span>
                 </div>
-                ${balanceCell}
+                ${expensesCell}
+                ${netCell}
             </div>
             ${pct != null ? `<div class="proj-pay-bar"><div class="proj-pay-bar-fill" style="width:${pct}%"></div></div>` : ''}`;
 
