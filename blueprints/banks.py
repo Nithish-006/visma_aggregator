@@ -420,6 +420,67 @@ def get_bank_transactions(bank_code):
     return jsonify({'transactions': transactions})
 
 
+def _filtered_bank_df(bank_code, category, project, vendor, start_date, end_date, search):
+    """Cached bank frame narrowed by the same filters the paginated endpoint uses."""
+    df = get_bank_df(bank_code).copy()
+    if df.empty:
+        return df
+    df = filter_by_category(df, category)
+    df = filter_by_date_range(df, start_date, end_date)
+    df = filter_by_project(df, project)
+    df = filter_by_vendor(df, vendor)
+    if search:
+        s = str(search).lower()
+        df = df[
+            df['Transaction Description'].astype(str).str.lower().str.contains(s, na=False)
+            | df['Client/Vendor'].astype(str).str.lower().str.contains(s, na=False)
+            | df['Category'].astype(str).str.lower().str.contains(s, na=False)
+        ]
+    return df
+
+
+def _flagged_material_purchases(df, bill_index):
+    """Rows earning the no-corresponding-purchase-bill warning (kvb).
+
+    Pre-narrows to MATERIAL PURCHASE debits before the vendor match, so the
+    per-row check runs on a handful of rows rather than the whole statement.
+    """
+    if df.empty or 'Category' not in df.columns:
+        return df.iloc[0:0]
+    cat = df['Category'].astype(str).str.upper().str.strip()
+    mp = df[(cat == 'MATERIAL PURCHASE') & (df['DR Amount'] > 0)]
+    if mp.empty:
+        return mp
+    mask = mp.apply(lambda r: is_unbilled_material_purchase(
+        r.get('Category', ''), r.get('Project', ''), r.get('Client/Vendor', ''),
+        bill_index, 'kvb'), axis=1)
+    return mp[mask]
+
+
+def _serialize_flagged_row(idx, row):
+    """One flagged transaction shaped like the paginated endpoint's output."""
+    dr_amount = float(row.get('DR Amount', 0) or 0)
+    cr_amount = float(row.get('CR Amount', 0) or 0)
+    net = float(row['net']) if 'net' in row and pd.notna(row['net']) else cr_amount - dr_amount
+    return {
+        'id': int(idx) if hasattr(idx, '__int__') else idx,
+        'date': row['date'].strftime('%d %b %Y'),
+        'date_raw': row['date'].strftime('%Y-%m-%d'),
+        'description': row.get('Transaction Description', '') or '',
+        'vendor': row.get('Client/Vendor', '') or '',
+        'category': row.get('Category', '') or '',
+        'code': row.get('Code', '') or '',
+        'dr_amount': dr_amount,
+        'dr_amount_formatted': format_indian_number(dr_amount) if dr_amount > 0 else '',
+        'cr_amount': cr_amount,
+        'cr_amount_formatted': format_indian_number(cr_amount) if cr_amount > 0 else '',
+        'net': net,
+        'net_formatted': format_indian_number(net),
+        'project': row.get('Project', '') or '',
+        'no_bill_warning': True,
+    }
+
+
 @bp.route('/api/<bank_code>/transactions/paginated')
 @login_required
 def get_bank_transactions_paginated(bank_code):
@@ -440,6 +501,44 @@ def get_bank_transactions_paginated(bank_code):
     search = request.args.get('search', None)
     sort_by = request.args.get('sort_by', 'date')
     sort_order = request.args.get('sort_order', 'desc')
+    only_warnings = str(request.args.get('only_warnings', '')).lower() in ('1', 'true', 'yes')
+
+    # Cross-check MATERIAL PURCHASE debits against purchase bills (kvb only).
+    bill_index = build_bill_vendor_index(
+        db_manager.get_purchase_bill_vendors_by_project()) if bank_code == 'kvb' else {}
+
+    # Live count of no-bill material-purchase debits under the current filters,
+    # and — when the "show only flagged" box is ticked — serve just those rows
+    # (paginated over the flagged subset, from the in-memory frame).
+    warning_count = 0
+    if bank_code == 'kvb':
+        fdf = _filtered_bank_df(bank_code, category, project, vendor,
+                                start_date, end_date, search)
+        flagged = _flagged_material_purchases(fdf, bill_index)
+        warning_count = len(flagged)
+
+        if only_warnings:
+            ascending = (sort_order == 'asc')
+            if sort_by == 'dr_amount':
+                flagged = flagged.sort_values(['DR Amount', 'date'], ascending=[ascending, False])
+            elif sort_by == 'cr_amount':
+                flagged = flagged.sort_values(['CR Amount', 'date'], ascending=[ascending, False])
+            else:
+                flagged = flagged.sort_values('date', ascending=ascending)
+            total = warning_count
+            total_pages = (total + per_page - 1) // per_page if total else 0
+            start = (page - 1) * per_page
+            page_rows = flagged.iloc[start:start + per_page]
+            return jsonify({
+                'transactions': [_serialize_flagged_row(idx, row)
+                                 for idx, row in page_rows.iterrows()],
+                'total': total,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': total_pages,
+                'filter_options': db_manager.get_filter_options(bank_code),
+                'warning_count': warning_count,
+            })
 
     # Get paginated data directly from database
     result = db_manager.get_paginated_transactions(
@@ -455,10 +554,6 @@ def get_bank_transactions_paginated(bank_code):
         sort_by=sort_by,
         sort_order=sort_order
     )
-
-    # Cross-check MATERIAL PURCHASE debits against purchase bills (kvb only).
-    bill_index = build_bill_vendor_index(
-        db_manager.get_purchase_bill_vendors_by_project()) if bank_code == 'kvb' else {}
 
     # Format transactions for frontend
     transactions = []
@@ -516,7 +611,8 @@ def get_bank_transactions_paginated(bank_code):
         'page': result['page'],
         'per_page': result['per_page'],
         'total_pages': result['total_pages'],
-        'filter_options': filter_options
+        'filter_options': filter_options,
+        'warning_count': warning_count
     })
 
 

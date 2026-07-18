@@ -234,6 +234,15 @@
                             <div class="filter-group filter-group-date">
                                 <input type="date" id="end-date" class="filter-input date-input" title="To Date">
                             </div>
+                            {% if bank_code == 'kvb' %}
+                            <div class="filter-group filter-group-warning">
+                                <label class="warning-filter-label" title="Show only MATERIAL PURCHASE payments that have no matching purchase bill for their project">
+                                    <input type="checkbox" id="only-warnings-toggle">
+                                    <span>&#9888; Only no-bill rows</span>
+                                    <span id="warning-count-badge" class="warning-count-badge" hidden>0</span>
+                                </label>
+                            </div>
+                            {% endif %}
                             <button id="clear-filters" class="btn btn-secondary btn-reset">Reset</button>
                         </div>
                     </div>

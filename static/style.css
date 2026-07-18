@@ -810,6 +810,21 @@ body {
     box-shadow: 0 2px 8px rgba(217, 119, 87, 0.08);
 }
 
+/* No matching purchase bill: a slight warm tint + left accent bar so the row
+   reads as "worth verifying" without shouting. Overrides the base and even-row
+   backgrounds (equal specificity, later in source). */
+.transactions-table tbody tr.no-bill-row,
+.transactions-table tbody tr.no-bill-row:nth-child(even) {
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.13) 0%, rgba(245, 158, 11, 0.07) 100%);
+    box-shadow: inset 3px 0 0 var(--c-warning);
+}
+
+.transactions-table tbody tr.no-bill-row:hover {
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.20) 0%, rgba(245, 158, 11, 0.12) 100%);
+    transform: scale(1.001);
+    box-shadow: inset 3px 0 0 var(--c-warning), 0 2px 8px rgba(217, 119, 87, 0.10);
+}
+
 /* Column specific styling - Date */
 .transactions-table th:nth-child(1),
 .transactions-table td:nth-child(1) {

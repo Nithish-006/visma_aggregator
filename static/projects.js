@@ -1,6 +1,10 @@
 (() => {
     'use strict';
 
+    // Soft heads-up for a MATERIAL PURCHASE debit with no matching purchase
+    // bill (set server-side, helpers/bill_reconcile). Full reason in the title.
+    const NO_BILL_BADGE = '<span class="no-bill-flag" title="NO CORRESPONDING PURCHASE BILL FOUND — no purchase bill from this vendor is tagged to this project. Worth verifying the project tag.">no bill</span>';
+
     const listEl = document.getElementById('projects-list');
     const newBtn = document.getElementById('new-project-btn');
     const newModal = document.getElementById('new-project-modal');
@@ -918,7 +922,7 @@
             <tr>
                 <td class="proj-li-unit">${fmtDate(t.date)}</td>
                 <td class="proj-li-desc" title="${escapeHtml(t.description)}">${escapeHtml((t.vendor && t.vendor !== 'Unknown') ? t.vendor : t.description)}</td>
-                <td><span class="proj-cat-chip">${escapeHtml(t.category)}</span></td>
+                <td><span class="proj-cat-chip">${escapeHtml(t.category)}</span>${t.no_bill_warning ? NO_BILL_BADGE : ''}</td>
                 <td class="proj-li-unit">${bankBadge(t.bank)}</td>
                 <td class="proj-li-num">${formatINR(t.amount)}</td>
             </tr>`).join('');

@@ -112,6 +112,35 @@
 }
 .no-bill-flag::before { content: "\26A0"; font-size: 0.72rem; line-height: 1; }
 
+/* KVB bank page: "show only no-bill rows" filter toggle + its live count. */
+.warning-filter-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--c-warning-deep);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+}
+.warning-filter-label input { accent-color: var(--c-warning); cursor: pointer; }
+.warning-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--c-warning);
+    border-radius: 999px;
+    line-height: 1;
+}
+.warning-count-badge[hidden] { display: none; }
+
 /* =========================================================================
    DARK THEME — scaffold for next run.
    Activated by <html data-theme="dark">. Empty today (no visual effect).

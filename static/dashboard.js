@@ -11,6 +11,7 @@ let currentEndDate = null;
 let currentSortBy = 'date';
 let currentSortOrder = 'desc';
 let currentSearch = '';
+let currentOnlyWarnings = false;  // KVB: show only no-bill material-purchase rows
 let searchTimeout = null;
 let dataMinDate = null;
 let dataMaxDate = null;
@@ -458,6 +459,9 @@ async function loadTransactions(categories = [], startDate = null, endDate = nul
         if (currentSearch) {
             params.set('search', currentSearch);
         }
+        if (currentOnlyWarnings) {
+            params.set('only_warnings', '1');
+        }
 
         const res = await fetch(`/api/${BANK_CODE}/transactions/paginated?${params}`);
         const data = await res.json();
@@ -476,6 +480,9 @@ async function loadTransactions(categories = [], startDate = null, endDate = nul
         if (headerCount) {
             headerCount.textContent = `${totalTransactions} Transactions`;
         }
+
+        // Keep the "no-bill rows" toggle's count fresh (KVB only)
+        updateWarningCount(data.warning_count);
 
         renderTransactionsPage();
         updatePaginationControls();
@@ -496,6 +503,15 @@ function isMobileView() {
 // Set server-side (helpers/bill_reconcile); the full reason lives in the title.
 const NO_BILL_BADGE = '<span class="no-bill-flag" title="NO CORRESPONDING PURCHASE BILL FOUND — no purchase bill from this vendor is tagged to this project. Worth verifying the project tag.">no bill</span>';
 
+// Reflect the current no-bill flag count on the KVB toggle (hidden at zero).
+function updateWarningCount(count) {
+    const badge = document.getElementById('warning-count-badge');
+    if (!badge) return;  // element only exists on the KVB page
+    const n = Number(count) || 0;
+    badge.textContent = n;
+    badge.hidden = n === 0;
+}
+
 function renderTransactionsPage() {
     const tbody = document.getElementById('transactions-body');
     if (!tbody) return;
@@ -504,6 +520,9 @@ function renderTransactionsPage() {
     // Render all transactions as scrollable list (both desktop and mobile)
     allTransactions.forEach((txn) => {
         const row = document.createElement('tr');
+
+        // Soft warm tint on rows with no matching purchase bill — see .no-bill-row.
+        if (txn.no_bill_warning) row.classList.add('no-bill-row');
 
         // Build mobile metadata (project and category)
         const project = txn.project || '';
@@ -625,6 +644,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
+    // "Only no-bill rows" toggle (KVB only)
+    const warnToggle = document.getElementById('only-warnings-toggle');
+    if (warnToggle) {
+        warnToggle.addEventListener('change', () => {
+            currentOnlyWarnings = warnToggle.checked;
+            refreshTransactions();  // Smooth refresh
+        });
+    }
+
     document.getElementById('clear-filters').addEventListener('click', () => {
         const startInput = document.getElementById('start-date');
         const endInput = document.getElementById('end-date');
@@ -634,6 +662,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentVendors = [];
         currentStartDate = null;
         currentEndDate = null;
+        currentOnlyWarnings = false;
+        if (warnToggle) warnToggle.checked = false;
 
         // Clear Custom Dropdowns
         Object.values(dropdowns).forEach(d => d.clearSelection());
