@@ -33,15 +33,19 @@ from extraction_validator import validate_extraction
 #   * "gemini-2.5-flash-lite" AND "gemini-2.5-flash" return 404 "no longer
 #     available to new users" on newer API-key projects — they only work on an
 #     older key, so neither can be a reliable primary.
-#   * "gemini-3.5-flash" works on ALL current keys and is the newest capable
-#     Flash, so it leads.
+#   * "gemini-3.6-flash" is the newest Flash generation — it now leads. If the
+#     id is ever wrong for a given key it simply 404s ('missing') and the chain
+#     falls straight through to 3.5-flash, so promoting it is safe by design.
+#   * "gemini-3.5-flash" works on ALL current keys and stays as the proven
+#     second, one step below the new primary.
 #   * "gemini-flash-latest" is an ALIAS that Google keeps pointed at the current
 #     Flash model — it can never 404 for being renamed/retired, so it is the
 #     self-healing safety net that survives the next model shuffle.
 # gemini-3-pro / gemini-3.1-pro are intentionally excluded — reasoning models
 # (slow + costly) with no accuracy edge on this OCR/extraction task.
 GEMINI_MODELS = [
-    "gemini-3.5-flash",      # primary: newest capable Flash, available on ALL keys
+    "gemini-3.6-flash",      # primary: newest Flash generation
+    "gemini-3.5-flash",      # proven second, available on ALL keys
     "gemini-flash-latest",   # net: alias always pointing at the current Flash (rename-proof)
     "gemini-2.5-flash",      # last Gemini resort: proven on GST tables (older-project keys only)
 ]
@@ -795,6 +799,7 @@ def get_pdf_page_count(pdf_path):
 def get_model_display_name(model):
     """Get a friendly display name for the model"""
     names = {
+        "gemini-3.6-flash": "Gemini 3.6 Flash",
         "gemini-3.5-flash": "Gemini 3.5 Flash",
         "gemini-flash-latest": "Gemini Flash (latest)",
         "gemini-3-flash-preview": "Gemini 3 Flash (preview)",
