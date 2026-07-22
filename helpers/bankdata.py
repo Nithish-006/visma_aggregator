@@ -1,10 +1,19 @@
-"""Per-bank data loading + cache (multi-bank support).
+"""Per-bank data loading (multi-bank support).
 
-State (DB connection flag, dataframe cache) lives on ``extensions.state`` so it
-is shared live across every blueprint instead of being a rebound module global.
+Reads always come straight from the database. The old design kept a long-lived
+``state.df_cache[bank_code]`` dataframe that only the worker handling an edit
+would refresh — so with ``gunicorn --workers 2`` the *other* worker kept serving
+stale totals, and aggregates flip-flopped between fresh and stale on every
+refresh. There is no cross-worker cache to invalidate now, so an edit committed
+by any worker is immediately visible from all of them.
+
+To avoid reloading the same bank twice inside one request, the frame is memoised
+on Flask's per-request ``g`` object only (never across requests). Outside a
+request context (e.g. startup, exports) we just load fresh.
 """
 
 import pandas as pd
+from flask import g, has_request_context
 
 from extensions import db_manager, state
 
@@ -57,15 +66,30 @@ def load_bank_data_from_db(bank_code='axis'):
 
 
 def get_bank_df(bank_code='axis'):
-    """Get dataframe for a specific bank (with caching)"""
-    if bank_code not in state.df_cache:
-        state.df_cache[bank_code] = load_bank_data_from_db(bank_code)
+    """Return a fresh dataframe for a bank, memoised only within this request.
 
-    return state.df_cache.get(bank_code, pd.DataFrame())
+    Cross-request there is no cache, so every request (on any gunicorn worker)
+    reflects the latest committed edits.
+    """
+    if has_request_context():
+        cache = getattr(g, '_bank_df_cache', None)
+        if cache is None:
+            cache = g._bank_df_cache = {}
+        if bank_code not in cache:
+            cache[bank_code] = load_bank_data_from_db(bank_code)
+        return cache[bank_code]
+    return load_bank_data_from_db(bank_code)
 
 
 def reload_bank_data(bank_code='axis'):
-    """Reload financial data for a specific bank"""
-    if bank_code in state.df_cache:
-        del state.df_cache[bank_code]
-    return get_bank_df(bank_code)
+    """Back-compat shim for the write paths.
+
+    Reads are always fresh now, so there is no persistent cache to rebuild. We
+    only drop this request's memo (so a re-read later in the same request sees
+    the write) and return a freshly loaded frame.
+    """
+    if has_request_context():
+        cache = getattr(g, '_bank_df_cache', None)
+        if cache is not None:
+            cache.pop(bank_code, None)
+    return load_bank_data_from_db(bank_code)

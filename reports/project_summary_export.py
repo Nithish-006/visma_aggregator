@@ -324,12 +324,21 @@ def export_single_project_summary(project_id):
     pct_fmt = st['pct_fmt']
 
     # ── Gather this project's bank transactions across banks ──
+    # Keep this in lock-step with the registry-card matching in
+    # blueprints/project_summary.py: the "<id> -" prefix is primary, with an
+    # exact registry-name fallback so a prefix-less legacy/parser row that shows
+    # on the on-screen card is not silently missing from the exported workbook.
+    _name_matches = {n for n in (stem_name.strip().lower(), display.strip().lower()) if n}
+
     def project_mask(df):
         col = 'Project' if 'Project' in df.columns else 'project'
         if col not in df.columns:
             return pd.Series(False, index=df.index)
         s = df[col].astype(str).str.strip()
-        return s.str.match(rf'^{project_id}\s*-')
+        mask = s.str.match(rf'^{project_id}\s*-')
+        if _name_matches:
+            mask = mask | s.str.lower().isin(_name_matches)
+        return mask
 
     combined_rows = []
     for bc in VALID_BANK_CODES:

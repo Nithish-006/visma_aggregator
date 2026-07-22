@@ -38,7 +38,7 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
   - Multi-bank support with bank-specific API endpoints (`/api/<bank_code>/...`)
   - Legacy API endpoints for backwards compatibility (`/api/summary`, `/api/transactions`)
   - Personal transaction tracker endpoints (`/api/personal/...`)
-  - Data caching with `df_cache` for bank dataframes, `df_global` for legacy support
+  - Bank/legacy dataframes are read fresh from the DB per request (memoized only within a request via Flask `g`), so all gunicorn workers stay consistent after an edit — see `helpers/bankdata.py` (`get_bank_df`) and `helpers/dataframe.py` (`get_legacy_df`)
 
 - **config.py**: Configuration and bank settings
   - `BANK_CONFIG` dict defines banks (currently `axis` and `kvb`) with table names and colors

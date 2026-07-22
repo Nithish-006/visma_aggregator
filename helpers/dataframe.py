@@ -7,6 +7,7 @@ Flask app/request context exists.
 """
 
 import pandas as pd
+from flask import g, has_request_context
 
 from config import Config
 from extensions import state
@@ -69,13 +70,37 @@ def load_financial_data_from_excel():
         return pd.DataFrame()
 
 
-def reload_data():
-    """Reload legacy financial data into shared state (backwards compatibility)"""
+def _load_legacy_df():
+    """Load the legacy combined frame fresh from the current source."""
     if Config.USE_DATABASE:
-        state.df_global = load_financial_data_from_db()
-    else:
-        state.df_global = load_financial_data_from_excel()
+        return load_financial_data_from_db()
+    return load_financial_data_from_excel()
+
+
+def reload_data():
+    """Reload legacy financial data into shared state (backwards compatibility).
+
+    Kept for startup (``app.py``) and the write paths. Legacy *reads* now go
+    through ``get_legacy_df`` and never rely on this shared frame, so it can no
+    longer go stale-per-worker.
+    """
+    state.df_global = _load_legacy_df()
     return state.df_global
+
+
+def get_legacy_df():
+    """Fresh legacy combined frame, memoised only within this request.
+
+    Same rationale as ``helpers.bankdata.get_bank_df``: reading straight from the
+    DB keeps every gunicorn worker consistent after an edit, and the per-request
+    memo avoids reloading the frame more than once per request.
+    """
+    if has_request_context():
+        df = getattr(g, '_legacy_df', None)
+        if df is None:
+            df = g._legacy_df = _load_legacy_df()
+        return df
+    return _load_legacy_df()
 
 
 def parse_month_filter(month_filter):

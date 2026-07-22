@@ -20,7 +20,7 @@ from bank_statement_processor import process_bank_statement
 from helpers.formatting import format_indian_number, sanitize_for_excel, safe_col_width
 from helpers.bankdata import get_bank_df, reload_bank_data
 from helpers.dataframe import (
-    reload_data, filter_by_date_range, filter_by_category, filter_by_vendor,
+    filter_by_date_range, filter_by_category, filter_by_vendor,
     filter_by_project,
 )
 from helpers.projects import validate_project_value
@@ -58,15 +58,6 @@ def edit_transactions(bank_code):
                          bank_code=bank_code,
                          bank_name=bank_config['name'],
                          bank_config=bank_config)
-
-
-@bp.route('/api/clear-cache', methods=['POST'])
-@login_required
-def clear_cache():
-    """Clear in-memory dataframe cache and reload from database"""
-    state.df_cache.clear()
-    reload_data()
-    return jsonify({'success': True, 'message': 'Cache cleared successfully'})
 
 
 @bp.route('/api/hub/stats')
@@ -930,7 +921,13 @@ def split_bank_transaction(bank_code):
                     split_amount = float(split.get('amount', 0) or 0)
                     split_vendor = split.get('vendor', 'Unknown')
                     split_category = split.get('category', 'Uncategorized')
-                    split_project = split.get('project')
+                    # Normalise the project the same way the edit path does, so a
+                    # split can never store a free-text / prefix-less project tag
+                    # that would then drop out of the registry-card totals.
+                    ok, split_project, perr = validate_project_value(split.get('project'))
+                    if not ok:
+                        conn.rollback()
+                        return jsonify({'success': False, 'error': perr}), 400
                     split_code = split.get('code')
 
                     # Create unique description for each split

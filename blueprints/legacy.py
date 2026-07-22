@@ -16,7 +16,7 @@ from config import Config, allowed_file, now_ist
 from extensions import db_manager, state
 from bank_statement_processor import process_bank_statement
 from helpers.formatting import format_indian_number, sanitize_for_excel
-from helpers.dataframe import reload_data, filter_by_date_range
+from helpers.dataframe import reload_data, get_legacy_df, filter_by_date_range
 from helpers.projects import validate_project_value
 from auth import login_required
 
@@ -153,7 +153,7 @@ def get_summary():
     end_date = request.args.get('end_date', None)
 
     # Filter data
-    df = state.df_global.copy()
+    df = get_legacy_df().copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -225,7 +225,7 @@ def get_monthly_trend():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = state.df_global.copy()
+    df = get_legacy_df().copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -266,7 +266,7 @@ def get_category_breakdown():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = state.df_global.copy()
+    df = get_legacy_df().copy()
     expense_df = df[df['DR Amount'] > 0]
 
     if category != 'All':
@@ -299,7 +299,7 @@ def get_running_balance():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = state.df_global.copy()
+    df = get_legacy_df().copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -350,7 +350,7 @@ def get_top_vendors():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = state.df_global.copy()
+    df = get_legacy_df().copy()
     expense_df = df[df['DR Amount'] > 0]
 
     if category != 'All':
@@ -380,7 +380,7 @@ def get_top_vendors():
 @login_required
 def get_categories():
     """Get list of all categories"""
-    categories = ['All'] + sorted(state.df_global['Category'].str.strip().unique().tolist())
+    categories = ['All'] + sorted(get_legacy_df()['Category'].str.strip().unique().tolist())
     return jsonify({'categories': categories})
 
 
@@ -389,7 +389,7 @@ def get_categories():
 def get_months():
     """Get list of all available months"""
     # Create unique pairs of (month_code, month_name) sorted by month_code
-    pairs = state.df_global[['month', 'month_name']].drop_duplicates().sort_values('month')
+    pairs = get_legacy_df()[['month', 'month_name']].drop_duplicates().sort_values('month')
 
     months_data = [{'value': 'All', 'label': 'All'}]
     for _, row in pairs.iterrows():
@@ -405,14 +405,15 @@ def get_months():
 @login_required
 def get_date_range():
     """Get the min and max dates available in the data"""
-    if len(state.df_global) == 0:
+    legacy_df = get_legacy_df()
+    if len(legacy_df) == 0:
         return jsonify({
             'min_date': None,
             'max_date': None
         })
 
-    min_date = state.df_global['date'].min()
-    max_date = state.df_global['date'].max()
+    min_date = legacy_df['date'].min()
+    max_date = legacy_df['date'].max()
 
     return jsonify({
         'min_date': min_date.strftime('%Y-%m-%d') if pd.notna(min_date) else None,
@@ -434,7 +435,7 @@ def get_transactions():
     sort_order = request.args.get('sort_order', 'desc') # asc, desc
     search_query = request.args.get('search', '').lower()
 
-    df = state.df_global.copy()
+    df = get_legacy_df().copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -607,7 +608,7 @@ def download_transactions():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = state.df_global.copy()
+    df = get_legacy_df().copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)
@@ -677,7 +678,7 @@ def get_insights():
     start_date = request.args.get('start_date', None)
     end_date = request.args.get('end_date', None)
 
-    df = state.df_global.copy()
+    df = get_legacy_df().copy()
     if category != 'All':
         df = df[df['Category'] == category]
     df = filter_by_date_range(df, start_date, end_date)

@@ -176,7 +176,9 @@ async function loadProjectsCount() {
 }
 
 /**
- * Clear server cache and reload hub stats
+ * Refresh the hub's live stats. The server no longer keeps a dataframe cache
+ * (reads load fresh from the DB), so this just re-pulls the counts and clears
+ * the browser's Cache Storage.
  */
 async function refreshCache() {
     const btn = document.getElementById('refresh-cache-btn');
@@ -189,8 +191,6 @@ async function refreshCache() {
             const names = await caches.keys();
             await Promise.all(names.map(name => caches.delete(name)));
         }
-        const response = await fetch('/api/clear-cache', { method: 'POST' });
-        if (!response.ok) throw new Error('Failed to clear cache');
 
         await refreshBankStats();
         await loadPersonalTrackerCount();

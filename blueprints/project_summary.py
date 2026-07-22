@@ -345,12 +345,23 @@ def get_project_summary_vendors():
 def get_project_summary_project_cards():
     """Registry-fed landing cards for the project-summary page.
 
-    One card per canonical registry entry, with its bank totals matched
-    STRICTLY by the "<id> -" project tag (no stem fuzz, no aggregation of
-    free-text variants). Income = credits, expense = debits, across banks.
+    One card per canonical registry entry. Bank totals are matched by the
+    "<id> -" project tag, with an exact registry-name fallback for rows that
+    lack the prefix (see below). No stem fuzz, so free-text variants are still
+    kept apart. Income = credits, expense = debits, across banks.
     """
     db_manager.ensure_projects_table()
     registry = db_manager.list_projects()
+
+    # Exact-name fallback for the id-prefix match below. A row tagged with a bare
+    # project name and no "<id> -" prefix (legacy data, or a tag the statement
+    # parser assigned) would otherwise be silently dropped from every card. We
+    # rescue it only on an EXACT match to a registry stem or display name — never
+    # a fuzzy stem — so unrelated free-text variants are still kept apart.
+    name_to_id = {}
+    for p in registry:
+        name_to_id[str(p['stem_name']).strip().lower()] = p['id']
+        name_to_id[str(p['display']).strip().lower()] = p['id']
 
     totals = {}  # project id -> {'income', 'expense', 'count'}
     for bank_code in VALID_BANK_CODES:
@@ -360,11 +371,17 @@ def get_project_summary_project_cards():
         col = 'Project' if 'Project' in df.columns else 'project'
         if col not in df.columns:
             continue
-        tag_ids = df[col].astype(str).str.strip().str.extract(r'^(\d+)\s*-', expand=False)
-        sub = df[tag_ids.notna()]
+        raw = df[col].astype(str).str.strip()
+        # Primary: the canonical "<id> -" tag prefix.
+        pid = pd.to_numeric(raw.str.extract(r'^(\d+)\s*-', expand=False), errors='coerce')
+        # Fallback: rows without the prefix whose value exactly names a project.
+        missing = pid.isna()
+        if missing.any():
+            pid.loc[missing] = raw[missing].str.lower().map(name_to_id)
+        sub = df[pid.notna()]
         if sub.empty:
             continue
-        grouped = sub.groupby(tag_ids[tag_ids.notna()].astype(int)).agg(
+        grouped = sub.groupby(pid[pid.notna()].astype(int)).agg(
             income=('CR Amount', 'sum'),
             expense=('DR Amount', 'sum'),
             count=('DR Amount', 'size'),
