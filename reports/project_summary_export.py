@@ -212,6 +212,24 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
             ws.cell(row=cr, column=c).border = thin_border
         cr += 1
 
+        # ── Split label ──
+        # For a bill split across projects, this block shows only THIS project's
+        # share. Spell that out so the auditor knows the amounts are partial and
+        # where the rest went (the same invoice # appears in the other projects'
+        # sheets with their shares).
+        if int(bill.get('allocation_count', 1) or 1) > 1:
+            pct = float(bill.get('share_ratio', 0) or 0) * 100
+            bill_full = float(bill.get('bill_total_amount', 0) or 0)
+            others = [str(p) for p in (bill.get('other_projects') or []) if p]
+            others_txt = f' — also on: {", ".join(others)}' if others else ''
+            note = (f"⑂ SPLIT — this project's share: {pct:.1f}% of "
+                    f"₹{bill_full:,.2f}{others_txt}")
+            nc = ws.cell(row=cr, column=6, value=note)
+            nc.font = Font(italic=True, bold=True, color='B45309')
+            for c in range(1, BILL_COLS + 1):
+                ws.cell(row=cr, column=c).border = thin_border
+            cr += 1
+
         grand_taxable += b_taxable
         grand_cgst += b_cgst
         grand_sgst += b_sgst

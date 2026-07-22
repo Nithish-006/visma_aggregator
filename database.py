@@ -1973,6 +1973,7 @@ class DatabaseManager:
                             'total_sgst': float(row['total_sgst']) if row.get('total_sgst') else 0,
                             'total_igst': float(row['total_igst']) if row.get('total_igst') else 0,
                             'total_amount': alloc_total,
+                            'bill_total_amount': bill_total,
                             '_ratio': ratio,
                             'line_items': []
                         }
@@ -1994,9 +1995,22 @@ class DatabaseManager:
                             'amount': (float(row['item_amount']) if row.get('item_amount') else 0) * r
                         })
 
-                # Drop the internal ratio helper before returning.
+                # Enrich each entry with split context so the export can label
+                # a split bill's block (share %, and the other projects it went
+                # to). allocation_count == 1 means an ordinary, unsplit bill.
+                from collections import defaultdict
+                by_bill = defaultdict(list)
                 for entry in bills_map.values():
-                    entry.pop('_ratio', None)
+                    by_bill[entry['bill_id']].append(entry)
+                for entries in by_bill.values():
+                    count = len(entries)
+                    for entry in entries:
+                        entry['allocation_count'] = count
+                        entry['share_ratio'] = entry.pop('_ratio', 1.0)
+                        entry['other_projects'] = [
+                            e['project'] for e in entries
+                            if e is not entry and e.get('project')
+                        ]
                 return list(bills_map.values())
 
         except Exception as e:
