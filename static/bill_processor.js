@@ -362,8 +362,13 @@ function handleTableClick(e) {
         const cell = projectDisplay.closest('.project-cell');
         if (cell) {
             const billId = parseInt(cell.dataset.billId);
-            const project = cell.dataset.project || '';
-            openProjectEdit(billId, project);
+            // A split bill's project cell edits the split, not a single project
+            // (inline single-project editing would collapse the split).
+            if (parseInt(cell.dataset.allocationCount || '1', 10) > 1) {
+                openSplitModal(billId);
+            } else {
+                openProjectEdit(billId, cell.dataset.project || '');
+            }
             e.stopPropagation();
             return;
         }
@@ -865,6 +870,8 @@ function renderInvoicesTable() {
         const projectClass = projectDisplay ? '' : 'empty';
         const projectText = projectDisplay || 'Click to add';
         const addedDisplay = formatAddedDate(bill.created_at);
+        const allocCount = bill.allocation_count || 1;
+        const isSplit = allocCount > 1;
 
         return `
             <tr>
@@ -880,13 +887,15 @@ function renderInvoicesTable() {
                 <td class="text-right">${formatIndianCurrency(bill.total_igst)}</td>
                 <td class="text-right cell-amount">${formatIndianCurrency(bill.total_amount)}</td>
                 <td class="cell-check">${validationBadge(bill)}</td>
-                <td class="project-cell" data-bill-id="${bill.id}" data-project="${escapeForAttr(projectDisplay)}">
+                <td class="project-cell ${isSplit ? 'is-split' : ''}" data-bill-id="${bill.id}" data-project="${escapeForAttr(projectDisplay)}" data-allocation-count="${allocCount}">
                     <div class="project-display">
                         <span class="project-text ${projectClass}">${escapeHtml(projectText)}</span>
-                        <svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        ${isSplit
+                            ? `<span class="split-badge" title="Split across ${allocCount} projects — click to edit">⑂ ${bill.allocation_seq || ''}/${allocCount}</span>`
+                            : `<svg class="edit-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
+                        </svg>`}
                     </div>
                 </td>
                 <td class="cell-added">${addedDisplay}</td>
@@ -908,6 +917,14 @@ function renderInvoicesTable() {
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="23 4 23 10 17 10"></polyline>
                                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                            </svg>
+                        </button>
+                        <button class="btn-icon btn-split" onclick="openSplitModal(${bill.id})" title="Split across projects">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="6" y1="3" x2="6" y2="15"></line>
+                                <circle cx="18" cy="6" r="3"></circle>
+                                <circle cx="6" cy="18" r="3"></circle>
+                                <path d="M18 9a9 9 0 0 1-9 9"></path>
                             </svg>
                         </button>
                         <button class="btn-icon btn-danger" onclick="deleteInvoice(${bill.id})" title="Delete">
@@ -1367,6 +1384,180 @@ async function saveProject(billId, project, moveToNext = false) {
     } catch (error) {
         console.error('Error saving project:', error);
         showToast('Failed to save project', 'error');
+    }
+}
+
+// ============================================================================
+// SPLIT BILL ACROSS PROJECTS
+// ============================================================================
+
+let splitBillId = null;
+let splitBillTotal = 0;
+let splitRows = [];   // [{ project, amount }]
+
+async function openSplitModal(billId) {
+    try {
+        const res = await fetch(`/api/bills/stored/${billId}/allocations`);
+        const data = await res.json();
+        if (!data.success) {
+            showToast(data.error || 'Failed to load bill', 'error');
+            return;
+        }
+        splitBillId = billId;
+        splitBillTotal = parseFloat(data.total_amount) || 0;
+        document.getElementById('splitInvoiceNo').textContent = data.invoice_number || '-';
+        document.getElementById('splitVendor').textContent = data.vendor_name || '-';
+        document.getElementById('splitBillTotal').textContent = formatIndianCurrency(splitBillTotal);
+
+        if (data.is_split && Array.isArray(data.allocations) && data.allocations.length >= 2) {
+            splitRows = data.allocations.map(a => ({
+                project: a.project || '',
+                amount: (parseFloat(a.alloc_total) || 0).toFixed(2)
+            }));
+            document.getElementById('unsplitBtn').style.display = '';
+        } else {
+            const current = (data.allocations && data.allocations[0] && data.allocations[0].project) || '';
+            splitRows = [{ project: current, amount: '' }, { project: '', amount: '' }];
+            document.getElementById('unsplitBtn').style.display = 'none';
+        }
+
+        renderSplitRows();
+        updateSplitValidation();
+        document.getElementById('splitModal').classList.add('show');
+    } catch (e) {
+        console.error('openSplitModal error:', e);
+        showToast('Failed to open split editor', 'error');
+    }
+}
+
+function closeSplitModal() {
+    document.getElementById('splitModal').classList.remove('show');
+    splitBillId = null;
+    splitRows = [];
+}
+
+function renderSplitRows() {
+    const container = document.getElementById('splitRowsContainer');
+    container.innerHTML = splitRows.map((r, i) => `
+        <div class="split-row">
+            <select class="split-project" onchange="onSplitRowChange(${i}, 'project', this.value)">
+                <option value="">Select project…</option>
+                ${canonicalProjects.map(p =>
+                    `<option value="${escapeForAttr(p)}" ${p === r.project ? 'selected' : ''}>${escapeHtml(p)}</option>`
+                ).join('')}
+            </select>
+            <input type="number" step="0.01" min="0" class="split-amount" placeholder="Amount"
+                   value="${r.amount !== '' && r.amount != null ? r.amount : ''}"
+                   oninput="onSplitRowChange(${i}, 'amount', this.value)">
+            <button class="btn-icon btn-danger" type="button" onclick="removeSplitRow(${i})"
+                    ${splitRows.length <= 2 ? 'disabled' : ''} title="Remove">&times;</button>
+        </div>
+    `).join('');
+}
+
+// Update state WITHOUT re-rendering rows (keeps input focus while typing).
+function onSplitRowChange(i, field, value) {
+    if (!splitRows[i]) return;
+    splitRows[i][field] = value;
+    updateSplitValidation();
+}
+
+function addSplitRow() {
+    splitRows.push({ project: '', amount: '' });
+    renderSplitRows();
+    updateSplitValidation();
+}
+
+function removeSplitRow(i) {
+    if (splitRows.length <= 2) return;
+    splitRows.splice(i, 1);
+    renderSplitRows();
+    updateSplitValidation();
+}
+
+function updateSplitValidation() {
+    let sum = 0;
+    let allFilled = true;
+    const chosen = [];
+    splitRows.forEach(r => {
+        const amt = parseFloat(r.amount);
+        if (!r.project || isNaN(amt) || amt <= 0) allFilled = false;
+        if (!isNaN(amt)) sum += amt;
+        if (r.project) chosen.push(r.project);
+    });
+    const remaining = splitBillTotal - sum;
+    document.getElementById('splitAllocated').textContent = formatIndianCurrency(sum);
+    document.getElementById('splitRemaining').textContent = formatIndianCurrency(remaining);
+
+    const enough = splitRows.length >= 2;
+    const noDup = new Set(chosen).size === chosen.length;
+    const balanced = Math.abs(remaining) < 0.01;
+    const ok = enough && noDup && allFilled && balanced;
+
+    const msg = document.getElementById('splitStatusMsg');
+    if (!enough) msg.textContent = 'Add at least 2 projects';
+    else if (!noDup) msg.textContent = 'A project is used twice';
+    else if (!allFilled) msg.textContent = 'Fill every row (project + amount)';
+    else if (!balanced) msg.textContent = remaining > 0 ? 'Under-allocated' : 'Over-allocated';
+    else msg.textContent = 'Balanced ✓';
+    msg.className = 'split-status ' + (ok ? 'ok' : 'warn');
+
+    document.getElementById('applySplitBtn').disabled = !ok;
+}
+
+async function saveSplit() {
+    if (!splitBillId) return;
+    const allocations = splitRows.map(r => ({
+        project: r.project,
+        amount: parseFloat(r.amount)
+    }));
+    try {
+        const res = await fetch(`/api/bills/stored/${splitBillId}/split`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ allocations })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message || 'Bill split saved', 'success');
+            closeSplitModal();
+            await loadStoredBills();
+            await loadSummary();
+        } else {
+            showToast(data.error || 'Failed to split bill', 'error');
+        }
+    } catch (e) {
+        console.error('saveSplit error:', e);
+        showToast('Failed to split bill', 'error');
+    }
+}
+
+// Un-split: assign the whole bill to a single project (the first chosen one).
+async function unsplitBill() {
+    if (!splitBillId) return;
+    const target = splitRows.map(r => r.project).find(Boolean) || '';
+    if (!target) {
+        showToast('Pick a project to assign the whole bill to', 'error');
+        return;
+    }
+    try {
+        const res = await fetch(`/api/bills/stored/${splitBillId}/project`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ project: target })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Bill un-split — assigned to one project', 'success');
+            closeSplitModal();
+            await loadStoredBills();
+            await loadSummary();
+        } else {
+            showToast(data.error || 'Failed to un-split', 'error');
+        }
+    } catch (e) {
+        console.error('unsplitBill error:', e);
+        showToast('Failed to un-split', 'error');
     }
 }
 

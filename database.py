@@ -942,6 +942,10 @@ class DatabaseManager:
                                 float(item.get('amount', 0) or 0)
                             ))
 
+                # Seed the unsplit default allocation for the new bill so it
+                # is immediately visible to allocation-based per-project reads.
+                self._resync_default_allocation(cursor, invoice_id)
+
                 conn.commit()
                 cursor.close()
 
@@ -962,25 +966,37 @@ class DatabaseManager:
     def get_all_bills(self, limit: int = 100, offset: int = 0, projects: list = None,
                        date_from: str = None, date_to: str = None,
                        added_from: str = None, added_to: str = None) -> List[Dict]:
-        """Get all bills from database with pagination and optional project/date filters"""
+        """Get all bills from database with pagination and optional project/date filters.
+
+        Reads from the allocation ledger so a split bill contributes one row
+        PER project it is allocated to, each carrying that project's share
+        (aliased back onto subtotal / total_cgst / total_amount so the response
+        shape is unchanged). An unsplit bill has a single allocation, so this is
+        identical to the old whole-bill row. `allocation_count` lets the UI flag
+        split bills; `project` is the allocation's project.
+        """
         query = """
         SELECT
             bi.id, bi.filename, bi.page_number, bi.invoice_number, bi.invoice_date,
             bi.vendor_name, bi.vendor_gstin, bi.buyer_name, bi.buyer_gstin,
-            bi.subtotal, bi.total_cgst, bi.total_sgst, bi.total_igst,
-            bi.total_amount, bi.vehicle_number, bi.eway_bill_number, bi.irn,
-            bi.project, bi.created_at,
+            a.alloc_taxable as subtotal, a.alloc_cgst as total_cgst,
+            a.alloc_sgst as total_sgst, a.alloc_igst as total_igst,
+            a.alloc_total as total_amount,
+            bi.vehicle_number, bi.eway_bill_number, bi.irn,
+            a.project as project, bi.created_at,
             bi.validation_status, bi.validation_diff, bi.validation_notes,
-            COUNT(bli.id) as line_item_count
-        FROM bill_invoices bi
-        LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
+            a.id as allocation_id, a.seq as allocation_seq,
+            (SELECT COUNT(*) FROM bill_line_items bli WHERE bli.invoice_id = bi.id) as line_item_count,
+            (SELECT COUNT(*) FROM bill_project_allocations a2 WHERE a2.invoice_id = bi.id) as allocation_count
+        FROM bill_project_allocations a
+        JOIN bill_invoices bi ON bi.id = a.invoice_id
         WHERE 1=1
         """
         params = []
 
         if projects:
             placeholders = ','.join(['%s'] * len(projects))
-            query += f" AND bi.project IN ({placeholders})"
+            query += f" AND a.project IN ({placeholders})"
             params.extend(projects)
 
         if date_from:
@@ -1000,8 +1016,7 @@ class DatabaseManager:
             params.append(added_to)
 
         query += """
-        GROUP BY bi.id
-        ORDER BY bi.invoice_date DESC, bi.created_at DESC
+        ORDER BY bi.invoice_date DESC, bi.created_at DESC, a.seq
         LIMIT %s OFFSET %s
         """
         params.extend([limit, offset])
@@ -1076,14 +1091,371 @@ class DatabaseManager:
             return None
 
     def delete_bill(self, invoice_id: int) -> bool:
-        """Delete a bill and its line items"""
-        return self.execute_query("DELETE FROM bill_invoices WHERE id = %s", (invoice_id,))
+        """Delete a bill, its line items, and its project allocations.
+
+        Allocations are removed explicitly (belt-and-suspenders) so a deleted
+        bill leaves no orphan shares even if the ON DELETE CASCADE FK could not
+        be created on the target MySQL.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                conn.autocommit = False
+                cursor.execute(
+                    "DELETE FROM bill_project_allocations WHERE invoice_id = %s",
+                    (invoice_id,)
+                )
+                cursor.execute("DELETE FROM bill_line_items WHERE invoice_id = %s", (invoice_id,))
+                cursor.execute("DELETE FROM bill_invoices WHERE id = %s", (invoice_id,))
+                conn.commit()
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error deleting bill {invoice_id}: {e}")
+            return False
 
     def update_bill_project(self, invoice_id: int, project: str) -> bool:
-        """Update the project field for a bill"""
-        return self.execute_query(
-            "UPDATE bill_invoices SET project = %s WHERE id = %s",
-            (project if project else None, invoice_id)
+        """Tag a bill with a single project — which also UN-SPLITS it.
+
+        Assigning one project means the whole bill belongs to that project, so
+        this collapses any existing split back to exactly one allocation
+        carrying the full bill on the new project. (To divide a bill across
+        projects, use set_bill_allocations via the split endpoint instead.)
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                conn.autocommit = False
+                cursor.execute(
+                    "UPDATE bill_invoices SET project = %s WHERE id = %s",
+                    (project if project else None, invoice_id)
+                )
+                # Force a single full-bill allocation on the new project,
+                # replacing whatever (split or not) was there before.
+                cursor.execute(
+                    "DELETE FROM bill_project_allocations WHERE invoice_id = %s",
+                    (invoice_id,)
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO bill_project_allocations
+                        (invoice_id, seq, project,
+                         alloc_taxable, alloc_cgst, alloc_sgst, alloc_igst, alloc_total)
+                    SELECT id, 1, project,
+                           COALESCE(subtotal, 0), COALESCE(total_cgst, 0),
+                           COALESCE(total_sgst, 0), COALESCE(total_igst, 0),
+                           COALESCE(total_amount, 0)
+                    FROM bill_invoices WHERE id = %s
+                    """,
+                    (invoice_id,)
+                )
+                conn.commit()
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error updating bill project for {invoice_id}: {e}")
+            return False
+
+    def set_bill_allocations(self, invoice_id: int, allocations: List[Dict]) -> Tuple[bool, Optional[str]]:
+        """Replace a bill's project allocations (the split write path).
+
+        allocations: list of dicts with keys project, alloc_taxable, alloc_cgst,
+        alloc_sgst, alloc_igst, alloc_total (as produced by
+        helpers.bill_split.compute_split_allocations). Written seq 1..N in order.
+
+        Sets bill_invoices.project to the MULTIPLE sentinel when there is more
+        than one allocation, or to the single project otherwise. Per-project
+        money is always read from the ledger, so the sentinel only affects
+        legacy/display readers. Returns (ok, error).
+        """
+        from helpers.bill_split import MULTI_PROJECT_TAG
+
+        if not allocations:
+            return False, "No allocations provided."
+
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                conn.autocommit = False
+
+                cursor.execute(
+                    "SELECT id FROM bill_invoices WHERE id = %s", (invoice_id,)
+                )
+                if cursor.fetchone() is None:
+                    cursor.close()
+                    return False, "Bill not found."
+
+                cursor.execute(
+                    "DELETE FROM bill_project_allocations WHERE invoice_id = %s",
+                    (invoice_id,)
+                )
+                insert_sql = """
+                    INSERT INTO bill_project_allocations
+                        (invoice_id, seq, project,
+                         alloc_taxable, alloc_cgst, alloc_sgst, alloc_igst, alloc_total)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                for i, a in enumerate(allocations, start=1):
+                    cursor.execute(insert_sql, (
+                        invoice_id, i, a['project'],
+                        float(a.get('alloc_taxable', 0) or 0),
+                        float(a.get('alloc_cgst', 0) or 0),
+                        float(a.get('alloc_sgst', 0) or 0),
+                        float(a.get('alloc_igst', 0) or 0),
+                        float(a.get('alloc_total', 0) or 0),
+                    ))
+
+                if len(allocations) > 1:
+                    bill_project = MULTI_PROJECT_TAG
+                else:
+                    bill_project = allocations[0]['project'] or None
+                cursor.execute(
+                    "UPDATE bill_invoices SET project = %s WHERE id = %s",
+                    (bill_project, invoice_id)
+                )
+
+                conn.commit()
+                cursor.close()
+                return True, None
+        except Exception as e:
+            print(f"[!] Error setting allocations for bill {invoice_id}: {e}")
+            return False, str(e)
+
+    def get_bill_allocations(self, invoice_id: int) -> List[Dict]:
+        """Return a bill's allocation rows (seq, project, alloc_* money), ordered
+        by seq. One row for an unsplit bill, N for a split one."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT id, seq, project, alloc_taxable, alloc_cgst, alloc_sgst, "
+                    "alloc_igst, alloc_total FROM bill_project_allocations "
+                    "WHERE invoice_id = %s ORDER BY seq",
+                    (invoice_id,)
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                for r in rows:
+                    for k, v in r.items():
+                        if isinstance(v, DecimalType):
+                            r[k] = float(v)
+                return rows
+        except Exception as e:
+            print(f"[!] Error fetching allocations for bill {invoice_id}: {e}")
+            return []
+
+    # ------------------------------------------------------------------
+    # Purchase-bill project allocations (per-project split ledger)
+    # ------------------------------------------------------------------
+    # A purchase bill can be split across several projects. Rather than
+    # multiplying the bill row (which would break its invoice-number unique
+    # key, file identity and dedup), the split is recorded as allocation rows
+    # in bill_project_allocations whose alloc_* columns sum EXACTLY to the
+    # bill's own subtotal / GST / total_amount. An unsplit bill is the
+    # degenerate one-allocation case (the whole bill on one project), so every
+    # per-project consumer can read allocations uniformly.
+
+    def ensure_bill_allocations_table(self):
+        """Additive, idempotent migration: create bill_project_allocations.
+
+        Safe to run repeatedly. The ON DELETE CASCADE FK is best-effort — if
+        the id column types don't line up on the target MySQL it is skipped
+        with a note (the delete path also removes allocations in app code).
+        """
+        # The alloc_* money columns mirror bill_invoices exactly (subtotal,
+        # total_cgst, total_sgst, total_igst, total_amount) so every per-project
+        # consumer is a drop-in column swap and each column sums back to the
+        # bill's own total to the paisa. Combined GST is derived as
+        # alloc_cgst + alloc_sgst + alloc_igst (no redundant column to drift).
+        create_sql = """
+        CREATE TABLE IF NOT EXISTS bill_project_allocations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            invoice_id INT NOT NULL,
+            seq INT NOT NULL DEFAULT 1,
+            project VARCHAR(255) NULL,
+            alloc_taxable DECIMAL(12,2) NOT NULL DEFAULT 0,
+            alloc_cgst DECIMAL(12,2) NOT NULL DEFAULT 0,
+            alloc_sgst DECIMAL(12,2) NOT NULL DEFAULT 0,
+            alloc_igst DECIMAL(12,2) NOT NULL DEFAULT 0,
+            alloc_total DECIMAL(12,2) NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uk_bill_alloc_invoice_seq (invoice_id, seq),
+            INDEX idx_bill_alloc_project (project)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(create_sql)
+                # Add the ON DELETE CASCADE FK once, only if absent.
+                cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS "
+                    "WHERE TABLE_SCHEMA = DATABASE() "
+                    "AND TABLE_NAME = 'bill_project_allocations' "
+                    "AND CONSTRAINT_NAME = 'fk_bill_alloc_invoice'"
+                )
+                if cursor.fetchone()[0] == 0:
+                    try:
+                        cursor.execute(
+                            "ALTER TABLE bill_project_allocations "
+                            "ADD CONSTRAINT fk_bill_alloc_invoice "
+                            "FOREIGN KEY (invoice_id) REFERENCES bill_invoices(id) "
+                            "ON DELETE CASCADE"
+                        )
+                    except Exception as fk_err:
+                        print(f"[i] bill_project_allocations FK not added "
+                              f"({fk_err}); app-level cascade covers deletes")
+                conn.commit()
+                cursor.close()
+                print("[+] bill_project_allocations table ensured")
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring bill_project_allocations table: {e}")
+            return False
+
+    def backfill_bill_allocations(self):
+        """Seed the unsplit default for any bill that has no allocation yet:
+        one allocation carrying the whole bill (subtotal / GST / total_amount)
+        on the bill's current project.
+
+        Idempotent — only bills with zero allocation rows are seeded, so
+        re-running never duplicates rows or disturbs already-split bills.
+        Returns the number of bills seeded, or -1 on error.
+        """
+        # INSERT IGNORE + the (invoice_id, seq) unique key make this safe under
+        # concurrent workers booting at once: whichever worker inserts a bill's
+        # seq=1 default first wins; the other's duplicate is skipped, never
+        # doubled.
+        insert_sql = """
+        INSERT IGNORE INTO bill_project_allocations
+            (invoice_id, seq, project,
+             alloc_taxable, alloc_cgst, alloc_sgst, alloc_igst, alloc_total)
+        SELECT b.id, 1, b.project,
+               COALESCE(b.subtotal, 0),
+               COALESCE(b.total_cgst, 0),
+               COALESCE(b.total_sgst, 0),
+               COALESCE(b.total_igst, 0),
+               COALESCE(b.total_amount, 0)
+        FROM bill_invoices b
+        LEFT JOIN bill_project_allocations a ON a.invoice_id = b.id
+        WHERE a.id IS NULL
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(insert_sql)
+                seeded = cursor.rowcount
+                conn.commit()
+                cursor.close()
+                print(f"[+] Backfilled allocations for {seeded} bill(s)")
+                return seeded
+        except Exception as e:
+            print(f"[!] Error backfilling bill allocations: {e}")
+            return -1
+
+    def verify_bill_allocations(self, tolerance: float = 0.01) -> Dict:
+        """Reliability check for the split ledger. Every bill must have at
+        least one allocation, and its alloc_* columns must sum to the bill's
+        own subtotal / GST / total_amount within `tolerance` rupees.
+
+        Returns {bills_total, bills_with_allocations, bills_missing_allocations,
+        mismatches: [...]}. `mismatches` is empty after a clean backfill.
+        """
+        result = {
+            'bills_total': 0,
+            'bills_with_allocations': 0,
+            'bills_missing_allocations': 0,
+            'mismatches': [],
+        }
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute("SELECT COUNT(*) AS c FROM bill_invoices")
+                result['bills_total'] = int((cursor.fetchone() or {}).get('c') or 0)
+
+                cursor.execute(
+                    """
+                    SELECT b.id AS invoice_id, b.invoice_number,
+                           COALESCE(b.total_amount, 0) AS bill_total,
+                           COALESCE(b.subtotal, 0) AS bill_taxable,
+                           COALESCE(b.total_cgst, 0) + COALESCE(b.total_sgst, 0)
+                               + COALESCE(b.total_igst, 0) AS bill_gst,
+                           COUNT(a.id) AS alloc_count,
+                           COALESCE(SUM(a.alloc_total), 0) AS sum_total,
+                           COALESCE(SUM(a.alloc_taxable), 0) AS sum_taxable,
+                           COALESCE(SUM(a.alloc_cgst), 0) + COALESCE(SUM(a.alloc_sgst), 0)
+                               + COALESCE(SUM(a.alloc_igst), 0) AS sum_gst
+                    FROM bill_invoices b
+                    LEFT JOIN bill_project_allocations a ON a.invoice_id = b.id
+                    GROUP BY b.id
+                    """
+                )
+                for row in cursor.fetchall():
+                    if int(row['alloc_count']) == 0:
+                        result['bills_missing_allocations'] += 1
+                        result['mismatches'].append({
+                            'invoice_id': row['invoice_id'],
+                            'invoice_number': row['invoice_number'],
+                            'reason': 'no allocations',
+                        })
+                        continue
+                    result['bills_with_allocations'] += 1
+                    d_total = abs(float(row['sum_total']) - float(row['bill_total']))
+                    d_tax = abs(float(row['sum_taxable']) - float(row['bill_taxable']))
+                    d_gst = abs(float(row['sum_gst']) - float(row['bill_gst']))
+                    if d_total > tolerance or d_tax > tolerance or d_gst > tolerance:
+                        result['mismatches'].append({
+                            'invoice_id': row['invoice_id'],
+                            'invoice_number': row['invoice_number'],
+                            'diff_total': round(d_total, 2),
+                            'diff_taxable': round(d_tax, 2),
+                            'diff_gst': round(d_gst, 2),
+                        })
+                cursor.close()
+        except Exception as e:
+            print(f"[!] Error verifying bill allocations: {e}")
+            result['error'] = str(e)
+        return result
+
+    def _resync_default_allocation(self, cursor, invoice_id):
+        """Keep the single default allocation in lock-step with an UNSPLIT bill.
+
+        Called INSIDE the bill insert/update transactions using the caller's
+        cursor — it never opens a connection, commits, or runs DDL.
+
+        - Split bill (more than one allocation): NO-OP. Allocations are
+          authoritative there and are owned by the split endpoint.
+        - Unsplit bill (zero or one allocation): (re)writes exactly one
+          allocation mirroring the bill's current project + money columns, so
+          allocation-based reads always match a freshly saved / tagged / edited
+          bill.
+        """
+        cursor.execute(
+            "SELECT COUNT(*) FROM bill_project_allocations WHERE invoice_id = %s",
+            (invoice_id,)
+        )
+        row = cursor.fetchone()
+        # Works for both plain and dictionary cursors.
+        count = list(row.values())[0] if isinstance(row, dict) else row[0]
+        if count and int(count) > 1:
+            return  # split bill — leave its allocations untouched
+        cursor.execute(
+            "DELETE FROM bill_project_allocations WHERE invoice_id = %s",
+            (invoice_id,)
+        )
+        cursor.execute(
+            """
+            INSERT INTO bill_project_allocations
+                (invoice_id, seq, project,
+                 alloc_taxable, alloc_cgst, alloc_sgst, alloc_igst, alloc_total)
+            SELECT id, 1, project,
+                   COALESCE(subtotal, 0), COALESCE(total_cgst, 0),
+                   COALESCE(total_sgst, 0), COALESCE(total_igst, 0),
+                   COALESCE(total_amount, 0)
+            FROM bill_invoices WHERE id = %s
+            """,
+            (invoice_id,)
         )
 
     def get_unique_projects(self) -> List[str]:
@@ -1102,29 +1474,37 @@ class DatabaseManager:
 
     def get_bill_count(self, projects: list = None, date_from: str = None, date_to: str = None,
                         added_from: str = None, added_to: str = None) -> int:
-        """Get total number of stored bills, optionally filtered by projects and date range"""
-        query = "SELECT COUNT(*) FROM bill_invoices WHERE 1=1"
+        """Count stored-bill rows for pagination, matching get_all_bills.
+
+        Counts allocation rows (one per project a bill is split to) so the count
+        lines up with the rows get_all_bills returns. Unsplit bills = 1 row each,
+        identical to the old whole-bill count.
+        """
+        query = (
+            "SELECT COUNT(*) FROM bill_project_allocations a "
+            "JOIN bill_invoices bi ON bi.id = a.invoice_id WHERE 1=1"
+        )
         params = []
 
         if projects:
             placeholders = ','.join(['%s'] * len(projects))
-            query += f" AND project IN ({placeholders})"
+            query += f" AND a.project IN ({placeholders})"
             params.extend(projects)
 
         if date_from:
-            query += " AND invoice_date >= %s"
+            query += " AND bi.invoice_date >= %s"
             params.append(date_from)
 
         if date_to:
-            query += " AND invoice_date <= %s"
+            query += " AND bi.invoice_date <= %s"
             params.append(date_to)
 
         if added_from:
-            query += " AND DATE(created_at) >= %s"
+            query += " AND DATE(bi.created_at) >= %s"
             params.append(added_from)
 
         if added_to:
-            query += " AND DATE(created_at) <= %s"
+            query += " AND DATE(bi.created_at) <= %s"
             params.append(added_to)
 
         result = self.fetch_all(query, tuple(params) if params else None)
@@ -1203,9 +1583,10 @@ class DatabaseManager:
             params.append(end_date)
 
         # Project matching: strict "<id> -" prefix for canonical selections,
-        # stem prefix for legacy free-text ones.
+        # stem prefix for legacy free-text ones. Matched on the allocation's
+        # project so a split bill is attributed per project.
         if project:
-            proj_cond = build_project_filter_sql('bi.project', project, params)
+            proj_cond = build_project_filter_sql('a.project', project, params)
             if proj_cond:
                 conditions.append(proj_cond)
 
@@ -1221,20 +1602,26 @@ class DatabaseManager:
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
+        # All per-project money comes from the allocation ledger (a.alloc_*),
+        # aliased back onto the bill's field names so the response is unchanged.
+        # An unsplit bill = one allocation = identical to the old whole-bill row.
+        base_from = ("FROM bill_project_allocations a "
+                     "JOIN bill_invoices bi ON bi.id = a.invoice_id")
+
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
 
-                # Count
-                count_query = f"SELECT COUNT(*) as cnt FROM bill_invoices bi WHERE {where_clause}"
+                # Count (allocation rows matching the filter)
+                count_query = f"SELECT COUNT(*) as cnt {base_from} WHERE {where_clause}"
                 cursor.execute(count_query, tuple(params) if params else None)
                 total = cursor.fetchone()['cnt']
 
                 # Summary
                 summary_query = f"""
-                SELECT COALESCE(SUM(bi.total_amount), 0) as total_amount,
-                       COALESCE(SUM(bi.total_cgst + bi.total_sgst + bi.total_igst), 0) as total_gst
-                FROM bill_invoices bi WHERE {where_clause}
+                SELECT COALESCE(SUM(a.alloc_total), 0) as total_amount,
+                       COALESCE(SUM(a.alloc_cgst + a.alloc_sgst + a.alloc_igst), 0) as total_gst
+                {base_from} WHERE {where_clause}
                 """
                 cursor.execute(summary_query, tuple(params) if params else None)
                 summary_row = cursor.fetchone()
@@ -1248,14 +1635,14 @@ class DatabaseManager:
                 data_query = f"""
                 SELECT
                     bi.id, bi.invoice_number, bi.invoice_date, bi.vendor_name, bi.vendor_gstin,
-                    bi.buyer_name, bi.subtotal, bi.total_cgst, bi.total_sgst, bi.total_igst,
-                    bi.total_amount, bi.project,
-                    COUNT(bli.id) as line_item_count
-                FROM bill_invoices bi
-                LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
+                    bi.buyer_name, a.alloc_taxable as subtotal, a.alloc_cgst as total_cgst,
+                    a.alloc_sgst as total_sgst, a.alloc_igst as total_igst,
+                    a.alloc_total as total_amount, a.project,
+                    (SELECT COUNT(*) FROM bill_line_items bli WHERE bli.invoice_id = bi.id) as line_item_count,
+                    (SELECT COUNT(*) FROM bill_project_allocations a2 WHERE a2.invoice_id = bi.id) as allocation_count
+                {base_from}
                 WHERE {where_clause}
-                GROUP BY bi.id
-                ORDER BY bi.invoice_date DESC, bi.id DESC
+                ORDER BY bi.invoice_date DESC, bi.id DESC, a.seq
                 LIMIT %s OFFSET %s
                 """
                 data_params = list(params) + [per_page, offset]
@@ -1393,22 +1780,47 @@ class DatabaseManager:
         else:
             table, items_table = 'bill_invoices', 'bill_line_items'
 
-        conds = ["TRIM(b.project) LIKE %s", "TRIM(b.project) LIKE %s"]
+        empty_summary = {'count': 0, 'total_taxable': 0.0,
+                         'total_gst': 0.0, 'total_amount': 0.0}
+
+        # Purchase bills carry a per-project split ledger: read money from the
+        # allocations (a.alloc_*) so a bill split across projects contributes
+        # only its share here — which flows straight into compute_project_finance
+        # (this summary is its `purchase` input) with no change there. Sales
+        # invoices are never split, so they read from the invoice table directly.
+        if kind == 'sales':
+            money_taxable = 'b.subtotal'
+            money_cgst, money_sgst, money_igst = 'b.total_cgst', 'b.total_sgst', 'b.total_igst'
+            money_total = 'b.total_amount'
+            base_from = f"{table} b"
+            proj_col = 'b.project'
+            count_expr = 'COUNT(*)'
+        else:
+            money_taxable = 'a.alloc_taxable'
+            money_cgst, money_sgst, money_igst = 'a.alloc_cgst', 'a.alloc_sgst', 'a.alloc_igst'
+            money_total = 'a.alloc_total'
+            base_from = ("bill_project_allocations a "
+                         "JOIN bill_invoices b ON b.id = a.invoice_id")
+            proj_col = 'a.project'
+            count_expr = 'COUNT(DISTINCT b.id)'
+
+        money_gst = (f"COALESCE({money_cgst}, 0) + COALESCE({money_sgst}, 0) "
+                     f"+ COALESCE({money_igst}, 0)")
+
+        conds = [f"TRIM({proj_col}) LIKE %s", f"TRIM({proj_col}) LIKE %s"]
         params = [f"{project_id} -%", f"{project_id}-%"]
         where_clause = " OR ".join(conds)
 
-        empty_summary = {'count': 0, 'total_taxable': 0.0,
-                         'total_gst': 0.0, 'total_amount': 0.0}
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
 
                 cursor.execute(
-                    f"SELECT COUNT(*) AS cnt, "
-                    f"COALESCE(SUM(b.subtotal), 0) AS total_taxable, "
-                    f"COALESCE(SUM(b.total_amount), 0) AS total_amount, "
-                    f"COALESCE(SUM(COALESCE(b.total_cgst, 0) + COALESCE(b.total_sgst, 0) + COALESCE(b.total_igst, 0)), 0) AS total_gst "
-                    f"FROM {table} b WHERE {where_clause}",
+                    f"SELECT {count_expr} AS cnt, "
+                    f"COALESCE(SUM({money_taxable}), 0) AS total_taxable, "
+                    f"COALESCE(SUM({money_total}), 0) AS total_amount, "
+                    f"COALESCE(SUM({money_gst}), 0) AS total_gst "
+                    f"FROM {base_from} WHERE {where_clause}",
                     tuple(params)
                 )
                 agg = cursor.fetchone() or {}
@@ -1423,13 +1835,13 @@ class DatabaseManager:
                     f"""
                     SELECT b.id, b.invoice_number, b.invoice_date,
                            b.vendor_name, b.buyer_name,
-                           b.subtotal, b.total_cgst, b.total_sgst, b.total_igst,
-                           b.total_amount, b.project,
-                           COUNT(li.id) AS line_item_count
-                    FROM {table} b
-                    LEFT JOIN {items_table} li ON b.id = li.invoice_id
+                           {money_taxable} AS subtotal,
+                           {money_cgst} AS total_cgst, {money_sgst} AS total_sgst,
+                           {money_igst} AS total_igst,
+                           {money_total} AS total_amount, {proj_col} AS project,
+                           (SELECT COUNT(*) FROM {items_table} li WHERE li.invoice_id = b.id) AS line_item_count
+                    FROM {base_from}
                     WHERE {where_clause}
-                    GROUP BY b.id
                     ORDER BY b.invoice_date DESC, b.id DESC
                     LIMIT %s
                     """,
@@ -1461,9 +1873,15 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
+                # One (project, vendor) row per allocation, so a bill split
+                # across projects marks EVERY project it touches as billed for
+                # that vendor — otherwise a split-away project would wrongly
+                # flag its matching material-purchase debit as "no bill".
                 cursor.execute(
-                    "SELECT project, vendor_name FROM bill_invoices "
-                    "WHERE project IS NOT NULL AND project <> ''"
+                    "SELECT a.project AS project, bi.vendor_name AS vendor_name "
+                    "FROM bill_project_allocations a "
+                    "JOIN bill_invoices bi ON bi.id = a.invoice_id "
+                    "WHERE a.project IS NOT NULL AND a.project <> ''"
                 )
                 rows = cursor.fetchall()
                 cursor.close()
@@ -1492,13 +1910,20 @@ class DatabaseManager:
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
+        # Read per-project shares from the allocation ledger: a split bill yields
+        # one export entry PER project (grouped by allocation seq), with header
+        # money = its allocated share and line-item money scaled by the same
+        # ratio, so each project's export reconciles to its share. An unsplit
+        # bill has one allocation with ratio 1.0 — identical to the old rows.
         query = f"""
         SELECT
-            bi.id as bill_id, bi.invoice_number, bi.invoice_date,
+            bi.id as bill_id, a.seq as alloc_seq, bi.invoice_number, bi.invoice_date,
             bi.vendor_name, bi.vendor_gstin,
-            bi.project, bi.subtotal,
-            bi.total_cgst, bi.total_sgst, bi.total_igst,
-            bi.total_amount,
+            a.project as project,
+            a.alloc_taxable as subtotal,
+            a.alloc_cgst as total_cgst, a.alloc_sgst as total_sgst, a.alloc_igst as total_igst,
+            a.alloc_total as total_amount,
+            bi.total_amount as bill_total_amount,
             bli.description as item_description,
             bli.hsn_sac_code as item_hsn_sac,
             bli.quantity as item_quantity,
@@ -1509,10 +1934,11 @@ class DatabaseManager:
             bli.sgst_amount as item_sgst,
             bli.igst_amount as item_igst,
             bli.amount as item_amount
-        FROM bill_invoices bi
+        FROM bill_project_allocations a
+        JOIN bill_invoices bi ON bi.id = a.invoice_id
         LEFT JOIN bill_line_items bli ON bi.id = bli.invoice_id
         WHERE {where_clause}
-        ORDER BY bi.id, bli.sl_no
+        ORDER BY bi.id, a.seq, bli.sl_no
         """
 
         try:
@@ -1522,17 +1948,21 @@ class DatabaseManager:
                 rows = cursor.fetchall()
                 cursor.close()
 
-                # Group flat JOIN rows by bill_id using OrderedDict
+                # Group flat JOIN rows by (bill_id, allocation seq): one export
+                # entry per project a bill is allocated to.
                 from collections import OrderedDict
                 bills_map = OrderedDict()
                 for row in rows:
-                    bid = row['bill_id']
-                    if bid not in bills_map:
+                    key = (row['bill_id'], row['alloc_seq'])
+                    if key not in bills_map:
                         inv_date = row.get('invoice_date')
                         if inv_date and hasattr(inv_date, 'strftime'):
                             inv_date = inv_date.strftime('%d-%b-%Y')
-                        bills_map[bid] = {
-                            'bill_id': bid,
+                        alloc_total = float(row['total_amount']) if row.get('total_amount') else 0
+                        bill_total = float(row['bill_total_amount']) if row.get('bill_total_amount') else 0
+                        ratio = (alloc_total / bill_total) if bill_total else 1.0
+                        bills_map[key] = {
+                            'bill_id': row['bill_id'],
                             'invoice_number': row.get('invoice_number', ''),
                             'invoice_date': inv_date,
                             'vendor_name': row.get('vendor_name', ''),
@@ -1542,24 +1972,31 @@ class DatabaseManager:
                             'total_cgst': float(row['total_cgst']) if row.get('total_cgst') else 0,
                             'total_sgst': float(row['total_sgst']) if row.get('total_sgst') else 0,
                             'total_igst': float(row['total_igst']) if row.get('total_igst') else 0,
-                            'total_amount': float(row['total_amount']) if row.get('total_amount') else 0,
+                            'total_amount': alloc_total,
+                            '_ratio': ratio,
                             'line_items': []
                         }
-                    # Add line item if present
+                    # Add line item if present, scaling money columns by the
+                    # allocation ratio so a split bill's per-project lines sum to
+                    # its share (quantity/rate stay the physical, full-bill values).
                     if row.get('item_description'):
-                        bills_map[bid]['line_items'].append({
+                        r = bills_map[key]['_ratio']
+                        bills_map[key]['line_items'].append({
                             'description': row['item_description'],
                             'hsn_sac_code': row.get('item_hsn_sac', ''),
                             'quantity': float(row['item_quantity']) if row.get('item_quantity') else 0,
                             'uom': row.get('item_uom', ''),
                             'rate_per_unit': float(row['item_rate']) if row.get('item_rate') else 0,
-                            'taxable_value': float(row['item_taxable']) if row.get('item_taxable') else 0,
-                            'cgst_amount': float(row['item_cgst']) if row.get('item_cgst') else 0,
-                            'sgst_amount': float(row['item_sgst']) if row.get('item_sgst') else 0,
-                            'igst_amount': float(row['item_igst']) if row.get('item_igst') else 0,
-                            'amount': float(row['item_amount']) if row.get('item_amount') else 0
+                            'taxable_value': (float(row['item_taxable']) if row.get('item_taxable') else 0) * r,
+                            'cgst_amount': (float(row['item_cgst']) if row.get('item_cgst') else 0) * r,
+                            'sgst_amount': (float(row['item_sgst']) if row.get('item_sgst') else 0) * r,
+                            'igst_amount': (float(row['item_igst']) if row.get('item_igst') else 0) * r,
+                            'amount': (float(row['item_amount']) if row.get('item_amount') else 0) * r
                         })
 
+                # Drop the internal ratio helper before returning.
+                for entry in bills_map.values():
+                    entry.pop('_ratio', None)
                 return list(bills_map.values())
 
         except Exception as e:
@@ -3517,6 +3954,10 @@ class DatabaseManager:
                                 float(item.get('igst_amount', 0) or 0),
                                 float(item.get('amount', 0) or 0)
                             ))
+
+                # Keep the unsplit default allocation in sync with the edited
+                # project / money columns (no-op for split bills).
+                self._resync_default_allocation(cursor, invoice_id)
 
                 conn.commit()
                 cursor.close()

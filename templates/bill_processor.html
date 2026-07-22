@@ -454,6 +454,36 @@
         </div>
     </div>
 
+    <!-- Split Modal -->
+    <div class="modal" id="splitModal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h3>Split Bill Across Projects</h3>
+                <button class="modal-close" id="closeSplitModal" onclick="closeSplitModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="split-bill-summary">
+                    <div><span class="split-label">Invoice</span><span id="splitInvoiceNo">-</span></div>
+                    <div><span class="split-label">Vendor</span><span id="splitVendor">-</span></div>
+                    <div><span class="split-label">Bill Total</span><span id="splitBillTotal">-</span></div>
+                </div>
+                <p class="split-hint">Enter the amount for each project. GST is split in the same proportion, and the amounts must add up to the bill total.</p>
+                <div id="splitRowsContainer" class="split-rows"></div>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="addSplitRow()">+ Add project</button>
+                <div class="split-validation">
+                    <span>Allocated: <strong id="splitAllocated">-</strong></span>
+                    <span>Remaining: <strong id="splitRemaining">-</strong></span>
+                    <span id="splitStatusMsg" class="split-status"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger btn-sm" id="unsplitBtn" type="button" onclick="unsplitBill()" style="display:none; margin-right:auto;">Un-split</button>
+                <button class="btn btn-secondary btn-sm" type="button" onclick="closeSplitModal()">Cancel</button>
+                <button class="btn btn-primary btn-sm" id="applySplitBtn" type="button" onclick="saveSplit()" disabled>Save Split</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Detail Modal -->
     <div class="modal" id="detailModal">
         <div class="modal-content modal-large">

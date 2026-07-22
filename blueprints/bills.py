@@ -12,6 +12,7 @@ from config import Config, now_ist
 from extensions import db_manager
 from bill_processor import process_bill_file, generate_excel, format_extracted_data_for_display
 from helpers.projects import validate_project_value
+from helpers.bill_split import compute_split_allocations, validate_split_targets
 from helpers.invoices import _reprocess_invoice, _set_invoice_validation
 from auth import login_required
 
@@ -23,6 +24,7 @@ bp = Blueprint('bills', __name__)
 def bill_processor_page():
     """Render bill processor page"""
     # Ensure the reconciliation/validation columns exist (additive migration).
+    # The split-ledger table is ensured once at app startup (see create_app).
     db_manager.ensure_validation_columns()
     return render_template('bill_processor.html')
 
@@ -259,6 +261,74 @@ def update_bill_project(invoice_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@bp.route('/api/bills/stored/<int:invoice_id>/allocations', methods=['GET'])
+@login_required
+def get_bill_allocations(invoice_id):
+    """Return a bill's current per-project allocations (for the split editor)."""
+    try:
+        bill = db_manager.get_bill_detail(invoice_id)
+        if not bill:
+            return jsonify({'success': False, 'error': 'Bill not found'}), 404
+        allocations = db_manager.get_bill_allocations(invoice_id)
+        return jsonify({
+            'success': True,
+            'invoice_id': invoice_id,
+            'invoice_number': bill.get('invoice_number'),
+            'vendor_name': bill.get('vendor_name'),
+            'total_amount': float(bill.get('total_amount') or 0),
+            'is_split': len(allocations) > 1,
+            'allocations': allocations,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@bp.route('/api/bills/stored/<int:invoice_id>/split', methods=['POST'])
+@login_required
+def split_bill(invoice_id):
+    """Split a single purchase bill across multiple projects by rupee amount.
+
+    Body: {"allocations": [{"project": "<canonical>", "amount": <float>}, ...]}.
+    The amounts must sum to the bill's grand total; taxable/CGST/SGST/IGST are
+    apportioned in the same proportion so every column reconciles to the paisa.
+    """
+    try:
+        data = request.json or {}
+        targets = data.get('allocations') or []
+
+        bill = db_manager.get_bill_detail(invoice_id)
+        if not bill:
+            return jsonify({'success': False, 'error': 'Bill not found'}), 404
+
+        # Validate every project against the canonical registry, normalising as
+        # we go (same guard the single-project tag uses).
+        normalized = []
+        for t in targets:
+            ok, proj, perr = validate_project_value((t or {}).get('project'))
+            if not ok or not proj:
+                return jsonify({'success': False,
+                                'error': perr or 'Each split row needs a registered project.'}), 400
+            normalized.append({'project': proj, 'amount': t.get('amount')})
+
+        # Validate amounts vs the bill total, then compute proportional shares.
+        ok, verr = validate_split_targets(bill.get('total_amount'), normalized)
+        if not ok:
+            return jsonify({'success': False, 'error': verr}), 400
+
+        allocations = compute_split_allocations(bill, normalized)
+        saved, serr = db_manager.set_bill_allocations(invoice_id, allocations)
+        if not saved:
+            return jsonify({'success': False, 'error': serr or 'Failed to save split'}), 500
+
+        return jsonify({
+            'success': True,
+            'message': f'Bill split across {len(allocations)} projects',
+            'allocations': db_manager.get_bill_allocations(invoice_id),
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @bp.route('/api/bills/projects')
 @login_required
 def get_bill_projects():
@@ -292,39 +362,44 @@ def get_bills_summary():
         elif project:
             projects_list = [project]
 
+        # Money comes from the allocation ledger (a.alloc_*) so a split bill
+        # contributes only its per-project share; invoice/vendor counts are
+        # DISTINCT on the bill so a split bill still counts as one document.
+        # Unsplit bills = one allocation each, identical to the old figures.
         query = """
         SELECT
-            COUNT(*) as cnt,
-            COALESCE(SUM(total_amount), 0) as sum_value,
-            COALESCE(SUM(COALESCE(total_cgst, 0) + COALESCE(total_sgst, 0) + COALESCE(total_igst, 0)), 0) as sum_gst,
-            COALESCE(SUM(COALESCE(total_cgst, 0)), 0) as sum_cgst,
-            COALESCE(SUM(COALESCE(total_sgst, 0)), 0) as sum_sgst,
-            COALESCE(SUM(COALESCE(total_igst, 0)), 0) as sum_igst,
-            COUNT(DISTINCT vendor_name) as vendor_cnt
-        FROM bill_invoices
+            COUNT(DISTINCT bi.id) as cnt,
+            COALESCE(SUM(a.alloc_total), 0) as sum_value,
+            COALESCE(SUM(COALESCE(a.alloc_cgst, 0) + COALESCE(a.alloc_sgst, 0) + COALESCE(a.alloc_igst, 0)), 0) as sum_gst,
+            COALESCE(SUM(COALESCE(a.alloc_cgst, 0)), 0) as sum_cgst,
+            COALESCE(SUM(COALESCE(a.alloc_sgst, 0)), 0) as sum_sgst,
+            COALESCE(SUM(COALESCE(a.alloc_igst, 0)), 0) as sum_igst,
+            COUNT(DISTINCT bi.vendor_name) as vendor_cnt
+        FROM bill_project_allocations a
+        JOIN bill_invoices bi ON bi.id = a.invoice_id
         WHERE 1=1
         """
         params = []
 
         if projects_list:
             placeholders = ','.join(['%s'] * len(projects_list))
-            query += f" AND project IN ({placeholders})"
+            query += f" AND a.project IN ({placeholders})"
             params.extend(projects_list)
 
         if date_from:
-            query += " AND invoice_date >= %s"
+            query += " AND bi.invoice_date >= %s"
             params.append(date_from)
 
         if date_to:
-            query += " AND invoice_date <= %s"
+            query += " AND bi.invoice_date <= %s"
             params.append(date_to)
 
         if added_from:
-            query += " AND DATE(created_at) >= %s"
+            query += " AND DATE(bi.created_at) >= %s"
             params.append(added_from)
 
         if added_to:
-            query += " AND DATE(created_at) <= %s"
+            query += " AND DATE(bi.created_at) <= %s"
             params.append(added_to)
 
         result = db_manager.fetch_all(query, tuple(params) if params else None)

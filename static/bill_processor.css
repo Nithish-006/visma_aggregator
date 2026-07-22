@@ -3306,3 +3306,83 @@ textarea.form-input {
 .bulk-log-row.fail { color: var(--error-color); }
 .bulk-log-icon { font-weight: 700; margin-right: 4px; }
 .bulk-progress-summary { margin-top: 12px; font-weight: 600; font-size: 0.85rem; }
+
+/* ============================================================
+   SPLIT BILL ACROSS PROJECTS
+   ============================================================ */
+.btn-split { color: var(--accent-color); }
+.btn-split:hover { background: var(--bg-hover); }
+
+.split-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1px 6px;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+.project-cell.is-split .project-text { font-weight: 600; }
+
+.split-bill-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+.split-bill-summary > div { display: flex; flex-direction: column; }
+.split-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+.split-bill-summary span:not(.split-label) { font-weight: 600; }
+
+.split-hint { font-size: 0.78rem; color: var(--text-muted); margin: 0 0 10px; }
+
+.split-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.split-row { display: flex; gap: 8px; align-items: center; }
+.split-row .split-project {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 7px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+.split-row .split-amount {
+    flex: 0 0 130px;
+    padding: 7px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    text-align: right;
+}
+.split-row .btn-icon.btn-danger { flex: 0 0 auto; }
+
+.split-validation {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.85rem;
+}
+.split-status { margin-left: auto; font-weight: 700; }
+.split-status.ok { color: var(--success-color); }
+.split-status.warn { color: var(--warning-color); }

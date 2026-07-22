@@ -45,6 +45,14 @@ def create_app():
     # saves. Doing it here means the schema is ready before the first request.
     db_manager.ensure_projects_table()
 
+    # Ensure the purchase-bill split ledger exists and every bill has its
+    # unsplit default allocation before any request runs. Per-project bill
+    # reads are allocation-based and the bill write paths keep the allocation
+    # in lock-step, so the table must exist up front (DDL can't run inside the
+    # write transactions without breaking their atomicity).
+    db_manager.ensure_bill_allocations_table()
+    db_manager.backfill_bill_allocations()
+
     # Load legacy data at startup (populates extensions.state.df_global)
     reload_data()
 
