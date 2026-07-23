@@ -2423,12 +2423,16 @@ textarea.form-input {
    MOBILE INVOICE CARDS (Replaces Table)
    ============================================================================ */
 
+/* `overflow-x: hidden` would force overflow-y to compute to `auto`, turning
+   this list into a scroll container with zero scroll range — a touch drag
+   starting on a card then latches onto it and never reaches the page. `clip`
+   still contains a too-wide card but creates no scroll box. */
 .mobile-invoice-list {
     display: none;
     padding: 12px;
     gap: 12px;
     width: 100%;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 .invoice-card {
@@ -2894,9 +2898,11 @@ textarea.form-input {
         min-height: 44px;
     }
 
-    /* Smooth scrolling */
-    .modal-body,
-    .mobile-invoice-list {
+    /* Smooth scrolling. Only the modal body gets `overscroll-behavior:
+       contain` — it is a real scroller, so containing it stops the page
+       behind the sheet from scrolling too. The invoice list must NOT have it:
+       it never scrolls itself, so containing it just swallows the gesture. */
+    .modal-body {
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
     }
