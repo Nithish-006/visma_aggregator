@@ -247,9 +247,11 @@
                 const optionEl = document.createElement('div');
                 optionEl.className = `ps-dd-option ${this.selectedValues.has(item) ? 'selected' : ''}`;
                 optionEl.dataset.value = item;
+                const isMatPurchase = (this.type === 'category' && item && item.toUpperCase() === 'MATERIAL PURCHASE');
+                const displayItem = isMatPurchase ? 'Material Purchase (from statements)' : item;
                 optionEl.innerHTML = `
                     <div class="ps-dd-checkbox"></div>
-                    <span>${escapeHtml(item)}</span>
+                    <span>${escapeHtml(displayItem)}</span>
                 `;
                 optionEl.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -284,7 +286,9 @@
                 this.triggerText.textContent = this.placeholder;
                 this.triggerBtn.classList.remove('has-selection');
             } else if (this.selectedValues.size === 1) {
-                this.triggerText.textContent = Array.from(this.selectedValues)[0];
+                const val = Array.from(this.selectedValues)[0];
+                const isMatPurchase = (this.type === 'category' && val && val.toUpperCase() === 'MATERIAL PURCHASE');
+                this.triggerText.textContent = isMatPurchase ? 'Material Purchase (from statements)' : val;
                 this.triggerBtn.classList.add('has-selection');
             } else {
                 this.triggerText.textContent = `${this.selectedValues.size} Selected`;
@@ -319,7 +323,11 @@
 
         filterOptions(query) {
             const q = query.toLowerCase();
-            const filtered = this.options.filter(item => item.toLowerCase().includes(q));
+            const filtered = this.options.filter(item => {
+                const isMatPurchase = (this.type === 'category' && item && item.toUpperCase() === 'MATERIAL PURCHASE');
+                const displayItem = isMatPurchase ? 'Material Purchase (from statements)' : item;
+                return item.toLowerCase().includes(q) || displayItem.toLowerCase().includes(q);
+            });
             this.renderOptions(filtered);
         }
 
@@ -422,8 +430,10 @@
             </span>`;
         });
         state.filters.category.forEach(val => {
+            const isMatPurchase = (val && val.toUpperCase() === 'MATERIAL PURCHASE');
+            const displayVal = isMatPurchase ? 'Material Purchase (from statements)' : val;
             html += `<span class="ps-cf-chip category" data-type="category" data-value="${escapeHtml(val)}">
-                ${escapeHtml(val)}
+                ${escapeHtml(displayVal)}
                 <svg class="ps-cf-remove" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </span>`;
         });
@@ -802,8 +812,10 @@
             const pct = maxAmount > 0 ? (c.amount / maxAmount * 100) : 0;
             const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
             const isActive = isCrossFilterActive('category', c.category);
+            const isMatPurchase = (c.category && (c.category.toUpperCase() === 'MATERIAL PURCHASE' || c.category === 'Material Purchase (from statements)'));
+            const displayLabel = c.display_category || (isMatPurchase ? 'Material Purchase (from statements)' : c.category);
             return `<div class="ps-cat-row ps-clickable ${isActive ? 'ps-cf-active' : ''}" data-cf-type="category" data-cf-value="${escapeHtml(c.category)}">
-                <div class="ps-cat-label" title="${escapeHtml(c.category)}">${escapeHtml(c.category)}</div>
+                <div class="ps-cat-label" title="${escapeHtml(displayLabel)}">${escapeHtml(displayLabel)}</div>
                 <div class="ps-cat-bar-wrap">
                     <div class="ps-cat-bar-track">
                         <div class="ps-cat-bar-fill" style="width: ${pct}%; background: ${color};"></div>

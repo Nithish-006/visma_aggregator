@@ -127,8 +127,10 @@ def get_project_summary_combined():
         for cat_name, row in cat_totals.iterrows():
             amt = float(row['sum'])
             pct = (amt / total_exp * 100) if total_exp > 0 else 0
+            display_cat = "Material Purchase (from statements)" if cat_name == "MATERIAL PURCHASE" else cat_name
             category_breakdown.append({
                 'category': cat_name,
+                'display_category': display_cat,
                 'amount': amt,
                 'amount_formatted': format_indian_number(amt),
                 'count': int(row['count']),
