@@ -601,6 +601,10 @@
         document.getElementById('ps-landing').classList.remove('hidden');
         document.getElementById('export-btn').classList.add('hidden');
         document.getElementById('ps-title').textContent = 'Project Summary';
+        // Drop the previous project's conflict queue: the next open repaints it,
+        // and a stale one flashing under a new project's title reads as its own.
+        const recon = document.getElementById('ps-recon');
+        if (recon) recon.innerHTML = '';
         window.scrollTo(0, 0);
     }
 
@@ -631,7 +635,11 @@
         try {
             // Painted once per open, alongside the filtered sections rather than
             // inside refreshAll — the filters don't reach it.
-            await Promise.all([renderGlance(state.currentProjectId), refreshAll()]);
+            await Promise.all([
+                renderGlance(state.currentProjectId),
+                renderRecon(state.currentProject),
+                refreshAll(),
+            ]);
         } finally {
             hideLoading();
         }
@@ -795,6 +803,33 @@
         } catch (err) {
             console.error('Glance error:', err);
             el.innerHTML = '<div class="ps-empty">Couldn\'t load the project figures.</div>';
+        }
+    }
+
+    // ── Render: Material reconciliation (right column) ─────────────────
+    // Purchase bills against the bank's MATERIAL PURCHASE debits, per supplier.
+    // Painted once per open, like the glance and for the same reason: it is a
+    // whole-project statement, and a month pill over it would pair one month of
+    // payments with every bill and manufacture conflicts out of ordinary
+    // part-payment timing. The panel says so in its own subtitle.
+    async function renderRecon(project) {
+        const el = document.getElementById('ps-recon');
+        if (!el) return;
+        if (!project) { el.innerHTML = ''; return; }
+        el.innerHTML = '<div class="ps-glance-loading">Checking bills against payments…</div>';
+        try {
+            const data = await fetchJSON('/api/project-summary/material-reconciliation?'
+                + new URLSearchParams({ project }).toString());
+            if (state.currentProject !== project) return; // navigated away
+            MaterialRecon.mount(el, data, {
+                project,
+                // Reuse the page's own bill modal rather than a second one, so a
+                // bill looks the same wherever it is opened from.
+                onBillClick: viewBillDetail,
+            });
+        } catch (err) {
+            console.error('Reconciliation error:', err);
+            el.innerHTML = '<div class="ps-empty">Couldn\'t run the bill-vs-payment check.</div>';
         }
     }
 

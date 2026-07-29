@@ -1,0 +1,569 @@
+/* ============================================================================
+   Material reconciliation panel — purchase bills vs bank material spend.
+
+   Rendered by material_recon.js, mounted in the project-summary page's right
+   column. Everything here is scoped under .mr-* so the panel can be dropped
+   into any page that loads theme.css.
+
+   The visual job: at a glance, is this project clean? If not, the biggest
+   disagreement must be the first thing the eye lands on, and getting from it
+   to the screen that fixes it must be one click.
+   ============================================================================ */
+
+.mr-panel {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: 14px;
+    padding: 1.1rem 1.1rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.mr-panel--muted {
+    background: var(--c-surface-soft);
+}
+
+/* == Header ========================================================== */
+
+.mr-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.mr-head-text {
+    min-width: 0;
+}
+
+.mr-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--c-text);
+}
+
+.mr-sub {
+    margin: 0.2rem 0 0;
+    font-size: 0.74rem;
+    line-height: 1.35;
+    color: var(--c-text-soft);
+}
+
+/* The scope caveat carries a tooltip, so it needs to look like it does. */
+.mr-sub span {
+    border-bottom: 1px dotted var(--c-border-strong);
+    cursor: help;
+}
+
+/* The verdict badge: the one thing worth reading from across the desk. */
+.mr-flag {
+    flex-shrink: 0;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.mr-flag--ok {
+    background: var(--c-success-soft);
+    color: var(--c-success-deep);
+}
+
+.mr-flag--bad {
+    background: var(--c-danger-soft);
+    color: var(--c-danger-deep);
+}
+
+/* == Balance: the two sides, to scale ================================= */
+
+.mr-balance {
+    background: var(--c-surface-soft);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    padding: 0.75rem 0.85rem;
+}
+
+.mr-scale-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.mr-scale-k {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--c-text-soft);
+}
+
+.mr-scale-v {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--c-text);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Two bars on a shared scale: the gap between them IS the finding, so it is
+   drawn rather than only stated. */
+.mr-bar {
+    height: 6px;
+    margin: 0.3rem 0 0.7rem;
+    border-radius: 999px;
+    background: var(--c-border);
+    overflow: hidden;
+}
+
+.mr-bar:last-of-type {
+    margin-bottom: 0.55rem;
+}
+
+.mr-bar i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--c-teal);
+    transition: width 0.35s ease;
+}
+
+.mr-bar--paid i {
+    background: var(--c-accent);
+}
+
+.mr-verdict {
+    margin: 0;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--c-border);
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.mr-verdict--ok { color: var(--c-success-deep); }
+.mr-verdict--warn { color: var(--c-warning-deep); }
+.mr-verdict--bad { color: var(--c-danger-deep); }
+
+/* What each kind of conflict is worth. Sits under the net figure precisely
+   because the net hides it — two ₹5L findings can cancel to zero. */
+.mr-exposure {
+    margin: 0.55rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.22rem;
+}
+
+.mr-exposure-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.74rem;
+}
+
+.mr-exposure-row dt {
+    color: var(--c-text-soft);
+}
+
+.mr-exposure-row dd {
+    margin: 0;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.mr-exposure-row--bad dd { color: var(--c-danger-deep); }
+.mr-exposure-row--warn dd { color: var(--c-warning-deep); }
+
+.mr-allclear,
+.mr-empty {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--c-text-soft);
+}
+
+.mr-warnline {
+    margin: 0;
+    padding: 0.45rem 0.6rem;
+    border-radius: 8px;
+    background: var(--c-warning-soft);
+    color: var(--c-warning-deep);
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+/* == Filter chips ===================================================== */
+
+.mr-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.mr-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+    padding: 0.3rem 0.55rem;
+    border: 1px solid var(--c-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--c-text-soft);
+    font-family: inherit;
+    font-size: 0.71rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.mr-chip span {
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: var(--c-border);
+    color: var(--c-text);
+    font-size: 0.68rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.mr-chip:hover {
+    border-color: var(--c-border-strong);
+    color: var(--c-text);
+}
+
+.mr-chip.active {
+    background: var(--c-text);
+    border-color: var(--c-text);
+    color: var(--c-bg);
+}
+
+.mr-chip.active span {
+    background: rgba(255, 255, 255, 0.22);
+    color: inherit;
+}
+
+/* == Rows ============================================================= */
+
+.mr-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    /* The queue can run long on a bad project; the panel keeps its own scroll
+       so the page around it doesn't stretch to match. */
+    max-height: 60vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.mr-row {
+    border: 1px solid var(--c-border);
+    border-left: 3px solid var(--c-border-strong);
+    border-radius: 9px;
+    background: var(--c-surface);
+    overflow: hidden;
+}
+
+/* Severity reads off the left edge before any text is parsed. */
+.mr-row--bad { border-left-color: var(--c-danger); }
+.mr-row--warn { border-left-color: var(--c-warning); }
+.mr-row--ok { border-left-color: var(--c-success); }
+
+.mr-row.open {
+    border-color: var(--c-border-strong);
+    background: var(--c-surface-soft);
+}
+
+.mr-row-head {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 14px;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.6rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.mr-row-head:hover {
+    background: var(--c-surface-soft);
+}
+
+.mr-row-main {
+    min-width: 0;
+}
+
+.mr-vendor {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--c-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mr-row-meta {
+    display: block;
+    margin-top: 0.12rem;
+    font-size: 0.7rem;
+    color: var(--c-text-soft);
+    font-variant-numeric: tabular-nums;
+}
+
+.mr-row-meta i {
+    font-style: normal;
+    opacity: 0.5;
+    padding: 0 0.15rem;
+}
+
+.mr-row-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+}
+
+.mr-badge {
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.63rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.mr-row--bad .mr-badge { background: var(--c-danger-soft); color: var(--c-danger-deep); }
+.mr-row--warn .mr-badge { background: var(--c-warning-soft); color: var(--c-warning-deep); }
+.mr-row--ok .mr-badge { background: var(--c-success-soft); color: var(--c-success-deep); }
+
+.mr-diff {
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.mr-row--bad .mr-diff { color: var(--c-danger-deep); }
+.mr-row--warn .mr-diff { color: var(--c-warning-deep); }
+.mr-row--ok .mr-diff { color: var(--c-text-soft); }
+
+.mr-chev {
+    color: var(--c-text-soft);
+    transition: transform 0.18s ease;
+}
+
+.mr-row.open .mr-chev {
+    transform: rotate(180deg);
+}
+
+/* == Expanded body: the evidence ====================================== */
+
+.mr-row-body {
+    padding: 0.1rem 0.6rem 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    border-top: 1px solid var(--c-border);
+}
+
+.mr-hint {
+    margin: 0.55rem 0 0;
+    font-size: 0.73rem;
+    line-height: 1.45;
+    color: var(--c-text-soft);
+}
+
+.mr-aliases {
+    margin: 0;
+    font-size: 0.7rem;
+    color: var(--c-text-soft);
+}
+
+.mr-aliases span {
+    display: inline-block;
+    margin: 0.1rem 0.2rem 0 0;
+    padding: 0.05rem 0.32rem;
+    border: 1px dashed var(--c-border-strong);
+    border-radius: 5px;
+    color: var(--c-text);
+}
+
+.mr-side-h {
+    display: block;
+    margin-bottom: 0.28rem;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--c-text-soft);
+}
+
+.mr-side-h em {
+    font-style: normal;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.75;
+}
+
+.mr-none {
+    margin: 0;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: var(--c-text-soft);
+    font-style: italic;
+}
+
+.mr-lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.mr-line {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.28rem 0.4rem;
+    border-radius: 6px;
+    background: var(--c-surface);
+    font-size: 0.72rem;
+}
+
+.mr-line--bill {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.mr-line--clickable {
+    cursor: pointer;
+}
+
+.mr-line--clickable:hover {
+    background: var(--c-accent-soft);
+}
+
+.mr-line-date {
+    color: var(--c-text-soft);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.mr-line-tag {
+    padding: 0.02rem 0.28rem;
+    border-radius: 4px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #fff;
+    background: var(--c-text-soft);
+}
+
+.mr-line-tag--kvb { background: var(--c-kvb); }
+.mr-line-tag--axis { background: var(--c-axis); }
+
+.mr-line-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--c-text);
+}
+
+.mr-split {
+    font-style: normal;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--c-warning-deep);
+}
+
+.mr-line-amt {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--c-text);
+}
+
+/* == Actions: the way out of the panel ================================ */
+
+.mr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding-top: 0.15rem;
+}
+
+.mr-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.32rem 0.6rem;
+    border: 1px solid var(--c-border-strong);
+    border-radius: 7px;
+    background: var(--c-surface);
+    color: var(--c-text);
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.mr-action:hover {
+    background: var(--c-accent-soft);
+    border-color: var(--c-accent);
+    color: var(--c-accent-strong);
+}
+
+.mr-foot {
+    margin: 0;
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--c-border);
+    font-size: 0.68rem;
+    line-height: 1.4;
+    color: var(--c-text-soft);
+}
+
+/* == Narrow screens =================================================== */
+
+@media (max-width: 1023px) {
+    .mr-list {
+        max-height: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .mr-row-head {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .mr-chev {
+        display: none;
+    }
+
+    .mr-line,
+    .mr-line--bill {
+        grid-template-columns: auto minmax(0, 1fr);
+        row-gap: 0.1rem;
+    }
+
+    .mr-line-amt {
+        grid-column: 2;
+        justify-self: end;
+    }
+}

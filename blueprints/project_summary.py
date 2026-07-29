@@ -24,6 +24,7 @@ from helpers.projects import (
 from helpers.bill_reconcile import (
     build_bill_vendor_index, is_unbilled_material_purchase,
 )
+from helpers.material_recon import is_material_purchase, reconcile_material
 # project_summary consumes the projects blueprint's PO/payments resolver.
 # One-directional: blueprints.projects never imports project_summary.
 from auth import login_required
@@ -592,6 +593,115 @@ def get_project_summary_sales_bills():
             'total_pages': 0,
             'summary': {'total_amount': 0, 'total_gst': 0}
         })
+
+
+# Fetch cap for the reconciliation's bill rows. Well above any real project's
+# bill count; if a project ever hits it the response says so rather than
+# quietly reconciling a subset.
+_RECON_BILL_LIMIT = 2000
+
+
+@bp.route('/api/project-summary/material-reconciliation')
+@login_required
+def get_project_summary_material_reconciliation():
+    """Purchase bills vs bank MATERIAL PURCHASE debits, per supplier.
+
+    Whole-project by design — the filter bar deliberately does not reach it.
+    Pairing one month of payments with every bill on the project would invent
+    conflicts out of ordinary part-payment timing, which is the same mistake
+    the old period-scoped KPI tiles made against the whole-contract PO value.
+
+    Needs a canonical "<id> - NAME" project: both sides are joined by registry
+    id, so a free-text selection has nothing to reconcile on and gets
+    ``available: false`` rather than a misleading empty-but-clean panel.
+    """
+    project = request.args.get('project', None)
+    ids, _ = parse_project_selection(project)
+    if not ids:
+        return jsonify({
+            'available': False,
+            'reason': 'Reconciliation needs a project from the registry.',
+        })
+    project_id = ids[0]
+
+    try:
+        bill_rows, bill_summary = db_manager.get_bills_for_canonical_project(
+            project_id, 'purchase', limit=_RECON_BILL_LIMIT)
+    except Exception as e:
+        print(f"[!] Material reconciliation bills fetch error: {e}")
+        traceback.print_exc()
+        return jsonify({'available': False,
+                        'reason': "Couldn't read this project's purchase bills."})
+
+    bills = [{
+        'id': r.get('id'),
+        'invoice_number': r.get('invoice_number') or '—',
+        'invoice_date': r.get('invoice_date') or '',
+        'vendor_name': r.get('vendor_name') or 'Unknown',
+        'total_amount': float(r.get('total_amount') or 0),
+        'project': r.get('project') or '',
+        # A bill split across projects contributes only its share here, and the
+        # auditor needs to know that before chasing the rest of its value.
+        'is_split': bool(r.get('allocation_count') and r['allocation_count'] > 1),
+    } for r in bill_rows]
+
+    # Bank side: every MATERIAL PURCHASE debit tagged to this project, across
+    # banks. KVB is the account these are normally paid from, but an Axis row
+    # carrying the category is spend the auditor still has to account for, so
+    # we don't filter it out — each row shows which bank it came from.
+    txns = []
+    for bank_code in VALID_BANK_CODES:
+        df = get_bank_df(bank_code)
+        if df.empty:
+            continue
+        df = robust_filter_by_project(df, project)
+        if df.empty:
+            continue
+        df = df[df['DR Amount'] > 0]
+        if df.empty:
+            continue
+        for _, row in df.iterrows():
+            category = str(row.get('Category', ''))
+            if not is_material_purchase(category):
+                continue
+            txns.append({
+                'date': row['date'].strftime('%Y-%m-%d') if pd.notna(row['date']) else '',
+                'vendor': str(row.get('Client/Vendor', row.get('client_vendor', 'Unknown'))),
+                'description': str(row.get('Description', row.get('transaction_description', ''))),
+                'dr_amount': float(row.get('DR Amount', 0)),
+                'bank': bank_code,
+            })
+
+    result = reconcile_material(bills, txns)
+
+    # Format once, server-side, so every figure on the panel reads in the same
+    # lakhs/crores convention as the rest of the page.
+    for group in result['groups']:
+        group['billed_formatted'] = format_indian_number(group['billed'])
+        group['paid_formatted'] = format_indian_number(group['paid'])
+        group['difference_formatted'] = format_indian_number(abs(group['difference']))
+        for bill in group['bills']:
+            bill['amount_formatted'] = format_indian_number(bill['total_amount'])
+        for txn in group['txns']:
+            txn['amount_formatted'] = format_indian_number(txn['dr_amount'])
+
+    s = result['summary']
+    for key in ('billed_total', 'paid_total', 'unbilled_total', 'unpaid_total',
+                'mismatch_total'):
+        s[key + '_formatted'] = format_indian_number(s[key])
+    s['difference_formatted'] = format_indian_number(abs(s['difference']))
+
+    return jsonify({
+        'available': True,
+        'project': project,
+        'project_id': project_id,
+        # True when the project has more bills than we fetched, so the panel can
+        # say its totals are partial instead of reporting a phantom shortfall.
+        'truncated': len(bill_rows) >= _RECON_BILL_LIMIT,
+        'bills_total_all': float(bill_summary.get('total_amount') or 0),
+        'summary': s,
+        'groups': result['groups'],
+    })
 
 
 @bp.route('/api/project-summary/date-range')

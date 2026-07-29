@@ -1795,6 +1795,8 @@ class DatabaseManager:
             base_from = f"{table} b"
             proj_col = 'b.project'
             count_expr = 'COUNT(*)'
+            # Sales invoices are never split across projects.
+            alloc_count_expr = '1'
         else:
             money_taxable = 'a.alloc_taxable'
             money_cgst, money_sgst, money_igst = 'a.alloc_cgst', 'a.alloc_sgst', 'a.alloc_igst'
@@ -1803,6 +1805,11 @@ class DatabaseManager:
                          "JOIN bill_invoices b ON b.id = a.invoice_id")
             proj_col = 'a.project'
             count_expr = 'COUNT(DISTINCT b.id)'
+            # How many projects this bill is split across. A row worth less than
+            # its invoice isn't a discrepancy, and the material reconciliation
+            # has to be able to say so.
+            alloc_count_expr = ('(SELECT COUNT(*) FROM bill_project_allocations a2 '
+                                'WHERE a2.invoice_id = b.id)')
 
         money_gst = (f"COALESCE({money_cgst}, 0) + COALESCE({money_sgst}, 0) "
                      f"+ COALESCE({money_igst}, 0)")
@@ -1839,6 +1846,7 @@ class DatabaseManager:
                            {money_cgst} AS total_cgst, {money_sgst} AS total_sgst,
                            {money_igst} AS total_igst,
                            {money_total} AS total_amount, {proj_col} AS project,
+                           {alloc_count_expr} AS allocation_count,
                            (SELECT COUNT(*) FROM {items_table} li WHERE li.invoice_id = b.id) AS line_item_count
                     FROM {base_from}
                     WHERE {where_clause}

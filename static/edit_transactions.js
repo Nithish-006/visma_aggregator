@@ -266,10 +266,69 @@
         // Setup event listeners first
         setupEventListeners();
 
+        // Seed the filters from the URL before the first load, so a deep link
+        // lands on exactly the rows it promised.
+        applyUrlFilters();
+
         // Load transactions (first page only - fast!)
         await loadTransactions();
 
         hideLoading();
+    }
+
+    /**
+     * Pre-filter the grid from the URL query string.
+     *
+     * Other screens send people here to fix something specific — the project
+     * summary's material-reconciliation panel links straight to the debits
+     * behind a conflict — and arriving at 100 unfiltered rows means finding
+     * them again by hand. Supported: project, vendor, category (each
+     * comma-separated, matching the API's own format) and search.
+     *
+     * The dropdowns are populated by loadFilterOptions() before this runs, so a
+     * value that isn't a known option is still applied: the server filters on
+     * the string, and the trigger label shows what's in force either way.
+     */
+    function applyUrlFilters() {
+        const params = new URLSearchParams(window.location.search);
+        const wanted = {
+            'edit-project-filter': params.get('project'),
+            'edit-vendor-filter': params.get('vendor'),
+            'edit-category-filter': params.get('category'),
+        };
+
+        let applied = false;
+        Object.entries(wanted).forEach(([containerId, raw]) => {
+            if (!raw) return;
+            const dd = dropdowns[containerId];
+            if (!dd) return;
+            raw.split(',').map(v => v.trim()).filter(Boolean)
+                .forEach(v => dd.selectedValues.add(v));
+            dd.updateUI();
+            dd.updateTriggerText();
+            dd.syncFilters();
+            applied = true;
+        });
+
+        const search = params.get('search');
+        if (search) {
+            currentFilters.search = search;
+            const box = document.getElementById('edit-search');
+            if (box) box.value = search;
+            applied = true;
+        }
+
+        // Deep links show a filtered subset, so make the filters visible —
+        // on phones the panel is collapsed behind its toggle, and a grid that
+        // silently shows a fraction of the data reads as missing rows.
+        if (applied) {
+            const content = document.getElementById('edit-filter-content');
+            const toggle = document.getElementById('edit-filter-toggle');
+            if (content && !content.classList.contains('expanded')) {
+                content.classList.add('expanded');
+                if (toggle) toggle.classList.add('active');
+            }
+        }
     }
 
     /**
