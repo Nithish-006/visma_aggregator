@@ -701,6 +701,13 @@ body {
     padding: 0 0.75rem;
 }
 
+.actions-toolbar .toolbar-action-btn {
+    flex-shrink: 0;
+    height: 36px;
+    padding: 0 0.9rem;
+    font-size: 0.8rem;
+}
+
 .search-wrapper {
     position: relative;
     flex: 1;
@@ -1007,24 +1014,6 @@ body {
 }
 
 /* Action Buttons */
-.table-actions {
-    display: flex;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--border-color);
-}
-
-.table-actions.table-actions-top {
-    justify-content: flex-end;
-    margin-top: 0;
-    margin-bottom: 1rem;
-    padding-top: 0;
-    padding-bottom: 0.75rem;
-    border-top: none;
-    border-bottom: 1px solid var(--border-color);
-}
-
 .action-btn {
     display: inline-flex;
     align-items: center;
@@ -2287,6 +2276,18 @@ body {
         flex-shrink: 0;
     }
 
+    /* Edit/Upload wrap onto their own full-width row below search/download/reset */
+    .actions-toolbar {
+        flex-wrap: wrap;
+    }
+
+    .actions-toolbar .toolbar-action-btn {
+        flex: 1 1 calc(50% - 0.25rem);
+        height: 44px;
+        justify-content: center;
+        font-size: 0.85rem;
+    }
+
     /* Filter content - appears at the very end when expanded */
     .filter-toolbar .filter-content {
         display: none;
@@ -2578,33 +2579,6 @@ body {
         gap: 10px;
     }
 
-    /* Action buttons - full width grid above the list */
-    .table-actions {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin: 16px 16px 0;
-        padding: 0;
-        border-top: none;
-    }
-
-    .table-actions.table-actions-top {
-        margin: 16px 16px;
-        border-bottom: none;
-        padding-bottom: 0;
-    }
-
-    .table-actions .action-btn {
-        width: 100%;
-        min-height: 48px;
-        justify-content: center;
-        font-size: 0.9rem;
-    }
-
-    .table-actions .upload-btn {
-        grid-column: span 2;
-    }
-
     /* Hero summary */
     .hero-summary {
         grid-template-columns: 1fr;
@@ -2727,19 +2701,6 @@ body {
         font-size: 0.95rem;
     }
 
-    /* Action buttons single column */
-    .table-actions {
-        grid-template-columns: 1fr;
-        margin: 12px 14px 0;
-    }
-
-    .table-actions.table-actions-top {
-        margin: 12px 14px;
-    }
-
-    .table-actions .upload-btn {
-        grid-column: span 1;
-    }
 }
 
 /* Touch device optimizations */
