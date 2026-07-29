@@ -441,10 +441,11 @@ body {
    MAIN LAYOUT
    ============================================================================ */
 
-/* Two columns from 1280px up: the project's own breakdown on the left, the
+/* Two columns from 1320px up: the project's own breakdown on the left, the
    reconciliation queue pinned on the right. Below that width the right column
    drops underneath rather than squeezing both — the queue's rows carry two
-   money figures plus a status and stop being scannable much under 340px. */
+   money figures plus a status and stop being scannable much under 340px, and
+   the left column's tables need room of their own at 100% zoom. */
 .ps-layout {
     display: grid;
     grid-template-columns: 1fr;
@@ -454,9 +455,9 @@ body {
     padding: 24px 32px;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1320px) {
     .ps-layout {
-        grid-template-columns: minmax(0, 1fr) 380px;
+        grid-template-columns: minmax(0, 1fr) 360px;
         align-items: start;
     }
 }
@@ -472,7 +473,7 @@ body {
 /* Pinned below the page header + filter bar, so the conflicts stay in view
    while the auditor scrolls the transactions and bills they're checking
    against. Its own list scrolls internally (see .mr-list). */
-@media (min-width: 1280px) {
+@media (min-width: 1320px) {
     .ps-right {
         position: sticky;
         top: 148px;
@@ -481,7 +482,7 @@ body {
 
 /* On narrow screens the queue lands after a very long left column, so it gets
    a visible seam of its own rather than reading as one more section. */
-@media (max-width: 1279px) {
+@media (max-width: 1319px) {
     .ps-right {
         padding-top: 4px;
     }

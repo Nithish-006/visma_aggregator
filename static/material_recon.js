@@ -313,15 +313,46 @@ window.MaterialRecon = (function () {
             </button>`).join('')}</div>`;
     }
 
+    // The panel's own header doubles as its collapse control, so the whole
+    // component folds down to one line. `flag` is the only thing worth reading
+    // while it is shut, so it stays in the bar.
+    // `interactive` is false for the states with nothing to open.
+    function headHtml({ flag = '', sub = '', interactive = true, expanded = true }) {
+        const subLine = sub ? `<p class="mr-sub">${sub}</p>` : '';
+        const inner = `<div class="mr-head-text">
+                <h2 class="mr-title">Material Reconciliation</h2>
+                ${subLine}
+            </div>
+            ${flag}`;
+        if (!interactive) return `<header class="mr-head">${inner}</header>`;
+        return `<header class="mr-head">
+            <button type="button" class="mr-head-btn" aria-expanded="${expanded}"
+                    aria-controls="mr-body" title="Show or hide the reconciliation">
+                ${inner}
+                <svg class="mr-head-chev" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+        </header>`;
+    }
+
+    const SCOPE_NOTE = `Purchase bills vs bank material spend
+        <span title="Bills and payments are compared over the project's whole life. A month filter would pair one month of payments against every bill and read ordinary part-payment timing as a conflict.">· whole project</span>`;
+
     /**
      * Build the panel's HTML from the /api/project-summary/material-reconciliation
      * payload. Returns a string; the caller owns the element.
+     *
+     * opts.expanded — start open (default: open only when there is something to
+     * resolve, so a clean project takes one line and the page stays quiet).
      */
     function render(data, opts) {
         const project = (opts && opts.project) || '';
         if (!data || !data.available) {
             return `<section class="mr-panel mr-panel--muted">
-                <header class="mr-head"><h2 class="mr-title">Material Reconciliation</h2></header>
+                ${headHtml({ interactive: false })}
                 <p class="mr-empty">${escapeHtml((data && data.reason)
                     || 'Reconciliation is unavailable for this project.')}</p>
             </section>`;
@@ -332,19 +363,18 @@ window.MaterialRecon = (function () {
 
         if (!groups.length) {
             return `<section class="mr-panel">
-                <header class="mr-head">
-                    <div><h2 class="mr-title">Material Reconciliation</h2>
-                    <p class="mr-sub">Purchase bills vs bank material spend</p></div>
-                </header>
+                ${headHtml({ sub: 'Purchase bills vs bank material spend', interactive: false })}
                 <p class="mr-empty">This project has no purchase bills and no material-purchase
                     payments yet, so there is nothing to reconcile.</p>
             </section>`;
         }
 
         const clean = s.conflict_count === 0;
-        const status = clean
+        const flag = clean
             ? `<span class="mr-flag mr-flag--ok">All clear</span>`
             : `<span class="mr-flag mr-flag--bad">${s.conflict_count} to resolve</span>`;
+        const expanded = (opts && typeof opts.expanded === 'boolean')
+            ? opts.expanded : !clean;
 
         const cleanNote = clean ? `<p class="mr-allclear">Every material payment on this
             project is backed by a purchase bill from the same supplier, and every bill has
@@ -353,26 +383,38 @@ window.MaterialRecon = (function () {
         const truncated = data.truncated ? `<p class="mr-warnline">Only the first
             ${groups.length} bills were read — totals below are partial.</p>` : '';
 
-        return `<section class="mr-panel">
-            <header class="mr-head">
-                <div class="mr-head-text">
-                    <h2 class="mr-title">Material Reconciliation</h2>
-                    <p class="mr-sub">Purchase bills vs bank material spend
-                        <span title="Bills and payments are compared over the project's whole life. A month filter would pair one month of payments against every bill and read ordinary part-payment timing as a conflict.">· whole project</span>
-                    </p>
+        return `<section class="mr-panel${expanded ? '' : ' collapsed'}">
+            ${headHtml({ flag, sub: SCOPE_NOTE, expanded })}
+            <div class="mr-body" id="mr-body"${expanded ? '' : ' hidden'}>
+                <div class="mr-body-fixed">
+                    ${truncated}
+                    ${balanceHtml(s)}
+                    ${cleanNote}
+                    ${chipsHtml(s, groups)}
                 </div>
-                ${status}
-            </header>
-            ${truncated}
-            ${balanceHtml(s)}
-            ${cleanNote}
-            ${chipsHtml(s, groups)}
-            <ul class="mr-list">${groups.map((g, i) => rowHtml(g, i, project)).join('')}</ul>
-            <p class="mr-foot">${pluralise(s.vendor_count || 0, 'supplier')} ·
-                ${pluralise(s.bill_count || 0, 'bill')} ·
-                ${pluralise(s.txn_count || 0, 'payment')}. Suppliers are matched on name, so
-                check the spellings listed inside a row before acting on it.</p>
+                <ul class="mr-list">${groups.map((g, i) => rowHtml(g, i, project)).join('')}</ul>
+                <p class="mr-foot">${pluralise(s.vendor_count || 0, 'supplier')} ·
+                    ${pluralise(s.bill_count || 0, 'bill')} ·
+                    ${pluralise(s.txn_count || 0, 'payment')}. Suppliers are matched on name, so
+                    check the spellings listed inside a row before acting on it.</p>
+            </div>
         </section>`;
+    }
+
+    // Open/closed preference, per tab. sessionStorage throws in some privacy
+    // modes, so every access is guarded — the panel falls back to its default
+    // rather than failing to render.
+    const PREF_KEY = 'mr.expanded';
+
+    function readPref() {
+        try {
+            const v = sessionStorage.getItem(PREF_KEY);
+            return v === null ? null : v === '1';
+        } catch (e) { return null; }
+    }
+
+    function writePref(expanded) {
+        try { sessionStorage.setItem(PREF_KEY, expanded ? '1' : '0'); } catch (e) { /* ignore */ }
     }
 
     // Only the rows the active chip asks for. Doing it here rather than
@@ -393,10 +435,27 @@ window.MaterialRecon = (function () {
     function mount(el, data, opts) {
         if (!el) return;
         opts = opts || {};
-        el.innerHTML = render(data, opts);
+        // An auditor working through a list of projects shouldn't have to
+        // re-open (or re-close) the panel on every one, so their last choice
+        // carries across — but only for this tab.
+        const remembered = readPref();
+        el.innerHTML = render(data, Object.assign(
+            remembered === null ? {} : { expanded: remembered }, opts));
 
         const panel = el.querySelector('.mr-panel');
         if (!panel) return;
+
+        const headBtn = panel.querySelector('.mr-head-btn');
+        if (headBtn) {
+            headBtn.addEventListener('click', () => {
+                const open = headBtn.getAttribute('aria-expanded') === 'true';
+                headBtn.setAttribute('aria-expanded', String(!open));
+                panel.classList.toggle('collapsed', open);
+                const body = panel.querySelector('.mr-body');
+                if (body) body.hidden = open;
+                writePref(!open);
+            });
+        }
 
         const activeChip = panel.querySelector('.mr-chip.active');
         applyFilter(panel, activeChip ? activeChip.dataset.filter : 'all');
