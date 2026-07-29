@@ -1006,13 +1006,23 @@ body {
     font-weight: 400;
 }
 
-/* Action Buttons (Below Table) */
+/* Action Buttons */
 .table-actions {
     display: flex;
     gap: 0.75rem;
     margin-top: 0.75rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border-color);
+}
+
+.table-actions.table-actions-top {
+    justify-content: flex-end;
+    margin-top: 0;
+    margin-bottom: 1rem;
+    padding-top: 0;
+    padding-bottom: 0.75rem;
+    border-top: none;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .action-btn {
@@ -1034,15 +1044,12 @@ body {
 }
 
 .action-btn.edit-btn {
-    background: #FFFFFF;
-    color: var(--text-main);
-    border: 1px solid var(--border-color);
+    background: linear-gradient(135deg, #4F8EF7 0%, #3B6FE0 100%);
+    color: white;
+    border: 1px solid transparent;
 }
 
 .action-btn.edit-btn:hover {
-    background: linear-gradient(135deg, #E08B6F 0%, #D97757 100%);
-    color: white;
-    border-color: transparent;
     transform: translateY(-2px);
     box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
 }
@@ -2571,7 +2578,7 @@ body {
         gap: 10px;
     }
 
-    /* Action buttons - full width grid below the list */
+    /* Action buttons - full width grid above the list */
     .table-actions {
         display: grid !important;
         grid-template-columns: 1fr 1fr;
@@ -2579,6 +2586,12 @@ body {
         margin: 16px 16px 0;
         padding: 0;
         border-top: none;
+    }
+
+    .table-actions.table-actions-top {
+        margin: 16px 16px;
+        border-bottom: none;
+        padding-bottom: 0;
     }
 
     .table-actions .action-btn {
@@ -2718,6 +2731,10 @@ body {
     .table-actions {
         grid-template-columns: 1fr;
         margin: 12px 14px 0;
+    }
+
+    .table-actions.table-actions-top {
+        margin: 12px 14px;
     }
 
     .table-actions .upload-btn {
