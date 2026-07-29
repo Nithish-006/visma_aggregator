@@ -31,6 +31,17 @@
     background: var(--c-surface-soft);
 }
 
+/* Everything that collapses in this panel is toggled with the `hidden`
+   attribute — the panel body, each card's detail, and the rows a filter chip
+   excludes. Several of those elements also carry a `display: flex` of their
+   own, and an author `display` rule BEATS the browser's `[hidden] {display:
+   none}`: without this line they stay on screen no matter what, so every card
+   renders permanently expanded and nothing appears to respond to a click.
+   Keep this rule above the layout rules below. */
+.mr-panel [hidden] {
+    display: none !important;
+}
+
 /* Collapsed, the panel is just its header bar — one line, no cap needed. */
 .mr-panel.collapsed {
     max-height: none;
@@ -82,7 +93,12 @@
 
 /* == Body: the part that collapses, and the part that scrolls ========= */
 
+/* Takes whatever height the header leaves and hands it down to the queue, which
+   is the piece that actually scrolls. min-height:0 is what allows a flex child
+   to be shorter than its content — without it the body refuses to shrink and
+   the scroll never engages, it just overflows the panel. */
 .mr-body {
+    flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -348,6 +364,11 @@
 }
 
 .mr-row {
+    /* The queue is a column flex container, so its rows would otherwise shrink
+       to fit the space available — crushing their content instead of
+       overflowing, which leaves nothing for the scrollbar to scroll. Rows keep
+       their natural height and the list scrolls past them. */
+    flex-shrink: 0;
     border: 1px solid var(--c-border);
     border-left: 3px solid var(--c-border-strong);
     border-radius: 9px;
@@ -550,6 +571,8 @@
 }
 
 .mr-line-tag {
+    /* Never let the grid stretch the tag into a coloured bar across the row. */
+    justify-self: start;
     padding: 0.02rem 0.28rem;
     border-radius: 4px;
     font-size: 0.6rem;
@@ -616,6 +639,7 @@
 }
 
 .mr-foot {
+    flex-shrink: 0;
     margin: 0;
     padding-top: 0.55rem;
     border-top: 1px solid var(--c-border);
@@ -626,18 +650,14 @@
 
 /* == Narrow screens =================================================== */
 
-/* Below the two-column breakpoint the panel is no longer pinned beside the
-   page — it sits in the normal flow, so capping it to the viewport would give
-   it a scrollbar inside a page that already scrolls. Let it run its full
-   height there and the page carries it. */
-@media (max-width: 1279px) {
+/* Stacked below the page rather than pinned beside it, the panel still keeps
+   its own scroll — the queue is the same length either way, and a component
+   that behaves differently depending on window width is worse than one that
+   always scrolls. Slightly taller here since it isn't sharing the viewport
+   with a sticky filter bar. */
+@media (max-width: 1319px) {
     .mr-panel {
-        max-height: none;
-        overflow: visible;
-    }
-
-    .mr-list {
-        overflow-y: visible;
+        max-height: 80vh;
     }
 }
 
@@ -650,14 +670,12 @@
         display: none;
     }
 
-    .mr-line,
-    .mr-line--bill {
-        grid-template-columns: auto minmax(0, 1fr);
-        row-gap: 0.1rem;
-    }
-
-    .mr-line-amt {
-        grid-column: 2;
-        justify-self: end;
+    /* The four-column line already survives a 360px panel on desktop, so it
+       needs no re-gridding here — only tighter gaps. Re-flowing it was what
+       stretched the bank tag across the row. */
+    .mr-line {
+        gap: 0.3rem;
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
     }
 }
