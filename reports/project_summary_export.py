@@ -685,6 +685,18 @@ def export_single_project_summary(project_id):
         if scope_n:
             kv_row(ws, r, 'Scope Items', int(scope_n)); r += 2
 
+    # A ledger line can be outside GST (the GST / N/A choice in the grid, stored
+    # as a zero rate). A bare 0.00 in the GST column can't be told from a line
+    # nobody has priced yet, so an exempt one says so in the auditor's own word.
+    def write_ledger_gst(row_no, entry):
+        cell = ws.cell(row=row_no, column=7)
+        if float(entry.get('gst_rate') or 0) == 0:
+            cell.value = 'N/A'
+            cell.alignment = Alignment(horizontal='right')
+        else:
+            cell.value = float(entry.get('tax_amount') or 0)
+            cell.number_format = currency_fmt
+
     # ── Variations: the agreed changes between the PO and the contract ──
     # The scope items above are the PO as signed; these are what moved since.
     # Without them the sheet shows a total the client can't reconcile to the
@@ -702,8 +714,9 @@ def export_single_project_summary(project_id):
             ws.cell(row=r, column=3, value=float(v.get('quantity') or 0)).number_format = '#,##0.###'
             ws.cell(row=r, column=4, value=str(v.get('unit') or '—'))
             ws.cell(row=r, column=5, value=float(v.get('rate') or 0)).number_format = currency_fmt
-            for col, key in ((6, 'basic_amount'), (7, 'tax_amount'), (8, 'total_amount')):
+            for col, key in ((6, 'basic_amount'), (8, 'total_amount')):
                 ws.cell(row=r, column=col, value=float(v.get(key) or 0)).number_format = currency_fmt
+            write_ledger_gst(r, v)
             r += 1
         ws.cell(row=r, column=2, value='Net Change').font = Font(bold=True)
         nc = ws.cell(row=r, column=8, value=var_total)
@@ -728,8 +741,9 @@ def export_single_project_summary(project_id):
             ws.cell(row=r, column=3, value=float(a.get('quantity') or 0)).number_format = '#,##0.###'
             ws.cell(row=r, column=4, value=str(a.get('unit') or '—'))
             ws.cell(row=r, column=5, value=float(a.get('rate') or 0)).number_format = currency_fmt
-            for col, key in ((6, 'basic_amount'), (7, 'tax_amount'), (8, 'total_amount')):
+            for col, key in ((6, 'basic_amount'), (8, 'total_amount')):
                 ws.cell(row=r, column=col, value=float(a.get(key) or 0)).number_format = currency_fmt
+            write_ledger_gst(r, a)
             r += 1
         ws.cell(row=r, column=2, value='Final PO Value').font = Font(bold=True)
         ac = ws.cell(row=r, column=8, value=act_total)

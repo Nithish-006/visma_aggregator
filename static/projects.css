@@ -1042,12 +1042,57 @@ html, body {
    Every px taken here is a px off the one column that needs them. */
 .proj-led-num { text-align: right; font-variant-numeric: tabular-nums; width: 4.5rem; }
 .proj-led-unit { width: 3.4rem; }
-.proj-led-table td[data-led-out] {
+/* Attribute, not td[attr]: the GST amount moved into a span so the treatment
+   toggle could share its cell, and it must keep reading like its neighbours. */
+.proj-led-table [data-led-out] {
     font-variant-numeric: tabular-nums;
     color: var(--proj-text-muted);
     white-space: nowrap;
 }
 .proj-led-table .proj-led-total { color: var(--proj-text); font-weight: 600; }
+
+/* GST treatment: two boxes in the GST cell itself, so the choice sits against
+   the figure it decides. A segmented pair rather than a checkbox — the row is
+   picking between two named treatments, and both names stay legible at rest. */
+.proj-led-tax { white-space: nowrap; }
+.proj-led-gst {
+    display: inline-flex;
+    margin-right: 0.45rem;
+    vertical-align: middle;
+    border: 1px solid var(--proj-border-strong);
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--proj-surface);
+}
+.proj-led-gst-opt {
+    padding: 0.1rem 0.45rem;
+    font-family: inherit;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.5;
+    color: var(--proj-text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+.proj-led-gst-opt + .proj-led-gst-opt { border-left: 1px solid var(--proj-border-strong); }
+.proj-led-gst-opt:hover { color: var(--proj-text); background: var(--proj-surface-soft); }
+.proj-led-gst-opt.is-on {
+    color: var(--proj-accent-strong);
+    background: var(--proj-accent-soft);
+}
+.proj-led-gst-opt:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px var(--proj-accent);
+}
+/* An exempt line says so twice — the chosen box, and a GST figure that reads as
+   deliberately absent rather than a zero someone forgot to fill in. */
+.proj-led-table tr.is-gst-exempt [data-led-out="tax"] {
+    opacity: 0.5;
+    font-style: italic;
+}
 .proj-led-table tfoot td {
     padding: 0.45rem 0.6rem;
     border-top: 1px solid var(--proj-border-strong);
@@ -1763,5 +1808,15 @@ html, body {
     /* The description gets its own full-width line as the card heading, so the
        numeric fields don't have to share a row with it. */
     .proj-led-table tbody td.proj-li-title .proj-led-input { width: 100%; }
+
+    /* GST is the one card line holding two things. Left as space-between the
+       toggle would drift into the middle of the row, reading as a third column;
+       pushing the label out with auto keeps it a LABEL : value line whose value
+       happens to be "[GST|N/A] ₹0". */
+    .proj-led-table tbody td.proj-led-tax { justify-content: flex-end; gap: 8px; }
+    .proj-led-table tbody td.proj-led-tax::before { margin-right: auto; }
+    .proj-led-tax .proj-led-gst { margin-right: 0; }
+    /* Comfortably tappable without growing the desktop control. */
+    .proj-led-gst-opt { padding: 0.25rem 0.6rem; }
 
 }

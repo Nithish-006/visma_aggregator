@@ -21,7 +21,7 @@ from config import (
 )
 from extraction_validator import validate_extraction, validate_db_row, notes_from_result
 from helpers.project_finance import (
-    PO_LEDGER_GST_RATE, compute_ledger_amounts, resolve_contract,
+    compute_ledger_amounts, resolve_contract, resolve_ledger_gst_rate,
 )
 
 
@@ -3774,11 +3774,12 @@ class DatabaseManager:
             rate = float(fields.get('rate') or 0)
         except (ValueError, TypeError):
             return None, 'quantity and rate must be numbers'
-        gst_rate = fields.get('gst_rate')
-        try:
-            gst_rate = PO_LEDGER_GST_RATE if gst_rate in (None, '') else float(gst_rate)
-        except (ValueError, TypeError):
-            return None, 'gst_rate must be a number'
+        # A line the auditor marked N/A arrives as 0 and must stay 0; a line that
+        # says nothing about GST is priced at the standard rate. resolve_ledger_gst_rate
+        # owns that distinction so the merge in update_po_ledger_row can't blur it.
+        gst_rate, err = resolve_ledger_gst_rate(fields.get('gst_rate'))
+        if err:
+            return None, err
         # A rate below zero would make a reduction read as an addition (two
         # negatives). Direction is the quantity's job and only the quantity's.
         if rate < 0:

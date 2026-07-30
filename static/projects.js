@@ -1438,10 +1438,50 @@
         return String(Number(v)); // 20.000 -> 20, -2.500 -> -2.5
     }
 
+    // GST is per line, not per ledger: some items and services are outside it
+    // and the auditor entering the line is the only one who knows. Stored as a
+    // zero rate rather than a flag (see resolve_ledger_gst_rate server-side), so
+    // a row is taxed unless it explicitly says 0 — which also means every row
+    // written before this choice existed reads as "GST", exactly what it was.
+    const ledIsTaxed = (v) => !(v && v.gst_rate != null && Number(v.gst_rate) === 0);
+    const ledTaxed = (tr) => tr.dataset.ledGst !== 'off';
+
+    // The rate a row prices at: the server's standard rate, or nothing at all.
+    // Never a third value — this is a two-way choice, not a rate field.
+    function ledGstRate(tr) {
+        if (!ledTaxed(tr)) return 0;
+        return (currentPo && currentPo.gst_rate != null) ? currentPo.gst_rate : LED_GST_RATE;
+    }
+
+    function setLedTaxed(tr, taxed) {
+        tr.dataset.ledGst = taxed ? 'on' : 'off';
+        tr.querySelectorAll('[data-led-gst-set]').forEach(btn => {
+            const on = (btn.dataset.ledGstSet === 'on') === taxed;
+            btn.classList.toggle('is-on', on);
+            btn.setAttribute('aria-pressed', String(on));
+        });
+        tr.classList.toggle('is-gst-exempt', !taxed);
+    }
+
+    // Two boxes rather than a checkbox or a rate field: the auditor is choosing
+    // between two named treatments, and both names stay on screen so a row's
+    // answer is readable without clicking it.
+    function ledGstToggleHtml(taxed) {
+        const opt = (val, label, hint) => `
+            <button type="button" class="proj-led-gst-opt${(val === 'on') === taxed ? ' is-on' : ''}"
+                    data-led-gst-set="${val}" aria-pressed="${(val === 'on') === taxed}"
+                    title="${hint}">${label}</button>`;
+        return `<span class="proj-led-gst" role="group" aria-label="GST treatment">
+            ${opt('on', 'GST', 'Charge GST on this line')}${opt('off', 'N/A', 'This line carries no GST')}
+        </span>`;
+    }
+
     function ledgerRowHtml(cfg, v, draft) {
+        const taxed = draft ? true : ledIsTaxed(v);
         const snap = JSON.stringify({
             description: v.description || '', quantity: trimQty(v.quantity || 0),
             unit: v.unit || '', rate: trimQty(v.rate || 0),
+            gst: taxed ? 'on' : 'off',
         });
         // Unlike the overhead field, qty/rate stay as raw numbers at rest rather
         // than swapping formatted<->raw on focus. Overhead is a lone input
@@ -1453,7 +1493,9 @@
                    value="${escapeHtml(String(v[field] == null ? '' : v[field]))}"
                    placeholder="${placeholder}" autocomplete="off">`;
         return `
-            <tr data-led-id="${draft ? 'new' : v.id}" class="${draft ? 'is-draft' : ''}" data-led-snapshot='${escapeHtml(snap)}'>
+            <tr data-led-id="${draft ? 'new' : v.id}" data-led-gst="${taxed ? 'on' : 'off'}"
+                class="${draft ? 'is-draft' : ''}${taxed ? '' : ' is-gst-exempt'}"
+                data-led-snapshot='${escapeHtml(snap)}'>
                 <td>${cell('description', '', cfg.descPlaceholder)}</td>
                 <td class="proj-li-num"><input class="proj-led-input proj-led-num" type="text"
                         inputmode="decimal" data-led-field="quantity"
@@ -1463,7 +1505,8 @@
                         inputmode="decimal" data-led-field="rate"
                         value="${trimQty(v.rate || '')}" placeholder="0" autocomplete="off"></td>
                 <td class="proj-li-num" data-led-out="basic">${cfg.fmt(v.basic_amount || 0)}</td>
-                <td class="proj-li-num" data-led-out="tax">${cfg.fmt(v.tax_amount || 0)}</td>
+                <td class="proj-li-num proj-led-tax">${ledGstToggleHtml(taxed)}<span
+                        data-led-out="tax">${cfg.fmt(v.tax_amount || 0)}</span></td>
                 <td class="proj-li-num proj-led-total" data-led-out="total">${cfg.fmt(v.total_amount || 0)}</td>
                 <td class="proj-led-actions">${draft
                     ? `<button type="button" class="proj-led-btn is-save" data-led-save title="Save this entry">✓</button>
@@ -1507,7 +1550,9 @@
                     <span class="proj-field-label">${cfg.label}${vt.count ? ` (${vt.count})` : ''}${badge}</span>
                     <button type="button" class="proj-secondary-btn proj-led-add" data-led-add>${cfg.addLabel}</button>
                 </div>
-                <p class="proj-note proj-led-note">${cfg.note} GST is applied at ${rate}%.</p>
+                <p class="proj-note proj-led-note">${cfg.note}
+                   Each line is taxed at ${rate}% or not at all — pick
+                   <strong>GST</strong> or <strong>N/A</strong> in the GST column.</p>
                 <div class="proj-li-scroll">
                     <table class="proj-li-table proj-led-table">
                         <thead>
@@ -1543,11 +1588,11 @@
         const rate = parseMoney(v.rate);
         const ok = Number.isFinite(qty) && Number.isFinite(rate);
         const basic = ok ? Math.round(qty * rate * 100) / 100 : 0;
-        // The server's rate, not the local constant, so PO_LEDGER_GST_RATE
+        // ledGstRate reads this row's GST / N/A choice, and takes the taxed rate
+        // from the server rather than the local constant, so PO_LEDGER_GST_RATE
         // stays the single place it's set — otherwise changing it there would
         // leave the preview quoting the old rate right up until save.
-        const gst = (currentPo && currentPo.gst_rate != null) ? currentPo.gst_rate : LED_GST_RATE;
-        const tax = Math.round(basic * gst) / 100;
+        const tax = Math.round(basic * ledGstRate(tr)) / 100;
         const set = (key, val) => {
             const cell = tr.querySelector(`[data-led-out="${key}"]`);
             if (cell) cell.textContent = cfg.fmt(val);
@@ -1679,13 +1724,17 @@
         const snap = tr.dataset.ledSnapshot;
         const now = JSON.stringify({
             description: v.description, quantity: trimQty(qty), unit: v.unit, rate: trimQty(rate),
+            gst: ledTaxed(tr) ? 'on' : 'off',
         });
         if (!isDraft && snap === now) return;
 
         tr.classList.remove('error');
         tr.classList.add('is-saving');
         delete tr.dataset.ledPending;
-        const body = JSON.stringify({ ...v, quantity: qty, rate });
+        // gst_rate is always sent, including the 0 that means N/A: leaving it out
+        // would let the server fall back to the standard rate and quietly tax a
+        // line the auditor marked exempt.
+        const body = JSON.stringify({ ...v, quantity: qty, rate, gst_rate: ledGstRate(tr) });
         // Pinned for the round trip: blurring a cell can close the modal, and
         // the response must not be applied to whichever project is open by the
         // time it lands. Same reason loadPoGist guards its own response.
@@ -1782,6 +1831,19 @@
             if (first) first.focus();
             return;
         }
+        const gstBtn = e.target.closest('[data-led-gst-set]');
+        if (gstBtn) {
+            const tr = gstBtn.closest('tr');
+            const want = gstBtn.dataset.ledGstSet === 'on';
+            if (ledTaxed(tr) === want) return; // already this treatment
+            setLedTaxed(tr, want);
+            previewLedgerRow(tr);
+            // Unlike the text cells, this choice has no blur of its own to
+            // commit on — clicking it *is* the edit — so a saved row saves here.
+            // A draft still waits for ✓ or Enter, like every other field in it.
+            if (tr.dataset.ledId !== 'new') saveLedgerRow(tr);
+            return;
+        }
         const saveBtn = e.target.closest('[data-led-save]');
         if (saveBtn) { saveLedgerRow(saveBtn.closest('tr')); return; }
         const discardBtn = e.target.closest('[data-led-discard]');
@@ -1842,6 +1904,8 @@
                 const el = tr.querySelector(`[data-led-field="${f}"]`);
                 if (el) el.value = snap[f] == null ? '' : snap[f];
             });
+            // The GST choice is part of the row, so "undo this row" undoes it too.
+            if (snap.gst) setLedTaxed(tr, snap.gst !== 'off');
             previewLedgerRow(tr);
             field.blur();
         }

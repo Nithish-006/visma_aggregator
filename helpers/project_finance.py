@@ -39,11 +39,37 @@ Callers hand `compute_project_finance` the contract already resolved, as `po`.
 It does not know the ledgers exist.
 """
 
-# Both PO ledgers — variations and actuals — are quoted at a flat 18%, the rate
-# every contract this app has seen runs at. Kept as one named constant so a
-# project at some other rate is a one-line change rather than a hunt for
-# scattered literals.
+# Both PO ledgers — variations and actuals — are quoted at a flat 18% when GST
+# applies at all, the rate every contract this app has seen runs at. Kept as one
+# named constant so a project at some other rate is a one-line change rather
+# than a hunt for scattered literals.
 PO_LEDGER_GST_RATE = 18.0
+
+# Not every line carries GST: some items and services are outside it, and only
+# the auditor entering the line knows which. That choice is stored as a zero
+# rate rather than an is_exempt flag, so every figure downstream still follows
+# from the same (quantity, rate, gst_rate) triple and there is no second code
+# path for an exempt line to drift down.
+PO_LEDGER_GST_EXEMPT = 0.0
+
+
+def resolve_ledger_gst_rate(value):
+    """The rate one ledger line is taxed at, from whatever the payload said.
+
+    Returns (rate, error). Blank means "not stated", which is the standard rate:
+    that is what every row written before the GST / N/A choice existed meant, so
+    they keep pricing exactly as they always did. An explicit 0 is the exemption
+    and is preserved — it must never be mistaken for a missing value.
+    """
+    if value is None or value == '':
+        return PO_LEDGER_GST_RATE, None
+    try:
+        rate = float(value)
+    except (ValueError, TypeError):
+        return None, 'gst_rate must be a number'
+    if rate < 0 or rate > 100:
+        return None, 'gst_rate must be between 0 and 100'
+    return rate, None
 
 # Categories excluded from the "other" bank-debit bucket: material and labour
 # arrive from bills and the attendance API respectively, so counting the bank
