@@ -1141,6 +1141,33 @@ html, body {
     color: var(--proj-text-muted);
     font-weight: 500;
 }
+/* Payment terms and amount-in-words are sentences, not figures — they read
+   badly in a half-width box next to a ₹ field. */
+.proj-gist-grid-wide { grid-column: 1 / -1; }
+
+/* The editable line items sit between the header totals they feed and the
+   save row, so they need air on both sides and a rule to read as their own
+   block rather than a third column of the grid above. */
+.proj-po-li-edit {
+    margin: 1rem 0 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--proj-border);
+}
+/* Two more numeric columns than the ledgers carry, on a grid that already
+   gives its slack to the description. */
+.proj-po-li-table .proj-led-num { width: 4.1rem; }
+/* Lines that don't sum to the header total: a discrepancy to look at, not an
+   error that blocks saving. */
+.proj-po-li-warn {
+    margin: 0.5rem 0 0;
+    padding: 0.45rem 0.6rem;
+    border-radius: 6px;
+    color: var(--proj-warning);
+    background: var(--proj-warning-soft);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
 .proj-po-actions {
     display: flex;
     gap: 0.6rem;

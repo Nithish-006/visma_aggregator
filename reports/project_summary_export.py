@@ -96,6 +96,9 @@ def _make_styles():
         'income_font': Font(name='Calibri', color='059669', bold=True),
         'expense_font': Font(name='Calibri', color='DC2626', bold=True),
         'section_bold': Font(name='Calibri', bold=True, size=11),
+        # For the formula spelled out beside a figure — quiet enough not to
+        # compete with the number it explains.
+        'formula_font': Font(name='Calibri', italic=True, size=9, color='6B7280'),
         'green_amount': Font(name='Calibri', bold=True, color='006100'),
         'red_amount': Font(name='Calibri', bold=True, color='DC2626'),
         'blue_amount': Font(name='Calibri', bold=True, color='2563EB'),
@@ -479,16 +482,25 @@ def export_single_project_summary(project_id):
     value_total = fin['value']['total']
     # Where the value came from. A project with no sales bills falls back to the
     # PO, and the section that prints these figures has to say so — calling the
-    # contract "billed" would report invoicing that never happened, and the
-    # profit below is struck against whichever of the two this is.
+    # contract "billed" would report invoicing that never happened.
     value_source = fin['value']['source']
+    # Which figure the balance is struck against: the contract ('po'), or the
+    # billed total when there is no PO to measure by.
+    contract_source = fin['contract']['source']
     sales_taxable, sales_gst = sales['taxable'], sales['gst']
     purchase_taxable, purchase_gst = purchase['taxable'], purchase['gst']
     gst_extra = fin['gst']['extra']
     gst_extra_cost = fin['gst']['extra_cost']
     overhead = fin['overhead']
     spend_total = fin['spend_total']
+    # The three bottom lines of the Consolidated Summary: one cost total, struck
+    # against cash received, the contract, and the invoices raised.
+    cash_position = fin['cash_position']
     profit = fin['profit']
+    billed_profit = fin['billed_profit']
+    contract_total = fin['contract']['total']
+    sales_total_value = fin['gst']['sales_total']
+    has_sales_bills_flag = fin['has_sales_bills']
     # What the client still owes against the project's value.
     balance = fin['receivable']
     # Sheet 1 reconciles against the PO specifically (it prints PO Value and a
@@ -541,7 +553,8 @@ def export_single_project_summary(project_id):
             existing = ws.column_dimensions[col_letter].width or 0
             ws.column_dimensions[col_letter].width = max(existing, min(max_len + 3, cap))
 
-    def kv_row(ws, row, label, value, *, fmt=None, font=None, bold_label=True):
+    def kv_row(ws, row, label, value, *, fmt=None, font=None, bold_label=True,
+               formula=None):
         lcell = ws.cell(row=row, column=1, value=label)
         if bold_label:
             lcell.font = Font(bold=True)
@@ -550,6 +563,10 @@ def export_single_project_summary(project_id):
             vcell.number_format = fmt
         if font:
             vcell.font = font
+        # Column C: how the figure was arrived at, with its actual operands, for
+        # rows whose name alone doesn't settle what was subtracted from what.
+        if formula:
+            ws.cell(row=row, column=3, value=formula).font = st['formula_font']
 
     def bank_font(bc):
         return st['bank_axis_font'] if bc == 'axis' else st['bank_kvb_font'] if bc == 'kvb' else None
@@ -612,15 +629,23 @@ def export_single_project_summary(project_id):
     r += 1
 
     # ── Scope line items (description / qty / unit / rate / amount) ──
+    # GST is priced per line only when someone entered it in the PO editor — the
+    # extractor reads a document-level tax total — so the pair of GST columns is
+    # earned by the data rather than always printed empty.
     line_items = po_gist.get('line_items') or []
     if line_items:
+        li_gst = any(it.get('gst_rate') or it.get('tax_amount') for it in line_items)
         ws.cell(row=r, column=1, value=f'SCOPE LINE ITEMS ({len(line_items)})').font = st['subtitle_font']; r += 1
-        li_headers = ['SL.NO', 'Description', 'Qty', 'Unit', 'Rate', 'Amount']
+        li_headers = ['SL.NO', 'Description', 'Qty', 'Unit', 'Rate',
+                      'Base Value' if li_gst else 'Amount']
+        if li_gst:
+            li_headers += ['GST %', 'GST Amount']
         for ci, h in enumerate(li_headers, 1):
             ws.cell(row=r, column=ci, value=h)
         style_header_row(ws, r, len(li_headers))
         r += 1
         li_total = 0.0
+        li_tax_total = 0.0
         for idx, it in enumerate(line_items, 1):
             ws.cell(row=r, column=1, value=idx)
             ws.cell(row=r, column=2, value=str(it.get('description') or '—'))
@@ -636,11 +661,24 @@ def export_single_project_summary(project_id):
                 amt = float(av)
                 ws.cell(row=r, column=6, value=amt).number_format = currency_fmt
                 li_total += amt
+            if li_gst:
+                gr = it.get('gst_rate')
+                if gr not in (None, ''):
+                    ws.cell(row=r, column=7, value=float(gr) / 100).number_format = '0.##%'
+                tv = it.get('tax_amount')
+                if tv not in (None, '', 0):
+                    tax = float(tv)
+                    ws.cell(row=r, column=8, value=tax).number_format = currency_fmt
+                    li_tax_total += tax
             r += 1
         ws.cell(row=r, column=2, value='Line Items Total').font = Font(bold=True)
         tc = ws.cell(row=r, column=6, value=li_total)
         tc.font = Font(bold=True)
         tc.number_format = currency_fmt
+        if li_gst:
+            ttc = ws.cell(row=r, column=8, value=li_tax_total)
+            ttc.font = Font(bold=True)
+            ttc.number_format = currency_fmt
         r += 2
     else:
         scope_n = po_gist.get('line_item_count')
@@ -966,6 +1004,13 @@ def export_single_project_summary(project_id):
             ws.cell(row=row, column=c).fill = st['green_fill']
         return row + 1
 
+    def operand(v):
+        """An amount as it appears inside a formula note."""
+        return f'{v:,.2f}'
+
+    def signed_font(v):
+        return st['green_amount'] if v >= 0 else st['red_amount']
+
     # Laid out like the app's Project value panel, so the sheet and the screen
     # can be read side by side: the PO as signed, the changes agreed since, the
     # work as finally measured, and the contract figure the balance is measured
@@ -994,13 +1039,18 @@ def export_single_project_summary(project_id):
     kv_row(ws, cr, 'Received — Cash', received_cash, fmt=currency_fmt, font=st['income_font']); cr += 1
     kv_row(ws, cr, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font']); cr += 1
     # Measured against the contract, not the invoices — see helpers/project_finance.
+    # Spelled out because this is the row most easily confused with the Net
+    # Position below: this one is what the client still owes, that one is what is
+    # left after spending what they've already paid.
     kv_row(ws, cr, ('Excess Received' if balance < -0.5 else 'Current Balance'), abs(balance),
-           fmt=currency_fmt, font=(st['red_amount'] if balance > 0.5 else st['green_amount'])); cr += 2
+           fmt=currency_fmt, font=(st['red_amount'] if balance > 0.5 else st['green_amount']),
+           formula=f'{operand(contract_total)} contract − {operand(received_total)} received'
+                   '   ·   what the client still owes'); cr += 2
 
-    # What we actually invoiced — a different question from the contract, and the
-    # one the profit below is struck against. With no sales bills there is
-    # nothing invoiced and this falls back to the PO, so the heading names its
-    # real source rather than reporting the contract as billed.
+    # What we actually invoiced — reported in its own right, and a different
+    # question from the contract the balance below is struck against. With no
+    # sales bills there is nothing invoiced and this falls back to the PO, so the
+    # heading names its real source rather than reporting the contract as billed.
     VALUE_HEAD = {
         'sales_bills': 'BILLED VALUE  (sales bills)',
         'po': 'PROJECT VALUE  (from the PO — no sales bills tagged)',
@@ -1028,12 +1078,39 @@ def export_single_project_summary(project_id):
     kv_row(ws, cr, 'Overhead', overhead, fmt=currency_fmt); cr += 1
     kv_row(ws, cr, 'Total Cost', spend_total, fmt=currency_fmt, font=st['expense_font']); cr += 2
 
+    # Three bottom lines, not one. They share a cost total and differ only in
+    # what it is subtracted from — cash received, the contract, or the invoices
+    # raised — and that difference is the whole point, so each row carries its
+    # own formula with the actual operands in column C. Collapsing them to a
+    # single "Balance" is what made the figure ambiguous to read.
     cr = section(ws, cr, 'NET POSITION')
+    kv_row(ws, cr, 'Net Position (Received − Total Cost)', cash_position,
+           fmt=currency_fmt, font=signed_font(cash_position),
+           formula=f'{operand(received_total)} received − {operand(spend_total)} cost'
+                   '   ·   cash in hand against cash spent'); cr += 1
+
+    # The contract, and what the job earns on it. With no PO there is no contract
+    # to measure against, so this falls back to the billed total and the label has
+    # to name what it actually subtracted from.
     kv_row(ws, cr,
-           ('Balance (Billed Value − Total Cost)' if value_source == 'sales_bills'
-            else 'Balance (Project Value − Total Cost)'),
-           profit, fmt=currency_fmt,
-           font=(st['green_amount'] if profit >= 0 else st['red_amount'])); cr += 1
+           ('Profit (PO Contract Value − Total Cost)' if contract_source == 'po'
+            else 'Profit (Billed Value − Total Cost — no PO)'),
+           profit, fmt=currency_fmt, font=signed_font(profit),
+           formula=f'{operand(contract_total)} contract − {operand(spend_total)} cost'
+                   '   ·   what the job earns, however much is invoiced'); cr += 1
+
+    # Same subtraction against invoices actually raised. Printed as a note rather
+    # than a number when nothing has been billed: a bare negative there reads as
+    # a loss, when it only means no invoice has gone out yet.
+    if has_sales_bills_flag:
+        kv_row(ws, cr, 'Billed Profit (Sales Bills Value − Total Cost)', billed_profit,
+               fmt=currency_fmt, font=signed_font(billed_profit),
+               formula=f'{operand(sales_total_value)} billed − {operand(spend_total)} cost'
+                       '   ·   earned on the invoices raised so far'); cr += 1
+    else:
+        kv_row(ws, cr, 'Billed Profit (Sales Bills Value − Total Cost)',
+               'No sales bills tagged', font=st['formula_font'],
+               formula='nothing invoiced yet, so there is no billed figure to strike'); cr += 1
     ws.column_dimensions['A'].width = 30
     ws.column_dimensions['B'].width = 22
 

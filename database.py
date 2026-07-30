@@ -3603,12 +3603,62 @@ class DatabaseManager:
             print(f"[!] Error fetching project PO {project_id}: {e}")
             return None
 
+    # Every figure po_processor can pull off a line of the ORDER table, so the
+    # editor can hand back a corrected copy of exactly what was extracted.
+    # gst_rate/tax_amount are editor-only: the extractor doesn't read a per-line
+    # tax split, but the document often prices GST per line, so a correction has
+    # somewhere to land instead of being forced up into the header total.
+    PO_LINE_ITEM_TEXT_FIELDS = ('description', 'unit')
+    PO_LINE_ITEM_NUM_FIELDS = ('quantity', 'rate', 'amount', 'gst_rate', 'tax_amount')
+
+    @classmethod
+    def _sanitize_po_line_items(cls, value) -> List[Dict]:
+        """Coerce a client-supplied line-item list into the stored shape.
+
+        Raises ValueError on anything that isn't a list of item objects, so the
+        caller reports it as a bad field rather than writing junk JSON. A row
+        with neither a description nor a single figure is dropped — that's a
+        draft row the user tabbed through — mirroring po_processor's normalizer.
+        """
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = json.loads(value)  # ValueError propagates to the caller
+        if not isinstance(value, list):
+            raise ValueError('line_items must be a list')
+        if len(value) > 500:
+            raise ValueError('too many line items')
+
+        items = []
+        for raw in value:
+            if not isinstance(raw, dict):
+                raise ValueError('each line item must be an object')
+            item = {}
+            for f in cls.PO_LINE_ITEM_TEXT_FIELDS:
+                item[f] = str(raw.get(f) or '').strip()[:1000]
+            for f in cls.PO_LINE_ITEM_NUM_FIELDS:
+                v = raw.get(f)
+                if v is None or (isinstance(v, str) and not v.strip()):
+                    item[f] = None
+                    continue
+                item[f] = round(float(str(v).replace(',', '').strip()), 2)
+            if not item['description'] and all(
+                    item[f] is None for f in cls.PO_LINE_ITEM_NUM_FIELDS):
+                continue
+            items.append(item)
+        return items
+
     def update_project_po_fields(self, project_id: int, fields: dict) -> Tuple[bool, Optional[str]]:
         """Apply user-corrected gist fields; flips extraction_status to 'manual'.
 
         Only a whitelist of gist columns is writable.
         """
         self.ensure_project_pos_table()
+        fields = dict(fields or {})
+        # The count is derived from the items themselves whenever they're sent,
+        # so the two can't drift into disagreeing about the same document.
+        if 'line_items' in fields:
+            fields.pop('line_item_count', None)
         allowed = {
             'po_number': lambda v: (str(v).strip() or None),
             'po_date': self._parse_po_date,
@@ -3629,6 +3679,19 @@ class DatabaseManager:
                 except (ValueError, TypeError):
                     return False, f'invalid value for {key}'
                 sets.append(f"{key} = %s")
+
+        # Line items travel as a list but land as a JSON string in one LONGTEXT
+        # column, and bring their own count with them.
+        if 'line_items' in fields:
+            try:
+                items = self._sanitize_po_line_items(fields['line_items'])
+            except (ValueError, TypeError):
+                return False, 'invalid value for line_items'
+            sets.append("line_items = %s")
+            params.append(json.dumps(items, ensure_ascii=False) if items else None)
+            sets.append("line_item_count = %s")
+            params.append(len(items))
+
         if not sets:
             return False, 'no_editable_fields'
         sets.append("extraction_status = 'manual'")

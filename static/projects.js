@@ -34,6 +34,9 @@
     const editForm = document.getElementById('detail-po-edit-form');
     const editCancel = document.getElementById('detail-po-edit-cancel');
     const editError = document.getElementById('detail-po-edit-error');
+    const editLiBody = document.getElementById('detail-po-li-body');
+    const editLiAdd = document.getElementById('detail-po-li-add');
+    const editLiWarn = document.getElementById('detail-po-li-warn');
 
     const toast = document.getElementById('proj-toast');
 
@@ -1150,6 +1153,10 @@
     }
 
     // ── Core line-item breakdown (description / qty / unit / rate / amount) ──
+    // The GST pair is only priced per line when someone has actually entered it
+    // in the editor — the extractor reads a document-level tax total — so those
+    // two columns appear only when there's something to put in them, rather than
+    // adding a permanent pair of dashes to every PO.
     function renderPoLineItems(items) {
         if (!Array.isArray(items) || items.length === 0) return '';
         const num = (v) => (v ? formatINR(v) : '—');
@@ -1158,6 +1165,7 @@
             // trim trailing zeros: 12.00 -> 12, 12.50 -> 12.5
             return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 });
         };
+        const withGst = items.some(it => it.gst_rate || it.tax_amount);
         const body = items.map(it => `
             <tr>
                 <td class="proj-li-desc">${it.description ? escapeHtml(it.description) : '—'}</td>
@@ -1165,6 +1173,8 @@
                 <td class="proj-li-unit">${it.unit ? escapeHtml(it.unit) : '—'}</td>
                 <td class="proj-li-num">${num(it.rate)}</td>
                 <td class="proj-li-num">${num(it.amount)}</td>
+                ${withGst ? `<td class="proj-li-num">${it.gst_rate ? `${qty(it.gst_rate)}%` : '—'}</td>
+                <td class="proj-li-num">${num(it.tax_amount)}</td>` : ''}
             </tr>`).join('');
         return `
             <div class="proj-gist-items">
@@ -1175,7 +1185,9 @@
                             <tr>
                                 <th>Description</th><th class="proj-li-num">Qty</th>
                                 <th>Unit</th><th class="proj-li-num">Rate</th>
-                                <th class="proj-li-num">Amount</th>
+                                <th class="proj-li-num">${withGst ? 'Base value' : 'Amount'}</th>
+                                ${withGst ? `<th class="proj-li-num">GST %</th>
+                                <th class="proj-li-num">GST amount</th>` : ''}
                             </tr>
                         </thead>
                         <tbody>${body}</tbody>
@@ -1183,6 +1195,180 @@
                 </div>
             </div>`;
     }
+
+    // ── Editable line items (inside the PO values form) ─────────────────────
+    // The read-only table above states what the document says; this is the same
+    // rows as inputs, so a misread figure can be fixed where it was misread
+    // instead of being absorbed into the header totals.
+    //
+    // Two derivations run as you type, each a convenience that never overrides
+    // an explicit edit: Qty × Rate fills the base value, and base × GST% fills
+    // the GST amount. Touch the derived field directly and your number stands
+    // until you edit one of its inputs again — the last edit wins, which is the
+    // same rule the header totals follow against this grid.
+    const PO_LI_TEXT_FIELDS = ['description', 'unit'];
+    const PO_LI_NUM_FIELDS = ['quantity', 'rate', 'amount', 'gst_rate', 'tax_amount'];
+    const PO_LI_FIELDS = [...PO_LI_TEXT_FIELDS, ...PO_LI_NUM_FIELDS];
+
+    function poLiRowHtml(it) {
+        const item = it || {};
+        const cell = (field, placeholder, extra = '') => `
+            <input class="proj-led-input ${extra}" type="text" data-po-li-field="${field}"
+                   value="${escapeHtml(item[field] == null ? '' : String(item[field]))}"
+                   placeholder="${placeholder}" autocomplete="off">`;
+        const numCell = (field, placeholder) => `
+            <td class="proj-li-num">${cell(field, placeholder, 'proj-led-num')}</td>`;
+        return `
+            <tr>
+                <td>${cell('description', 'e.g. MS structural fabrication')}</td>
+                ${numCell('quantity', '0')}
+                <td>${cell('unit', 'MT', 'proj-led-unit')}</td>
+                ${numCell('rate', '0')}
+                ${numCell('amount', '0')}
+                ${numCell('gst_rate', '18')}
+                ${numCell('tax_amount', '0')}
+                <td class="proj-led-actions">
+                    <button type="button" class="proj-led-btn" data-po-li-delete title="Remove this line">×</button>
+                </td>
+            </tr>`;
+    }
+
+    // Unlike the ledgers — whose whole block is replaced, table element and all —
+    // this table outlives its rows, so decorateProjLiTables' one-shot data-mobi
+    // flag would leave every row added after the first render unlabelled on a
+    // phone. Clear it and walk the table again.
+    function redecoratePoLiTable() {
+        const table = editLiBody.closest('.proj-li-table');
+        if (table) table.removeAttribute('data-mobi');
+        decorateProjLiTables(editForm);
+    }
+
+    function renderPoEditLineItems(items) {
+        const list = (Array.isArray(items) && items.length) ? items : [{}];
+        editLiBody.innerHTML = list.map(poLiRowHtml).join('');
+        redecoratePoLiTable();
+        refreshPoLiTotals();
+    }
+
+    // Numbers as the user typed them, blank staying blank — an empty GST cell
+    // has to reach the server as null rather than a confident zero.
+    function poLiRowValues(tr) {
+        const out = {};
+        PO_LI_FIELDS.forEach(f => {
+            const el = tr.querySelector(`[data-po-li-field="${f}"]`);
+            out[f] = el ? el.value.trim() : '';
+        });
+        return out;
+    }
+
+    function poLiEditedItems() {
+        return Array.from(editLiBody.querySelectorAll('tr'))
+            .map(poLiRowValues)
+            .filter(v => PO_LI_FIELDS.some(f => v[f] !== ''))
+            .map(v => {
+                const item = {};
+                PO_LI_TEXT_FIELDS.forEach(f => { item[f] = v[f]; });
+                PO_LI_NUM_FIELDS.forEach(f => {
+                    const n = v[f] === '' ? null : parseMoney(v[f]);
+                    item[f] = (n == null || !Number.isFinite(n)) ? null : n;
+                });
+                return item;
+            });
+    }
+
+    function setPoLiField(tr, field, value) {
+        const el = tr.querySelector(`[data-po-li-field="${field}"]`);
+        if (el) el.value = value;
+    }
+
+    // Round to paise the same way the server does, so what the footer sums and
+    // what lands in the column can't differ by a stray fraction.
+    const round2 = (n) => Math.round(n * 100) / 100;
+
+    function poLiDerive(tr, field) {
+        const v = poLiRowValues(tr);
+        if (field === 'quantity' || field === 'rate') {
+            const qty = parseMoney(v.quantity);
+            const rate = parseMoney(v.rate);
+            if (v.quantity !== '' && v.rate !== '' && Number.isFinite(qty) && Number.isFinite(rate)) {
+                v.amount = String(round2(qty * rate));
+                setPoLiField(tr, 'amount', v.amount);
+                field = 'amount'; // the new base flows on into GST below
+            }
+        }
+        if (field === 'amount' || field === 'gst_rate') {
+            const base = parseMoney(v.amount);
+            const gstRate = parseMoney(v.gst_rate);
+            if (v.gst_rate !== '' && Number.isFinite(base) && Number.isFinite(gstRate)) {
+                setPoLiField(tr, 'tax_amount', String(round2(base * gstRate / 100)));
+            }
+        }
+    }
+
+    // The footer sums, plus the header totals they feed. A mismatch is surfaced
+    // rather than silently corrected: the user may be mid-entry, and a PO whose
+    // lines genuinely don't sum to its printed total is a fact about the
+    // document, not something this form gets to overwrite.
+    function refreshPoLiTotals(syncHeader) {
+        const items = poLiEditedItems();
+        const sum = (f) => items.reduce((t, it) => t + (it[f] || 0), 0);
+        const base = round2(sum('amount'));
+        const tax = round2(sum('tax_amount'));
+
+        const foot = (key, val, show) => {
+            const cell = editForm.querySelector(`[data-po-li-sum="${key}"]`);
+            if (cell) cell.textContent = show ? formatINR(val) : '—';
+        };
+        foot('amount', base, items.length > 0);
+        foot('tax_amount', tax, items.some(it => it.tax_amount != null));
+
+        if (syncHeader && items.length) {
+            editForm.taxable_value.value = base;
+            if (items.some(it => it.tax_amount != null)) editForm.total_tax.value = tax;
+            editForm.total_value.value = round2(base + parseMoney(editForm.total_tax.value));
+        }
+
+        const typedBase = parseMoney(editForm.taxable_value.value);
+        const off = items.length && Number.isFinite(typedBase) && Math.abs(typedBase - base) >= 0.01;
+        editLiWarn.classList.toggle('hidden', !off);
+        if (off) {
+            editLiWarn.textContent = `These lines add up to ${formatINR(base)}, but the taxable`
+                + ` value above reads ${formatINR(typedBase)}. Both will be saved as they stand —`
+                + ` fix whichever one is wrong.`;
+        }
+    }
+
+    editLiBody.addEventListener('input', (e) => {
+        const el = e.target.closest('[data-po-li-field]');
+        if (!el) return;
+        poLiDerive(el.closest('tr'), el.dataset.poLiField);
+        refreshPoLiTotals(true);
+    });
+
+    editLiBody.addEventListener('click', (e) => {
+        if (!e.target.closest('[data-po-li-delete]')) return;
+        const tr = e.target.closest('tr');
+        if (tr) tr.remove();
+        if (!editLiBody.querySelector('tr')) editLiBody.innerHTML = poLiRowHtml({});
+        redecoratePoLiTable();
+        refreshPoLiTotals(true);
+    });
+
+    editLiAdd.addEventListener('click', () => {
+        editLiBody.insertAdjacentHTML('beforeend', poLiRowHtml({}));
+        redecoratePoLiTable();
+        const rows = editLiBody.querySelectorAll('tr');
+        const input = rows[rows.length - 1].querySelector('[data-po-li-field="description"]');
+        if (input) input.focus();
+    });
+
+    // The header inputs stay authoritative when typed into — but the moment one
+    // moves, the mismatch note under the grid has to agree with it.
+    editForm.addEventListener('input', (e) => {
+        if (['taxable_value', 'total_tax', 'total_value'].includes(e.target.name)) {
+            refreshPoLiTotals(false);
+        }
+    });
 
     // ── PO ledgers: variations and actuals ─────────────────────────────────
     // A signed contract moves two ways, and each is an editable grid of priced
@@ -1862,6 +2048,10 @@
         editForm.client_name.value = po.client_name ?? '';
         editForm.taxable_value.value = po.taxable_value ?? '';
         editForm.total_tax.value = po.total_tax ?? '';
+        editForm.currency.value = po.currency ?? '';
+        editForm.payment_terms.value = po.payment_terms ?? '';
+        editForm.amount_in_words.value = po.amount_in_words ?? '';
+        renderPoEditLineItems(po.line_items);
         editError.classList.add('hidden');
         editForm.classList.remove('hidden');
         poActions.classList.add('hidden');
@@ -1881,6 +2071,12 @@
             client_name: editForm.client_name.value,
             taxable_value: editForm.taxable_value.value,
             total_tax: editForm.total_tax.value,
+            currency: editForm.currency.value,
+            payment_terms: editForm.payment_terms.value,
+            amount_in_words: editForm.amount_in_words.value,
+            // Replaces the stored list outright — a line deleted here is gone,
+            // and the server re-derives line_item_count from what arrives.
+            line_items: poLiEditedItems(),
         };
         const btn = editForm.querySelector('button[type="submit"]');
         btn.disabled = true;

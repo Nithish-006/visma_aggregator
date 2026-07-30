@@ -17,16 +17,23 @@ The model (verified against the client's own summary sheet):
     cost total            material (purchase bills, gross) + other bank debits
                           + labour + GST extra + overhead.
     receivable            contract total - received (what the client still owes)
-    profit                total value - cost total (what the project makes)
+    cash_position         received - cost total (money in hand vs money spent)
+    profit                contract total - cost total (what the job earns)
+    billed_profit         sales bills total - cost total (earned on invoices raised)
 
-`receivable` and `profit` are different questions and must not be conflated,
-and they deliberately read off different figures. The client committed to the
-contract — the PO plus any agreed variations, or the actuals once the work has
-been finally measured (see resolve_contract) — so what they still owe is the
-contract less what they've paid, however much of it we've invoiced so far.
-Profit stays on the sales bills: the PO is the promise, the bills are the
-revenue. A project with no PO has no contract to measure against, so its
-receivable falls back to the billed total.
+`receivable` and the three bottom-line figures answer different questions and
+must not be conflated. The client committed to the contract — the PO plus any
+agreed variations, or the actuals once the work has been finally measured (see
+resolve_contract) — so what they still owe is the contract less what they've
+paid, and what the job earns is that same contract less what it cost, however
+much of it we've invoiced so far. Billing is a schedule; a part-billed project
+is not a part-earned one. A project with no PO has no contract to measure
+against, so `receivable` and `profit` fall back to the billed total.
+
+`cash_position` and `billed_profit` are the same subtraction struck against cash
+received and invoices raised instead. All three are returned rather than one
+being chosen: which one matters depends on whether you're asking about the bank,
+the contract, or the invoices, and a single figure called "balance" hid that.
 
 Callers hand `compute_project_finance` the contract already resolved, as `po`.
 It does not know the ledgers exist.
@@ -182,9 +189,28 @@ def compute_project_finance(*, sales, purchase, po, received_total,
         has_po = po_total > 0
     contract_total = po_total if has_po else value_total
     contract_source = 'po' if has_po else value_source
-    receivable = contract_total - float(received_total or 0)
-    profit = value_total - spend_total
-    margin_pct = (profit / value_total * 100) if value_total > 0 else None
+    received = float(received_total or 0)
+    receivable = contract_total - received
+
+    # Three ways to read the same spend, and the difference between them is the
+    # difference between cash, contract and invoices. All three are reported —
+    # picking one and calling it "the balance" is what made the figure ambiguous:
+    #
+    #   cash_position  received - cost. Money actually in hand against money
+    #                  actually gone out. Ignores what is owed or promised, so a
+    #                  profitable project reads negative until the client pays.
+    #   profit         contract - cost. What the job earns. The client committed
+    #                  to the PO (plus variations, or the actuals once measured),
+    #                  so that is what the project is worth however much of it
+    #                  has been invoiced so far — billing is a schedule, and a
+    #                  part-billed project is not a part-earned one.
+    #   billed_profit  sales bills - cost. The same question asked of what has
+    #                  actually been invoiced; equals `profit` once the contract
+    #                  is fully billed, and short of it before then.
+    cash_position = received - spend_total
+    profit = contract_total - spend_total
+    billed_profit = sales_total - spend_total
+    margin_pct = (profit / contract_total * 100) if contract_total > 0 else None
 
     # Built here so it always sums to spend_total, whatever the caller does.
     cost_lines = [
@@ -225,7 +251,13 @@ def compute_project_finance(*, sales, purchase, po, received_total,
             'source': contract_source,
         },
         'receivable': receivable,
+        'received_total': received,
+        'cash_position': cash_position,
         'profit': profit,
+        'billed_profit': billed_profit,
+        # Whether anything was invoiced at all, so a caller can say "nothing
+        # billed yet" instead of printing billed_profit as a bare loss.
+        'has_sales_bills': bool(has_sales_bills),
         'margin_pct': margin_pct,
         'material_total': material_total,
         'other_expense_total': other_expense_total,

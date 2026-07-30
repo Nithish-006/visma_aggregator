@@ -898,7 +898,14 @@ def api_process_project_po(project_id):
 @bp.route('/api/projects/<int:project_id>/po-data', methods=['PUT'])
 @login_required
 def api_update_project_po_data(project_id):
-    """Save user-corrected PO gist fields (flips status to 'manual')."""
+    """Save user-corrected PO gist fields (flips status to 'manual').
+
+    Takes the whole extracted gist, line items included: `line_items` is a list
+    of {description, quantity, unit, rate, amount, gst_rate, tax_amount} and
+    replaces the stored list outright, with line_item_count re-derived from it.
+    Anything the extractor read is therefore correctable — a misread line no
+    longer has to be absorbed into the header totals.
+    """
     project = db_manager.get_project(project_id)
     if not project:
         return jsonify({'error': 'not_found'}), 404
