@@ -65,13 +65,11 @@ Required environment variables (see `.env.example`):
 ├── database.py                     # Database utilities
 ├── database_schema.sql             # Database schema
 ├── templates/                      # HTML templates
-│   ├── index.html                 # Dashboard
-│   └── edit_transactions.html     # Edit page
+│   └── index.html                 # Bank page: view + edit transactions in place
 ├── static/                        # Static assets
-│   ├── style.css                  # Dashboard styles
-│   ├── script.js                  # Dashboard JS
-│   ├── edit_transactions.css      # Edit page styles
-│   └── edit_transactions.js       # Edit page JS
+│   ├── style.css                  # Shared page styles
+│   ├── edit_transactions.css      # Bank table + inline-editing styles
+│   └── edit_transactions.js       # Bank table: filters, paging, inline editing
 ├── requirements.txt               # Python dependencies
 ├── Procfile                       # Deployment configuration
 └── .env.example                   # Environment template

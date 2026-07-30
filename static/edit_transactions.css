@@ -40,6 +40,22 @@
     align-items: center;
     gap: 0.5rem;
     flex-shrink: 0;
+    /* Download and Upload joined this row when the editor and the dashboard
+       became one page. On a narrow laptop that's more than fits, and a
+       no-wrap flex row would push them off the edge instead. */
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+/* Match the grafted dashboard buttons to the compact 36px toolbar band, so
+   Download / Upload sit level with Save All and the search box rather than
+   standing a few pixels taller. */
+.edit-actions-toolbar .download-btn,
+.edit-actions-toolbar .toolbar-action-btn {
+    height: 36px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
 }
 
 .edit-filter-toolbar .filter-toggle {
@@ -1594,6 +1610,44 @@ input[type="checkbox"] {
 
 .split-field input[type="number"] {
     font-weight: 600;
+}
+
+/* Searchable project picker inside a split row (see wireSplitProjectCombobox) */
+.split-project-combo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.split-project-field {
+    position: relative;
+    display: flex;
+}
+
+.split-project-combo input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.split-project-combo .combobox-dropdown {
+    border-top: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    margin-top: 2px;
+    z-index: 10001; /* above the split modal */
+}
+
+.split-project-hint {
+    display: none;
+    font-size: 0.7rem;
+    color: #fbbf24;
+}
+
+.split-project-combo.has-legacy .split-project-hint {
+    display: block;
+}
+
+.split-project-combo.has-legacy input {
+    border-color: #fbbf24;
 }
 
 /* Validation Summary */

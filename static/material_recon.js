@@ -60,7 +60,9 @@ window.MaterialRecon = (function () {
         if (vendors && vendors.length) p.set('vendor', vendors.join(','));
         if (category) p.set('category', category);
         if (search) p.set('search', search);
-        return `/edit-transactions/${bank || 'kvb'}?${p.toString()}`;
+        // The bank dashboard is the edit grid now — /edit-transactions redirects
+        // here anyway, but link straight through so there's no extra hop.
+        return `/dashboard/${bank || 'kvb'}?${p.toString()}`;
     }
 
     // The bank vendor strings exactly as the edit grid's own filter lists them —

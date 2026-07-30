@@ -72,8 +72,11 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 
 ### Key Routes
 - `/` → Hub (bank selection)
-- `/dashboard/<bank_code>` → Bank analytics dashboard
-- `/edit-transactions/<bank_code>` → Bulk transaction editing
+- `/dashboard/<bank_code>` → Bank transactions: filter/search/page **and** edit in place
+  (click-to-edit cells, bulk apply, split). Rendered by `templates/index.html`,
+  driven by `static/edit_transactions.{css,js}`.
+- `/edit-transactions/<bank_code>` → retired; redirects to the dashboard, preserving the
+  query string (the material-reconciliation panel deep-links pre-filtered)
 - `/charts/<bank_code>` → Analytics charts
 - `/personal-tracker` → Personal expense entry
 

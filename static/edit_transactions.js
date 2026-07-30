@@ -27,6 +27,7 @@
 
     // Sort state
     let currentSortOrder = 'desc'; // 'desc' = newest first, 'asc' = oldest first
+    let currentSortBy = 'date';    // any sortable column: date | dr_amount | cr_amount
 
     // Filter state
     let currentFilters = {
@@ -35,7 +36,8 @@
         vendor: [],
         search: '',
         startDate: null,
-        endDate: null
+        endDate: null,
+        onlyWarnings: false  // KVB: only no-bill material-purchase rows
     };
 
     // Loading state to prevent duplicate requests
@@ -353,9 +355,42 @@
                 startInput.value = '';
                 endInput.value = '';
             }
+
+            // "UPDATED FROM / TILL" badges in the header, and their mobile
+            // equivalents in the info bar — how far the statement data actually
+            // runs, which is the first thing you check before reading a total.
+            const stamp = (id, value) => {
+                const el = document.getElementById(id);
+                if (el && value) el.textContent = formatDisplayDate(value);
+            };
+            stamp('data-from-date', data.min_date);
+            stamp('mobile-from-date', data.min_date);
+            stamp('data-updated-date', data.max_date);
+            stamp('mobile-to-date', data.max_date);
         } catch (error) {
             console.error('Error loading date range:', error);
         }
+    }
+
+    /**
+     * Format an ISO date for display (e.g. "05 Jan 2026").
+     */
+    function formatDisplayDate(dateStr) {
+        if (!dateStr) return '--';
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return String(dateStr);
+        return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    /**
+     * Reflect the current no-bill flag count on the KVB toggle (hidden at zero).
+     */
+    function updateWarningCount(count) {
+        const badge = document.getElementById('warning-count-badge');
+        if (!badge) return;  // element only exists on the KVB page
+        const n = Number(count) || 0;
+        badge.textContent = n;
+        badge.hidden = n === 0;
     }
 
     /**
@@ -398,7 +433,7 @@
             const params = new URLSearchParams({
                 page: currentPage,
                 per_page: ITEMS_PER_PAGE,
-                sort_by: 'date',
+                sort_by: currentSortBy,
                 sort_order: currentSortOrder
             });
 
@@ -421,6 +456,9 @@
             if (currentFilters.endDate) {
                 params.set('end_date', currentFilters.endDate);
             }
+            if (currentFilters.onlyWarnings) {
+                params.set('only_warnings', '1');
+            }
 
             const response = await fetch(`/api/${BANK_CODE}/transactions/paginated?${params}`);
             const data = await response.json();
@@ -428,6 +466,10 @@
             allTransactions = data.transactions;
             totalTransactions = data.total;
             totalPages = data.total_pages;
+
+            // Keep the no-bill toggle's badge honest about the whole filtered set,
+            // not just this page (KVB only — the element is absent elsewhere).
+            updateWarningCount(data.warning_count);
 
             // Update the map for tracking
             allTransactionsMap.clear();
@@ -1664,8 +1706,14 @@
             vendor: [],
             search: '',
             startDate: null,
-            endDate: null
+            endDate: null,
+            onlyWarnings: false
         };
+
+        // The no-bill toggle is a filter like any other, so Reset has to release
+        // it too — otherwise Reset leaves the grid showing a subset.
+        const warnToggle = document.getElementById('only-warnings-toggle');
+        if (warnToggle) warnToggle.checked = false;
 
         // Clear dropdowns
         if (dropdowns['edit-category-filter']) dropdowns['edit-category-filter'].clear();
@@ -1689,6 +1737,9 @@
      */
     function updateCounts() {
         totalCountEl.textContent = totalTransactions;
+        // The header badge counts the same filtered set as the toolbar's "Total".
+        const headerCount = document.getElementById('total-transactions');
+        if (headerCount) headerCount.textContent = `${totalTransactions} Transactions`;
     }
 
     // Debounce timer for search
@@ -1708,26 +1759,63 @@
             }
         });
 
-        // Date sort toggle
-        const dateSortHeader = document.getElementById('date-sort-header');
-        if (dateSortHeader) {
-            dateSortHeader.addEventListener('click', async (e) => {
+        // Column sort. Any th[data-sort] participates: clicking the active column
+        // flips the direction, clicking a new one switches to it (descending, so
+        // "biggest debit" is one click away). Sorting is server-side over the
+        // whole filtered set, not just the page on screen.
+        document.querySelectorAll('.edit-table th.sortable').forEach(th => {
+            th.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 if (isLoading) return;
+                const field = th.dataset.sort;
+                if (!field) return;
 
-                currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
-                const icon = dateSortHeader.querySelector('.sort-icon');
-                if (icon) {
-                    icon.textContent = currentSortOrder === 'desc' ? '↓' : '↑';
+                if (currentSortBy === field) {
+                    currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
+                } else {
+                    currentSortBy = field;
+                    currentSortOrder = 'desc';
                 }
-                dateSortHeader.classList.add('sorting');
+
+                document.querySelectorAll('.edit-table th.sortable').forEach(h => {
+                    h.classList.remove('header-sort-active');
+                    const i = h.querySelector('.sort-icon');
+                    if (i) i.textContent = '';
+                });
+                th.classList.add('header-sort-active');
+                const icon = th.querySelector('.sort-icon');
+                if (icon) icon.textContent = currentSortOrder === 'desc' ? '↓' : '↑';
+
+                th.classList.add('sorting');
                 currentPage = 1;
                 showLoading();
                 await loadTransactions();
                 hideLoading();
-                dateSortHeader.classList.remove('sorting');
+                th.classList.remove('sorting');
+            });
+        });
+
+        // "Only no-bill rows" toggle (KVB only)
+        const warnToggle = document.getElementById('only-warnings-toggle');
+        if (warnToggle) {
+            warnToggle.addEventListener('change', () => {
+                currentFilters.onlyWarnings = warnToggle.checked;
+                applyFilters();
             });
         }
+
+        // Download Excel — the same filters that shape the grid shape the file,
+        // so what you exported is what you were looking at.
+        document.getElementById('download-transactions')?.addEventListener('click', () => {
+            const params = new URLSearchParams();
+            params.append('category', currentFilters.category.length
+                ? currentFilters.category.join(',') : 'All');
+            if (currentFilters.project.length) params.append('project', currentFilters.project.join(','));
+            if (currentFilters.vendor.length) params.append('vendor', currentFilters.vendor.join(','));
+            if (currentFilters.startDate) params.append('start_date', currentFilters.startDate);
+            if (currentFilters.endDate) params.append('end_date', currentFilters.endDate);
+            window.location.href = `/api/${BANK_CODE}/download_transactions?${params.toString()}`;
+        });
 
         // Filters
         // Note: Category, Project, Vendor filters are now handled by CustomDropdown class events
@@ -1956,22 +2044,11 @@
                 `<option value="${cat}">`
             ).join('');
 
-            // Build canonical-only project <select> options. No free-text — the project
-            // for every split must be chosen from the registered (canonical) projects,
-            // matching the inline edit picker (renderCanonicalProjectCombobox).
+            // Project is a canonical-only searchable combobox (same feel as the inline
+            // edit picker and the bill/sales modules) — type to filter, pick from the
+            // list. Free text is never committed; new projects are registered on /projects.
             const currentProj = row.project || '';
-            const currentProjLower = currentProj.toLowerCase();
-            const isProjCanonical = !currentProj || canonicalProjectSet.has(currentProjLower);
-            let projectOptions = '<option value="">(none)</option>';
-            // If the inherited value is legacy free-text, surface it as a disabled option
-            // so the user sees what was there but is forced to pick a canonical project.
-            if (currentProj && !isProjCanonical) {
-                projectOptions += `<option value="${escapeHtml(currentProj)}" disabled selected>${escapeHtml(currentProj)} — legacy, pick canonical</option>`;
-            }
-            projectOptions += canonicalProjects.map(disp => {
-                const sel = (isProjCanonical && disp.toLowerCase() === currentProjLower) ? ' selected' : '';
-                return `<option value="${escapeHtml(disp)}"${sel}>${escapeHtml(disp)}</option>`;
-            }).join('');
+            const isProjLegacy = !!currentProj && !canonicalProjectSet.has(currentProj.toLowerCase());
 
             rowCard.innerHTML = `
                 <div class="split-row-header">
@@ -1994,7 +2071,15 @@
                     </div>
                     <div class="split-field">
                         <label>Project</label>
-                        <select class="split-project-input project-select" data-index="${index}">${projectOptions}</select>
+                        <div class="split-project-combo${isProjLegacy ? ' has-legacy' : ''}" data-index="${index}">
+                            <div class="split-project-field">
+                                <input type="text" class="split-project-input" data-index="${index}"
+                                       value="${escapeHtml(currentProj)}" autocomplete="off"
+                                       placeholder="Type to filter projects...">
+                                <div class="combobox-dropdown" style="display: none;"></div>
+                            </div>
+                            <span class="split-project-hint">Legacy value — pick a registered project</span>
+                        </div>
                     </div>
                     <div class="split-field full-width">
                         <label>Notes</label>
@@ -2004,6 +2089,7 @@
             `;
 
             splitRowsContainer.appendChild(rowCard);
+            wireSplitProjectCombobox(rowCard, index);
         });
 
         // Attach event listeners
@@ -2019,13 +2105,146 @@
             input.addEventListener('input', handleSplitFieldChange);
         });
 
-        // Project is a canonical-only <select> — listen for change.
-        document.querySelectorAll('.split-project-input').forEach(select => {
-            select.addEventListener('change', handleSplitFieldChange);
-        });
+        // Project has its own searchable combobox wiring (wireSplitProjectCombobox) —
+        // it must not go through handleSplitFieldChange, which would store raw typing.
 
         document.querySelectorAll('.split-row-remove').forEach(btn => {
             btn.addEventListener('click', handleRemoveSplitRow);
+        });
+    }
+
+    /**
+     * Wire the canonical-only project combobox for one split row: type to filter,
+     * arrow keys / Enter / click to pick, Escape to revert. Only values from
+     * /api/projects are stored — free text reverts on blur, so a half-typed name can
+     * never be saved. "(none)" clears the project for that split.
+     */
+    function wireSplitProjectCombobox(rowCard, index) {
+        const wrapper = rowCard.querySelector('.split-project-combo');
+        if (!wrapper) return;
+        const input = wrapper.querySelector('.split-project-input');
+        const dropdown = wrapper.querySelector('.combobox-dropdown');
+
+        let items = [];          // {value, label} in render order
+        let highlighted = -1;
+
+        function closeDropdown() {
+            dropdown.style.display = 'none';
+            highlighted = -1;
+        }
+
+        function commit(value) {
+            splitRows[index].project = value;
+            input.value = value;
+            wrapper.classList.toggle('has-legacy', !!value && !canonicalProjectSet.has(value.toLowerCase()));
+            closeDropdown();
+        }
+
+        function revert() {
+            input.value = splitRows[index].project || '';
+            closeDropdown();
+        }
+
+        function renderDropdown(filter = '') {
+            const lower = filter.trim().toLowerCase();
+            const stored = splitRows[index].project || '';
+            items = [];
+            if (!lower || 'none'.includes(lower)) items.push({ value: '', label: '(none)' });
+            canonicalProjects
+                .filter(p => !lower || p.toLowerCase().includes(lower))
+                .forEach(p => items.push({ value: p, label: p }));
+
+            highlighted = -1;
+            dropdown.innerHTML = '';
+
+            if (items.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'combobox-item combobox-empty';
+                empty.textContent = 'No matching projects';
+                dropdown.appendChild(empty);
+                dropdown.style.display = 'block';
+                return;
+            }
+
+            items.forEach(it => {
+                const item = document.createElement('div');
+                item.className = 'combobox-item';
+                if (it.value === '') item.classList.add('combobox-clear');
+                else if (it.value === stored) item.classList.add('combobox-current');
+
+                const matchIdx = it.value && lower ? it.label.toLowerCase().indexOf(lower) : -1;
+                if (matchIdx >= 0) {
+                    item.innerHTML = escapeHtml(it.label.substring(0, matchIdx)) +
+                        '<strong>' + escapeHtml(it.label.substring(matchIdx, matchIdx + lower.length)) + '</strong>' +
+                        escapeHtml(it.label.substring(matchIdx + lower.length));
+                } else {
+                    item.textContent = it.label;
+                }
+
+                item.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); // keep the input from blurring first
+                    commit(it.value);
+                });
+                dropdown.appendChild(item);
+            });
+            dropdown.style.display = 'block';
+        }
+
+        function updateHighlight() {
+            dropdown.querySelectorAll('.combobox-item').forEach((item, idx) => {
+                item.classList.toggle('combobox-highlighted', idx === highlighted);
+                if (idx === highlighted) item.scrollIntoView({ block: 'nearest' });
+            });
+        }
+
+        // Highlighted row wins; else an exact canonical match of what was typed; else
+        // the sole remaining match. Anything ambiguous reverts.
+        function selectFromKeyboard() {
+            if (highlighted >= 0 && highlighted < items.length) { commit(items[highlighted].value); return; }
+            const typed = input.value.trim();
+            if (!typed) { revert(); return; }
+            const exact = canonicalProjects.find(p => p.toLowerCase() === typed.toLowerCase());
+            if (exact) { commit(exact); return; }
+            const matches = items.filter(it => it.value !== '');
+            if (matches.length === 1) { commit(matches[0].value); return; }
+            revert();
+        }
+
+        input.addEventListener('focus', () => renderDropdown(input.value));
+        input.addEventListener('input', () => renderDropdown(input.value));
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (dropdown.style.display === 'none') { renderDropdown(input.value); return; }
+                if (items.length > 0) {
+                    highlighted = Math.min(highlighted + 1, items.length - 1);
+                    updateHighlight();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (items.length > 0) {
+                    highlighted = Math.max(highlighted - 1, 0);
+                    updateHighlight();
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                selectFromKeyboard();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();   // don't let Escape close the split modal mid-pick
+                revert();
+            }
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                const typed = input.value.trim();
+                if (!typed) { revert(); return; }
+                const exact = canonicalProjects.find(p => p.toLowerCase() === typed.toLowerCase());
+                if (exact) { commit(exact); return; }
+                revert();
+            }, 120);
         });
     }
 

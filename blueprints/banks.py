@@ -49,15 +49,19 @@ def bank_dashboard(bank_code):
 @bp.route('/edit-transactions/<bank_code>')
 @login_required
 def edit_transactions(bank_code):
-    """Render bank-specific transaction edit page"""
+    """Retired — editing now happens on the bank dashboard itself.
+
+    Kept as a redirect because the query string is load-bearing: the material
+    reconciliation panel deep-links here pre-filtered (project/vendor/category/
+    search), and bookmarks exist. The dashboard reads exactly the same params
+    (applyUrlFilters), so forwarding them lands on the rows the link promised.
+    """
     if bank_code not in VALID_BANK_CODES:
         return redirect(url_for('auth.index'))
 
-    bank_config = get_bank_config(bank_code)
-    return render_template('edit_transactions.html',
-                         bank_code=bank_code,
-                         bank_name=bank_config['name'],
-                         bank_config=bank_config)
+    target = url_for('banks.bank_dashboard', bank_code=bank_code)
+    query = request.query_string.decode('utf-8', 'ignore')
+    return redirect(f'{target}?{query}' if query else target)
 
 
 @bp.route('/api/hub/stats')
