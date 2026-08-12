@@ -188,12 +188,53 @@ def _reprocess_invoice(invoice_id, kind, apply_changes, supplied_flat=None):
     }, 200
 
 
+def _invoice_validation_detail(invoice_id, kind):
+    """Everything the review dialog needs for one bill: the stored verdict, the
+    reconciliation re-run live off the stored rows (so the numbers on screen are
+    the numbers being checked), each deviation explained with a proposed fix,
+    and enough invoice identity to head the dialog.
+    """
+    invoice, items = db_manager.get_invoice_with_items(invoice_id, kind)
+    if not invoice:
+        return jsonify({'success': False, 'error': 'Bill not found'}), 404
+
+    v = validate_db_row(invoice, items)
+    stored_status = invoice.get('validation_status') or 'review'
+    # 'approved' is a human verdict on top of the machine one: the deviations
+    # below are still the real ones, they have simply been accepted.
+    return jsonify({
+        'success': True,
+        'invoice': {
+            'id': invoice.get('id'),
+            'kind': kind,
+            'invoice_number': invoice.get('invoice_number'),
+            'invoice_date': invoice.get('invoice_date'),
+            'vendor_name': invoice.get('vendor_name'),
+            'buyer_name': invoice.get('buyer_name'),
+            'project_name': invoice.get('project_name'),
+            'filename': invoice.get('filename'),
+            'total_amount': invoice.get('total_amount'),
+        },
+        'stored_status': stored_status,
+        'stored_notes': invoice.get('validation_notes') or '',
+        'reviewed_note': invoice.get('validation_reviewed_note') or '',
+        'status': v['status'],
+        'score': v['score'],
+        'diff': v['diff'],
+        'issues': v['issues'],
+        'worksheet': v['worksheet'],
+        'failures': v['failures'],
+    })
+
+
 def _set_invoice_validation(invoice_id, kind):
     """Manually approve a flagged bill ('approve') or recompute its verdict
     ('recheck'). Approve is a sticky override that survives re-validation."""
-    action = (request.json or {}).get('action', 'approve')
+    payload = request.json or {}
+    action = payload.get('action', 'approve')
     if action == 'approve':
-        ok, info = db_manager.approve_bill_validation(invoice_id, kind)
+        ok, info = db_manager.approve_bill_validation(invoice_id, kind,
+                                                      note=payload.get('note'))
         if not ok:
             return jsonify({'success': False, 'error': info or 'Update failed'}), 200
         return jsonify({'success': True, 'status': 'approved'})

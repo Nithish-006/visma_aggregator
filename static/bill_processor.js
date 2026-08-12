@@ -125,8 +125,17 @@ function init() {
             closeUploadModal();
             closeDetailModal();
             closeEditModal();
+            closeReviewModal();
         }
     });
+
+    // Review modal: click the backdrop to dismiss, like the other modals.
+    const reviewModal = document.getElementById('reviewModal');
+    if (reviewModal) {
+        reviewModal.addEventListener('click', (e) => {
+            if (e.target === reviewModal) closeReviewModal();
+        });
+    }
 
     // Edit modal events
     const editModal = document.getElementById('editModal');
@@ -776,38 +785,237 @@ function initBillSearch() {
     }
 }
 
-// Amber/green reconciliation badge. Tooltip carries the failure notes.
-// Clickable: a flagged bill can be manually marked OK; a manually-approved
-// bill can be re-checked against the reconciliation rules.
+// Amber/green reconciliation badge. Clicking any checked bill opens the review
+// dialog, which shows the full reconciliation working, every deviation with a
+// proposed fix, and the accept / re-check / re-extract actions.
 function validationBadge(bill) {
     const status = bill.validation_status;
     if (status === 'review') {
-        const notes = (bill.validation_notes || 'Failed reconciliation').replace(/"/g, '&quot;');
-        return `<span class="val-badge val-review val-clickable" title="${notes} — click to mark OK" onclick="event.stopPropagation(); approveBillValidation(${bill.id})">⚠ Review</span>`;
+        const n = (bill.validation_notes || '').split(';').filter(s => s.trim()).length;
+        const what = n ? `${n} deviation${n > 1 ? 's' : ''} found` : 'Failed reconciliation';
+        return `<span class="val-badge val-review val-clickable" title="${what} — click to review in detail" onclick="event.stopPropagation(); openReviewModal(${bill.id})">⚠ Review</span>`;
     }
     if (status === 'approved') {
-        const notes = (bill.validation_notes || '').replace(/"/g, '&quot;');
-        const why = notes ? ` (despite: ${notes})` : '';
-        return `<span class="val-badge val-ok val-approved val-clickable" title="Manually approved${why} — click to re-check" onclick="event.stopPropagation(); recheckBillValidation(${bill.id})">✓ OK ✋</span>`;
+        return `<span class="val-badge val-ok val-approved val-clickable" title="Manually approved by a reviewer — click to see why and re-check" onclick="event.stopPropagation(); openReviewModal(${bill.id})">✓ OK ✋</span>`;
     }
     if (status === 'ok') {
-        return `<span class="val-badge val-ok" title="Reconciles">✓ OK</span>`;
+        return `<span class="val-badge val-ok val-clickable" title="Reconciles — click to see the working" onclick="event.stopPropagation(); openReviewModal(${bill.id})">✓ OK</span>`;
     }
     return `<span class="val-badge val-unknown" title="Not checked yet">–</span>`;
 }
 
-// Manually mark a flagged bill as OK (sticky — survives "Run validation").
-async function approveBillValidation(billId) {
-    if (!confirm('Mark this bill as OK?\n\nThis manually approves it despite the reconciliation flag. It will stay OK even after re-running validation.')) return;
+// ============================================================================
+// RECONCILIATION REVIEW DIALOG
+// ============================================================================
+// The tooltip used to dump raw equations at the auditor. This dialog does the
+// explaining instead: the reconciliation worksheet, then one card per deviation
+// (what it is, by how much, why it usually happens, what to do), then the
+// actions — accept with a reason, re-check, re-extract, or edit.
+
+const REVIEW_API = '/api/bills';       // purchase ledger
+let currentReviewId = null;
+let currentReviewData = null;
+
+async function openReviewModal(billId) {
+    currentReviewId = billId;
+    currentReviewData = null;
+    document.getElementById('reviewModal').classList.add('show');
+    document.getElementById('reviewTitle').textContent = 'Reconciliation review';
+    document.getElementById('reviewFooter').innerHTML = '';
+    document.getElementById('reviewBody').innerHTML =
+        '<div class="review-loading"><div class="loading-spinner"></div> Re-checking this bill…</div>';
     try {
-        const res = await fetch(`/api/bills/${billId}/validation`, {
+        const res = await fetch(`${REVIEW_API}/${billId}/validation-detail`);
+        const data = await res.json();
+        if (!data.success) {
+            document.getElementById('reviewBody').innerHTML =
+                `<div class="review-error">⚠ ${escapeHtml(data.error || 'Could not load the review')}</div>`;
+            return;
+        }
+        currentReviewData = data;
+        renderReviewModal(data);
+    } catch (e) {
+        document.getElementById('reviewBody').innerHTML =
+            `<div class="review-error">⚠ ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function closeReviewModal() {
+    document.getElementById('reviewModal').classList.remove('show');
+    currentReviewId = null;
+    currentReviewData = null;
+}
+
+// Signed rupee figure — the sign matters here, it tells the auditor which way
+// the bill is out.
+function reviewSigned(v) {
+    const n = parseFloat(v) || 0;
+    return (n > 0 ? '+' : n < 0 ? '-' : '') + formatIndianCurrency(Math.abs(n));
+}
+
+function renderReviewModal(d) {
+    const issues = d.issues || [];
+    const w = d.worksheet || {};
+    const inv = d.invoice || {};
+    const approved = d.stored_status === 'approved';
+    const clean = issues.length === 0;
+
+    const verdict = approved
+        ? `<span class="review-verdict v-approved">✓ Accepted by reviewer</span>`
+        : clean
+            ? `<span class="review-verdict v-ok">✓ Reconciles</span>`
+            : `<span class="review-verdict v-review">⚠ ${issues.length} deviation${issues.length > 1 ? 's' : ''}</span>`;
+
+    const idLine = [
+        inv.invoice_number ? `Invoice ${escapeHtml(inv.invoice_number)}` : null,
+        inv.invoice_date ? escapeHtml(inv.invoice_date) : null,
+        inv.project_name ? `Project: ${escapeHtml(inv.project_name)}` : null,
+        inv.filename ? escapeHtml(truncate(inv.filename, 40)) : null,
+    ].filter(Boolean).join(' · ');
+
+    const gap = (w.total_amount || 0) - (w.expected_total || 0);
+    const gapClass = Math.abs(gap) <= (w.tolerance || 2) ? 'gap-ok' : 'gap-bad';
+
+    const wsRow = (label, value, cls = '') =>
+        `<tr class="${cls}"><td>${label}</td><td class="text-right">${formatIndianCurrency(value)}</td></tr>`;
+
+    const worksheet = `
+        <div class="review-section">
+            <h4 class="review-h">The reconciliation</h4>
+            <p class="review-hint">Every stored figure, added up the way the bill itself adds up. Anything that does not tie out is listed below.</p>
+            <table class="review-worksheet">
+                <tbody>
+                    ${wsRow('Subtotal (taxable value)', w.subtotal)}
+                    ${wsRow('CGST', w.cgst)}
+                    ${wsRow('SGST', w.sgst)}
+                    ${wsRow('IGST', w.igst)}
+                    ${wsRow('Other charges (freight, packing…)', w.other_charges)}
+                    ${wsRow('Round off', w.round_off)}
+                    ${wsRow('<strong>Computed total</strong>', w.expected_total, 'ws-computed')}
+                    ${wsRow('<strong>Total printed on the bill</strong>', w.total_amount, 'ws-printed')}
+                    <tr class="ws-gap ${gapClass}">
+                        <td><strong>Gap</strong></td>
+                        <td class="text-right"><strong>${reviewSigned(gap)}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="review-hint">${w.line_item_count || 0} line item(s) · ${w.checks_passed || 0} of ${w.checks_applicable || 0} checks passed · rounding allowance ₹${(w.tolerance || 2).toFixed(2)}</p>
+        </div>`;
+
+    const issueCards = clean
+        ? `<div class="review-clean">✓ Nothing deviates. Every figure on this bill ties out within the rounding allowance.</div>`
+        : issues.map(renderReviewIssue).join('');
+
+    const approvedBanner = approved ? `
+        <div class="review-approved-banner">
+            <strong>✋ A reviewer accepted this bill despite the deviations below.</strong>
+            ${d.reviewed_note ? `<div class="review-approved-note">Reason: ${escapeHtml(d.reviewed_note)}</div>` : '<div class="review-approved-note">No reason was recorded.</div>'}
+        </div>` : '';
+
+    const acceptPanel = (!clean && !approved) ? `
+        <div class="review-section review-accept">
+            <h4 class="review-h">Accept anyway</h4>
+            <p class="review-hint">If you have checked this against the paper bill and the figures are right, mark it OK. The verdict sticks — re-running validation will not flag it again.</p>
+            <textarea id="reviewNote" class="review-note-input" rows="2"
+                placeholder="Reason (recommended) — e.g. checked against the printed bill, freight is genuinely outside GST"></textarea>
+        </div>` : '';
+
+    document.getElementById('reviewBody').innerHTML = `
+        <div class="review-head">
+            <div class="review-head-main">
+                <div class="review-vendor">${escapeHtml(inv.vendor_name || 'Unknown vendor')}</div>
+                <div class="review-sub">${idLine}</div>
+            </div>
+            <div class="review-head-side">
+                ${verdict}
+                <div class="review-score">Confidence ${d.score}%</div>
+            </div>
+        </div>
+        ${approvedBanner}
+        ${worksheet}
+        <div class="review-section">
+            <h4 class="review-h">${clean ? 'Deviations' : `Deviations found (${issues.length})`}</h4>
+            ${issueCards}
+        </div>
+        ${acceptPanel}
+    `;
+
+    // Actions. Accept is the primary action only while the bill is flagged.
+    const buttons = [
+        `<button class="btn btn-secondary btn-sm" onclick="closeReviewModal()">Close</button>`,
+        `<button class="btn btn-secondary btn-sm" onclick="reviewOpenEdit()">Edit bill</button>`,
+        `<button class="btn btn-secondary btn-sm" onclick="reviewReExtract()">Re-extract from PDF</button>`,
+    ];
+    if (approved) {
+        buttons.push(`<button class="btn btn-primary btn-sm" onclick="reviewRecheck()">Re-check against the rules</button>`);
+    } else if (clean) {
+        buttons.push(`<button class="btn btn-primary btn-sm" onclick="reviewRecheck()">Re-check</button>`);
+    } else {
+        buttons.push(`<button class="btn btn-primary btn-sm" onclick="reviewApprove()">✓ Mark as OK</button>`);
+    }
+    document.getElementById('reviewFooter').innerHTML = buttons.join('');
+}
+
+function renderReviewIssue(issue, i) {
+    const terms = (issue.terms || []).length
+        ? `<div class="ri-terms">${issue.terms.map(t =>
+             `<span class="ri-term"><span class="ri-term-label">${escapeHtml(t.label)}</span><span class="ri-term-val">${formatIndianCurrency(t.value)}</span></span>`
+           ).join('<span class="ri-plus">+</span>')}</div>`
+        : '';
+    // Sanity checks (a missing or negative figure) have no two-sided sum to
+    // show, so they get the explanation without the equation block.
+    const hasEq = issue.equation !== false;
+    const equation = hasEq ? `
+            <div class="ri-eq">
+                <div class="ri-eq-side">
+                    <div class="ri-eq-label">${escapeHtml(issue.actual_label)}</div>
+                    <div class="ri-eq-val">${formatIndianCurrency(issue.actual)}</div>
+                </div>
+                <div class="ri-eq-op">should equal</div>
+                <div class="ri-eq-side">
+                    <div class="ri-eq-label">${escapeHtml(issue.expected_label)}</div>
+                    <div class="ri-eq-val">${formatIndianCurrency(issue.expected)}</div>
+                </div>
+            </div>` : '';
+    const delta = (hasEq && Math.abs(issue.delta) >= 0.01)
+        ? `<span class="ri-delta">Off by ${reviewSigned(issue.delta)}</span>` : '';
+    return `
+        <div class="review-issue sev-${escapeHtml(issue.severity || 'medium')}">
+            <div class="ri-head">
+                <span class="ri-num">${i + 1}</span>
+                <span class="ri-title">${escapeHtml(issue.title)}</span>
+                ${delta}
+            </div>
+            ${equation}
+            ${terms}
+            <div class="ri-block">
+                <div class="ri-block-h">What this usually means</div>
+                <p>${escapeHtml(issue.meaning)}</p>
+            </div>
+            <div class="ri-block ri-fix">
+                <div class="ri-block-h">Suggested fix</div>
+                <p>${escapeHtml(issue.fix)}</p>
+            </div>
+        </div>`;
+}
+
+// --- Review dialog actions -------------------------------------------------
+
+// Accept the bill despite its deviations, recording the reviewer's reason.
+async function reviewApprove() {
+    const id = currentReviewId;
+    const noteEl = document.getElementById('reviewNote');
+    const note = noteEl ? noteEl.value.trim() : '';
+    try {
+        const res = await fetch(`${REVIEW_API}/${id}/validation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'approve' })
+            body: JSON.stringify({ action: 'approve', note })
         });
         const data = await res.json();
         if (data.success) {
-            showToast('Bill marked OK (manually approved)', 'success');
+            showToast('Marked OK — the deviations stay on record', 'success');
+            closeReviewModal();
             await loadStoredBills();
         } else {
             showToast(data.error || 'Could not update', 'error');
@@ -817,11 +1025,11 @@ async function approveBillValidation(billId) {
     }
 }
 
-// Clear a manual approval and recompute the reconciliation verdict.
-async function recheckBillValidation(billId) {
-    if (!confirm('Re-check this bill against the reconciliation rules?\n\nThis clears the manual approval and may flag it for review again.')) return;
+// Clear any manual approval and recompute the verdict from the stored figures.
+async function reviewRecheck() {
+    const id = currentReviewId;
     try {
-        const res = await fetch(`/api/bills/${billId}/validation`, {
+        const res = await fetch(`${REVIEW_API}/${id}/validation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'recheck' })
@@ -830,12 +1038,25 @@ async function recheckBillValidation(billId) {
         if (data.success) {
             showToast(`Re-checked — now: ${data.status === 'ok' ? 'OK' : 'Review'}`, 'success');
             await loadStoredBills();
+            await openReviewModal(id);
         } else {
             showToast(data.error || 'Could not re-check', 'error');
         }
     } catch (e) {
         showToast('Re-check failed: ' + e.message, 'error');
     }
+}
+
+function reviewReExtract() {
+    const id = currentReviewId;
+    closeReviewModal();
+    reprocessBill(id);
+}
+
+function reviewOpenEdit() {
+    const id = currentReviewId;
+    closeReviewModal();
+    openEditModal(id);
 }
 
 function updateFlaggedCount() {
@@ -3154,3 +3375,9 @@ window.removeLineItem = removeLineItem;
 window.handleImageError = handleImageError;
 window.updateZoomDisplay = updateZoomDisplay;
 window.removeBulkFile = removeBulkFile;
+window.openReviewModal = openReviewModal;
+window.closeReviewModal = closeReviewModal;
+window.reviewApprove = reviewApprove;
+window.reviewRecheck = reviewRecheck;
+window.reviewReExtract = reviewReExtract;
+window.reviewOpenEdit = reviewOpenEdit;

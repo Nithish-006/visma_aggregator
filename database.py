@@ -2208,6 +2208,8 @@ class DatabaseManager:
         - validation_status ENUM('ok','review')  whether the numbers reconcile
         - validation_diff   DECIMAL(12,2)         signed header-identity gap (INR)
         - validation_notes  TEXT                  human-readable failure list
+        - validation_reviewed_note TEXT           auditor's reason when they
+                                                  manually mark a flagged bill OK
         """
         specs = [
             ("validation_status",
@@ -2219,6 +2221,9 @@ class DatabaseManager:
             ("validation_notes",
              "ALTER TABLE {t} ADD COLUMN validation_notes "
              "TEXT AFTER validation_diff"),
+            ("validation_reviewed_note",
+             "ALTER TABLE {t} ADD COLUMN validation_reviewed_note "
+             "TEXT AFTER validation_notes"),
         ]
         try:
             with self.get_connection() as conn:
@@ -2305,11 +2310,38 @@ class DatabaseManager:
         print(f"[+] Revalidated existing bills: {summary}")
         return summary
 
-    def approve_bill_validation(self, invoice_id: int, kind: str = 'purchase') -> Tuple[bool, Optional[str]]:
+    def get_invoice_with_items(self, invoice_id: int, kind: str = 'purchase'):
+        """Fetch one invoice row plus its line items for either ledger, with
+        Decimals coerced to float. Used by the review dialog, which needs the
+        same rows the validator sees."""
+        inv_t = 'sales_invoices' if kind == 'sales' else 'bill_invoices'
+        li_t = 'sales_line_items' if kind == 'sales' else 'bill_line_items'
+        with self.get_connection() as conn:
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(f"SELECT * FROM {inv_t} WHERE id=%s", (invoice_id,))
+            invoice = cursor.fetchone()
+            if not invoice:
+                cursor.close()
+                return None, []
+            cursor.execute(f"SELECT * FROM {li_t} WHERE invoice_id=%s ORDER BY sl_no",
+                           (invoice_id,))
+            items = cursor.fetchall()
+            cursor.close()
+        for row in [invoice] + list(items):
+            for key, val in list(row.items()):
+                if isinstance(val, DecimalType):
+                    row[key] = float(val)
+                elif hasattr(val, 'strftime'):
+                    row[key] = val.strftime('%d-%b-%Y')
+        return invoice, items
+
+    def approve_bill_validation(self, invoice_id: int, kind: str = 'purchase',
+                                note: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """Manually mark a bill's reconciliation verdict as 'approved' — a
         human-confirmed OK that the auto-reconciliation couldn't certify. This
         is sticky: revalidate_existing_bills skips approved rows, so it survives
-        future re-checks. The original failure notes are left intact for audit.
+        future re-checks. The original failure notes are left intact for audit,
+        and the auditor's reason (when given) is stored beside them.
         """
         inv_t = 'sales_invoices' if kind == 'sales' else 'bill_invoices'
         try:
@@ -2318,8 +2350,9 @@ class DatabaseManager:
                 cursor = conn.cursor()
                 cursor.execute(
                     f"UPDATE {inv_t} SET validation_status='approved', "
+                    f"validation_reviewed_note=%s, "
                     f"updated_at=CURRENT_TIMESTAMP WHERE id=%s",
-                    (invoice_id,)
+                    ((note or '').strip()[:1000] or None, invoice_id)
                 )
                 affected = cursor.rowcount
                 conn.commit()
@@ -2355,7 +2388,7 @@ class DatabaseManager:
                 v = validate_db_row(inv, items)
                 cursor.execute(
                     f"UPDATE {inv_t} SET validation_status=%s, validation_diff=%s, "
-                    f"validation_notes=%s WHERE id=%s",
+                    f"validation_notes=%s, validation_reviewed_note=NULL WHERE id=%s",
                     (v['status'], v['diff'], notes_from_result(v), invoice_id)
                 )
                 conn.commit()

@@ -13,7 +13,9 @@ from extensions import db_manager
 from bill_processor import process_bill_file, generate_excel, format_extracted_data_for_display
 from helpers.projects import validate_project_value
 from helpers.bill_split import compute_split_allocations, validate_split_targets
-from helpers.invoices import _reprocess_invoice, _set_invoice_validation
+from helpers.invoices import (
+    _reprocess_invoice, _set_invoice_validation, _invoice_validation_detail,
+)
 from auth import login_required
 
 bp = Blueprint('bills', __name__)
@@ -639,3 +641,10 @@ def reprocess_bill(invoice_id):
 def set_bill_validation(invoice_id):
     """Manually mark a purchase bill OK (approve) or re-check it."""
     return _set_invoice_validation(invoice_id, 'purchase')
+
+
+@bp.route('/api/bills/<int:invoice_id>/validation-detail')
+@login_required
+def get_bill_validation_detail(invoice_id):
+    """Explained reconciliation for the review dialog."""
+    return _invoice_validation_detail(invoice_id, 'purchase')

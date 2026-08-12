@@ -3213,3 +3213,287 @@ textarea.form-input {
 .bulk-log-row.fail { color: var(--error-color); }
 .bulk-log-icon { font-weight: 700; margin-right: 4px; }
 .bulk-progress-summary { margin-top: 12px; font-weight: 600; font-size: 0.85rem; }
+
+/* ============================================================================
+   RECONCILIATION REVIEW DIALOG
+   ============================================================================
+   Opened from the ⚠ Review / ✓ OK badge. Replaces the old one-line tooltip:
+   the full reconciliation worksheet, one card per deviation (working, cause,
+   proposed fix), and the accept-with-a-reason panel.
+   ========================================================================= */
+
+.review-loading,
+.review-error {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 24px 4px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+.review-error { color: var(--error-color); }
+
+/* --- Header: whose bill this is, and the verdict ------------------------- */
+.review-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border-color);
+}
+.review-vendor {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+.review-sub {
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    opacity: 0.85;
+}
+.review-head-side { text-align: right; }
+.review-verdict {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.review-verdict.v-review { background: var(--c-warning-soft); color: var(--warning-color); }
+.review-verdict.v-ok { background: var(--c-success-soft); color: var(--success-color); }
+.review-verdict.v-approved {
+    background: var(--c-success-soft);
+    color: var(--success-color);
+    border: 1px dashed var(--success-color);
+}
+.review-score {
+    margin-top: 6px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    opacity: 0.8;
+}
+
+.review-section { margin-top: 20px; }
+.review-h {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.review-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    opacity: 0.8;
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+/* --- Worksheet: the bill's own arithmetic, laid out ---------------------- */
+.review-worksheet {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 8px);
+    overflow: hidden;
+}
+.review-worksheet td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+.review-worksheet tr:last-child td { border-bottom: none; }
+.review-worksheet .text-right { text-align: right; font-variant-numeric: tabular-nums; }
+.review-worksheet .ws-computed td { background: var(--bg-hover); }
+.review-worksheet .ws-printed td { background: var(--bg-hover); }
+.review-worksheet .ws-gap td { font-size: 0.9rem; }
+.review-worksheet .ws-gap.gap-bad td {
+    background: var(--c-warning-soft);
+    color: var(--warning-color);
+}
+.review-worksheet .ws-gap.gap-ok td {
+    background: var(--c-success-soft);
+    color: var(--success-color);
+}
+
+/* --- Deviation cards ----------------------------------------------------- */
+.review-clean {
+    padding: 16px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--c-success-soft);
+    color: var(--success-color);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.review-issue {
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--warning-color);
+    border-radius: var(--radius-sm, 8px);
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    background: var(--bg-card);
+}
+.review-issue.sev-medium { border-left-color: var(--c-teal, #0e7490); }
+.ri-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.ri-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--warning-color);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.review-issue.sev-medium .ri-num { background: var(--c-teal, #0e7490); }
+.ri-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    flex: 1;
+    min-width: 200px;
+}
+.ri-delta {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--warning-color);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* The equation, as two labelled sides instead of a cryptic one-liner. */
+.ri-eq {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 12px 0 4px;
+}
+.ri-eq-side {
+    flex: 1;
+    min-width: 180px;
+    padding: 10px 12px;
+    background: var(--bg-hover);
+    border-radius: var(--radius-sm, 8px);
+}
+.ri-eq-label {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    opacity: 0.85;
+    line-height: 1.4;
+}
+.ri-eq-val {
+    margin-top: 3px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+.ri-eq-op {
+    align-self: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* The terms behind the expected side, so the auditor can follow the sum. */
+.ri-terms {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0 2px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+.ri-term {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 3px 8px;
+    background: var(--bg-hover);
+    border-radius: 10px;
+}
+.ri-term-label { opacity: 0.8; }
+.ri-term-val { font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.ri-plus { opacity: 0.5; font-weight: 700; }
+
+.ri-block { margin-top: 12px; }
+.ri-block-h {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    opacity: 0.8;
+    margin-bottom: 3px;
+}
+.ri-block p {
+    font-size: 0.83rem;
+    line-height: 1.55;
+    color: var(--text-secondary);
+}
+.ri-fix {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--c-accent-soft-a, rgba(217, 119, 87, 0.12));
+}
+.ri-fix p { color: var(--text-primary); }
+
+/* --- Accept-anyway panel and the approved banner ------------------------- */
+.review-approved-banner {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--c-success-soft);
+    border: 1px dashed var(--success-color);
+    font-size: 0.83rem;
+    color: var(--text-primary);
+}
+.review-approved-note {
+    margin-top: 4px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+.review-note-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm, 8px);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.85rem;
+    resize: vertical;
+}
+.review-note-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.review-footer { flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+    .review-head { flex-direction: column; }
+    .review-head-side { text-align: left; }
+    .ri-eq { flex-direction: column; }
+    .ri-eq-op { align-self: flex-start; }
+    .review-footer { justify-content: stretch; }
+    .review-footer .btn { flex: 1 1 45%; }
+}

@@ -13,6 +13,7 @@ from bill_processor import process_bill_file, generate_excel, format_extracted_d
 from helpers.projects import validate_project_value
 from helpers.invoices import (
     extract_project_from_filename, _reprocess_invoice, _set_invoice_validation,
+    _invoice_validation_detail,
 )
 from auth import login_required
 
@@ -35,6 +36,13 @@ def reprocess_sales_bill(invoice_id):
 def set_sales_validation(invoice_id):
     """Manually mark a sales bill OK (approve) or re-check it."""
     return _set_invoice_validation(invoice_id, 'sales')
+
+
+@bp.route('/api/sales/<int:invoice_id>/validation-detail')
+@login_required
+def get_sales_validation_detail(invoice_id):
+    """Explained reconciliation for the review dialog."""
+    return _invoice_validation_detail(invoice_id, 'sales')
 
 
 @bp.route('/sales-processor')
