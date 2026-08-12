@@ -8,6 +8,7 @@ Uses per-request connection pattern for thread safety.
 
 import re
 import json
+import warnings
 import mysql.connector
 from mysql.connector import Error
 import pandas as pd
@@ -22,6 +23,18 @@ from config import (
 from extraction_validator import validate_extraction, validate_db_row, notes_from_result
 from helpers.project_finance import (
     compute_ledger_amounts, resolve_contract, resolve_ledger_gst_rate,
+)
+
+# fetch_dataframe hands pandas a raw mysql-connector connection rather than a
+# SQLAlchemy connectable, which pandas warns about on every call. The bank
+# dataframe is read fresh per request, so the warning repeats through the logs
+# for a query that works correctly. Silence just this one message — the rest of
+# pandas' warnings still surface.
+warnings.filterwarnings(
+    'ignore',
+    message='pandas only supports SQLAlchemy connectable',
+    category=UserWarning,
+    module='database',
 )
 
 
