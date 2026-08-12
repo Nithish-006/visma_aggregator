@@ -25,8 +25,11 @@ from helpers.bill_reconcile import (
     build_bill_vendor_index, is_unbilled_material_purchase,
 )
 from helpers.material_recon import is_material_purchase, reconcile_material
-# project_summary consumes the projects blueprint's PO/payments resolver.
+# project_summary consumes the projects blueprint's client-payments resolver, so
+# the landing cards and the registry answer "what has this project received?"
+# from one definition instead of two that drifted.
 # One-directional: blueprints.projects never imports project_summary.
+from blueprints.projects import _attach_client_payments
 from auth import login_required
 
 bp = Blueprint('project_summary', __name__)
@@ -351,10 +354,19 @@ def get_project_summary_project_cards():
     One card per canonical registry entry. Bank totals are matched by the
     "<id> -" project tag, with an exact registry-name fallback for rows that
     lack the prefix (see below). No stem fuzz, so free-text variants are still
-    kept apart. Income = credits, expense = debits, across banks.
+    kept apart. Expense = debits across banks.
+
+    Income is *not* computed here. It is the same "client payments received"
+    figure the registry shows — KVB credits plus the manual cash ledger — taken
+    from _attach_client_payments so the two pages can't disagree about what a
+    project has been paid. This card used to sum credits across every bank and
+    ignore cash, which made it quietly differ from the registry on both counts.
+    `income_net` nets off money passed straight on to a third party; see
+    helpers/project_finance for why that is a subtraction from cash in hand and
+    nothing else.
     """
     db_manager.ensure_projects_table()
-    registry = db_manager.list_projects()
+    registry = _attach_client_payments(db_manager.list_projects())
 
     # Exact-name fallback for the id-prefix match below. A row tagged with a bare
     # project name and no "<id> -" prefix (legacy data, or a tag the statement
@@ -366,7 +378,7 @@ def get_project_summary_project_cards():
         name_to_id[str(p['stem_name']).strip().lower()] = p['id']
         name_to_id[str(p['display']).strip().lower()] = p['id']
 
-    totals = {}  # project id -> {'income', 'expense', 'count'}
+    totals = {}  # project id -> {'expense', 'count'}
     for bank_code in VALID_BANK_CODES:
         df = get_bank_df(bank_code)
         if df.empty:
@@ -385,27 +397,32 @@ def get_project_summary_project_cards():
         if sub.empty:
             continue
         grouped = sub.groupby(pid[pid.notna()].astype(int)).agg(
-            income=('CR Amount', 'sum'),
             expense=('DR Amount', 'sum'),
             count=('DR Amount', 'size'),
         )
         for pid, row in grouped.iterrows():
-            t = totals.setdefault(int(pid), {'income': 0.0, 'expense': 0.0, 'count': 0})
-            t['income'] += float(row['income'])
+            t = totals.setdefault(int(pid), {'expense': 0.0, 'count': 0})
             t['expense'] += float(row['expense'])
             t['count'] += int(row['count'])
 
     cards = []
     for p in registry:
-        t = totals.get(p['id'], {'income': 0.0, 'expense': 0.0, 'count': 0})
+        t = totals.get(p['id'], {'expense': 0.0, 'count': 0})
+        income = float(p.get('received_total') or 0)
+        third_party = float(p.get('third_party_total') or 0)
+        income_net = float(p.get('received_net') or 0)
         cards.append({
             'id': p['id'],
             'stem_name': p['stem_name'],
             'display': p['display'],
             'project_type': p.get('project_type', 'project'),
             'is_inactive': bool(p.get('is_inactive', False)),
-            'income': t['income'],
-            'income_formatted': format_indian_number(t['income']),
+            'income': income,
+            'income_formatted': format_indian_number(income),
+            'third_party_total': third_party,
+            'third_party_formatted': format_indian_number(third_party),
+            'income_net': income_net,
+            'income_net_formatted': format_indian_number(income_net),
             'expense': t['expense'],
             'expense_formatted': format_indian_number(t['expense']),
             'txn_count': t['count'],

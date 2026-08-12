@@ -71,6 +71,8 @@ window.ProjectGlance = (function () {
     //              the panel can paint before insights lands.
     //   insights - the /api/projects/<id>/insights payload, or null while it is
     //              in flight. Its `summary` is the server's money model.
+    //   linkThirdParty - render the third-party deduction as a link to the
+    //              ledger tab. Only where a listener for it exists.
     // Returns an HTML string, or null when there is nothing worth showing.
     function render(opts) {
         const p = (opts && opts.project) || {};
@@ -78,6 +80,11 @@ window.ProjectGlance = (function () {
         const rec = Number((s ? s.received_total : p.received_total)) || 0;
         const bank = Number((s ? s.received_bank : p.received_bank)) || 0;
         const cash = Number((s ? s.received_cash : p.received_cash)) || 0;
+        // Of what the client paid, the part forwarded straight on to someone
+        // else (civil, design, transport). A pass-through: it leaves the cash
+        // in hand but not what the client owes. See helpers/project_finance.
+        const thirdParty = Number((s ? s.third_party_total : p.third_party_total)) || 0;
+        const netRec = rec - thirdParty;
         const po = Number(p.po_total_value) || 0;
 
         // What the client owes is measured against the contract — the PO plus
@@ -89,7 +96,9 @@ window.ProjectGlance = (function () {
         const billed = s ? (Number(s.value && s.value.total) || 0) : 0;
         const contract = s ? (Number(s.contract && s.contract.total) || 0)
                            : (po > 0 ? po : billed);
-        const receivable = s ? (Number(s.receivable) || 0) : contract - rec;
+        // Net, not gross — see helpers/project_finance: money that came in for a
+        // third party and went straight back out never paid down our contract.
+        const receivable = s ? (Number(s.receivable) || 0) : contract - netRec;
 
         // Only bail when there is genuinely nothing to say. This guard predates
         // the cost breakdown, and a project can have real costs (bills, labour,
@@ -99,7 +108,7 @@ window.ProjectGlance = (function () {
         if (contract <= 0 && rec <= 0 && !hasCosts) return null;
         // Percentages track the same denominator as the figure above them,
         // otherwise the hero states a balance the bar underneath contradicts.
-        const pct = contract > 0 ? Math.min(100, Math.round((rec / contract) * 100)) : null;
+        const pct = contract > 0 ? Math.min(100, Math.round((netRec / contract) * 100)) : null;
         const dueLabel = receivable < -0.5 ? 'Client overpaid by' : 'Client yet to pay';
         const dueCls = receivable > 0.5 ? 'due' : 'settled';
 
@@ -111,7 +120,9 @@ window.ProjectGlance = (function () {
         // promise; this line is the money position, so a project can be in the
         // black on profit and still short here until the client pays.
         const spend = s ? (Number(s.spend_total) || 0) : 0;
-        const netBalance = rec - spend;
+        // Net, not gross — money passed on to a third party is not in hand to
+        // set against the spend.
+        const netBalance = netRec - spend;
         const expensesCell = s ? `
             <div class="proj-hero-cell">
                 <span class="proj-hero-k">Total Expenses</span>
@@ -127,7 +138,7 @@ window.ProjectGlance = (function () {
             <div class="proj-hero-cell">
                 <span class="proj-hero-k">Net Balance</span>
                 <span class="proj-hero-v ${netBalance >= 0 ? 'profit' : 'loss'}">${formatSignedINR(netBalance)}</span>
-                <span class="proj-hero-sub">${formatINRCompact(rec)} paid − ${formatINRCompact(spend)} spent</span>
+                <span class="proj-hero-sub">${formatINRCompact(netRec)} ${thirdParty > 0 ? 'net ' : ''}paid − ${formatINRCompact(spend)} spent</span>
             </div>` : `
             <div class="proj-hero-cell">
                 <span class="proj-hero-k">Net Balance</span>
@@ -139,7 +150,7 @@ window.ProjectGlance = (function () {
                 <div class="proj-hero-cell">
                     <span class="proj-hero-k">${dueLabel}</span>
                     <span class="proj-hero-v ${dueCls}">${formatINR(Math.abs(receivable))}</span>
-                    <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received` : '&nbsp;'}</span>
+                    <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received${thirdParty > 0.5 ? ', net' : ''}` : '&nbsp;'}</span>
                 </div>
                 ${expensesCell}
                 ${netCell}
@@ -213,9 +224,37 @@ window.ProjectGlance = (function () {
             ladderRows += lHead('Billed', 'no PO yet — from sales bills');
             ladderRows += lRow('Total', contract, 'is-sub is-total');
         }
-        ladderRows += lRow('Payments received', rec, '', formatINR, splitNote);
+        // The pass-through, spelled out as a subtraction in the sequence the
+        // client reads it in: they paid us X, we passed on Y, we have Z. It gets
+        // its own head and indent — the same blocked shape as the contract rungs
+        // — so that on a project carrying both variations and actuals the three
+        // receipt lines still read as one block instead of trailing off the end
+        // of a fifteen-row ladder. With nothing passed on it stays the single
+        // row it was, rather than a head and two lines saying nothing happened.
+        if (thirdParty > 0.5) {
+            ladderRows += lHead('Received', 'less what we passed on');
+            ladderRows += lRow('Payments received', rec, 'is-sub', formatINR, splitNote);
+            // Deep-links to the Ledger → Third-party payments tab, but only
+            // where something is listening for it (the registry modal). The
+            // summary page renders the same ladder with no tabs to jump to.
+            const tpLabel = (opts && opts.linkThirdParty)
+                ? `<button type="button" class="proj-ladder-link" data-glance-goto="third-party"
+                        title="Show every third-party payment">Less: third-party payments</button>`
+                : 'Less: third-party payments';
+            ladderRows += lRow(tpLabel, -thirdParty, 'is-sub is-deduct', formatDeltaINR);
+            ladderRows += lRow('Net for VISMA', netRec, 'is-revised');
+        } else {
+            ladderRows += lRow('Payments received', rec, '', formatINR, splitNote);
+        }
+        // Struck against the net: money that arrived earmarked for a contractor
+        // and went straight out again never paid down our own work, so the
+        // ladder reads as one continuous subtraction — contract, less what
+        // actually stayed with us, equals what is still outstanding. Named on
+        // the row only where there is a deduction to name.
+        const balNote = thirdParty > 0.5
+            ? `<span class="proj-ladder-split">contract less the net received</span>` : '';
         ladderRows += `
-                    <div class="proj-ladder-row is-balance"><dt>${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}</dd></div>`;
+                    <div class="proj-ladder-row is-balance"><dt>${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}${balNote}</dd></div>`;
 
         const ladder = `
             <div class="proj-ov-panel">

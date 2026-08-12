@@ -16,10 +16,27 @@ The model (verified against the client's own summary sheet):
                           forward, never a cost.
     cost total            material (purchase bills, gross) + other bank debits
                           + labour + GST extra + overhead.
-    receivable            contract total - received (what the client still owes)
-    cash_position         received - cost total (money in hand vs money spent)
+    third_party_total     of what the client paid us, the part we forwarded to
+                          someone else on their behalf (civil, design, transport)
+    net_received          received - third party (what actually stayed with us)
+    receivable            contract total - net received (what the client still
+                          owes against our own work)
+    cash_position         net received - cost total (money in hand vs money spent)
     profit                contract total - cost total (what the job earns)
     billed_profit         sales bills total - cost total (earned on invoices raised)
+
+Third-party payments are a **pass-through**, and that word decides where they do
+and don't appear. Money the client sends us earmarked for a civil contractor or
+a designer was never payment against our contract: it arrived in our account and
+left again, settling their obligation to someone else, not to us. So everything
+that asks "how much of this project has been paid for" reads the **net** —
+`receivable` and `cash_position` both. What is left owing on our own work is the
+contract less the part of the receipts that actually stayed with us.
+
+What the pass-through must never touch is the earning side. The money was ours
+neither to earn nor to spend, so it is not revenue and not a cost line:
+`profit`, `billed_profit` and `spend_total` don't see it at all, and it must
+never appear in `cost_lines`.
 
 `receivable` and the three bottom-line figures answer different questions and
 must not be conflated. The client committed to the contract — the PO plus any
@@ -149,7 +166,7 @@ def resolve_contract(base, variations, actuals, *, has_actuals):
 def compute_project_finance(*, sales, purchase, po, received_total,
                             other_expense_total, labour_total, overhead,
                             other_cat_totals=None, has_sales_bills=None,
-                            has_po=None):
+                            has_po=None, third_party_total=0):
     """Return the full money picture for one project.
 
     sales / purchase: {'taxable', 'gst', 'total'} — summed bill figures.
@@ -167,6 +184,11 @@ def compute_project_finance(*, sales, purchase, po, received_total,
                       contract still governs the receivable — inferring
                       existence from `total > 0` would quietly hand such a
                       project back to the sales-bill rule.
+    third_party_total: of `received_total`, the part paid straight on to a third
+                      party on the client's behalf. Subtracted from received to
+                      get the cash that actually stayed with us, which is what
+                      both `receivable` and `cash_position` are struck against;
+                      see the module docstring for why it touches nothing else.
     """
     sales_total = float(sales.get('total') or 0)
     po_total = float(po.get('total') or 0)
@@ -215,16 +237,30 @@ def compute_project_finance(*, sales, purchase, po, received_total,
         has_po = po_total > 0
     contract_total = po_total if has_po else value_total
     contract_source = 'po' if has_po else value_source
+    # Gross, as the client paid it — then net, after the part forwarded straight
+    # on to a third party. Deliberately not clamped at zero: a third-party total
+    # exceeding what has been received is a real state — we paid the contractor
+    # ahead of the client paying us — and a negative net is the honest reading of
+    # it, not an error to hide.
     received = float(received_total or 0)
-    receivable = contract_total - received
+    third_party = float(third_party_total or 0)
+    net_received = received - third_party
+    # Struck against the net, not the gross: money that came in earmarked for a
+    # contractor and went straight back out never paid down our contract, so
+    # counting it here would report a project as settled on work the client has
+    # not actually paid us for.
+    receivable = contract_total - net_received
 
     # Three ways to read the same spend, and the difference between them is the
     # difference between cash, contract and invoices. All three are reported —
     # picking one and calling it "the balance" is what made the figure ambiguous:
     #
-    #   cash_position  received - cost. Money actually in hand against money
+    #   cash_position  net received - cost. Money actually in hand against money
     #                  actually gone out. Ignores what is owed or promised, so a
     #                  profitable project reads negative until the client pays.
+    #                  Net, not gross: money forwarded to a third party is not
+    #                  in hand, and counting it here would report cash we no
+    #                  longer hold as available to spend.
     #   profit         contract - cost. What the job earns. The client committed
     #                  to the PO (plus variations, or the actuals once measured),
     #                  so that is what the project is worth however much of it
@@ -233,7 +269,7 @@ def compute_project_finance(*, sales, purchase, po, received_total,
     #   billed_profit  sales bills - cost. The same question asked of what has
     #                  actually been invoiced; equals `profit` once the contract
     #                  is fully billed, and short of it before then.
-    cash_position = received - spend_total
+    cash_position = net_received - spend_total
     profit = contract_total - spend_total
     billed_profit = sales_total - spend_total
     margin_pct = (profit / contract_total * 100) if contract_total > 0 else None
@@ -278,6 +314,8 @@ def compute_project_finance(*, sales, purchase, po, received_total,
         },
         'receivable': receivable,
         'received_total': received,
+        'third_party_total': third_party,
+        'net_received': net_received,
         'cash_position': cash_position,
         'profit': profit,
         'billed_profit': billed_profit,

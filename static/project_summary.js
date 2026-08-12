@@ -509,6 +509,14 @@
     }
 
     function landingCardHtml(c) {
+        // Only on the projects where money was passed straight on to a third
+        // party. Everywhere else Net equals the Income beside it, and a cell
+        // restating its neighbour is noise on a card this dense — the same rule
+        // the registry card follows.
+        const thirdParty = Number(c.third_party_total) || 0;
+        const netCell = thirdParty > 0.5
+            ? `<div class="ps-proj-fin-cell"><span class="k">Net</span><span class="v income" title="For VISMA, after ${escapeHtml(c.third_party_formatted)} paid to third parties">${formatINRCompact(c.income_net)}</span></div>`
+            : '';
         return `
             <button type="button" class="ps-proj-card${isCardClosed(c) ? ' is-closed' : ''}" data-display="${escapeHtml(c.display)}"
                     data-title="${c.id} − ${escapeHtml(c.stem_name)}">
@@ -518,6 +526,7 @@
                 </div>
                 <div class="ps-proj-fin">
                     <div class="ps-proj-fin-cell"><span class="k">Income</span><span class="v income" title="${escapeHtml(c.income_formatted)}">${formatINRCompact(c.income)}</span></div>
+                    ${netCell}
                     <div class="ps-proj-fin-cell"><span class="k">Expense</span><span class="v expense" title="${escapeHtml(c.expense_formatted)}">${formatINRCompact(c.expense)}</span></div>
                     <div class="ps-proj-fin-cell"><span class="k">Txns</span><span class="v">${(c.txn_count || 0).toLocaleString()}</span></div>
                 </div>

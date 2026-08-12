@@ -70,6 +70,20 @@
     const cashAddBtn = document.getElementById('detail-cash-add');
     const cashError = document.getElementById('detail-cash-error');
     const cashListEl = document.getElementById('detail-cash-list');
+    // Third-party payments — the same ledger shape as cash, but money going the
+    // other way: out of what the client paid us, straight on to someone else.
+    const tpTotalEl = document.getElementById('detail-tp-total');
+    const tpForm = document.getElementById('detail-tp-form');
+    const tpToggleBtn = document.getElementById('detail-tp-toggle');
+    const tpToggleLabel = document.getElementById('detail-tp-toggle-label');
+    const tpPayee = document.getElementById('detail-tp-payee');
+    const tpPurpose = document.getElementById('detail-tp-purpose');
+    const tpAmount = document.getElementById('detail-tp-amount');
+    const tpDate = document.getElementById('detail-tp-date');
+    const tpAddBtn = document.getElementById('detail-tp-add');
+    const tpError = document.getElementById('detail-tp-error');
+    const tpListEl = document.getElementById('detail-tp-list');
+    const tpReconEl = document.getElementById('detail-tp-recon');
 
     const detailTypeStatus = document.getElementById('detail-type-status');
     const detailTypeRadios = () => Array.from(detailModal.querySelectorAll('input[name="detail_project_type"]'));
@@ -110,6 +124,7 @@
     let activeProjectId = null;
     let insights = null;        // /insights payload for the open project
     let cashPayments = [];      // live cash ledger for the open project
+    let thirdPartyPayments = []; // live third-party ledger for the open project
 
     // ── Toast ──────────────────────────────────────────
     let toastTimer = null;
@@ -164,12 +179,25 @@
                 hasReceived ? 'received' : 'muted',
                 'Client payments received', hasReceived ? received : null));
         }
+        // Only on the projects where money was passed on. Everywhere else the
+        // net equals the received figure beside it, and a cell restating its
+        // neighbour is noise on a card this dense.
+        const thirdParty = Number(p.third_party_total) || 0;
+        if (thirdParty > 0.5) {
+            const net = received - thirdParty;
+            cells.push(financeCell('Net', formatINRCompact(net), 'received',
+                `For VISMA, after ${formatINR(thirdParty)} paid to third parties`, net));
+        }
         if (hasPoValue) {
-            const bal = poValue - received;
+            // Against the net, as everywhere else: money forwarded to a
+            // contractor never paid down the PO (helpers/project_finance).
+            const bal = poValue - (received - thirdParty);
             const settled = bal <= 0.5;
             cells.push(financeCell('Balance', settled ? 'Settled' : formatINRCompact(bal),
                 settled ? 'settled' : 'due',
-                settled ? 'Fully received' : 'Balance due (PO value − received)', settled ? null : bal));
+                settled ? 'Fully received'
+                        : `Balance due (PO value − ${thirdParty > 0.5 ? 'net ' : ''}received)`,
+                settled ? null : bal));
         }
         const financeBlock = cells.length ? `<div class="project-finance">${cells.join('')}</div>` : '';
 
@@ -453,11 +481,13 @@
         // Fresh insight state: PO tab first, counts cleared, panels in loading state.
         insights = null;
         cashPayments = [];
+        thirdPartyPayments = [];
         switchTab('overview');
         switchSubTab('bills', 'purchase');
         switchSubTab('ledger', 'payments');
         ['bills', 'ledger'].forEach(k => setTabCount(k, null));
-        ['purchase', 'sales', 'payments', 'expenses', 'labour'].forEach(k => setSubTabCount(k, null));
+        ['purchase', 'sales', 'payments', 'expenses', 'labour', 'thirdparty']
+            .forEach(k => setSubTabCount(k, null));
         payModesEl.innerHTML = '';
         const loading = `<p class="proj-tab-loading">Loading…</p>`;
         expensesEl.innerHTML = loading;
@@ -474,6 +504,14 @@
         cashForm.reset();
         cashError.classList.add('hidden');
         cashError.textContent = '';
+        // Third-party ledger, same collapsed-until-asked-for treatment.
+        setTpFormOpen(false);
+        tpForm.reset();
+        tpError.classList.add('hidden');
+        tpError.textContent = '';
+        if (tpReconEl) tpReconEl.classList.add('hidden');
+        // One fetch feeds both ledgers — the payments endpoint returns the pair
+        // together, since either one moves totals the other displays.
         loadCashPayments(p.id);
         loadInsights(p.id);
         // Reflect current type in the toggle
@@ -575,6 +613,18 @@
         }
     });
 
+    // The "Less: third-party payments" rung in the value ladder is a way in to
+    // the list behind the figure — one click from the number to the payees that
+    // make it up, instead of hunting for the tab that holds them.
+    detailModal.addEventListener('click', (e) => {
+        const link = e.target.closest('[data-glance-goto="third-party"]');
+        if (!link) return;
+        switchTab('ledger');
+        switchSubTab('ledger', 'thirdparty');
+        const panel = document.getElementById('detail-tp');
+        if (panel) panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+
     function setTabCount(key, value) {
         const el = tabsBar.querySelector(`[data-tab-count="${key}"]`);
         if (!el) return;
@@ -625,6 +675,20 @@
         setCashFormOpen(cashForm.classList.contains('hidden'));
     });
 
+    // ── Third-party form reveal (+ Add) ────────────────
+    function setTpFormOpen(on) {
+        tpForm.classList.toggle('hidden', !on);
+        tpToggleBtn.classList.toggle('active', on);
+        tpToggleLabel.textContent = on ? 'Close' : 'Add payment';
+        if (on) setTimeout(() => {
+            tpForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            tpPayee.focus({ preventScroll: true });
+        }, 60);
+    }
+    tpToggleBtn.addEventListener('click', () => {
+        setTpFormOpen(tpForm.classList.contains('hidden'));
+    });
+
     // ── Project at a glance ────────────────────────────
     // Rendered by the shared module so this pop-up and the project summary page
     // can't drift apart (project_glance.js). Called twice per open — once from
@@ -637,6 +701,9 @@
             // The overhead field is only editable where its handlers are wired,
             // which is here — see saveOverhead below.
             editableOverhead: true,
+            // Likewise the deep-link out of the third-party deduction: the
+            // ledger tab it jumps to only exists in this modal.
+            linkThirdParty: true,
         });
         if (html === null) {
             detailOverview.classList.add('hidden');
@@ -657,19 +724,32 @@
         if (insights && insights.summary) {
             insights.summary.received_cash = summary.received_cash;
             insights.summary.received_total = summary.received_total;
-            insights.summary.receivable = insights.summary.value.total - summary.received_total;
+            insights.summary.third_party_total = summary.third_party_total;
+            insights.summary.net_received = summary.received_net;
+            // Struck against the net receipt and the contract, exactly as the
+            // server does it (helpers/project_finance) — money that arrived
+            // earmarked for a contractor never paid down our own work. Optimistic
+            // only; the next /insights settles it.
+            const contractTotal = (insights.summary.contract && insights.summary.contract.total)
+                || insights.summary.value.total || 0;
+            insights.summary.receivable = contractTotal - summary.received_net;
             insights.payments.cash_total = summary.received_cash;
+            insights.payments.third_party_total = summary.third_party_total;
             insights.payments.total = summary.received_total;
+            insights.payments.net = summary.received_net;
         }
         const cached = projects.find(x => x.id === activeProjectId);
         if (cached) {
             cached.received_bank = summary.received_bank;
             cached.received_cash = summary.received_cash;
             cached.received_total = summary.received_total;
+            cached.third_party_total = summary.third_party_total;
+            cached.received_net = summary.received_net;
             renderOverview(cached);
             renderList(); // keep the registry card's "Received" in sync
         }
         renderCashList(summary.payments || []);
+        renderThirdPartyList(summary.third_party_payments || []);
     }
 
     function renderCashList(payments) {
@@ -686,11 +766,29 @@
     // Bank (KVB) total / cash total / total received chips at the top of the
     // Client Payments tab. Cash figures come from the live ledger so an
     // add/delete updates them instantly.
+    //
+    // When money has been passed on to a third party the strip carries the whole
+    // subtraction — gross, less what went out, equals what is ours — because the
+    // two totals are only meaningful next to each other. With nothing passed on
+    // it stays the original three chips rather than showing a zero deduction.
     function renderPayModes() {
         if (!insights) { payModesEl.innerHTML = ''; return; }
         const bank = insights.payments.bank;
         const bankTotal = Number(insights.payments.bank_total) || 0;
         const cashTotal = cashPayments.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        const tpTotal = thirdPartyPayments.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+        const gross = bankTotal + cashTotal;
+        const passThrough = tpTotal > 0.5 ? `
+            <div class="proj-chip deduct">
+                <span class="proj-chip-k">Less: third-party</span>
+                <span class="proj-chip-v">−${formatINR(tpTotal)}</span>
+                <span class="proj-chip-sub">${thirdPartyPayments.length} payment${thirdPartyPayments.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="proj-chip accent">
+                <span class="proj-chip-k">Net for VISMA</span>
+                <span class="proj-chip-v">${formatINR(gross - tpTotal)}</span>
+                <span class="proj-chip-sub">funds our expenses</span>
+            </div>` : '';
         payModesEl.innerHTML = `
             <div class="proj-chip">
                 <span class="proj-chip-k">Bank (KVB)</span>
@@ -702,11 +800,146 @@
                 <span class="proj-chip-v">${formatINR(cashTotal)}</span>
                 <span class="proj-chip-sub">${cashPayments.length} entr${cashPayments.length === 1 ? 'y' : 'ies'}</span>
             </div>
-            <div class="proj-chip accent">
+            <div class="proj-chip${tpTotal > 0.5 ? '' : ' accent'}">
                 <span class="proj-chip-k">Total received</span>
-                <span class="proj-chip-v">${formatINR(bankTotal + cashTotal)}</span>
-            </div>`;
+                <span class="proj-chip-v">${formatINR(gross)}</span>
+                ${tpTotal > 0.5 ? '<span class="proj-chip-sub">from the client</span>' : ''}
+            </div>
+            ${passThrough}`;
     }
+
+    // ── Third-party payments ───────────────────────────
+    function renderThirdPartyList(payments) {
+        thirdPartyPayments = payments || [];
+        renderThirdPartyHistory();
+        renderPayModes();
+    }
+
+    function renderThirdPartyHistory() {
+        const total = thirdPartyPayments.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+        tpTotalEl.textContent = thirdPartyPayments.length
+            ? `${formatINR(total)} passed on` : '';
+        setSubTabCount('thirdparty', thirdPartyPayments.length);
+
+        // The subtraction restated on the tab that drives it. The receipts it
+        // comes out of live one tab over, so without this the reader has to hold
+        // the gross figure in their head to make sense of the list.
+        if (tpReconEl) {
+            const gross = insights
+                ? (Number(insights.payments.bank_total) || 0)
+                  + cashPayments.reduce((s, c) => s + (Number(c.amount) || 0), 0)
+                : null;
+            if (total > 0.5 && gross !== null) {
+                tpReconEl.innerHTML = `Client paid <b>${formatINR(gross)}</b>`
+                    + ` &minus; <b>${formatINR(total)}</b> passed on`
+                    + ` = <b class="net">${formatINR(gross - total)}</b> for VISMA's expenses.`;
+                tpReconEl.classList.remove('hidden');
+            } else {
+                tpReconEl.classList.add('hidden');
+            }
+        }
+
+        if (!thirdPartyPayments.length) {
+            tpListEl.innerHTML = `<p class="proj-cash-empty">Nothing paid to a third party on this project. Add one when the client's money goes straight out to a contractor.</p>`;
+            return;
+        }
+        tpListEl.innerHTML = thirdPartyPayments.map(t => {
+            const when = t.payment_date ? fmtDate(t.payment_date)
+                : (t.created_at ? fmtDate(String(t.created_at).slice(0, 10)) : '');
+            const purpose = t.purpose || t.note || '';
+            return `
+                <div class="proj-cash-item">
+                    <div class="proj-cash-item-main">
+                        <span class="proj-cash-item-amt is-out">−${formatINR(Number(t.amount) || 0)}
+                            <span class="proj-mode-badge tp" title="Paid to a third party out of the client's money">${escapeHtml(t.payee || 'Third party')}</span>
+                        </span>
+                        ${purpose ? `<span class="proj-cash-item-note" title="${escapeHtml(purpose)}">${escapeHtml(purpose)}</span>` : ''}
+                    </div>
+                    <div class="proj-cash-item-side">
+                        ${when ? `<span class="proj-cash-item-date">${when}</span>` : ''}
+                        <button type="button" class="proj-cash-del" data-tp-id="${t.id}" title="Remove this payment" aria-label="Remove this payment">×</button>
+                    </div>
+                </div>`;
+        }).join('');
+    }
+
+    tpForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!activeProjectId) return;
+        tpError.classList.add('hidden');
+        tpError.textContent = '';
+
+        const payee = tpPayee.value.trim();
+        if (!payee) {
+            tpError.textContent = 'Enter who the money was paid to.';
+            tpError.classList.remove('hidden');
+            return;
+        }
+        const amount = parseFloat(tpAmount.value);
+        if (Number.isNaN(amount) || amount <= 0) {
+            tpError.textContent = 'Enter an amount greater than zero.';
+            tpError.classList.remove('hidden');
+            return;
+        }
+        const payload = {
+            payee,
+            amount,
+            purpose: tpPurpose.value.trim() || null,
+            payment_date: tpDate.value || null,
+        };
+        tpAddBtn.disabled = true;
+        tpAddBtn.textContent = 'Adding…';
+        try {
+            const res = await fetch(`/api/projects/${activeProjectId}/third-party-payments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                tpError.textContent = data.message || data.error || `Failed (HTTP ${res.status})`;
+                tpError.classList.remove('hidden');
+                return;
+            }
+            tpForm.reset();
+            setTpFormOpen(false);
+            applyPaymentSummary(data);
+            showToast(`${formatINR(amount)} to ${payee} recorded as a third-party payment.`);
+        } catch (err) {
+            tpError.textContent = `Network error: ${err.message}`;
+            tpError.classList.remove('hidden');
+        } finally {
+            tpAddBtn.disabled = false;
+            tpAddBtn.textContent = 'Add';
+        }
+    });
+
+    tpListEl.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.proj-cash-del');
+        if (!btn || !activeProjectId) return;
+        const id = btn.dataset.tpId;
+        if (!id) return;
+        if (!confirm('Remove this third-party payment? The full amount goes back into the received total.')) return;
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/api/projects/${activeProjectId}/third-party-payments/${id}`, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(data.message || data.error || 'Could not remove payment.', 'error');
+                btn.disabled = false;
+                return;
+            }
+            applyPaymentSummary(data);
+            showToast('Third-party payment removed.');
+        } catch (err) {
+            showToast(`Network error: ${err.message}`, 'error');
+            btn.disabled = false;
+        }
+    });
 
     // One chronological history mixing KVB statement credits (read-only, with
     // their statement context) and manual cash entries (deletable).
@@ -767,15 +1000,22 @@
         cashError.textContent = '';
         cashListEl.innerHTML = `<p class="proj-cash-empty">Loading…</p>`;
         cashTotalEl.textContent = '';
+        tpListEl.innerHTML = `<p class="proj-cash-empty">Loading…</p>`;
+        tpTotalEl.textContent = '';
+        tpError.classList.add('hidden');
+        tpError.textContent = '';
+        // One endpoint, both ledgers — see _payment_summary in blueprints/projects.
         fetch(`/api/projects/${projectId}/cash-payments`, { credentials: 'same-origin' })
             .then(r => r.json())
             .then(data => {
                 if (projectId !== activeProjectId) return; // modal changed
                 renderCashList(data.payments || []);
+                renderThirdPartyList(data.third_party_payments || []);
             })
             .catch(() => {
                 if (projectId !== activeProjectId) return;
                 cashListEl.innerHTML = `<p class="proj-cash-empty">Couldn't load cash payments.</p>`;
+                tpListEl.innerHTML = `<p class="proj-cash-empty">Couldn't load third-party payments.</p>`;
             });
     }
 
@@ -863,6 +1103,13 @@
             if (!cashPayments.length && data.payments.cash.length) {
                 cashPayments = data.payments.cash;
             }
+            if (!thirdPartyPayments.length && (data.payments.third_party || []).length) {
+                thirdPartyPayments = data.payments.third_party;
+            }
+            // Unconditionally: the reconciliation line inside the tab needs the
+            // gross received, which only arrives with insights, so the list has
+            // to repaint even when its own fetch already filled it.
+            renderThirdPartyHistory();
             // Repaint the glance now that the real numbers (profit, GST, costs)
             // are in — the first paint only had the cached PO/received figures.
             const p = projects.find(x => x.id === projectId);

@@ -852,6 +852,35 @@ html, body {
     font-weight: 700;
     color: var(--proj-text);
 }
+/* An amount leaving again rather than arriving. */
+.proj-cash-item-amt.is-out { color: var(--proj-danger); }
+
+/* The third-party ledger is its own sub-tab now, so it needs no rule to divide
+   it from anything — but it does need to restate the subtraction it belongs to,
+   since the receipts it comes out of are one tab away. */
+.proj-tp-recon {
+    margin: 0.15rem 0 0.7rem;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--proj-border);
+    border-left: 3px solid var(--proj-danger);
+    border-radius: 6px;
+    background: var(--proj-surface-soft);
+    font-size: 0.82rem;
+    color: var(--proj-text-muted);
+    line-height: 1.5;
+}
+.proj-tp-recon b { color: var(--proj-text); font-weight: 700; }
+.proj-tp-recon .net { color: var(--proj-accent); }
+/* Four fields instead of three: payee and purpose share the top row, amount
+   and date the second, with the button spanning both as it does for cash. */
+.proj-tp-form-row {
+    grid-template-columns: 1.1fr 1fr auto;
+    grid-template-areas:
+        "payee   purpose add"
+        "amount  date    add";
+}
+.proj-tp-form-row #detail-tp-payee   { grid-area: payee; }
+.proj-tp-form-row #detail-tp-purpose { grid-area: purpose; }
 .proj-cash-item-note {
     font-size: 0.78rem;
     color: var(--proj-text-muted);
@@ -1250,6 +1279,16 @@ html, body {
             "note   note"
             "add    add";
     }
+    /* On a phone the four fields stack; the button gets its own full-width row
+       rather than being squeezed beside a date picker. */
+    .proj-tp-form-row {
+        grid-template-columns: 1fr 1fr;
+        grid-template-areas:
+            "payee   payee"
+            "purpose purpose"
+            "amount  date"
+            "add     add";
+    }
 
     /* Don't pin the ID field to 110px while the name input starves. */
     .proj-input-id { flex: 0 0 76px; }
@@ -1619,6 +1658,13 @@ html, body {
     background: var(--proj-accent-soft);
     border-color: rgba(217, 119, 87, 0.35);
 }
+/* The pass-through chip: money that arrived and left again. Tinted as an
+   outflow so the eye reads gross → deduction → net across the strip. */
+.proj-chip.deduct {
+    background: var(--proj-danger-soft, rgba(220, 38, 38, 0.10));
+    border-color: rgba(220, 38, 38, 0.30);
+}
+.proj-chip.deduct .proj-chip-v { color: var(--proj-danger); }
 
 .proj-chip-k {
     font-size: 0.66rem;
@@ -1664,6 +1710,15 @@ html, body {
 .proj-mode-badge.cash {
     background: var(--proj-success-soft);
     color: var(--proj-success);
+}
+/* The payee on a third-party row. Not a mode like Bank/Cash — it names who the
+   money went to, so it carries the outflow colour rather than an income one,
+   and keeps its own casing because it's a name, not a label. */
+.proj-mode-badge.tp {
+    background: var(--proj-danger-soft, rgba(220, 38, 38, 0.12));
+    color: var(--proj-danger);
+    text-transform: none;
+    letter-spacing: 0.01em;
 }
 
 /* Bank badge in the expenses table: Axis red, KVB green */

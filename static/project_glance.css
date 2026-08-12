@@ -203,6 +203,33 @@
 .proj-ladder-row.is-revised dt { font-weight: 700; color: var(--proj-text); }
 .proj-ladder-row.is-revised dd { font-size: 1rem; font-weight: 700; }
 
+/* Money the client paid us that we forwarded straight on to someone else. It
+   reduces what is in hand, so it reads in the danger colour like any other
+   outflow — but it sits indented under the receipt it comes out of, because it
+   is a subtraction from that line and not a cost of the project. */
+.proj-ladder-row.is-deduct dd { color: var(--proj-danger); }
+
+/* The deduction's label is a way in to the list behind it: which payee, for
+   what, when. Styled as a link rather than a button so it doesn't compete with
+   the figures — the ladder is a document, and this is a footnote you can open. */
+.proj-ladder-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--proj-border-strong);
+}
+.proj-ladder-link:hover,
+.proj-ladder-link:focus-visible {
+    color: var(--proj-accent);
+    text-decoration-color: currentColor;
+}
+
 /* Actuals replace the PO and its variations, so the rungs they supersede stay
    on the ladder as history — dimmed and struck, plainly not the live figure. */
 .proj-ladder-row.is-superseded dt,

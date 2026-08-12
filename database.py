@@ -2986,6 +2986,8 @@ class DatabaseManager:
             self.ensure_project_pos_table()
             # Cash client payments live in their own ledger table.
             self.ensure_project_cash_table()
+            # Money the client paid us that we forwarded to a third party.
+            self.ensure_project_third_party_table()
             # The two contract ledgers, joined by list/get the same way.
             self.ensure_po_ledger_tables()
             return True
@@ -3138,6 +3140,131 @@ class DatabaseManager:
         except Exception as e:
             print(f"[!] Error ensuring project_cash_payments table: {e}")
             return False
+
+    def ensure_project_third_party_table(self):
+        """Create the project_third_party_payments ledger (N:1 with projects).
+
+        Not every rupee the client pays us is ours to spend. On some jobs the
+        client settles design or civil work through us: the money lands in our
+        account as a client payment, and we pay the contractor directly. Only
+        what is left funds the project's own expenses.
+
+        Each such disbursement is one row here. It is a pass-through, not an
+        expense — see helpers/project_finance for why it is subtracted from the
+        received total but never enters the cost breakdown.
+
+        `payee` is required because the whole point of the row is *who* the
+        money went to; a nameless deduction is indistinguishable from a
+        bookkeeping error six months later.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS project_third_party_payments (
+                        id           INT AUTO_INCREMENT PRIMARY KEY,
+                        project_id   INT NOT NULL,
+                        payee        VARCHAR(200) NOT NULL,
+                        purpose      VARCHAR(500) DEFAULT NULL,
+                        amount       DECIMAL(15, 2) NOT NULL,
+                        payment_date DATE DEFAULT NULL,
+                        note         VARCHAR(500) DEFAULT NULL,
+                        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_ptp_project (project_id),
+                        CONSTRAINT fk_ptp_project FOREIGN KEY (project_id)
+                            REFERENCES projects(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring project_third_party_payments table: {e}")
+            return False
+
+    def get_third_party_total_by_project(self) -> Dict[int, float]:
+        """Sum third-party disbursements grouped by project id.
+
+        Returns {project_id: total}. Mirrors get_cash_total_by_project — the
+        registry list needs one query for every project, not one per card.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT project_id, COALESCE(SUM(amount), 0) "
+                    "FROM project_third_party_payments GROUP BY project_id"
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                return {int(r[0]): float(r[1] or 0) for r in rows}
+        except Exception as e:
+            print(f"[!] Error fetching third-party totals by project: {e}")
+            return {}
+
+    def list_third_party_payments(self, project_id: int) -> List[Dict]:
+        """Return individual third-party payment rows for a project, newest first."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT id, project_id, payee, purpose, amount, payment_date, note, created_at "
+                    "FROM project_third_party_payments WHERE project_id = %s "
+                    "ORDER BY COALESCE(payment_date, DATE(created_at)) DESC, id DESC",
+                    (project_id,)
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+                for r in rows:
+                    r['amount'] = float(r['amount'] or 0)
+                    for col in ('payment_date', 'created_at'):
+                        if r.get(col) and hasattr(r[col], 'isoformat'):
+                            r[col] = r[col].isoformat()
+                return rows
+        except Exception as e:
+            print(f"[!] Error listing third-party payments for {project_id}: {e}")
+            return []
+
+    def add_third_party_payment(self, project_id: int, payee: str, amount: float,
+                                purpose: str = None, payment_date=None,
+                                note: str = None) -> Tuple[bool, Optional[str], Optional[int]]:
+        """Record one third-party disbursement. Returns (ok, error, new_id)."""
+        try:
+            pay_date = self._parse_po_date(payment_date) if payment_date else None
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT INTO project_third_party_payments "
+                    "(project_id, payee, purpose, amount, payment_date, note) "
+                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                    (project_id, payee, purpose, amount, pay_date, note)
+                )
+                conn.commit()
+                new_id = cursor.lastrowid
+                cursor.close()
+                return True, None, new_id
+        except mysql.connector.errors.IntegrityError:
+            return False, 'project_not_found', None
+        except Exception as e:
+            return False, str(e), None
+
+    def delete_third_party_payment(self, project_id: int,
+                                   payment_id: int) -> Tuple[bool, Optional[str]]:
+        """Delete a single third-party payment row, scoped to its project."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM project_third_party_payments WHERE id = %s AND project_id = %s",
+                    (payment_id, project_id)
+                )
+                conn.commit()
+                affected = cursor.rowcount
+                cursor.close()
+                if affected == 0:
+                    return False, 'not_found'
+                return True, None
+        except Exception as e:
+            return False, str(e)
 
     # SELECT that augments each project row with a compact PO summary (the
     # gist columns the cards/detail need) via a LEFT JOIN on project_pos, plus
