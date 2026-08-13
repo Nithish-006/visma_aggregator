@@ -10,6 +10,8 @@ from datetime import datetime
 from difflib import get_close_matches
 from typing import Optional, Tuple, Dict, List
 
+from vendor_extractor import extract_vendor, match_vendor
+
 # Try to import msoffcrypto for encrypted file support
 try:
     import msoffcrypto
@@ -311,8 +313,11 @@ def categorize_transaction(particulars: str, dr_cr_indicator: str, vendor: Optio
 
 def extract_vendor_from_particulars(particulars: str, bank_code: str = 'axis') -> Optional[str]:
     """
-    Extract vendor/client name from transaction particulars
-    Handles UPI, IMPS, NEFT patterns common in bank statements
+    Extract vendor/client name from transaction particulars.
+
+    Thin wrapper kept for backwards compatibility; the family-by-family parsing
+    rules live in vendor_extractor.py. Use vendor_extractor.match_vendor() when
+    you also need the flags (is_self, is_reversal, is_internal, truncated).
 
     Args:
         particulars: Transaction description
@@ -321,88 +326,7 @@ def extract_vendor_from_particulars(particulars: str, bank_code: str = 'axis') -
     Returns:
         Vendor name or None
     """
-    if not particulars or not isinstance(particulars, str):
-        return None
-
-    particulars = particulars.strip()
-
-    # KVB-specific patterns (different format from Axis)
-    if bank_code == 'kvb':
-        # KVB IMPS: IMPS-509113479708-VISMAASSOCIATES-UTIB-xxxxxxxxxxx
-        kvb_imps = re.search(r'IMPS-\d+-([A-Za-z\s]+)-[A-Z]{4}-', particulars)
-        if kvb_imps:
-            return kvb_imps.group(1).strip()
-
-        # KVB NEFT CR: NEFT CR-CNRB0000967-SV CONSTRUCTIONS-VISMA ASSOCIA
-        kvb_neft_cr = re.search(r'NEFT CR-[A-Z0-9]+-([^-]+)-', particulars)
-        if kvb_neft_cr:
-            return kvb_neft_cr.group(1).strip()
-
-        # KVB NEFT DR: NEFT DR-KVBLH00232446439-VISMAASSOCIATES-UTIB00004
-        kvb_neft_dr = re.search(r'NEFT DR-[A-Z0-9]+-([^-]+)-', particulars)
-        if kvb_neft_dr:
-            return kvb_neft_dr.group(1).strip()
-
-        # KVB UPI-CR: UPI-CR-102477049440-SRIRAM R-HDFC-50100004440849-U
-        kvb_upi = re.search(r'UPI-(?:CR|DR)-\d+-([^-]+)-[A-Z]{4}-', particulars)
-        if kvb_upi:
-            return kvb_upi.group(1).strip()
-
-        # CASH DEP: CASH DEP-SELF-SEETHALAKSHMI-CBE-RAMANATH
-        cash_dep = re.search(r'CASH DEP-[^-]+-([^-]+)-', particulars)
-        if cash_dep:
-            return cash_dep.group(1).strip()
-
-        # ECS/NACH: To Clg:ECS BD-TATA MF - NACH
-        ecs_match = re.search(r'ECS (?:BD|TP ACH)\s*-?\s*([^-]+)\s*-?\s*NACH', particulars, re.IGNORECASE)
-        if ecs_match:
-            return ecs_match.group(1).strip()
-
-        # MB-WITHIN (internal transfers): MB-WITHIN-DR:XXXX4008-CR:XXXX0334-...
-        if 'MB-WITHIN' in particulars:
-            return 'Internal Transfer'
-
-        # Fallback: Extract name from hyphen-separated parts
-        parts = [p.strip() for p in particulars.split('-') if p.strip()]
-        if len(parts) >= 3:
-            # Skip transaction type and ID, look for name
-            for part in parts[2:]:
-                # Skip account numbers, codes, and numeric parts
-                if part and not part.isdigit() and len(part) > 2:
-                    if not re.match(r'^[A-Z]{4}\d*$', part) and not re.match(r'^x+\d*$', part, re.IGNORECASE):
-                        return part
-        return None
-
-    # Axis Bank patterns (original logic)
-    # UPI patterns: UPI/P2M/xxx/VENDOR NAME/...
-    upi_match = re.search(r'UPI/P2[AM]/\d+/([^/]+)', particulars)
-    if upi_match:
-        vendor = upi_match.group(1).strip()
-        # Clean up common suffixes
-        vendor = re.sub(r'\s+(UPI|MERCHANT|PAY TO|PAYMENT).*$', '', vendor, flags=re.IGNORECASE)
-        return vendor
-
-    # IMPS patterns: IMPS/P2A/xxx/VENDOR/...
-    imps_match = re.search(r'IMPS/P2A/\d+/([^/]+)', particulars)
-    if imps_match:
-        vendor = imps_match.group(1).strip()
-        return vendor
-
-    # NEFT/RTGS patterns
-    neft_match = re.search(r'(?:NEFT|RTGS)[^/]*/([^/]+)', particulars)
-    if neft_match:
-        vendor = neft_match.group(1).strip()
-        return vendor
-
-    # Fallback: Take first meaningful part before /
-    parts = [p.strip() for p in particulars.split('/') if p.strip()]
-    if len(parts) >= 2:
-        # Skip transaction type (UPI, IMPS, etc) and ID, get the vendor
-        for part in parts[2:]:
-            if part and not part.isdigit() and len(part) > 3:
-                return part
-
-    return None
+    return extract_vendor(particulars, bank_code)
 
 
 # ============================================================================
@@ -468,6 +392,70 @@ def is_file_encrypted(file_path: str) -> bool:
 # ============================================================================
 # MAIN PROCESSING FUNCTION
 # ============================================================================
+
+class VendorExtractionReport:
+    """
+    Tallies how vendor extraction went across one uploaded statement.
+
+    The point is early warning: an unrecognised narration format resolves to
+    'Unknown' silently, so without this a bank changing its export reads as a
+    batch of ordinary blanks and is only noticed weeks later. Anything landing
+    in the 'unresolved' family means no rule matched and a new format has
+    appeared - that is a parser gap, not bad data.
+    """
+
+    def __init__(self, bank_code: str):
+        self.bank_code = bank_code
+        self.total = 0
+        self.families = {}
+        self.unresolved = []   # narrations no rule matched at all
+        self.nameless = 0      # matched, but the narration carries no name
+        self.truncated = []    # name cut off by the bank's export width
+
+    def record(self, particulars: str, result) -> None:
+        self.total += 1
+        self.families[result.family] = self.families.get(result.family, 0) + 1
+        if result.family == 'unresolved':
+            self.unresolved.append(particulars)
+        elif result.vendor is None:
+            self.nameless += 1
+        if result.truncated:
+            self.truncated.append(particulars)
+
+    def log(self) -> None:
+        named = self.total - len(self.unresolved) - self.nameless
+        safe_print(
+            f"[*] Vendor extraction: {named}/{self.total} named "
+            f"across {len(self.families)} transaction families"
+        )
+
+        if self.nameless:
+            safe_print(
+                f"  [i] {self.nameless} row(s) carry no counterparty name in the "
+                f"narration (internal transfers, reversals) - set to Unknown"
+            )
+
+        if self.truncated:
+            safe_print(
+                f"  [!] {len(self.truncated)} vendor name(s) truncated by the "
+                f"bank's export width - may need correcting by hand:"
+            )
+            for narration in self.truncated[:5]:
+                safe_print(f"        {narration}")
+            if len(self.truncated) > 5:
+                safe_print(f"        ... and {len(self.truncated) - 5} more")
+
+        if self.unresolved:
+            safe_print(
+                f"  [!] UNRECOGNISED FORMAT: {len(self.unresolved)} row(s) matched "
+                f"no known {self.bank_code.upper()} narration pattern. These became "
+                f"'Unknown'. Add a rule to vendor_extractor.py for:"
+            )
+            for narration in self.unresolved[:10]:
+                safe_print(f"        {narration}")
+            if len(self.unresolved) > 10:
+                safe_print(f"        ... and {len(self.unresolved) - 10} more")
+
 
 def safe_print(text: str):
     """Print text with fallback for Unicode errors"""
@@ -632,6 +620,7 @@ def _process_axis_statement(
     # Step 4: Process each transaction
     safe_print("[*] Processing transactions...")
     records = []
+    vendor_report = VendorExtractionReport('axis')
 
     for idx, row in df.iterrows():
         # Skip opening balance and closing balance rows
@@ -653,7 +642,9 @@ def _process_axis_statement(
         dr_cr = str(row[drcr_col]).strip().upper() if pd.notna(row[drcr_col]) else ""
 
         # Extract vendor
-        vendor = extract_vendor_from_particulars(particulars_text, 'axis')
+        vendor_match = match_vendor(particulars_text, 'axis')
+        vendor_report.record(particulars_text, vendor_match)
+        vendor = vendor_match.vendor
 
         # Categorize transaction
         category, code = categorize_transaction(particulars_text, dr_cr, vendor)
@@ -679,6 +670,8 @@ def _process_axis_statement(
             'DD': None,
             'Notes': None
         })
+
+    vendor_report.log()
 
     # Step 5: Create final DataFrame
     final_df = pd.DataFrame(records)
@@ -810,6 +803,7 @@ def _process_kvb_statement(
     # Step 5: Process each transaction
     safe_print("[*] Processing transactions...")
     records = []
+    vendor_report = VendorExtractionReport('kvb')
     running_balance = bf_balance
 
     for idx, row in df.iterrows():
@@ -843,7 +837,9 @@ def _process_kvb_statement(
         dr_cr = 'DR' if dr_amount > 0 else 'CR'
 
         # Extract vendor using KVB patterns
-        vendor = extract_vendor_from_particulars(particulars_text, 'kvb')
+        vendor_match = match_vendor(particulars_text, 'kvb')
+        vendor_report.record(particulars_text, vendor_match)
+        vendor = vendor_match.vendor
 
         # Categorize transaction
         category, code = categorize_transaction(particulars_text, dr_cr, vendor)
@@ -862,6 +858,8 @@ def _process_kvb_statement(
             'DD': None,
             'Notes': None
         })
+
+    vendor_report.log()
 
     # Step 6: Create final DataFrame
     final_df = pd.DataFrame(records)
