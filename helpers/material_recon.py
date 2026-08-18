@@ -25,11 +25,12 @@ Design notes
   own "paid, never billed" group. Assigning to the best match rather than
   union-ing everything that matches is what stops one loosely-named bank vendor
   from chaining two genuinely different suppliers into one row.
-* **Matching reuses ``helpers.bill_reconcile``'s vendor normalisation** — same
-  stopwords, same fuzzy ratio — so the panel and the row-level "no bill" badge
-  can never tell different stories. What's added here is a *score* (rather than
-  a yes/no) so "best match" is well defined, and a small set of weak tokens
-  (SRI, SAI, NEW, ...) that are too common to be evidence on their own.
+* **Matching reuses ``helpers.bill_reconcile``'s vendor identity** — same
+  normalisation, same anchor gate, same fuzzy ratio — so the panel and the
+  row-level "no bill" badge can never tell different stories. What's added
+  here is a *score* (rather than a yes/no) so "best match" is well defined.
+  The anchor gate does the work of keeping suppliers apart; the score only
+  ranks candidates that already agree on who they are.
 * **Both sides are gross.** Bill totals are allocation totals including GST;
   bank debits are cash out. They are directly comparable.
 * **Tolerance is relative and absolute.** Rounding, small round-offs and a few
@@ -44,24 +45,25 @@ from difflib import SequenceMatcher
 
 from helpers.bill_reconcile import (
     MATERIAL_PURCHASE_CATEGORY,
-    normalize_vendor_tokens,
-    _FUZZY_RATIO_THRESHOLD,
+    VendorKey,
+    vendor_anchors_agree,
+    vendor_key,
+    _VENDOR_DESCRIPTORS,
+    _VENDOR_HONORIFICS,
 )
 
-# Tokens that appear across many unrelated suppliers — honorifics, generic
-# qualifiers. bill_reconcile keeps them because for a *lenient* yes/no flag a
-# false match only costs a missed warning. Here a false match silently merges
-# two suppliers into one row and hides a real conflict, so they carry no weight
-# on their own; a pair sharing only these has to clear the fuzzy ratio instead.
+# Tokens that say nothing about *which* supplier this is: courtesy prefixes,
+# the trade words bill_reconcile already treats as descriptors, and a handful
+# of generic boosters. They still count towards how alike two names look, but
+# they can never be the evidence that carries a merge.
 _WEAK_VENDOR_TOKENS = frozenset({
-    'SRI', 'SHRI', 'SHREE', 'SREE', 'SAI', 'NEW', 'JAI', 'JAY', 'MS',
-    'SUPER', 'ROYAL', 'NATIONAL', 'GLOBAL', 'UNITED', 'GENERAL', 'MODERN',
-    'STEEL', 'STEELS', 'HARDWARE', 'HARDWARES', 'ENGINEERING', 'ENGINEERS',
-    'CEMENT', 'CONSTRUCTION', 'CONSTRUCTIONS', 'BUILDERS', 'MATERIALS',
-})
+    'SAI', 'JAI', 'JAY', 'SUPER', 'ROYAL', 'NATIONAL', 'GLOBAL', 'UNITED',
+    'GENERAL', 'MODERN', 'PRIME', 'STAR', 'GOLDEN', 'PERFECT',
+}) | _VENDOR_DESCRIPTORS | _VENDOR_HONORIFICS
 
-# Two vendors join the same group at or above this score. A shared *strong*
-# token always clears it (see _match_score); anything less has to look alike.
+# Two vendors join the same group at or above this score. Reaching the scoring
+# stage at all means the anchors already agree (see _match_score), so this only
+# decides *which* of several same-anchor candidates is the best home.
 _MATCH_THRESHOLD = 0.60
 
 # A group is "ok" while the gap stays inside max(ABS, PCT% of the larger side).
@@ -103,27 +105,36 @@ def is_material_purchase(category):
     return str(category or '').strip().upper() == MATERIAL_PURCHASE_CATEGORY
 
 
-def _match_score(a_tokens, b_tokens):
-    """How strongly two vendor token-sets name the same supplier (0.0 - 1.0).
+def _match_score(a, b):
+    """How strongly two ``VendorKey``s name the same supplier (0.0 - 1.0).
 
-    A shared *strong* token is real evidence, so it floors the score above the
-    threshold and is then graded by how much of the two names overlap — that
-    grading is what makes "best match" meaningful when several bill vendors
-    share a token with one bank vendor. With no strong token in common the pair
-    has to look alike as whole strings, at bill_reconcile's own ratio.
+    **Disagreeing anchors score zero, whatever else the names share.** "HARI OM
+    ROOFING INDUSTRIES" and "P&P ROOFING" share ROOFING and nothing that names
+    a supplier; letting that merge them hid a real conflict on project 664.
+
+    Once the anchors agree the pair is already accepted as one supplier, so the
+    rest is only ranking: a shared identifying token floors the score above the
+    threshold, graded by how much of the two names overlap. That grading is
+    what makes "best match" meaningful when several bill vendors share an
+    anchor with one bank vendor.
     """
-    if not a_tokens or not b_tokens:
+    if not a.tokens or not b.tokens:
+        return 0.0
+    if not vendor_anchors_agree(a.anchor, b.anchor):
         return 0.0
     ratio = SequenceMatcher(None,
-                            ' '.join(sorted(a_tokens)),
-                            ' '.join(sorted(b_tokens))).ratio()
-    strong_a = a_tokens - _WEAK_VENDOR_TOKENS
-    strong_b = b_tokens - _WEAK_VENDOR_TOKENS
+                            ' '.join(sorted(a.tokens)),
+                            ' '.join(sorted(b.tokens))).ratio()
+    strong_a = a.tokens - _WEAK_VENDOR_TOKENS
+    strong_b = b.tokens - _WEAK_VENDOR_TOKENS
     shared = strong_a & strong_b
     if shared:
         overlap = len(shared) / len(strong_a | strong_b)
         return max(_MATCH_THRESHOLD + (1.0 - _MATCH_THRESHOLD) * overlap, ratio)
-    return ratio if ratio >= _FUZZY_RATIO_THRESHOLD else 0.0
+    # Agreeing anchors with no other identifying word in common — "ALPHA" vs
+    # "ALPHA THREAD ROLLING". The anchor is the identity, so this is a match;
+    # score it by how alike the names look, floored at the threshold.
+    return max(_MATCH_THRESHOLD, ratio)
 
 
 def _tolerance_for(billed, paid, tol_abs, tol_pct):
@@ -145,13 +156,27 @@ def _classify(billed, paid, tolerance):
 class _Group:
     """One supplier's two-sided ledger while it is being assembled."""
 
-    __slots__ = ('tokens', 'names', 'bills', 'txns')
+    __slots__ = ('tokens', 'anchor', 'names', 'bills', 'txns')
 
-    def __init__(self, tokens, name):
-        self.tokens = set(tokens)
+    def __init__(self, key, name):
+        self.tokens = set(key.tokens)
+        # The anchor of the first name in — deliberately NOT widened as
+        # aliases join. A group means "this supplier", and letting each new
+        # spelling add another anchor would rebuild the chaining the anchor
+        # gate exists to prevent.
+        self.anchor = key.anchor
         self.names = [name]
         self.bills = []
         self.txns = []
+
+    @property
+    def key(self):
+        return VendorKey(frozenset(self.tokens), self.anchor)
+
+    def admit(self, key, name):
+        """Fold another spelling of this supplier into the group."""
+        self.tokens |= key.tokens
+        self.names.append(name)
 
     def absorb(self, other):
         self.tokens |= other.tokens
@@ -181,26 +206,24 @@ def _group_bill_vendors(bill_rows):
     by_name = {}
     for row in bill_rows:
         raw = str(row.get('vendor_name') or '').strip()
-        key = raw.upper()
-        group = by_name.get(key)
+        seen_key = raw.upper()
+        group = by_name.get(seen_key)
         if group is None:
-            tokens = normalize_vendor_tokens(raw)
-            group = None
-            if tokens:
+            key = vendor_key(raw)
+            if key.tokens:
                 # Merge into the best-matching existing bill group, if any.
                 best, best_score = None, 0.0
                 for g in groups:
-                    score = _match_score(tokens, g.tokens)
+                    score = _match_score(key, g.key)
                     if score > best_score:
                         best, best_score = g, score
                 if best is not None and best_score >= _MATCH_THRESHOLD:
                     group = best
-                    group.tokens |= tokens
-                    group.names.append(raw or 'Unknown')
+                    group.admit(key, raw or 'Unknown')
             if group is None:
-                group = _Group(tokens, raw or 'Unknown')
+                group = _Group(key, raw or 'Unknown')
                 groups.append(group)
-            by_name[key] = group
+            by_name[seen_key] = group
         group.bills.append(row)
     return groups
 
@@ -217,26 +240,24 @@ def _attach_bank_vendors(groups, bank_rows):
     unmatched = []
     for row in bank_rows:
         raw = str(row.get('vendor') or '').strip()
-        key = raw.upper()
-        group = by_name.get(key)
+        seen_key = raw.upper()
+        group = by_name.get(seen_key)
         if group is None:
-            tokens = normalize_vendor_tokens(raw)
-            group = None
-            if tokens:
+            key = vendor_key(raw)
+            if key.tokens:
                 best, best_score = None, 0.0
                 for g in billed_groups + unmatched:
-                    score = _match_score(tokens, g.tokens)
+                    score = _match_score(key, g.key)
                     if score > best_score:
                         best, best_score = g, score
                 if best is not None and best_score >= _MATCH_THRESHOLD:
                     group = best
-                    group.tokens |= tokens
-                    group.names.append(raw or 'Unknown')
+                    group.admit(key, raw or 'Unknown')
             if group is None:
-                group = _Group(tokens, raw or 'Unknown')
+                group = _Group(key, raw or 'Unknown')
                 unmatched.append(group)
                 groups.append(group)
-            by_name[key] = group
+            by_name[seen_key] = group
         group.txns.append(row)
     return groups
 

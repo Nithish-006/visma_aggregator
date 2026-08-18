@@ -68,6 +68,45 @@ def test_bank_vendor_joins_only_its_best_match():
     assert group_for(r, 'MURUGAN')['status'] == STATUS_UNPAID
 
 
+def test_a_shared_trade_word_does_not_fuse_two_suppliers_into_one_row():
+    """Project 664, as reported: both suppliers roof, so both names carry
+    ROOFING — and the panel showed them as one vendor, netting a ₹14,927 bill
+    against an unrelated one and hiding both conflicts."""
+    r = reconcile_material(
+        [bill('HARI OM ROOFING INDUSTRIES', 14927), bill('P&P ROOFING', 1450)],
+        [],
+    )
+    assert len(r['groups']) == 2
+    assert group_for(r, 'HARI OM')['billed'] == 14927
+    assert group_for(r, 'P&P')['billed'] == 1450
+
+
+def test_a_trade_word_does_not_chain_three_suppliers_together():
+    """POWER and TOOLS between them linked Power Steels, Selvanayagi and
+    Southern Tools into a single ledger."""
+    r = reconcile_material(
+        [bill('POWER STEELS', 100000), bill('SELVANAYAGI POWER TOOLS', 50000),
+         bill('SOUTHERN TOOLS SUPPLIERS', 25000)],
+        [txn('POWER STEELS', 100000)],
+    )
+    assert len(r['groups']) == 3
+    assert group_for(r, 'POWER STEELS')['status'] == STATUS_OK
+    assert group_for(r, 'SELVANAYAGI')['status'] == STATUS_UNPAID
+    assert group_for(r, 'SOUTHERN')['status'] == STATUS_UNPAID
+
+
+def test_the_supplier_still_wins_over_the_trade_word():
+    """Tightening must not cost the merges that make the panel readable: the
+    bank's short spelling still joins the invoice's registered name."""
+    r = reconcile_material(
+        [bill('DEVA STEELS (KOCHI) PRIVATE LIMITED', 721304),
+         bill('SRI KARPAGAM STEELS', 131107)],
+        [txn('deva steel new', 721304), txn('karpagam steels canar', 131107)],
+    )
+    assert len(r['groups']) == 2
+    assert all(g['status'] == STATUS_OK for g in r['groups'])
+
+
 def test_two_spellings_of_one_unbilled_vendor_are_one_conflict():
     r = reconcile_material([], [txn('ZARON YES', 200000), txn('Zaron Yes.', 220000)])
     assert len(r['groups']) == 1
