@@ -13,7 +13,7 @@
     <!-- Shared with the registry; must load before the page's own sheet. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='project_glance.css') }}?v=4">
     <!-- Self-contained panel (material_recon.js); scoped under .mr-*. -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='material_recon.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='material_recon.css') }}?v=4">
     <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=20">
 </head>
 
@@ -269,7 +269,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='project_glance.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='material_recon.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='material_recon.js') }}?v=3"></script>
     <script src="{{ url_for('static', filename='project_summary.js') }}?v=19"></script>
 <script>
 function hardRefresh() {

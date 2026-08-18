@@ -22,6 +22,7 @@ from helpers.project_finance import (
     compute_project_finance, is_other_expense_category, resolve_contract,
     PO_LEDGER_GST_RATE,
 )
+from helpers.vendor_aliases import get_vendor_alias_resolver
 from helpers.bill_reconcile import (
     build_bill_vendor_index, is_unbilled_material_purchase,
 )
@@ -658,12 +659,14 @@ def api_project_insights(project_id):
     # Reuses the bills just fetched, so no extra query. The tag is synthesised
     # from project_id since every expense row here already belongs to it. Count
     # is over the (capped) rows shown, which for real projects is all of them.
-    bill_index = build_bill_vendor_index(purchase_bills)
+    aliases = get_vendor_alias_resolver()
+    bill_index = build_bill_vendor_index(purchase_bills, aliases)
     no_bill_tag = f"{project_id} -"
     no_bill_count = 0
     for er in expense_rows:
         flag = er['amount'] > 0 and is_unbilled_material_purchase(
-            er['category'], no_bill_tag, er['vendor'], bill_index, er['bank'])
+            er['category'], no_bill_tag, er['vendor'], bill_index, er['bank'],
+            aliases)
         er['no_bill_warning'] = flag
         if flag:
             no_bill_count += 1

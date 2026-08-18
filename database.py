@@ -3181,6 +3181,188 @@ class DatabaseManager:
             print(f"[!] Error ensuring project_third_party_payments table: {e}")
             return False
 
+    # ── Vendor aliases ────────────────────────────────────────────────
+    # Human rulings about which spellings are the same supplier. The matcher
+    # in helpers/bill_reconcile.py is good but cannot be perfect — "PANDP" is
+    # the bank clerk's "P&P ROOFING" and no rule reads that off the names — so
+    # a person settles those cases once and the answer is kept here.
+
+    def ensure_vendor_alias_tables(self):
+        """Create vendor_aliases and vendor_alias_splits. Idempotent.
+
+        Two tables because the decisions are opposites: a link says "these are
+        one supplier", a split says "these never are". Keeping them apart makes
+        each one a plain row that can be listed and undone, rather than a flag
+        on a shared record.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                # alias_norm is the lookup key (upper-cased, whitespace
+                # collapsed); canonical_name keeps its original casing because
+                # it is what the panel shows as the supplier's name.
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS vendor_aliases (
+                        id             INT AUTO_INCREMENT PRIMARY KEY,
+                        alias_name     VARCHAR(255) NOT NULL,
+                        alias_norm     VARCHAR(255) NOT NULL,
+                        canonical_name VARCHAR(255) NOT NULL,
+                        created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY uk_vendor_alias (alias_norm)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                # The pair is stored with the two sides sorted, so "A not B"
+                # and "B not A" can only ever be one row.
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS vendor_alias_splits (
+                        id          INT AUTO_INCREMENT PRIMARY KEY,
+                        left_norm   VARCHAR(255) NOT NULL,
+                        right_norm  VARCHAR(255) NOT NULL,
+                        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE KEY uk_vendor_split (left_norm, right_norm)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                """)
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring vendor alias tables: {e}")
+            return False
+
+    def get_vendor_alias_rules(self) -> Dict:
+        """Every alias ruling: ``{'links': {...}, 'splits': [...]}``.
+
+        Small by nature — one row per decision a human has actually made — so
+        it is read whole and turned into a resolver per request.
+        """
+        rules = {'links': {}, 'splits': []}
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT alias_norm, canonical_name FROM vendor_aliases")
+                rules['links'] = {r['alias_norm']: r['canonical_name']
+                                  for r in cursor.fetchall()}
+                cursor.execute(
+                    "SELECT left_norm, right_norm FROM vendor_alias_splits")
+                rules['splits'] = [(r['left_norm'], r['right_norm'])
+                                   for r in cursor.fetchall()]
+                cursor.close()
+        except Exception as e:
+            # A missing table or an unreachable DB must not take the panel
+            # down — it just means no human overrides, i.e. the heuristic
+            # alone, which is exactly the pre-alias behaviour.
+            print(f"[!] Error reading vendor alias rules: {e}")
+        return rules
+
+    def list_vendor_aliases(self) -> List[Dict]:
+        """Every ruling in display form, newest first."""
+        out = []
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                cursor.execute(
+                    "SELECT id, alias_name, canonical_name, created_at "
+                    "FROM vendor_aliases ORDER BY canonical_name, alias_name")
+                for r in cursor.fetchall():
+                    out.append({'kind': 'link', 'id': r['id'],
+                                'alias': r['alias_name'],
+                                'canonical': r['canonical_name'],
+                                'created_at': str(r['created_at'] or '')})
+                cursor.execute(
+                    "SELECT id, left_norm, right_norm, created_at "
+                    "FROM vendor_alias_splits ORDER BY left_norm, right_norm")
+                for r in cursor.fetchall():
+                    out.append({'kind': 'split', 'id': r['id'],
+                                'alias': r['left_norm'],
+                                'canonical': r['right_norm'],
+                                'created_at': str(r['created_at'] or '')})
+                cursor.close()
+        except Exception as e:
+            print(f"[!] Error listing vendor aliases: {e}")
+        return out
+
+    def link_vendor_alias(self, alias_name: str, canonical_name: str) -> bool:
+        """Record "``alias_name`` is really ``canonical_name``".
+
+        Drops any opposing split first: a person cannot coherently hold that
+        two names are both the same supplier and not, and the newer ruling is
+        the one they mean.
+        """
+        alias_norm = ' '.join(str(alias_name or '').upper().split())
+        canon_norm = ' '.join(str(canonical_name or '').upper().split())
+        if not alias_norm or not canon_norm or alias_norm == canon_norm:
+            return False
+        left, right = sorted((alias_norm, canon_norm))
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM vendor_alias_splits "
+                    "WHERE left_norm = %s AND right_norm = %s", (left, right))
+                cursor.execute(
+                    "INSERT INTO vendor_aliases "
+                    "(alias_name, alias_norm, canonical_name) "
+                    "VALUES (%s, %s, %s) "
+                    "ON DUPLICATE KEY UPDATE canonical_name = VALUES(canonical_name), "
+                    "alias_name = VALUES(alias_name)",
+                    (str(alias_name).strip(), alias_norm,
+                     str(canonical_name).strip()))
+                # If the canonical name was itself an alias of something else,
+                # follow that through rather than leaving a two-hop chain the
+                # resolver would not walk.
+                cursor.execute(
+                    "UPDATE vendor_aliases SET canonical_name = %s "
+                    "WHERE canonical_name = %s", (str(canonical_name).strip(),
+                                                  str(alias_name).strip()))
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error linking vendor alias: {e}")
+            return False
+
+    def split_vendor_alias(self, left_name: str, right_name: str) -> bool:
+        """Record "these two are different suppliers", and undo any link."""
+        left_norm = ' '.join(str(left_name or '').upper().split())
+        right_norm = ' '.join(str(right_name or '').upper().split())
+        if not left_norm or not right_norm or left_norm == right_norm:
+            return False
+        left, right = sorted((left_norm, right_norm))
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                # A link between exactly these two is the opposite ruling.
+                cursor.execute(
+                    "DELETE FROM vendor_aliases WHERE "
+                    "(alias_norm = %s AND UPPER(canonical_name) = %s) OR "
+                    "(alias_norm = %s AND UPPER(canonical_name) = %s)",
+                    (left, right, right, left))
+                cursor.execute(
+                    "INSERT IGNORE INTO vendor_alias_splits "
+                    "(left_norm, right_norm) VALUES (%s, %s)", (left, right))
+                cursor.close()
+                return True
+        except Exception as e:
+            print(f"[!] Error splitting vendor alias: {e}")
+            return False
+
+    def delete_vendor_alias_rule(self, kind: str, rule_id: int) -> bool:
+        """Undo one ruling, returning that pair to the heuristic's judgement."""
+        table = {'link': 'vendor_aliases',
+                 'split': 'vendor_alias_splits'}.get(kind)
+        if not table:
+            return False
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"DELETE FROM {table} WHERE id = %s",
+                               (int(rule_id),))
+                deleted = cursor.rowcount
+                cursor.close()
+                return deleted > 0
+        except Exception as e:
+            print(f"[!] Error deleting vendor alias rule: {e}")
+            return False
+
     def get_third_party_total_by_project(self) -> Dict[int, float]:
         """Sum third-party disbursements grouped by project id.
 

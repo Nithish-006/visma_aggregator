@@ -835,6 +835,9 @@
                 // Reuse the page's own bill modal rather than a second one, so a
                 // bill looks the same wherever it is opened from.
                 onBillClick: viewBillDetail,
+                // Correcting a supplier match regroups the whole panel, so
+                // rebuild it from the server rather than patching in place.
+                onRulingSaved: () => renderRecon(project),
             });
         } catch (err) {
             console.error('Reconciliation error:', err);

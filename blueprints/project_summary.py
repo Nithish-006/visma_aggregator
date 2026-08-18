@@ -21,6 +21,7 @@ from helpers.dataframe import (
 from helpers.projects import (
     build_smart_project_groups, parse_project_selection,
 )
+from helpers.vendor_aliases import get_vendor_alias_resolver
 from helpers.bill_reconcile import (
     build_bill_vendor_index, is_unbilled_material_purchase,
 )
@@ -248,8 +249,10 @@ def get_project_summary_bank_transactions():
     page_df = df.iloc[start_idx:end_idx]
 
     # Cross-check MATERIAL PURCHASE debits against purchase bills (kvb only).
+    aliases = get_vendor_alias_resolver()
     bill_index = build_bill_vendor_index(
-        db_manager.get_purchase_bill_vendors_by_project()) if bank_code == 'kvb' else {}
+        db_manager.get_purchase_bill_vendors_by_project(),
+        aliases) if bank_code == 'kvb' else {}
 
     transactions = []
     for _, row in page_df.iterrows():
@@ -258,7 +261,7 @@ def get_project_summary_bank_transactions():
         category = str(row.get('Category', 'Uncategorized'))
         project = str(row.get('Project', row.get('project', ''))) if pd.notna(row.get('Project', row.get('project', ''))) else ''
         no_bill_warning = dr_amount > 0 and is_unbilled_material_purchase(
-            category, project, vendor, bill_index, bank_code)
+            category, project, vendor, bill_index, bank_code, aliases)
         transactions.append({
             'date': row['date'].strftime('%Y-%m-%d') if pd.notna(row['date']) else '',
             'description': str(row.get('Description', row.get('transaction_description', ''))),
@@ -689,7 +692,8 @@ def get_project_summary_material_reconciliation():
                 'bank': bank_code,
             })
 
-    result = reconcile_material(bills, txns)
+    result = reconcile_material(bills, txns,
+                                resolver=get_vendor_alias_resolver())
 
     # Format once, server-side, so every figure on the panel reads in the same
     # lakhs/crores convention as the rest of the page.
@@ -719,6 +723,89 @@ def get_project_summary_material_reconciliation():
         'summary': s,
         'groups': result['groups'],
     })
+
+
+@bp.route('/api/vendor-aliases', methods=['GET'])
+@login_required
+def list_vendor_aliases():
+    """Every vendor-identity ruling a person has saved, both kinds."""
+    db_manager.ensure_vendor_alias_tables()
+    return jsonify({'rules': db_manager.list_vendor_aliases()})
+
+
+@bp.route('/api/vendor-aliases/link', methods=['POST'])
+@login_required
+def link_vendor_alias():
+    """Record that a set of spellings all name one supplier.
+
+    JSON body: { "aliases": [str, ...], "canonical": str }, or "alias" for a
+    single one. Every alias is folded into ``canonical``, so pass the fuller
+    registered name as the canonical one.
+
+    Merging a whole row means sending *every* spelling in it, not just its
+    label: the others were grouped by the name matcher, and once the label is
+    rewritten to another supplier they would no longer match it and would break
+    away into a row of their own.
+    """
+    data = request.get_json(silent=True) or {}
+    canonical = (data.get('canonical') or '').strip()
+    raw_aliases = data.get('aliases')
+    if raw_aliases is None:
+        raw_aliases = [data.get('alias')]
+    aliases = []
+    for name in raw_aliases if isinstance(raw_aliases, list) else []:
+        name = (str(name or '')).strip()
+        if name and name.upper() != canonical.upper() and name not in aliases:
+            aliases.append(name)
+
+    if not canonical or not aliases:
+        return jsonify({'error': 'invalid_request',
+                        'message': 'Give at least one other name and the '
+                                   'supplier to fold it into.'}), 400
+
+    db_manager.ensure_vendor_alias_tables()
+    saved = [a for a in aliases if db_manager.link_vendor_alias(a, canonical)]
+    if not saved:
+        return jsonify({'error': 'save_failed',
+                        'message': "Couldn't save that."}), 500
+    return jsonify({'success': True, 'aliases': saved,
+                    'canonical': canonical}), 201
+
+
+@bp.route('/api/vendor-aliases/split', methods=['POST'])
+@login_required
+def split_vendor_alias():
+    """Record that two spellings are different suppliers.
+
+    JSON body: { "left": str, "right": str }. This is the ruling that undoes a
+    wrong merge — the panel offers it on each name folded into a row.
+    """
+    data = request.get_json(silent=True) or {}
+    left = (data.get('left') or '').strip()
+    right = (data.get('right') or '').strip()
+    if not left or not right:
+        return jsonify({'error': 'invalid_request',
+                        'message': 'Both vendor names are required.'}), 400
+    if left.upper() == right.upper():
+        return jsonify({'error': 'invalid_request',
+                        'message': 'That is the same name twice.'}), 400
+
+    db_manager.ensure_vendor_alias_tables()
+    if not db_manager.split_vendor_alias(left, right):
+        return jsonify({'error': 'save_failed',
+                        'message': "Couldn't save that."}), 500
+    return jsonify({'success': True, 'left': left, 'right': right}), 201
+
+
+@bp.route('/api/vendor-aliases/<kind>/<int:rule_id>', methods=['DELETE'])
+@login_required
+def delete_vendor_alias(kind, rule_id):
+    """Undo one ruling, handing that pair back to the name matcher."""
+    if kind not in ('link', 'split'):
+        return jsonify({'error': 'invalid_request'}), 400
+    if not db_manager.delete_vendor_alias_rule(kind, rule_id):
+        return jsonify({'error': 'not_found'}), 404
+    return jsonify({'success': True})
 
 
 @bp.route('/api/project-summary/date-range')

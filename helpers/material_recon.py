@@ -45,7 +45,7 @@ from difflib import SequenceMatcher
 
 from helpers.bill_reconcile import (
     MATERIAL_PURCHASE_CATEGORY,
-    VendorKey,
+    NO_ALIASES,
     vendor_anchors_agree,
     vendor_key,
     _VENDOR_DESCRIPTORS,
@@ -105,28 +105,34 @@ def is_material_purchase(category):
     return str(category or '').strip().upper() == MATERIAL_PURCHASE_CATEGORY
 
 
-def _match_score(a, b):
-    """How strongly two ``VendorKey``s name the same supplier (0.0 - 1.0).
+def _match_score(key, group, resolver=NO_ALIASES):
+    """How strongly a vendor name belongs to a group (0.0 - 1.0).
 
-    **Disagreeing anchors score zero, whatever else the names share.** "HARI OM
-    ROOFING INDUSTRIES" and "P&P ROOFING" share ROOFING and nothing that names
-    a supplier; letting that merge them hid a real conflict on project 664.
+    **A human "not the same supplier" ruling scores zero**, and outranks
+    everything below it — that is the whole point of recording one.
 
-    Once the anchors agree the pair is already accepted as one supplier, so the
+    **Disagreeing anchors also score zero, whatever else the names share.**
+    "HARI OM ROOFING INDUSTRIES" and "P&P ROOFING" share ROOFING and nothing
+    that names a supplier; letting that merge them hid a real conflict on
+    project 664.
+
+    Past those two gates the pair is already accepted as one supplier, so the
     rest is only ranking: a shared identifying token floors the score above the
     threshold, graded by how much of the two names overlap. That grading is
     what makes "best match" meaningful when several bill vendors share an
     anchor with one bank vendor.
     """
-    if not a.tokens or not b.tokens:
+    if not key.tokens or not group.tokens:
         return 0.0
-    if not vendor_anchors_agree(a.anchor, b.anchor):
+    if resolver.are_split((key.canon,), group.canons):
+        return 0.0
+    if not vendor_anchors_agree(key.anchor, group.anchor):
         return 0.0
     ratio = SequenceMatcher(None,
-                            ' '.join(sorted(a.tokens)),
-                            ' '.join(sorted(b.tokens))).ratio()
-    strong_a = a.tokens - _WEAK_VENDOR_TOKENS
-    strong_b = b.tokens - _WEAK_VENDOR_TOKENS
+                            ' '.join(sorted(key.tokens)),
+                            ' '.join(sorted(group.tokens))).ratio()
+    strong_a = key.tokens - _WEAK_VENDOR_TOKENS
+    strong_b = group.tokens - _WEAK_VENDOR_TOKENS
     shared = strong_a & strong_b
     if shared:
         overlap = len(shared) / len(strong_a | strong_b)
@@ -156,7 +162,7 @@ def _classify(billed, paid, tolerance):
 class _Group:
     """One supplier's two-sided ledger while it is being assembled."""
 
-    __slots__ = ('tokens', 'anchor', 'names', 'bills', 'txns')
+    __slots__ = ('tokens', 'anchor', 'canons', 'names', 'bills', 'txns')
 
     def __init__(self, key, name):
         self.tokens = set(key.tokens)
@@ -165,21 +171,23 @@ class _Group:
         # spelling add another anchor would rebuild the chaining the anchor
         # gate exists to prevent.
         self.anchor = key.anchor
+        # Every canonical spelling in this group, so a "not the same supplier"
+        # ruling against any of them vetoes the next candidate.
+        self.canons = {key.canon} if key.canon else set()
         self.names = [name]
         self.bills = []
         self.txns = []
 
-    @property
-    def key(self):
-        return VendorKey(frozenset(self.tokens), self.anchor)
-
     def admit(self, key, name):
         """Fold another spelling of this supplier into the group."""
         self.tokens |= key.tokens
+        if key.canon:
+            self.canons.add(key.canon)
         self.names.append(name)
 
     def absorb(self, other):
         self.tokens |= other.tokens
+        self.canons |= other.canons
         self.names.extend(other.names)
         self.bills.extend(other.bills)
         self.txns.extend(other.txns)
@@ -196,7 +204,7 @@ class _Group:
         return max(self.names, key=lambda n: (len(n), n)) if self.names else 'Unknown'
 
 
-def _group_bill_vendors(bill_rows):
+def _group_bill_vendors(bill_rows, resolver=NO_ALIASES):
     """Group purchase-bill rows by supplier.
 
     Distinct invoice spellings of one supplier ("BALU IRON PVT LTD" / "Balu
@@ -209,12 +217,12 @@ def _group_bill_vendors(bill_rows):
         seen_key = raw.upper()
         group = by_name.get(seen_key)
         if group is None:
-            key = vendor_key(raw)
+            key = vendor_key(raw, resolver)
             if key.tokens:
                 # Merge into the best-matching existing bill group, if any.
                 best, best_score = None, 0.0
                 for g in groups:
-                    score = _match_score(key, g.key)
+                    score = _match_score(key, g, resolver)
                     if score > best_score:
                         best, best_score = g, score
                 if best is not None and best_score >= _MATCH_THRESHOLD:
@@ -228,7 +236,7 @@ def _group_bill_vendors(bill_rows):
     return groups
 
 
-def _attach_bank_vendors(groups, bank_rows):
+def _attach_bank_vendors(groups, bank_rows, resolver=NO_ALIASES):
     """Attach each bank debit to its best-matching bill group, or a new one.
 
     A bank vendor never merges two bill groups: it picks the single strongest
@@ -243,11 +251,11 @@ def _attach_bank_vendors(groups, bank_rows):
         seen_key = raw.upper()
         group = by_name.get(seen_key)
         if group is None:
-            key = vendor_key(raw)
+            key = vendor_key(raw, resolver)
             if key.tokens:
                 best, best_score = None, 0.0
                 for g in billed_groups + unmatched:
-                    score = _match_score(key, g.key)
+                    score = _match_score(key, g, resolver)
                     if score > best_score:
                         best, best_score = g, score
                 if best is not None and best_score >= _MATCH_THRESHOLD:
@@ -271,6 +279,7 @@ def _txn_amount(row):
 
 
 def reconcile_material(bill_rows, bank_rows, *,
+                       resolver=NO_ALIASES,
                        tolerance_abs=DEFAULT_TOLERANCE_ABS,
                        tolerance_pct=DEFAULT_TOLERANCE_PCT):
     """Match one project's purchase bills against its bank material debits.
@@ -287,7 +296,8 @@ def reconcile_material(bill_rows, bank_rows, *,
     Returns ``{'summary': {...}, 'groups': [...]}`` with groups ordered
     conflicts-first by size of deviation — the auditor's work queue.
     """
-    groups = _attach_bank_vendors(_group_bill_vendors(bill_rows), bank_rows)
+    groups = _attach_bank_vendors(_group_bill_vendors(bill_rows, resolver),
+                                  bank_rows, resolver)
 
     out = []
     for g in groups:

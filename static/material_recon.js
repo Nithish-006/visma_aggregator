@@ -11,7 +11,8 @@
    and every rupee figure. This file owns presentation only — it must not
    re-derive a number, or the panel and the export could tell different stories.
 
-   Usage:  MaterialRecon.mount(el, payload, { onBillClick, project })
+   Usage:  MaterialRecon.mount(el, payload,
+                              { onBillClick, onRulingSaved, project })
    Styling lives in material_recon.css.
    ============================================================================ */
 window.MaterialRecon = (function () {
@@ -207,15 +208,50 @@ window.MaterialRecon = (function () {
         </div>`;
     }
 
-    function aliasHtml(group) {
-        if (!group.aliases || !group.aliases.length) return '';
-        // Vendor names are matched fuzzily, so what got merged into one row is
-        // shown rather than assumed — a wrong merge is a conflict in disguise.
-        return `<p class="mr-aliases">Also seen as ${group.aliases
-            .map(a => `<span>${escapeHtml(a)}</span>`).join(' ')}</p>`;
+    // Every spelling this row covers, canonical name first.
+    function namesOf(group) {
+        return [group.vendor].concat(group.aliases || []);
     }
 
-    function rowHtml(group, index, project) {
+    /* Who this row thinks the supplier is — and the two ways to correct it.
+       Suppliers are matched on their names, which is a guess, so the guess is
+       always shown and always reversible: each folded-in spelling can be split
+       back out, and any other row can be declared the same supplier. Both are
+       saved and outlive the page, because being asked the same question on
+       every visit is what makes people stop answering it. */
+    function identityHtml(group, index, allGroups) {
+        const canonical = escapeHtml(group.vendor);
+
+        const chips = (group.aliases || []).map(a => `
+            <span class="mr-alias">${escapeHtml(a)}<button type="button"
+                    class="mr-alias-split" data-alias="${escapeHtml(a)}"
+                    data-canonical="${canonical}"
+                    aria-label="Separate ${escapeHtml(a)} from ${canonical}"
+                    title="Not the same supplier — give ${escapeHtml(a)} its own row from now on">×</button></span>`).join(' ');
+
+        const aliasLine = chips
+            ? `<p class="mr-aliases">Also seen as ${chips}</p>`
+            : '';
+
+        const others = allGroups.filter(g => g.vendor !== group.vendor);
+        if (!others.length) return aliasLine;
+
+        const selectId = `mr-merge-${index}`;
+        const mergeLine = `
+            <div class="mr-merge">
+                <label class="mr-merge-label" for="${selectId}">Same supplier as</label>
+                <select class="mr-merge-pick" id="${selectId}">
+                    <option value="">another row…</option>
+                    ${others.map(o => `<option value="${escapeHtml(o.vendor)}">${escapeHtml(o.vendor)}</option>`).join('')}
+                </select>
+                <button type="button" class="mr-merge-go" data-canonical="${canonical}"
+                        title="Combine the two rows into one supplier, now and in future">Merge</button>
+            </div>`;
+
+        return aliasLine + mergeLine;
+    }
+
+    function rowHtml(group, index, project, allGroups) {
         const meta = STATUS[group.status] || STATUS.ok;
         const diff = Number(group.difference) || 0;
         // The headline figure is the deviation, signed the way the auditor
@@ -239,7 +275,7 @@ window.MaterialRecon = (function () {
             </button>
             <div class="mr-row-body" hidden>
                 <p class="mr-hint">${escapeHtml(group.hint || '')}</p>
-                ${aliasHtml(group)}
+                ${identityHtml(group, index, allGroups)}
                 ${txnListHtml(group)}
                 ${billListHtml(group)}
                 ${actionsHtml(group, project)}
@@ -394,11 +430,12 @@ window.MaterialRecon = (function () {
                     ${cleanNote}
                     ${chipsHtml(s, groups)}
                 </div>
-                <ul class="mr-list">${groups.map((g, i) => rowHtml(g, i, project)).join('')}</ul>
+                <ul class="mr-list">${groups.map((g, i) => rowHtml(g, i, project, groups)).join('')}</ul>
                 <p class="mr-foot">${pluralise(s.vendor_count || 0, 'supplier')} ·
                     ${pluralise(s.bill_count || 0, 'bill')} ·
-                    ${pluralise(s.txn_count || 0, 'payment')}. Suppliers are matched on name, so
-                    check the spellings listed inside a row before acting on it.</p>
+                    ${pluralise(s.txn_count || 0, 'payment')}. Suppliers are matched on name —
+                    open a row to see which spellings were folded together, and correct it
+                    there if the match is wrong.</p>
             </div>
         </section>`;
     }
@@ -432,7 +469,11 @@ window.MaterialRecon = (function () {
 
     /**
      * Render into `el` and wire up the interactions.
-     * opts: { project, onBillClick(billId) }
+     * opts: { project, onBillClick(billId), onRulingSaved() }
+     *
+     * onRulingSaved fires after the auditor corrects a supplier match; the
+     * caller should re-fetch and re-mount, because regrouping moves every
+     * total, status and row position on the panel.
      */
     function mount(el, data, opts) {
         if (!el) return;
@@ -495,6 +536,91 @@ window.MaterialRecon = (function () {
                 });
             });
         }
+
+        wireIdentityControls(panel, data, opts);
+    }
+
+    // ── Correcting who a supplier is ──────────────────────────────────
+
+    async function postRuling(url, body) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+            throw new Error(data.message || "Couldn't save that.");
+        }
+        return data;
+    }
+
+    function wireIdentityControls(panel, data, opts) {
+        const groups = (data && data.groups) || [];
+        const byVendor = new Map(groups.map(g => [g.vendor, g]));
+        // A saved ruling changes the grouping, so the panel has to be rebuilt
+        // from the server rather than patched here — the totals, statuses and
+        // ordering all move with it.
+        const reload = typeof opts.onRulingSaved === 'function'
+            ? opts.onRulingSaved : null;
+
+        function fail(btn, err) {
+            btn.disabled = false;
+            console.error('Vendor alias error:', err);
+            window.alert(err.message || "Couldn't save that.");
+        }
+
+        panel.querySelectorAll('.mr-alias-split').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const alias = btn.dataset.alias;
+                const canonical = btn.dataset.canonical;
+                if (!window.confirm(
+                    `Treat "${alias}" and "${canonical}" as different suppliers `
+                    + `from now on?\n\nThey will be listed as separate rows, on `
+                    + `this project and every other.`)) return;
+                btn.disabled = true;
+                try {
+                    await postRuling('/api/vendor-aliases/split',
+                        { left: alias, right: canonical });
+                    if (reload) reload();
+                } catch (err) { fail(btn, err); }
+            });
+        });
+
+        panel.querySelectorAll('.mr-merge-go').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const row = btn.closest('.mr-merge');
+                const pick = row && row.querySelector('.mr-merge-pick');
+                const other = pick && pick.value;
+                if (!other) return;
+
+                const here = byVendor.get(btn.dataset.canonical);
+                const there = byVendor.get(other);
+                if (!here || !there) return;
+
+                // Keep the fuller name as the supplier's — the same rule the
+                // server uses to label a group, so merging by hand doesn't
+                // rename a supplier the auditor already recognises.
+                const names = namesOf(here).concat(namesOf(there));
+                const canonical = names.reduce(
+                    (a, b) => (b.length > a.length ? b : a));
+                const aliases = names.filter(n => n !== canonical);
+
+                if (!window.confirm(
+                    `Treat these as one supplier, named "${canonical}"?\n\n`
+                    + aliases.map(a => `  • ${a}`).join('\n')
+                    + `\n\nTheir bills and payments will be reconciled together, `
+                    + `on this project and every other.`)) return;
+                btn.disabled = true;
+                try {
+                    await postRuling('/api/vendor-aliases/link',
+                        { aliases, canonical });
+                    if (reload) reload();
+                } catch (err) { fail(btn, err); }
+            });
+        });
     }
 
     return { render, mount };

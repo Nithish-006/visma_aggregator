@@ -24,6 +24,7 @@ from helpers.dataframe import (
     filter_by_project,
 )
 from helpers.projects import validate_project_value
+from helpers.vendor_aliases import get_vendor_alias_resolver
 from helpers.bill_reconcile import (
     build_bill_vendor_index, is_unbilled_material_purchase,
 )
@@ -383,15 +384,18 @@ def get_bank_transactions(bank_code):
         df_sorted = df.sort_values('date', ascending=ascending).head(limit)
 
     # Cross-check MATERIAL PURCHASE debits against purchase bills (kvb only).
+    aliases = get_vendor_alias_resolver()
     bill_index = build_bill_vendor_index(
-        db_manager.get_purchase_bill_vendors_by_project()) if bank_code == 'kvb' else {}
+        db_manager.get_purchase_bill_vendors_by_project(),
+        aliases) if bank_code == 'kvb' else {}
 
     transactions = []
     for idx, row in df_sorted.iterrows():
         dr_amount = float(row['DR Amount'])
         project = row.get('Project', '')
         no_bill_warning = dr_amount > 0 and is_unbilled_material_purchase(
-            row['Category'], project, row['Client/Vendor'], bill_index, bank_code)
+            row['Category'], project, row['Client/Vendor'], bill_index, bank_code,
+            aliases)
         transactions.append({
             'id': int(idx) if hasattr(idx, '__int__') else idx,
             'date': row['date'].strftime('%d %b %Y'),
@@ -434,7 +438,7 @@ def _filtered_bank_df(bank_code, category, project, vendor, start_date, end_date
     return df
 
 
-def _flagged_material_purchases(df, bill_index):
+def _flagged_material_purchases(df, bill_index, aliases):
     """Rows earning the no-corresponding-purchase-bill warning (kvb).
 
     Pre-narrows to MATERIAL PURCHASE debits before the vendor match, so the
@@ -448,7 +452,7 @@ def _flagged_material_purchases(df, bill_index):
         return mp
     mask = mp.apply(lambda r: is_unbilled_material_purchase(
         r.get('Category', ''), r.get('Project', ''), r.get('Client/Vendor', ''),
-        bill_index, 'kvb'), axis=1)
+        bill_index, 'kvb', aliases), axis=1)
     return mp[mask]
 
 
@@ -499,8 +503,10 @@ def get_bank_transactions_paginated(bank_code):
     only_warnings = str(request.args.get('only_warnings', '')).lower() in ('1', 'true', 'yes')
 
     # Cross-check MATERIAL PURCHASE debits against purchase bills (kvb only).
+    aliases = get_vendor_alias_resolver()
     bill_index = build_bill_vendor_index(
-        db_manager.get_purchase_bill_vendors_by_project()) if bank_code == 'kvb' else {}
+        db_manager.get_purchase_bill_vendors_by_project(),
+        aliases) if bank_code == 'kvb' else {}
 
     # Live count of no-bill material-purchase debits under the current filters,
     # and — when the "show only flagged" box is ticked — serve just those rows
@@ -509,7 +515,7 @@ def get_bank_transactions_paginated(bank_code):
     if bank_code == 'kvb':
         fdf = _filtered_bank_df(bank_code, category, project, vendor,
                                 start_date, end_date, search)
-        flagged = _flagged_material_purchases(fdf, bill_index)
+        flagged = _flagged_material_purchases(fdf, bill_index, aliases)
         warning_count = len(flagged)
 
         if only_warnings:
@@ -564,7 +570,8 @@ def get_bank_transactions_paginated(bank_code):
         net = cr_amount - dr_amount
         project = row['Project'] or ''
         no_bill_warning = dr_amount > 0 and is_unbilled_material_purchase(
-            row['Category'], project, row['Client/Vendor'], bill_index, bank_code)
+            row['Category'], project, row['Client/Vendor'], bill_index, bank_code,
+            aliases)
 
         transactions.append({
             'id': row['id'],

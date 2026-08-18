@@ -497,13 +497,86 @@
     color: var(--c-text-soft);
 }
 
-.mr-aliases span {
-    display: inline-block;
+.mr-aliases span,
+.mr-alias {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.18rem;
     margin: 0.1rem 0.2rem 0 0;
     padding: 0.05rem 0.32rem;
     border: 1px dashed var(--c-border-strong);
     border-radius: 5px;
     color: var(--c-text);
+}
+
+/* Splitting a wrongly-merged spelling back out. Deliberately quiet — the
+   match is usually right, so this must not read as a call to action; it is
+   there for the times the auditor spots that it isn't. */
+.mr-alias-split {
+    border: 0;
+    background: none;
+    padding: 0 0.1rem;
+    line-height: 1;
+    font-size: 0.85rem;
+    color: var(--c-text-soft);
+    cursor: pointer;
+    border-radius: 3px;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mr-alias-split:hover,
+.mr-alias-split:focus-visible {
+    color: var(--c-bad, #e5484d);
+    background: var(--c-surface-soft);
+}
+
+.mr-alias-split:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+/* The other half of the correction: declaring two rows one supplier. */
+.mr-merge {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.35rem;
+    font-size: 0.7rem;
+    color: var(--c-text-soft);
+}
+
+.mr-merge-pick {
+    flex: 1 1 8rem;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0.22rem 0.3rem;
+    border: 1px solid var(--c-border-strong);
+    border-radius: 6px;
+    background: var(--c-surface);
+    color: var(--c-text);
+    font-size: 0.7rem;
+}
+
+.mr-merge-go {
+    padding: 0.24rem 0.55rem;
+    border: 1px solid var(--c-border-strong);
+    border-radius: 6px;
+    background: var(--c-surface);
+    color: var(--c-text);
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.mr-merge-go:hover {
+    background: var(--c-surface-soft);
+}
+
+.mr-merge-go:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .mr-side-h {

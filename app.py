@@ -51,6 +51,7 @@ def create_app():
     # in lock-step, so the table must exist up front (DDL can't run inside the
     # write transactions without breaking their atomicity).
     db_manager.ensure_bill_allocations_table()
+    db_manager.ensure_vendor_alias_tables()
     db_manager.backfill_bill_allocations()
 
     # Load legacy data at startup (populates extensions.state.df_global)

@@ -141,8 +141,76 @@ _PHONETIC_SUBSTITUTIONS = (
 
 
 #: A vendor name reduced to what identifies it: the significant word tokens,
-#: plus the one ``anchor`` word naming *who* the supplier is.
-VendorKey = namedtuple('VendorKey', ('tokens', 'anchor'))
+#: the one ``anchor`` word naming *who* the supplier is, and ``canon`` — the
+#: normalised name after alias resolution, which is what a human decision is
+#: recorded against.
+VendorKey = namedtuple('VendorKey', ('tokens', 'anchor', 'canon'))
+
+
+def normalize_vendor_name(name):
+    """Whitespace- and case-normalised vendor name — the alias lookup key."""
+    return ' '.join(str(name or '').upper().split())
+
+
+class VendorAliasResolver:
+    """Human decisions about vendor identity, overriding the heuristic.
+
+    No rule read off the names alone can know that "PANDP" is the bank clerk's
+    spelling of "P&P ROOFING", or that "SURESH FAB/MANICKAM ASSOCIATES" leads
+    with a person rather than the firm. Those need a person to say so once —
+    and once said, the answer must stick rather than be re-guessed.
+
+    Two kinds of decision, and they are opposites, so the store never holds
+    both for the same pair:
+
+    * a **link** rewrites one spelling to the supplier it belongs to, before
+      any tokenising happens — so the alias then normalises, anchors and
+      matches exactly as the canonical name does, with no special case in the
+      matching itself;
+    * a **split** vetoes a pair the heuristic would otherwise merge.
+
+    Instances are immutable snapshots, built once per request and passed down.
+    The default :data:`NO_ALIASES` keeps this module pure and its tests free of
+    a database.
+    """
+
+    __slots__ = ('_links', '_splits')
+
+    def __init__(self, links=None, splits=None):
+        # {alias_norm: canonical_name} — the value keeps its original casing,
+        # because it is what the panel will show as the supplier's name.
+        self._links = {normalize_vendor_name(k): v
+                       for k, v in dict(links or {}).items()
+                       if normalize_vendor_name(k) and v}
+        # Unordered pairs of canonical norms that must never merge.
+        self._splits = {frozenset(pair) for pair in (splits or ())
+                        if len(set(pair)) == 2}
+
+    def canonical(self, name):
+        """The supplier name this spelling belongs to (itself, if unpinned)."""
+        return self._links.get(normalize_vendor_name(name), name)
+
+    def are_split(self, canons_a, canons_b):
+        """True when a human has said these two are different suppliers.
+
+        Takes collections because a group carries every spelling folded into
+        it: one "not the same supplier" ruling anywhere across the two sides
+        vetoes the merge, which is the cautious reading.
+        """
+        if not self._splits:
+            return False
+        for left in canons_a:
+            for right in canons_b:
+                if left != right and frozenset((left, right)) in self._splits:
+                    return True
+        return False
+
+    def __bool__(self):
+        return bool(self._links or self._splits)
+
+
+#: Shared empty resolver — the heuristic on its own, with no human overrides.
+NO_ALIASES = VendorAliasResolver()
 
 
 def project_id_from_tag(tag):
@@ -246,20 +314,30 @@ def vendor_anchors_agree(a, b):
             >= _SKELETON_RATIO_THRESHOLD)
 
 
-def vendor_key(name):
-    """``VendorKey`` for a raw vendor name — tokens plus identity anchor."""
-    return VendorKey(normalize_vendor_tokens(name), vendor_anchor(name))
+def vendor_key(name, resolver=NO_ALIASES):
+    """``VendorKey`` for a raw vendor name — tokens, anchor, canonical form.
+
+    A linked alias is rewritten to its supplier *first*, so everything
+    downstream sees the canonical name and needs no knowledge of aliases.
+    """
+    resolved = resolver.canonical(name)
+    return VendorKey(normalize_vendor_tokens(resolved),
+                     vendor_anchor(resolved),
+                     normalize_vendor_name(resolved))
 
 
-def vendor_keys_match(a, b):
+def vendor_keys_match(a, b, resolver=NO_ALIASES):
     """True when two ``VendorKey``s plausibly name the same vendor.
 
-    The anchors must agree — that is what stops a shared trade word from
+    A human "not the same supplier" ruling vetoes the pair outright. Otherwise
+    the anchors must agree — that is what stops a shared trade word from
     marrying two suppliers. Given agreeing anchors we stay lenient about the
     rest of the name, because the remainder is exactly where abbreviation
     noise lives ("Alpha Thread" vs "ALPHA THREAD ROLLING").
     """
     if not a.tokens or not b.tokens:
+        return False
+    if resolver.are_split((a.canon,), (b.canon,)):
         return False
     if not vendor_anchors_agree(a.anchor, b.anchor):
         return False
@@ -270,20 +348,24 @@ def vendor_keys_match(a, b):
     return SequenceMatcher(None, left, right).ratio() >= _FUZZY_RATIO_THRESHOLD
 
 
-def build_bill_vendor_index(bill_rows):
+def build_bill_vendor_index(bill_rows, resolver=NO_ALIASES):
     """Index purchase-bill vendors by project id: ``{id: [VendorKey, ...]}``.
 
     ``bill_rows`` is any iterable of dict-likes carrying ``project`` and
     ``vendor_name`` (e.g. rows from ``get_purchase_bill_vendors_by_project``
     or ``get_bills_for_canonical_project``). Vendors with no significant
     tokens are skipped.
+
+    Pass the same ``resolver`` here and to
+    :func:`is_unbilled_material_purchase`, or the two sides will disagree
+    about who a supplier is.
     """
     index = {}
     for row in bill_rows:
         pid = project_id_from_tag(row.get('project'))
         if not pid:
             continue
-        key = vendor_key(row.get('vendor_name'))
+        key = vendor_key(row.get('vendor_name'), resolver)
         if not key.tokens:
             continue
         index.setdefault(pid, []).append(key)
@@ -291,7 +373,7 @@ def build_bill_vendor_index(bill_rows):
 
 
 def is_unbilled_material_purchase(category, project_tag, vendor, bill_index,
-                                  bank_code='kvb'):
+                                  bank_code='kvb', resolver=NO_ALIASES):
     """True when this row deserves the NO-CORRESPONDING-PURCHASE-BILL warning.
 
     Flags only KVB ``MATERIAL PURCHASE`` rows whose project has purchase bills
@@ -310,7 +392,8 @@ def is_unbilled_material_purchase(category, project_tag, vendor, bill_index,
         # No bills for this project at all — can't distinguish a mis-tag from
         # bills-not-uploaded, so stay quiet.
         return False
-    key = vendor_key(vendor)
+    key = vendor_key(vendor, resolver)
     if not key.tokens:
         return False
-    return not any(vendor_keys_match(key, bill_key) for bill_key in bill_keys)
+    return not any(vendor_keys_match(key, bill_key, resolver)
+                   for bill_key in bill_keys)
