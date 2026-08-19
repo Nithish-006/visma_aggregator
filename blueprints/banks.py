@@ -568,9 +568,13 @@ def get_bank_transactions_paginated(bank_code):
         dr_amount = float(row['DR Amount'] or 0)
         cr_amount = float(row['CR Amount'] or 0)
         net = cr_amount - dr_amount
-        project = row['Project'] or ''
+        # Deliberately not named `project`: that name holds the project *filter*
+        # for this request, and rebinding it row by row left it pointing at the
+        # last row's project — which then pruned the dropdown options below as
+        # if the user had filtered by a project they never picked.
+        row_project = row['Project'] or ''
         no_bill_warning = dr_amount > 0 and is_unbilled_material_purchase(
-            row['Category'], project, row['Client/Vendor'], bill_index, bank_code,
+            row['Category'], row_project, row['Client/Vendor'], bill_index, bank_code,
             aliases)
 
         transactions.append({
@@ -587,7 +591,7 @@ def get_bank_transactions_paginated(bank_code):
             'cr_amount_formatted': format_indian_number(cr_amount) if cr_amount > 0 else '',
             'net': net,
             'net_formatted': format_indian_number(net),
-            'project': project,
+            'project': row_project,
             'no_bill_warning': no_bill_warning
         })
 
