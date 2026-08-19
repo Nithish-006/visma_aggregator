@@ -16,9 +16,13 @@ The model (verified against the client's own summary sheet):
                           forward, never a cost.
     cost total            material (purchase bills, gross) + other bank debits
                           + labour + GST extra + overhead.
-    third_party_total     of what the client paid us, the part we forwarded to
+    third_party_out       of what the client paid us, the part we forwarded to
                           someone else on their behalf (civil, design, transport)
-    net_received          received - third party (what actually stayed with us)
+    third_party_in        money a third party paid us against this project,
+                          settling part of the client's obligation directly
+    third_party_net       out - in (the net adjustment to the receipts)
+    net_received          received - out + in (what actually reached us and
+                          stayed with us)
     receivable            contract total - net received (what the client still
                           owes against our own work)
     cash_position         net received - cost total (money in hand vs money spent)
@@ -26,17 +30,32 @@ The model (verified against the client's own summary sheet):
     billed_profit         sales bills total - cost total (earned on invoices raised)
 
 Third-party payments are a **pass-through**, and that word decides where they do
-and don't appear. Money the client sends us earmarked for a civil contractor or
-a designer was never payment against our contract: it arrived in our account and
-left again, settling their obligation to someone else, not to us. So everything
-that asks "how much of this project has been paid for" reads the **net** —
-`receivable` and `cash_position` both. What is left owing on our own work is the
-contract less the part of the receipts that actually stayed with us.
+and don't appear. The ledger runs both ways:
+
+  * **Paid to a third party** (`third_party_out`). Money the client sends us
+    earmarked for a civil contractor or a designer was never payment against our
+    contract: it arrived in our account and left again, settling their obligation
+    to someone else, not to us.
+  * **Received from a third party** (`third_party_in`). Someone other than the
+    client — their financier, a main contractor, a sister firm — pays us against
+    this project. It discharges the client's obligation to us just as a payment
+    from the client would, so it counts as money received.
+
+So everything that asks "how much of this project has been paid for" reads the
+**net** — `receivable` and `cash_position` both. What is left owing on our own
+work is the contract less the part of the receipts that actually reached us and
+stayed with us.
 
 What the pass-through must never touch is the earning side. The money was ours
 neither to earn nor to spend, so it is not revenue and not a cost line:
 `profit`, `billed_profit` and `spend_total` don't see it at all, and it must
-never appear in `cost_lines`.
+never appear in `cost_lines`. That holds for the incoming leg too — it moves
+*when* and *whether* the contract gets paid, never what the job is worth.
+
+One caution on the incoming leg: it is for receipts the bank/cash ledgers don't
+already carry. A third-party credit that landed in KVB and was tagged to the
+project is already inside `received_total`; recording it here as well counts it
+twice.
 
 `receivable` and the three bottom-line figures answer different questions and
 must not be conflated. The client committed to the contract — the PO plus any
@@ -166,7 +185,8 @@ def resolve_contract(base, variations, actuals, *, has_actuals):
 def compute_project_finance(*, sales, purchase, po, received_total,
                             other_expense_total, labour_total, overhead,
                             other_cat_totals=None, has_sales_bills=None,
-                            has_po=None, third_party_total=0):
+                            has_po=None, third_party_total=0,
+                            third_party_in_total=0):
     """Return the full money picture for one project.
 
     sales / purchase: {'taxable', 'gst', 'total'} — summed bill figures.
@@ -185,10 +205,15 @@ def compute_project_finance(*, sales, purchase, po, received_total,
                       existence from `total > 0` would quietly hand such a
                       project back to the sales-bill rule.
     third_party_total: of `received_total`, the part paid straight on to a third
-                      party on the client's behalf. Subtracted from received to
-                      get the cash that actually stayed with us, which is what
-                      both `receivable` and `cash_position` are struck against;
-                      see the module docstring for why it touches nothing else.
+                      party on the client's behalf. Named without an `_out` for
+                      the callers that predate the two-way ledger; it is the
+                      out leg. Subtracted from received.
+    third_party_in_total: money received from a third party against this project
+                      and not already in `received_total`. Added to received.
+
+    The two together give the cash that actually reached us and stayed with us,
+    which is what both `receivable` and `cash_position` are struck against; see
+    the module docstring for why they touch nothing else.
     """
     sales_total = float(sales.get('total') or 0)
     po_total = float(po.get('total') or 0)
@@ -238,12 +263,17 @@ def compute_project_finance(*, sales, purchase, po, received_total,
     contract_total = po_total if has_po else value_total
     contract_source = 'po' if has_po else value_source
     # Gross, as the client paid it — then net, after the part forwarded straight
-    # on to a third party. Deliberately not clamped at zero: a third-party total
-    # exceeding what has been received is a real state — we paid the contractor
-    # ahead of the client paying us — and a negative net is the honest reading of
-    # it, not an error to hide.
+    # on to a third party and plus the part a third party paid us directly.
+    # Deliberately not clamped at zero: a third-party out total exceeding what has
+    # been received is a real state — we paid the contractor ahead of the client
+    # paying us — and a negative net is the honest reading of it, not an error to
+    # hide.
     received = float(received_total or 0)
-    third_party = float(third_party_total or 0)
+    third_party_out = float(third_party_total or 0)
+    third_party_in = float(third_party_in_total or 0)
+    # The single number the receipts are adjusted by. Positive = more went out
+    # than came in, so it reads as a deduction; negative = the reverse.
+    third_party = third_party_out - third_party_in
     net_received = received - third_party
     # Struck against the net, not the gross: money that came in earmarked for a
     # contractor and went straight back out never paid down our contract, so
@@ -314,7 +344,14 @@ def compute_project_finance(*, sales, purchase, po, received_total,
         },
         'receivable': receivable,
         'received_total': received,
-        'third_party_total': third_party,
+        # `third_party_total` is the OUT leg and always has been — readers that
+        # predate the incoming leg keep working and keep meaning what they meant.
+        # `third_party_net` is the one to use for "what did the ledger do to the
+        # receipts", since only it accounts for both directions.
+        'third_party_total': third_party_out,
+        'third_party_out_total': third_party_out,
+        'third_party_in_total': third_party_in,
+        'third_party_net': third_party,
         'net_received': net_received,
         'cash_position': cash_position,
         'profit': profit,

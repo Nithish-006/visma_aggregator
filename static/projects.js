@@ -70,12 +70,19 @@
     const cashAddBtn = document.getElementById('detail-cash-add');
     const cashError = document.getElementById('detail-cash-error');
     const cashListEl = document.getElementById('detail-cash-list');
-    // Third-party payments — the same ledger shape as cash, but money going the
-    // other way: out of what the client paid us, straight on to someone else.
+    // Third-party payments — the same ledger shape as cash, but two-directional:
+    // money out of what the client paid us straight on to someone else, and money
+    // someone else paid us against this project.
     const tpTotalEl = document.getElementById('detail-tp-total');
     const tpForm = document.getElementById('detail-tp-form');
     const tpToggleBtn = document.getElementById('detail-tp-toggle');
     const tpToggleLabel = document.getElementById('detail-tp-toggle-label');
+    const tpHint = document.getElementById('detail-tp-hint');
+    const tpDirRadios = () => Array.from(document.querySelectorAll('input[name="detail_tp_direction"]'));
+    const tpDirection = () => {
+        const on = tpDirRadios().find(r => r.checked);
+        return on && on.value === 'in' ? 'in' : 'out';
+    };
     const tpPayee = document.getElementById('detail-tp-payee');
     const tpPurpose = document.getElementById('detail-tp-purpose');
     const tpAmount = document.getElementById('detail-tp-amount');
@@ -179,24 +186,33 @@
                 hasReceived ? 'received' : 'muted',
                 'Client payments received', hasReceived ? received : null));
         }
-        // Only on the projects where money was passed on. Everywhere else the
-        // net equals the received figure beside it, and a cell restating its
+        // Only on the projects the third-party ledger touched. Everywhere else
+        // the net equals the received figure beside it, and a cell restating its
         // neighbour is noise on a card this dense.
-        const thirdParty = Number(p.third_party_total) || 0;
-        if (thirdParty > 0.5) {
+        const tpOut = Number(p.third_party_out_total ?? p.third_party_total) || 0;
+        const tpIn = Number(p.third_party_in_total) || 0;
+        const thirdParty = tpOut - tpIn;  // the net adjustment, either sign
+        const hasThirdParty = Math.abs(tpOut) > 0.5 || Math.abs(tpIn) > 0.5;
+        if (hasThirdParty) {
             const net = received - thirdParty;
+            // Both legs spelled out in the tooltip — a single net figure can't
+            // say whether it came from paying out or being paid.
+            const bits = [];
+            if (tpOut > 0.5) bits.push(`${formatINR(tpOut)} paid to third parties`);
+            if (tpIn > 0.5) bits.push(`${formatINR(tpIn)} received from third parties`);
             cells.push(financeCell('Net', formatINRCompact(net), 'received',
-                `For VISMA, after ${formatINR(thirdParty)} paid to third parties`, net));
+                `For VISMA, after ${bits.join(' and ')}`, net));
         }
         if (hasPoValue) {
             // Against the net, as everywhere else: money forwarded to a
-            // contractor never paid down the PO (helpers/project_finance).
+            // contractor never paid down the PO, and money a third party paid us
+            // did (helpers/project_finance).
             const bal = poValue - (received - thirdParty);
             const settled = bal <= 0.5;
             cells.push(financeCell('Balance', settled ? 'Settled' : formatINRCompact(bal),
                 settled ? 'settled' : 'due',
                 settled ? 'Fully received'
-                        : `Balance due (PO value − ${thirdParty > 0.5 ? 'net ' : ''}received)`,
+                        : `Balance due (PO value − ${hasThirdParty ? 'net ' : ''}received)`,
                 settled ? null : bal));
         }
         const financeBlock = cells.length ? `<div class="project-finance">${cells.join('')}</div>` : '';
@@ -676,14 +692,32 @@
     });
 
     // ── Third-party form reveal (+ Add) ────────────────
+    // Every label on the form is re-worded from the direction switch. The two
+    // directions ask for the same four facts but mean opposite things by them,
+    // and "Paid to" sitting above a receipt is how money gets booked backwards.
+    function syncTpDirection() {
+        const incoming = tpDirection() === 'in';
+        tpHint.textContent = incoming
+            ? 'Money someone other than the client paid us against this project — their financier, a main contractor. Added to the received total, exactly like a client payment. Only record it here if it is NOT already in the KVB statement or the cash ledger.'
+            : "Paid to someone else out of the client's money — civil, design, transport. Deducted from the received total to give what's left for our expenses. Not counted as a project expense.";
+        tpPayee.placeholder = incoming ? 'Received from (e.g. Sundaram Finance)' : 'Paid to (e.g. Suresh)';
+        tpPurpose.placeholder = incoming ? 'For (e.g. Part settlement)' : 'For (e.g. Civil works)';
+        tpDate.title = incoming ? 'Date received (optional)' : 'Date paid (optional)';
+        tpForm.classList.toggle('is-in', incoming);
+    }
+    tpDirRadios().forEach(r => r.addEventListener('change', syncTpDirection));
+
     function setTpFormOpen(on) {
         tpForm.classList.toggle('hidden', !on);
         tpToggleBtn.classList.toggle('active', on);
         tpToggleLabel.textContent = on ? 'Close' : 'Add payment';
-        if (on) setTimeout(() => {
-            tpForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            tpPayee.focus({ preventScroll: true });
-        }, 60);
+        if (on) {
+            syncTpDirection();
+            setTimeout(() => {
+                tpForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                tpPayee.focus({ preventScroll: true });
+            }, 60);
+        }
     }
     tpToggleBtn.addEventListener('click', () => {
         setTpFormOpen(tpForm.classList.contains('hidden'));
@@ -725,6 +759,9 @@
             insights.summary.received_cash = summary.received_cash;
             insights.summary.received_total = summary.received_total;
             insights.summary.third_party_total = summary.third_party_total;
+            insights.summary.third_party_out_total = summary.third_party_out_total;
+            insights.summary.third_party_in_total = summary.third_party_in_total;
+            insights.summary.third_party_net = summary.third_party_net;
             insights.summary.net_received = summary.received_net;
             // Struck against the net receipt and the contract, exactly as the
             // server does it (helpers/project_finance) — money that arrived
@@ -740,6 +777,9 @@
                 summary.received_net - (Number(insights.summary.spend_total) || 0);
             insights.payments.cash_total = summary.received_cash;
             insights.payments.third_party_total = summary.third_party_total;
+            insights.payments.third_party_out_total = summary.third_party_out_total;
+            insights.payments.third_party_in_total = summary.third_party_in_total;
+            insights.payments.third_party_net = summary.third_party_net;
             insights.payments.total = summary.received_total;
             insights.payments.net = summary.received_net;
         }
@@ -749,6 +789,9 @@
             cached.received_cash = summary.received_cash;
             cached.received_total = summary.received_total;
             cached.third_party_total = summary.third_party_total;
+            cached.third_party_out_total = summary.third_party_out_total;
+            cached.third_party_in_total = summary.third_party_in_total;
+            cached.third_party_net = summary.third_party_net;
             cached.received_net = summary.received_net;
             renderOverview(cached);
             renderList(); // keep the registry card's "Received" in sync
@@ -772,26 +815,35 @@
     // Client Payments tab. Cash figures come from the live ledger so an
     // add/delete updates them instantly.
     //
-    // When money has been passed on to a third party the strip carries the whole
-    // subtraction — gross, less what went out, equals what is ours — because the
-    // two totals are only meaningful next to each other. With nothing passed on
-    // it stays the original three chips rather than showing a zero deduction.
+    // When the third-party ledger has anything in it the strip carries the whole
+    // sum — gross, less what went out, plus what came in from elsewhere, equals
+    // what is ours — because those totals are only meaningful next to each other.
+    // Each leg appears only if it happened, so an empty ledger leaves the
+    // original three chips rather than showing two zeroes.
     function renderPayModes() {
         if (!insights) { payModesEl.innerHTML = ''; return; }
         const bank = insights.payments.bank;
         const bankTotal = Number(insights.payments.bank_total) || 0;
         const cashTotal = cashPayments.reduce((s, c) => s + (Number(c.amount) || 0), 0);
-        const tpTotal = thirdPartyPayments.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+        const tp = tpTotals();
         const gross = bankTotal + cashTotal;
-        const passThrough = tpTotal > 0.5 ? `
+        const hasTp = tp.out > 0.5 || tp.in > 0.5;
+        const outChip = tp.out > 0.5 ? `
             <div class="proj-chip deduct">
-                <span class="proj-chip-k">Less: third-party</span>
-                <span class="proj-chip-v">−${formatINR(tpTotal)}</span>
-                <span class="proj-chip-sub">${thirdPartyPayments.length} payment${thirdPartyPayments.length === 1 ? '' : 's'}</span>
-            </div>
+                <span class="proj-chip-k">Less: paid to third parties</span>
+                <span class="proj-chip-v">−${formatINR(tp.out)}</span>
+                <span class="proj-chip-sub">${tp.outCount} payment${tp.outCount === 1 ? '' : 's'}</span>
+            </div>` : '';
+        const inChip = tp.in > 0.5 ? `
+            <div class="proj-chip">
+                <span class="proj-chip-k">Add: received from third parties</span>
+                <span class="proj-chip-v">+${formatINR(tp.in)}</span>
+                <span class="proj-chip-sub">${tp.inCount} receipt${tp.inCount === 1 ? '' : 's'}</span>
+            </div>` : '';
+        const passThrough = hasTp ? `${outChip}${inChip}
             <div class="proj-chip accent">
                 <span class="proj-chip-k">Net for VISMA</span>
-                <span class="proj-chip-v">${formatINR(gross - tpTotal)}</span>
+                <span class="proj-chip-v">${formatINR(gross - tp.net)}</span>
                 <span class="proj-chip-sub">funds our expenses</span>
             </div>` : '';
         payModesEl.innerHTML = `
@@ -805,15 +857,30 @@
                 <span class="proj-chip-v">${formatINR(cashTotal)}</span>
                 <span class="proj-chip-sub">${cashPayments.length} entr${cashPayments.length === 1 ? 'y' : 'ies'}</span>
             </div>
-            <div class="proj-chip${tpTotal > 0.5 ? '' : ' accent'}">
+            <div class="proj-chip${hasTp ? '' : ' accent'}">
                 <span class="proj-chip-k">Total received</span>
                 <span class="proj-chip-v">${formatINR(gross)}</span>
-                ${tpTotal > 0.5 ? '<span class="proj-chip-sub">from the client</span>' : ''}
+                ${hasTp ? '<span class="proj-chip-sub">from the client</span>' : ''}
             </div>
             ${passThrough}`;
     }
 
     // ── Third-party payments ───────────────────────────
+    // One ledger, two directions. `tpTotals()` is the only place the split is
+    // computed on this page, so the chips, the header total, the reconciliation
+    // line and the value ladder can't disagree about which way it ran.
+    const isTpIncoming = (t) => t && t.direction === 'in';
+
+    function tpTotals() {
+        let out = 0, incoming = 0, outCount = 0, inCount = 0;
+        thirdPartyPayments.forEach(t => {
+            const amt = Number(t.amount) || 0;
+            if (isTpIncoming(t)) { incoming += amt; inCount++; }
+            else { out += amt; outCount++; }
+        });
+        return { out, in: incoming, net: out - incoming, outCount, inCount };
+    }
+
     function renderThirdPartyList(payments) {
         thirdPartyPayments = payments || [];
         renderThirdPartyHistory();
@@ -821,23 +888,29 @@
     }
 
     function renderThirdPartyHistory() {
-        const total = thirdPartyPayments.reduce((s, t) => s + (Number(t.amount) || 0), 0);
-        tpTotalEl.textContent = thirdPartyPayments.length
-            ? `${formatINR(total)} passed on` : '';
+        const t = tpTotals();
+        // Both legs named, never a bare net: "₹3L passed on" beside a list that
+        // also contains receipts would describe half the tab.
+        const parts = [];
+        if (t.out > 0.5) parts.push(`${formatINR(t.out)} passed on`);
+        if (t.in > 0.5) parts.push(`${formatINR(t.in)} received`);
+        tpTotalEl.textContent = parts.join(' · ');
         setSubTabCount('thirdparty', thirdPartyPayments.length);
 
-        // The subtraction restated on the tab that drives it. The receipts it
-        // comes out of live one tab over, so without this the reader has to hold
+        // The adjustment restated on the tab that drives it. The receipts it
+        // applies to live one tab over, so without this the reader has to hold
         // the gross figure in their head to make sense of the list.
         if (tpReconEl) {
             const gross = insights
                 ? (Number(insights.payments.bank_total) || 0)
                   + cashPayments.reduce((s, c) => s + (Number(c.amount) || 0), 0)
                 : null;
-            if (total > 0.5 && gross !== null) {
-                tpReconEl.innerHTML = `Client paid <b>${formatINR(gross)}</b>`
-                    + ` &minus; <b>${formatINR(total)}</b> passed on`
-                    + ` = <b class="net">${formatINR(gross - total)}</b> for VISMA's expenses.`;
+            if ((t.out > 0.5 || t.in > 0.5) && gross !== null) {
+                let line = `Client paid <b>${formatINR(gross)}</b>`;
+                if (t.out > 0.5) line += ` &minus; <b>${formatINR(t.out)}</b> passed on`;
+                if (t.in > 0.5) line += ` + <b>${formatINR(t.in)}</b> from third parties`;
+                line += ` = <b class="net">${formatINR(gross - t.net)}</b> received for this project.`;
+                tpReconEl.innerHTML = line;
                 tpReconEl.classList.remove('hidden');
             } else {
                 tpReconEl.classList.add('hidden');
@@ -845,24 +918,29 @@
         }
 
         if (!thirdPartyPayments.length) {
-            tpListEl.innerHTML = `<p class="proj-cash-empty">Nothing paid to a third party on this project. Add one when the client's money goes straight out to a contractor.</p>`;
+            tpListEl.innerHTML = `<p class="proj-cash-empty">Nothing recorded against a third party on this project. Add one when the client's money goes straight out to a contractor, or when someone other than the client pays us for this job.</p>`;
             return;
         }
         tpListEl.innerHTML = thirdPartyPayments.map(t => {
             const when = t.payment_date ? fmtDate(t.payment_date)
                 : (t.created_at ? fmtDate(String(t.created_at).slice(0, 10)) : '');
             const purpose = t.purpose || t.note || '';
+            const incoming = isTpIncoming(t);
+            const who = escapeHtml(t.payee || 'Third party');
+            const whoTitle = incoming
+                ? 'Received from a third party against this project — added to the received total'
+                : "Paid to a third party out of the client's money — deducted from the received total";
             return `
                 <div class="proj-cash-item">
                     <div class="proj-cash-item-main">
-                        <span class="proj-cash-item-amt is-out">−${formatINR(Number(t.amount) || 0)}
-                            <span class="proj-mode-badge tp" title="Paid to a third party out of the client's money">${escapeHtml(t.payee || 'Third party')}</span>
+                        <span class="proj-cash-item-amt ${incoming ? 'is-in' : 'is-out'}">${incoming ? '+' : '−'}${formatINR(Number(t.amount) || 0)}
+                            <span class="proj-mode-badge tp${incoming ? ' tp-in' : ''}" title="${whoTitle}">${incoming ? 'from ' : 'to '}${who}</span>
                         </span>
                         ${purpose ? `<span class="proj-cash-item-note" title="${escapeHtml(purpose)}">${escapeHtml(purpose)}</span>` : ''}
                     </div>
                     <div class="proj-cash-item-side">
                         ${when ? `<span class="proj-cash-item-date">${when}</span>` : ''}
-                        <button type="button" class="proj-cash-del" data-tp-id="${t.id}" title="Remove this payment" aria-label="Remove this payment">×</button>
+                        <button type="button" class="proj-cash-del" data-tp-id="${t.id}" title="Remove this entry" aria-label="Remove this entry">×</button>
                     </div>
                 </div>`;
         }).join('');
@@ -874,19 +952,25 @@
         tpError.classList.add('hidden');
         tpError.textContent = '';
 
+        const direction = tpDirection();
+        const incoming = direction === 'in';
         const payee = tpPayee.value.trim();
         if (!payee) {
-            tpError.textContent = 'Enter who the money was paid to.';
+            tpError.textContent = incoming ? 'Enter who the money came from.'
+                                           : 'Enter who the money was paid to.';
             tpError.classList.remove('hidden');
             return;
         }
         const amount = parseFloat(tpAmount.value);
         if (Number.isNaN(amount) || amount <= 0) {
+            // Always positive: the direction switch carries the sign, so a
+            // negative here would be a second, contradictory way to say it.
             tpError.textContent = 'Enter an amount greater than zero.';
             tpError.classList.remove('hidden');
             return;
         }
         const payload = {
+            direction,
             payee,
             amount,
             purpose: tpPurpose.value.trim() || null,
@@ -908,9 +992,12 @@
                 return;
             }
             tpForm.reset();
+            syncTpDirection();  // reset() puts the switch back to "out"
             setTpFormOpen(false);
             applyPaymentSummary(data);
-            showToast(`${formatINR(amount)} to ${payee} recorded as a third-party payment.`);
+            showToast(incoming
+                ? `${formatINR(amount)} from ${payee} added to the received total.`
+                : `${formatINR(amount)} to ${payee} recorded as a third-party payment.`);
         } catch (err) {
             tpError.textContent = `Network error: ${err.message}`;
             tpError.classList.remove('hidden');
@@ -925,7 +1012,10 @@
         if (!btn || !activeProjectId) return;
         const id = btn.dataset.tpId;
         if (!id) return;
-        if (!confirm('Remove this third-party payment? The full amount goes back into the received total.')) return;
+        const row = thirdPartyPayments.find(t => String(t.id) === String(id));
+        if (!confirm(isTpIncoming(row)
+            ? 'Remove this third-party receipt? The amount comes back out of the received total.'
+            : 'Remove this third-party payment? The full amount goes back into the received total.')) return;
         btn.disabled = true;
         try {
             const res = await fetch(`/api/projects/${activeProjectId}/third-party-payments/${id}`, {

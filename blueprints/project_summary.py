@@ -364,9 +364,9 @@ def get_project_summary_project_cards():
     from _attach_client_payments so the two pages can't disagree about what a
     project has been paid. This card used to sum credits across every bank and
     ignore cash, which made it quietly differ from the registry on both counts.
-    `income_net` nets off money passed straight on to a third party; see
-    helpers/project_finance for why that is a subtraction from cash in hand and
-    nothing else.
+    `income_net` applies the third-party ledger to that: less what was passed
+    straight on to a third party, plus what a third party paid us directly. See
+    helpers/project_finance for why those move cash in hand and nothing else.
     """
     db_manager.ensure_projects_table()
     registry = _attach_client_payments(db_manager.list_projects())
@@ -413,6 +413,7 @@ def get_project_summary_project_cards():
         t = totals.get(p['id'], {'expense': 0.0, 'count': 0})
         income = float(p.get('received_total') or 0)
         third_party = float(p.get('third_party_total') or 0)
+        third_party_in = float(p.get('third_party_in_total') or 0)
         income_net = float(p.get('received_net') or 0)
         cards.append({
             'id': p['id'],
@@ -424,6 +425,8 @@ def get_project_summary_project_cards():
             'income_formatted': format_indian_number(income),
             'third_party_total': third_party,
             'third_party_formatted': format_indian_number(third_party),
+            'third_party_in_total': third_party_in,
+            'third_party_in_formatted': format_indian_number(third_party_in),
             'income_net': income_net,
             'income_net_formatted': format_indian_number(income_net),
             'expense': t['expense'],

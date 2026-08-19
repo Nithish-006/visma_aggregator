@@ -153,12 +153,18 @@ def _attach_client_payments(projects):
     `received_total` is the sum of the two, which is what the cards and the
     payments-vs-PO view use.
 
-    Some of that money was never ours to spend: on jobs where the client settles
-    design or civil work through us, we forward part of the receipt straight to
-    the contractor. Those disbursements are summed as `third_party_total` and
-    subtracted to give `received_net` — the cash that actually funds the
-    project's own expenses. The gross figure stays, because the client's
-    obligation was discharged in full; see helpers/project_finance.
+    The third-party ledger then adjusts that in both directions:
+
+      * `third_party_out` — money the client paid us that we forwarded straight
+        to a contractor on their behalf. Never ours to spend, so it comes off.
+      * `third_party_in` — money a third party paid us against this project,
+        settling part of the client's obligation directly. Received all the
+        same, so it goes on.
+
+    `received_net` is `received_total - third_party_out + third_party_in` — what
+    actually reached us and funds the project's own expenses. The gross figure
+    stays alongside it, because it is still what came through the bank and the
+    cash box; see helpers/project_finance.
     """
     try:
         rows = db_manager.get_kvb_credit_by_project()
@@ -181,21 +187,27 @@ def _attach_client_payments(projects):
         cash_by_id = {}
 
     try:
-        third_party_by_id = db_manager.get_third_party_total_by_project()
+        third_party_by_id = db_manager.get_third_party_totals_by_project()
     except Exception as e:
         print(f"[!] Could not load third-party payments: {e}")
         third_party_by_id = {}
 
+    empty_tp = {'out': 0.0, 'in': 0.0, 'net': 0.0}
     for p in projects:
         pid = p.get('id')
         bank = bank_by_id.get(pid, 0.0)
         cash = cash_by_id.get(pid, 0.0)
-        third_party = third_party_by_id.get(pid, 0.0)
+        tp = third_party_by_id.get(pid, empty_tp)
         p['received_bank'] = bank
         p['received_cash'] = cash
         p['received_total'] = bank + cash
-        p['third_party_total'] = third_party
-        p['received_net'] = (bank + cash) - third_party
+        # `third_party_total` stays the OUT leg, unchanged in meaning for every
+        # reader that predates the incoming one.
+        p['third_party_total'] = tp['out']
+        p['third_party_out_total'] = tp['out']
+        p['third_party_in_total'] = tp['in']
+        p['third_party_net'] = tp['net']
+        p['received_net'] = (bank + cash) - tp['net']
     return projects
 
 
@@ -403,6 +415,9 @@ def _payment_summary(project_id):
         'received_cash': enriched.get('received_cash', 0.0),
         'received_total': enriched.get('received_total', 0.0),
         'third_party_total': enriched.get('third_party_total', 0.0),
+        'third_party_out_total': enriched.get('third_party_out_total', 0.0),
+        'third_party_in_total': enriched.get('third_party_in_total', 0.0),
+        'third_party_net': enriched.get('third_party_net', 0.0),
         'received_net': enriched.get('received_net', 0.0),
     }
 
@@ -483,13 +498,18 @@ def api_list_third_party_payments(project_id):
 @bp.route('/api/projects/<int:project_id>/third-party-payments', methods=['POST'])
 @login_required
 def api_add_third_party_payment(project_id):
-    """Record money paid on the client's behalf out of what they paid us.
+    """Record one third-party ledger entry, in either direction.
 
-    JSON body: { "payee": str (required),
-                 "amount": number (required, > 0),
+    JSON body: { "direction": "out" | "in" (optional, default "out"),
+                 "payee": str (required — who it went to, or came from),
+                 "amount": number (required, > 0 — the sign is the direction's job),
                  "purpose": str (optional, e.g. "Civil works"),
                  "payment_date": "YYYY-MM-DD" (optional),
                  "note": str (optional) }
+
+    "out" is money paid on the client's behalf out of what they paid us, and
+    comes off the received total. "in" is money a third party paid us against
+    this project, and goes on to it.
     """
     db_manager.ensure_projects_table()
     if not db_manager.get_project(project_id):
@@ -497,10 +517,20 @@ def api_add_third_party_payment(project_id):
 
     data = request.get_json(silent=True) or {}
 
-    payee = (data.get('payee') or '').strip()
+    direction = str(data.get('direction') or 'out').strip().lower()
+    if direction not in ('out', 'in'):
+        return jsonify({'error': 'invalid_direction',
+                        'message': 'Direction must be "out" (paid to a third '
+                                   'party) or "in" (received from one).'}), 400
+
+    # One column, two readings: the payee of an outgoing payment, the payer of an
+    # incoming one. Callers may send either name for it.
+    payee = (data.get('payee') or data.get('payer') or '').strip()
     if not payee:
         return jsonify({'error': 'invalid_payee',
-                        'message': 'Enter who the money was paid to.'}), 400
+                        'message': ('Enter who the money came from.'
+                                    if direction == 'in'
+                                    else 'Enter who the money was paid to.')}), 400
 
     try:
         amount = float(data.get('amount'))
@@ -516,7 +546,7 @@ def api_add_third_party_payment(project_id):
     payment_date = (data.get('payment_date') or '').strip() or None
 
     ok, err, new_id = db_manager.add_third_party_payment(
-        project_id, payee, amount, purpose, payment_date, note)
+        project_id, payee, amount, purpose, payment_date, note, direction)
     if not ok:
         if err == 'project_not_found':
             return jsonify({'error': 'not_found'}), 404
@@ -600,11 +630,16 @@ def api_project_insights(project_id):
     cash_total = sum(float(c.get('amount') or 0) for c in cash_payments)
     received_total = bank_total + cash_total
 
-    # Of that receipt, the part forwarded straight on to a third party. Not an
-    # expense — it never funded our work — so it stays out of the buckets below
-    # and only nets down what is in hand. See helpers/project_finance.
+    # The third-party ledger, both directions. Neither leg is an expense or
+    # revenue — the outgoing never funded our work, the incoming is a receipt
+    # rather than an earning — so both stay out of the buckets below and only
+    # move what is in hand. See helpers/project_finance.
     third_party_payments = db_manager.list_third_party_payments(project_id)
-    third_party_total = sum(float(t.get('amount') or 0) for t in third_party_payments)
+    third_party_out_total = sum(float(t.get('amount') or 0) for t in third_party_payments
+                                if t.get('direction') != 'in')
+    third_party_in_total = sum(float(t.get('amount') or 0) for t in third_party_payments
+                               if t.get('direction') == 'in')
+    third_party_net = third_party_out_total - third_party_in_total
 
     # ── Expenses: debit transactions tagged with this project, all banks ──
     expense_rows = []
@@ -698,7 +733,8 @@ def api_project_insights(project_id):
             'gst': project.get('po_total_tax'),
             'total': po_value},
         received_total=received_total,
-        third_party_total=third_party_total,
+        third_party_total=third_party_out_total,
+        third_party_in_total=third_party_in_total,
         other_expense_total=other_expense_total,
         labour_total=labour_total,
         overhead=project.get('overhead'),
@@ -732,9 +768,12 @@ def api_project_insights(project_id):
             'third_party': third_party_payments,
             'bank_total': bank_total,
             'cash_total': cash_total,
-            'third_party_total': third_party_total,
+            'third_party_total': third_party_out_total,
+            'third_party_out_total': third_party_out_total,
+            'third_party_in_total': third_party_in_total,
+            'third_party_net': third_party_net,
             'total': received_total,
-            'net': received_total - third_party_total,
+            'net': received_total - third_party_net,
         },
         'expenses': {
             'transactions': expense_rows,

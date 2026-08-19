@@ -509,13 +509,16 @@
     }
 
     function landingCardHtml(c) {
-        // Only on the projects where money was passed straight on to a third
-        // party. Everywhere else Net equals the Income beside it, and a cell
-        // restating its neighbour is noise on a card this dense — the same rule
-        // the registry card follows.
+        // Only on the projects the third-party ledger touched. Everywhere else
+        // Net equals the Income beside it, and a cell restating its neighbour is
+        // noise on a card this dense — the same rule the registry card follows.
         const thirdParty = Number(c.third_party_total) || 0;
-        const netCell = thirdParty > 0.5
-            ? `<div class="ps-proj-fin-cell"><span class="k">Net</span><span class="v income" title="For VISMA, after ${escapeHtml(c.third_party_formatted)} paid to third parties">${formatINRCompact(c.income_net)}</span></div>`
+        const thirdPartyIn = Number(c.third_party_in_total) || 0;
+        const bits = [];
+        if (thirdParty > 0.5) bits.push(`${c.third_party_formatted} paid to third parties`);
+        if (thirdPartyIn > 0.5) bits.push(`${c.third_party_in_formatted} received from third parties`);
+        const netCell = bits.length
+            ? `<div class="ps-proj-fin-cell"><span class="k">Net</span><span class="v income" title="For VISMA, after ${escapeHtml(bits.join(' and '))}">${formatINRCompact(c.income_net)}</span></div>`
             : '';
         return `
             <button type="button" class="ps-proj-card${isCardClosed(c) ? ' is-closed' : ''}" data-display="${escapeHtml(c.display)}"

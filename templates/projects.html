@@ -13,7 +13,7 @@
     <!-- project_glance.* is shared with the project summary page and must load
          first: it owns the --proj-* aliases projects.css builds on. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='project_glance.css') }}?v=5">
-    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=15">
+    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=16">
 </head>
 
 <body>
@@ -332,12 +332,14 @@
 
                     </div><!-- /subtab: payments -->
 
-                    <!-- Money the client paid us that we passed straight on to a
-                         third party (civil, design, transport). Its own sub-tab:
-                         it is a subtraction from the receipts, not a project
-                         expense, so it belongs beside them rather than inside
-                         either list. The "Less: third-party payments" rung in the
-                         Project value ladder deep-links here. -->
+                    <!-- The third-party ledger, both directions: money the client
+                         paid us that we passed straight on to someone else
+                         (civil, design, transport), and money someone else paid
+                         us against this project. Its own sub-tab: neither leg is
+                         a project expense or an earning — they only move the
+                         receipts — so they belong beside the payment lists
+                         rather than inside either. The "Less/Add: third-party"
+                         rungs in the Project value ladder deep-link here. -->
                     <div id="detail-tp" class="proj-cash proj-tp proj-tab-content hidden" data-subtab-panel="thirdparty">
                         <div class="proj-cash-head">
                             <span class="proj-field-label">Third-Party Payments</span>
@@ -347,7 +349,20 @@
                             </button>
                         </div>
                         <form id="detail-tp-form" class="proj-cash-form hidden">
-                            <p class="proj-cash-hint">Paid to someone else out of the client's money — civil, design, transport. Deducted from the received total to give what's left for our expenses. Not counted as a project expense.</p>
+                            <!-- Direction first, because it decides what every field
+                                 below it means and which way the amount moves the
+                                 received total. -->
+                            <div class="proj-type-toggle proj-tp-dir" role="radiogroup" aria-label="Direction of the third-party payment">
+                                <label class="proj-type-option">
+                                    <input type="radio" name="detail_tp_direction" value="out" checked>
+                                    <span>Paid to third party</span>
+                                </label>
+                                <label class="proj-type-option">
+                                    <input type="radio" name="detail_tp_direction" value="in">
+                                    <span>Received from third party</span>
+                                </label>
+                            </div>
+                            <p class="proj-cash-hint" id="detail-tp-hint">Paid to someone else out of the client's money — civil, design, transport. Deducted from the received total to give what's left for our expenses. Not counted as a project expense.</p>
                             <div class="proj-cash-form-row proj-tp-form-row">
                                 <input id="detail-tp-payee" class="proj-input" type="text" placeholder="Paid to (e.g. Suresh)" autocomplete="off">
                                 <input id="detail-tp-purpose" class="proj-input" type="text" placeholder="For (e.g. Civil works)" autocomplete="off">
@@ -377,8 +392,8 @@
     <!-- Toast -->
     <div id="proj-toast" class="proj-toast hidden"></div>
 
-    <script src="{{ url_for('static', filename='project_glance.js') }}?v=5"></script>
-    <script src="{{ url_for('static', filename='projects.js') }}?v=15"></script>
+    <script src="{{ url_for('static', filename='project_glance.js') }}?v=6"></script>
+    <script src="{{ url_for('static', filename='projects.js') }}?v=16"></script>
 </body>
 
 </html>

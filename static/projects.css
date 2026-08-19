@@ -854,6 +854,10 @@ html, body {
 }
 /* An amount leaving again rather than arriving. */
 .proj-cash-item-amt.is-out { color: var(--proj-danger); }
+/* The incoming leg of the third-party ledger. Same list, opposite sign, so it
+   takes the receipt colour — the row's own sign is the fastest way to read
+   which way a given entry moved the received total. */
+.proj-cash-item-amt.is-in { color: var(--proj-success); }
 
 /* The third-party ledger is its own sub-tab now, so it needs no rule to divide
    it from anything — but it does need to restate the subtraction it belongs to,
@@ -1351,6 +1355,23 @@ html, body {
     outline-offset: 1px;
 }
 
+/* Direction switch on the third-party form. Same segmented control as the type
+   toggle, but the two segments are opposites rather than siblings, so each takes
+   the colour of the direction it means: out is a deduction, in is a receipt.
+   Anyone who mis-reads this control books money the wrong way, so the colour has
+   to carry the meaning as loudly as the words do. */
+.proj-tp-dir {
+    margin-bottom: 0.6rem;
+}
+.proj-tp-dir .proj-type-option input[value="out"]:checked + span {
+    background: linear-gradient(135deg, #f87171 0%, var(--proj-danger) 100%);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+}
+.proj-tp-dir .proj-type-option input[value="in"]:checked + span {
+    background: linear-gradient(135deg, #4ade80 0%, var(--proj-success) 100%);
+    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.25);
+}
+
 .proj-type-hint {
     margin: 0.5rem 0 0;
     font-size: 0.76rem;
@@ -1711,14 +1732,19 @@ html, body {
     background: var(--proj-success-soft);
     color: var(--proj-success);
 }
-/* The payee on a third-party row. Not a mode like Bank/Cash — it names who the
-   money went to, so it carries the outflow colour rather than an income one,
-   and keeps its own casing because it's a name, not a label. */
+/* The counterparty on a third-party row. Not a mode like Bank/Cash — it names
+   who the money went to or came from, so it carries that leg's direction colour
+   rather than a neutral one, and keeps its own casing because it's a name, not
+   a label. */
 .proj-mode-badge.tp {
     background: var(--proj-danger-soft, rgba(220, 38, 38, 0.12));
     color: var(--proj-danger);
     text-transform: none;
     letter-spacing: 0.01em;
+}
+.proj-mode-badge.tp-in {
+    background: var(--proj-success-soft);
+    color: var(--proj-success);
 }
 
 /* Bank badge in the expenses table: Axis red, KVB green */

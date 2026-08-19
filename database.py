@@ -3144,18 +3144,26 @@ class DatabaseManager:
     def ensure_project_third_party_table(self):
         """Create the project_third_party_payments ledger (N:1 with projects).
 
-        Not every rupee the client pays us is ours to spend. On some jobs the
-        client settles design or civil work through us: the money lands in our
-        account as a client payment, and we pay the contractor directly. Only
-        what is left funds the project's own expenses.
+        Not every rupee the client pays us is ours to spend, and not every rupee
+        we receive for a job comes from the client. The ledger runs both ways,
+        and `direction` says which:
 
-        Each such disbursement is one row here. It is a pass-through, not an
-        expense — see helpers/project_finance for why it is subtracted from the
-        received total but never enters the cost breakdown.
+          'out' — PAID TO a third party. The client settles design or civil work
+                  through us: the money lands in our account as a client payment
+                  and we pay the contractor directly. Only what is left funds the
+                  project's own expenses, so it is subtracted from received.
+          'in'  — RECEIVED FROM a third party. Someone else settles part of the
+                  client's obligation to us directly. It is money received
+                  against this project just as a client payment is, so it is
+                  added to received.
 
-        `payee` is required because the whole point of the row is *who* the
-        money went to; a nameless deduction is indistinguishable from a
-        bookkeeping error six months later.
+        Both are pass-throughs in the same sense: neither is an expense and
+        neither is revenue in its own right — see helpers/project_finance for why
+        they move the received total and nothing else.
+
+        `payee` is required in either direction because the whole point of the
+        row is *who* the money went to or came from; a nameless adjustment is
+        indistinguishable from a bookkeeping error six months later.
         """
         try:
             with self.get_connection() as conn:
@@ -3164,6 +3172,7 @@ class DatabaseManager:
                     CREATE TABLE IF NOT EXISTS project_third_party_payments (
                         id           INT AUTO_INCREMENT PRIMARY KEY,
                         project_id   INT NOT NULL,
+                        direction    VARCHAR(3) NOT NULL DEFAULT 'out',
                         payee        VARCHAR(200) NOT NULL,
                         purpose      VARCHAR(500) DEFAULT NULL,
                         amount       DECIMAL(15, 2) NOT NULL,
@@ -3175,6 +3184,20 @@ class DatabaseManager:
                             REFERENCES projects(id) ON DELETE CASCADE
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """)
+                # Additive migration: the ledger was one-way (money paid out) until
+                # incoming third-party receipts were added. Every pre-existing row
+                # is a payment out, which is exactly what the DEFAULT gives them.
+                cursor.execute(
+                    "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                    "WHERE TABLE_SCHEMA = DATABASE() "
+                    "AND TABLE_NAME = 'project_third_party_payments' "
+                    "AND COLUMN_NAME = 'direction'"
+                )
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute(
+                        "ALTER TABLE project_third_party_payments "
+                        "ADD COLUMN direction VARCHAR(3) NOT NULL DEFAULT 'out' AFTER project_id"
+                    )
                 cursor.close()
                 return True
         except Exception as e:
@@ -3363,33 +3386,54 @@ class DatabaseManager:
             print(f"[!] Error deleting vendor alias rule: {e}")
             return False
 
-    def get_third_party_total_by_project(self) -> Dict[int, float]:
-        """Sum third-party disbursements grouped by project id.
+    def get_third_party_totals_by_project(self) -> Dict[int, Dict[str, float]]:
+        """Sum the third-party ledger per project, split by direction.
 
-        Returns {project_id: total}. Mirrors get_cash_total_by_project — the
-        registry list needs one query for every project, not one per card.
+        Returns {project_id: {'out': paid to third parties,
+                              'in':  received from third parties,
+                              'net': out - in}}.
+
+        `net` is the figure that comes off the received total, so a project whose
+        incoming third-party receipts outweigh its disbursements carries a
+        negative net — an addition, which is the point of the two-way ledger.
+
+        Mirrors get_cash_total_by_project — the registry list needs one query for
+        every project, not one per card.
         """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT project_id, COALESCE(SUM(amount), 0) "
+                    "SELECT project_id, "
+                    "COALESCE(SUM(CASE WHEN direction = 'in' THEN 0 ELSE amount END), 0), "
+                    "COALESCE(SUM(CASE WHEN direction = 'in' THEN amount ELSE 0 END), 0) "
                     "FROM project_third_party_payments GROUP BY project_id"
                 )
                 rows = cursor.fetchall()
                 cursor.close()
-                return {int(r[0]): float(r[1] or 0) for r in rows}
+                out = {}
+                for pid, paid_out, paid_in in rows:
+                    paid_out, paid_in = float(paid_out or 0), float(paid_in or 0)
+                    out[int(pid)] = {'out': paid_out, 'in': paid_in,
+                                     'net': paid_out - paid_in}
+                return out
         except Exception as e:
             print(f"[!] Error fetching third-party totals by project: {e}")
             return {}
 
     def list_third_party_payments(self, project_id: int) -> List[Dict]:
-        """Return individual third-party payment rows for a project, newest first."""
+        """Return individual third-party payment rows for a project, newest first.
+
+        Each row carries its `direction` ('out' paid to / 'in' received from) —
+        the two are one ledger because they are one question, "what did this
+        project's receipts actually come to", asked in both directions.
+        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
                 cursor.execute(
-                    "SELECT id, project_id, payee, purpose, amount, payment_date, note, created_at "
+                    "SELECT id, project_id, direction, payee, purpose, amount, "
+                    "payment_date, note, created_at "
                     "FROM project_third_party_payments WHERE project_id = %s "
                     "ORDER BY COALESCE(payment_date, DATE(created_at)) DESC, id DESC",
                     (project_id,)
@@ -3398,6 +3442,7 @@ class DatabaseManager:
                 cursor.close()
                 for r in rows:
                     r['amount'] = float(r['amount'] or 0)
+                    r['direction'] = 'in' if r.get('direction') == 'in' else 'out'
                     for col in ('payment_date', 'created_at'):
                         if r.get(col) and hasattr(r[col], 'isoformat'):
                             r[col] = r[col].isoformat()
@@ -3408,17 +3453,24 @@ class DatabaseManager:
 
     def add_third_party_payment(self, project_id: int, payee: str, amount: float,
                                 purpose: str = None, payment_date=None,
-                                note: str = None) -> Tuple[bool, Optional[str], Optional[int]]:
-        """Record one third-party disbursement. Returns (ok, error, new_id)."""
+                                note: str = None, direction: str = 'out'
+                                ) -> Tuple[bool, Optional[str], Optional[int]]:
+        """Record one third-party ledger entry. Returns (ok, error, new_id).
+
+        `direction` is 'out' (paid to a third party) or 'in' (received from one);
+        anything else is read as 'out', the historical meaning of the ledger.
+        Amounts are always stored positive — the direction carries the sign.
+        """
         try:
+            direction = 'in' if str(direction or '').lower() == 'in' else 'out'
             pay_date = self._parse_po_date(payment_date) if payment_date else None
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "INSERT INTO project_third_party_payments "
-                    "(project_id, payee, purpose, amount, payment_date, note) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
-                    (project_id, payee, purpose, amount, pay_date, note)
+                    "(project_id, direction, payee, purpose, amount, payment_date, note) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (project_id, direction, payee, purpose, amount, pay_date, note)
                 )
                 conn.commit()
                 new_id = cursor.lastrowid

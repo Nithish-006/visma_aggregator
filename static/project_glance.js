@@ -80,10 +80,19 @@ window.ProjectGlance = (function () {
         const rec = Number((s ? s.received_total : p.received_total)) || 0;
         const bank = Number((s ? s.received_bank : p.received_bank)) || 0;
         const cash = Number((s ? s.received_cash : p.received_cash)) || 0;
-        // Of what the client paid, the part forwarded straight on to someone
-        // else (civil, design, transport). A pass-through: it leaves the cash
-        // in hand but not what the client owes. See helpers/project_finance.
-        const thirdParty = Number((s ? s.third_party_total : p.third_party_total)) || 0;
+        // The third-party ledger, both ways: of what the client paid, the part
+        // forwarded straight on to someone else (civil, design, transport), and
+        // money someone other than the client paid us against this project.
+        // Pass-throughs both: they move the cash in hand and what the client
+        // still owes, and nothing else. See helpers/project_finance.
+        const pick = (key) => Number((s ? s[key] : p[key])) || 0;
+        const tpOut = Number((s ? (s.third_party_out_total ?? s.third_party_total)
+                                : (p.third_party_out_total ?? p.third_party_total))) || 0;
+        const tpIn = pick('third_party_in_total');
+        // The net adjustment to the receipts. Positive = more passed on than
+        // came in, so it reads as a deduction; negative = the reverse.
+        const thirdParty = tpOut - tpIn;
+        const hasThirdParty = tpOut > 0.5 || tpIn > 0.5;
         const netRec = rec - thirdParty;
         const po = Number(p.po_total_value) || 0;
 
@@ -182,7 +191,7 @@ window.ProjectGlance = (function () {
         const netDrawer = s ? `
             <div class="proj-net-drawer" data-glance-panel="net" hidden>
                 ${nRow('Net Position',
-                       `${formatINRCompact(netRec)} ${thirdParty > 0.5 ? 'net received' : 'received'} − ${formatINRCompact(spend)} cost · cash in hand against cash spent`,
+                       `${formatINRCompact(netRec)} ${hasThirdParty ? "net received" : "received"} − ${formatINRCompact(spend)} cost · cash in hand against cash spent`,
                        cashPosition)}
                 ${nRow(fromPo ? 'Profit (contract)' : 'Profit (billed — no PO)',
                        `${formatINRCompact(contract)} ${contractLabel} − ${formatINRCompact(spend)} cost · what the job earns, however much is invoiced`,
@@ -200,7 +209,7 @@ window.ProjectGlance = (function () {
                     <div class="proj-hero-cell">
                         <span class="proj-hero-k">${dueLabel}</span>
                         <span class="proj-hero-v ${dueCls}">${formatINR(Math.abs(receivable))}</span>
-                        <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received${thirdParty > 0.5 ? ', net' : ''}` : '&nbsp;'}</span>
+                        <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received${hasThirdParty ? ", net" : ""}` : '&nbsp;'}</span>
                     </div>
                     ${expensesCell}
                     ${netCell}
@@ -270,24 +279,39 @@ window.ProjectGlance = (function () {
             ladderRows += lHead('Billed', 'no PO yet — from sales bills');
             ladderRows += lRow('Total', contract, 'is-sub is-total');
         }
-        // The pass-through, spelled out as a subtraction in the sequence the
-        // client reads it in: they paid us X, we passed on Y, we have Z. It gets
-        // its own head and indent — the same blocked shape as the contract rungs
-        // — so that on a project carrying both variations and actuals the three
+        // The pass-through, spelled out in the sequence the client reads it in:
+        // they paid us X, we passed on Y, someone else paid us Z, we have W. It
+        // gets its own head and indent — the same blocked shape as the contract
+        // rungs — so that on a project carrying both variations and actuals the
         // receipt lines still read as one block instead of trailing off the end
-        // of a fifteen-row ladder. With nothing passed on it stays the single
-        // row it was, rather than a head and two lines saying nothing happened.
-        if (thirdParty > 0.5) {
-            ladderRows += lHead('Received', 'less what we passed on');
+        // of a fifteen-row ladder. With an untouched ledger it stays the single
+        // row it was, rather than a head and lines saying nothing happened.
+        if (hasThirdParty) {
+            // The head names only the legs that actually happened — "less what we
+            // passed on" over a project that only ever received from a third
+            // party describes the opposite of what the rows below it show.
+            const headNote = tpOut > 0.5 && tpIn > 0.5
+                ? 'third-party payments both ways'
+                : (tpOut > 0.5 ? 'less what we passed on' : 'plus what a third party paid us');
+            ladderRows += lHead('Received', headNote);
             ladderRows += lRow('Payments received', rec, 'is-sub', formatINR, splitNote);
             // Deep-links to the Ledger → Third-party payments tab, but only
             // where something is listening for it (the registry modal). The
             // summary page renders the same ladder with no tabs to jump to.
-            const tpLabel = (opts && opts.linkThirdParty)
+            const tpLink = (text, title) => ((opts && opts.linkThirdParty)
                 ? `<button type="button" class="proj-ladder-link" data-glance-goto="third-party"
-                        title="Show every third-party payment">Less: third-party payments</button>`
-                : 'Less: third-party payments';
-            ladderRows += lRow(tpLabel, -thirdParty, 'is-sub is-deduct', formatDeltaINR);
+                        title="${title}">${text}</button>`
+                : text);
+            if (tpOut > 0.5) {
+                ladderRows += lRow(
+                    tpLink('Less: paid to third parties', 'Show every third-party payment'),
+                    -tpOut, 'is-sub is-deduct', formatDeltaINR);
+            }
+            if (tpIn > 0.5) {
+                ladderRows += lRow(
+                    tpLink('Add: received from third parties', 'Show every third-party receipt'),
+                    tpIn, 'is-sub', formatDeltaINR);
+            }
             ladderRows += lRow('Net for VISMA', netRec, 'is-revised');
         } else {
             ladderRows += lRow('Payments received', rec, '', formatINR, splitNote);
@@ -297,7 +321,7 @@ window.ProjectGlance = (function () {
         // ladder reads as one continuous subtraction — contract, less what
         // actually stayed with us, equals what is still outstanding. Named on
         // the row only where there is a deduction to name.
-        const balNote = thirdParty > 0.5
+        const balNote = hasThirdParty
             ? `<span class="proj-ladder-split">contract less the net received</span>` : '';
         ladderRows += `
                     <div class="proj-ladder-row is-balance"><dt>${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}${balNote}</dd></div>`;

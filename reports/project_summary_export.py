@@ -384,11 +384,21 @@ def export_single_project_summary(project_id):
     cash_payments = db_manager.list_cash_payments(project_id)
     received_cash = sum(float(c.get('amount') or 0) for c in cash_payments)
     received_total = received_bank + received_cash
-    # Paid on the client's behalf out of that receipt — a pass-through, netted
-    # off what is in hand but never a cost line. See helpers/project_finance.
+    # The third-party ledger, both directions: paid on the client's behalf out of
+    # that receipt, and received from someone other than the client against this
+    # project. Pass-throughs — they move what is in hand, never a cost or a
+    # revenue line. See helpers/project_finance.
     third_party_payments = db_manager.list_third_party_payments(project_id)
-    third_party_total = sum(float(t.get('amount') or 0) for t in third_party_payments)
-    received_net = received_total - third_party_total
+    third_party_total = sum(float(t.get('amount') or 0) for t in third_party_payments
+                            if t.get('direction') != 'in')
+    third_party_in_total = sum(float(t.get('amount') or 0) for t in third_party_payments
+                               if t.get('direction') == 'in')
+    third_party_net = third_party_total - third_party_in_total
+    received_net = received_total - third_party_net
+    # Whether the ledger touched this project at all, in either direction. Every
+    # "net received" wording below turns on this rather than on the out leg
+    # alone: with only an incoming entry the net still differs from the gross.
+    has_third_party = bool(third_party_total or third_party_in_total)
 
     # ── Expenses: debit transactions, all banks ──
     expense_df = combined[combined['DR Amount'] > 0] if not combined.empty else pd.DataFrame()
@@ -477,6 +487,7 @@ def export_single_project_summary(project_id):
             'total': po_value},
         received_total=received_total,
         third_party_total=third_party_total,
+        third_party_in_total=third_party_in_total,
         other_expense_total=other_expense_total,
         labour_total=labour_total,
         overhead=project.get('overhead'),
@@ -764,11 +775,15 @@ def export_single_project_summary(project_id):
     kv_row(ws, r, 'Received — Bank (KVB)', received_bank, fmt=currency_fmt, font=st['income_font']); r += 1
     kv_row(ws, r, 'Received — Cash', received_cash, fmt=currency_fmt, font=st['income_font']); r += 1
     kv_row(ws, r, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font']); r += 1
-    # Only when there is something to deduct: on the great majority of projects
-    # these two rows would be a zero and a restatement of the line above.
-    if third_party_total:
-        kv_row(ws, r, 'Less: Third-Party Payments', -third_party_total,
-               fmt=currency_fmt, font=st['red_amount']); r += 1
+    # Only the legs that actually happened: on the great majority of projects
+    # these rows would be zeroes and a restatement of the line above.
+    if third_party_total or third_party_in_total:
+        if third_party_total:
+            kv_row(ws, r, 'Less: Paid to Third Parties', -third_party_total,
+                   fmt=currency_fmt, font=st['red_amount']); r += 1
+        if third_party_in_total:
+            kv_row(ws, r, 'Add: Received from Third Parties', third_party_in_total,
+                   fmt=currency_fmt, font=st['income_font']); r += 1
         kv_row(ws, r, 'Net Received (for VISMA)', received_net,
                fmt=currency_fmt, font=st['income_font']); r += 1
     kv_row(ws, r, bal_label, abs(po_balance), fmt=currency_fmt,
@@ -784,12 +799,25 @@ def export_single_project_summary(project_id):
     kv_row(ws, 4, 'Cash', received_cash, fmt=currency_fmt, font=st['income_font'])
     ws.cell(row=4, column=3, value=f'{len(cash_payments)} entr{"y" if len(cash_payments) == 1 else "ies"}').font = Font(italic=True, color='6B7280')
     kv_row(ws, 5, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font'])
-    hr = 7
-    if third_party_total:
-        kv_row(ws, 6, 'Less: Third-Party', -third_party_total, fmt=currency_fmt, font=st['red_amount'])
-        ws.cell(row=6, column=3, value=f'{len(third_party_payments)} payment(s)').font = Font(italic=True, color='6B7280')
-        kv_row(ws, 7, 'Net Received (for VISMA)', received_net, fmt=currency_fmt, font=st['income_font'])
-        hr = 9
+    # The chip rows are counted rather than pinned, because how many there are
+    # depends on which directions this project's third-party ledger actually ran.
+    cr = 6
+    if third_party_total or third_party_in_total:
+        tp_out_rows = [t for t in third_party_payments if t.get('direction') != 'in']
+        tp_in_rows = [t for t in third_party_payments if t.get('direction') == 'in']
+        if third_party_total:
+            kv_row(ws, cr, 'Less: Paid to Third Parties', -third_party_total,
+                   fmt=currency_fmt, font=st['red_amount'])
+            ws.cell(row=cr, column=3, value=f'{len(tp_out_rows)} payment(s)').font = Font(italic=True, color='6B7280')
+            cr += 1
+        if third_party_in_total:
+            kv_row(ws, cr, 'Add: Received from Third Parties', third_party_in_total,
+                   fmt=currency_fmt, font=st['income_font'])
+            ws.cell(row=cr, column=3, value=f'{len(tp_in_rows)} receipt(s)').font = Font(italic=True, color='6B7280')
+            cr += 1
+        kv_row(ws, cr, 'Net Received (for VISMA)', received_net, fmt=currency_fmt, font=st['income_font'])
+        cr += 1
+    hr = cr + 1
     # Combined history table
     headers = ['Date', 'Source', 'Particulars', 'Vendor', 'Amount']
     for ci, h in enumerate(headers, 1):
@@ -816,15 +844,19 @@ def export_single_project_summary(project_id):
             'source': 'Cash', 'particulars': c.get('note') or '',
             'vendor': '', 'amount': float(c.get('amount') or 0),
         })
-    # Money forwarded on, listed in the same history as a negative so the column
-    # foots to what actually stayed with us rather than to the gross receipt.
+    # The third-party ledger, listed in the same history and signed by direction
+    # so the column foots to what actually reached us rather than to the gross
+    # receipt from the client.
     for t in third_party_payments:
+        incoming = t.get('direction') == 'in'
+        amount = float(t.get('amount') or 0)
         pay_entries.append({
             'date': (t.get('payment_date') or t.get('created_at') or '')[:10],
             'sort': t.get('payment_date') or t.get('created_at') or '',
-            'source': 'Third-Party',
+            'source': 'Third-Party In' if incoming else 'Third-Party Out',
             'particulars': t.get('purpose') or t.get('note') or '',
-            'vendor': t.get('payee') or '', 'amount': -float(t.get('amount') or 0),
+            'vendor': t.get('payee') or '',
+            'amount': amount if incoming else -amount,
         })
     pay_entries.sort(key=lambda x: str(x['sort'] or ''), reverse=True)
     rr = hr + 1
@@ -1082,14 +1114,25 @@ def export_single_project_summary(project_id):
     kv_row(ws, cr, 'Received — Bank (KVB)', received_bank, fmt=currency_fmt, font=st['income_font']); cr += 1
     kv_row(ws, cr, 'Received — Cash', received_cash, fmt=currency_fmt, font=st['income_font']); cr += 1
     kv_row(ws, cr, 'Total Received', received_total, fmt=currency_fmt, font=st['income_font']); cr += 1
-    if third_party_total:
-        kv_row(ws, cr, f'Less: Third-Party Payments ({len(third_party_payments)})', -third_party_total,
-               fmt=currency_fmt, font=st['red_amount'],
-               formula='paid to others on the client\'s behalf — not our expense'); cr += 1
+    if third_party_total or third_party_in_total:
+        tp_out_n = len([t for t in third_party_payments if t.get('direction') != 'in'])
+        tp_in_n = len([t for t in third_party_payments if t.get('direction') == 'in'])
+        # The net formula names only the legs that ran, so it always reads as the
+        # arithmetic actually performed on the rows above it.
+        net_formula = f'{operand(received_total)} received'
+        if third_party_total:
+            kv_row(ws, cr, f'Less: Paid to Third Parties ({tp_out_n})', -third_party_total,
+                   fmt=currency_fmt, font=st['red_amount'],
+                   formula='paid to others on the client\'s behalf — not our expense'); cr += 1
+            net_formula += f' − {operand(third_party_total)} passed on'
+        if third_party_in_total:
+            kv_row(ws, cr, f'Add: Received from Third Parties ({tp_in_n})', third_party_in_total,
+                   fmt=currency_fmt, font=st['income_font'],
+                   formula='paid to us by someone other than the client — not extra revenue'); cr += 1
+            net_formula += f' + {operand(third_party_in_total)} from third parties'
         kv_row(ws, cr, 'Net Received (for VISMA)', received_net, fmt=currency_fmt,
                font=st['income_font'],
-               formula=f'{operand(received_total)} received − {operand(third_party_total)} passed on'
-                       '   ·   what funds this project'); cr += 1
+               formula=net_formula + '   ·   what funds this project'); cr += 1
     # Measured against the contract, not the invoices — see helpers/project_finance.
     # Spelled out because this is the row most easily confused with the Net
     # Position below: this one is what the client still owes, that one is what is
@@ -1097,7 +1140,7 @@ def export_single_project_summary(project_id):
     kv_row(ws, cr, ('Excess Received' if balance < -0.5 else 'Current Balance'), abs(balance),
            fmt=currency_fmt, font=(st['red_amount'] if balance > 0.5 else st['green_amount']),
            formula=(f'{operand(contract_total)} contract − {operand(received_net)} '
-                    + ('net received' if third_party_total else 'received')
+                    + ('net received' if has_third_party else 'received')
                     + '   ·   what the client still owes')); cr += 2
 
     # What we actually invoiced — reported in its own right, and a different
@@ -1140,11 +1183,11 @@ def export_single_project_summary(project_id):
     # Struck against the *net* receipt: money forwarded to a third party never
     # stayed in hand, so counting it here would report cash we no longer hold.
     kv_row(ws, cr,
-           ('Net Position (Net Received − Total Cost)' if third_party_total
+           ('Net Position (Net Received − Total Cost)' if has_third_party
             else 'Net Position (Received − Total Cost)'), cash_position,
            fmt=currency_fmt, font=signed_font(cash_position),
            formula=f'{operand(received_net)} '
-                   f'{"net received" if third_party_total else "received"} '
+                   f'{"net received" if has_third_party else "received"} '
                    f'− {operand(spend_total)} cost'
                    '   ·   cash in hand against cash spent'); cr += 1
 
