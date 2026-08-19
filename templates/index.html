@@ -34,8 +34,8 @@
     </script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
     <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=2">
 </head>
 
@@ -242,15 +242,6 @@
                         <div class="filter-group filter-group-date">
                             <input type="date" id="edit-end-date" class="filter-input date-input" title="To Date">
                         </div>
-                        {% if bank_code == 'kvb' %}
-                        <div class="filter-group filter-group-warning">
-                            <label class="warning-filter-label" title="Show only MATERIAL PURCHASE payments that have no matching purchase bill for their project">
-                                <input type="checkbox" id="only-warnings-toggle">
-                                <span>&#9888; Only no-bill rows</span>
-                                <span id="warning-count-badge" class="warning-count-badge" hidden>0</span>
-                            </label>
-                        </div>
-                        {% endif %}
                         <button id="filter-uncategorized" class="btn btn-primary btn-compact">Uncategorized</button>
                         <button id="clear-all-filters" class="btn btn-secondary btn-compact">Reset</button>
                     </div>
@@ -451,7 +442,7 @@
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=5"></script>
     <script src="{{ url_for('static', filename='upload.js') }}"></script>
     <script src="/static/pwa-register.js"></script>
 <script>

@@ -1882,35 +1882,6 @@ class DatabaseManager:
             print(f"[!] Error fetching {kind} bills for project {project_id}: {e}")
             return [], empty_summary
 
-    def get_purchase_bill_vendors_by_project(self):
-        """(project, vendor_name) for every purchase bill — cheap and unpaged.
-
-        Feeds the material-purchase-vs-bill reconciliation on pages that list
-        transactions across many projects (bank views, edit grid), where a
-        per-project bills query would be N+1. One small scan of bill_invoices;
-        the caller turns these rows into a project-id -> vendor-token index via
-        helpers.bill_reconcile.build_bill_vendor_index.
-        """
-        try:
-            with self.get_connection() as conn:
-                cursor = conn.cursor(dictionary=True)
-                # One (project, vendor) row per allocation, so a bill split
-                # across projects marks EVERY project it touches as billed for
-                # that vendor — otherwise a split-away project would wrongly
-                # flag its matching material-purchase debit as "no bill".
-                cursor.execute(
-                    "SELECT a.project AS project, bi.vendor_name AS vendor_name "
-                    "FROM bill_project_allocations a "
-                    "JOIN bill_invoices bi ON bi.id = a.invoice_id "
-                    "WHERE a.project IS NOT NULL AND a.project <> ''"
-                )
-                rows = cursor.fetchall()
-                cursor.close()
-                return rows
-        except Exception as e:
-            print(f"[!] Error fetching purchase-bill vendors by project: {e}")
-            return []
-
     def get_bills_with_line_items_for_export(self, start_date=None, end_date=None):
         """Fetch all bills with their nested line items for Excel export.
 

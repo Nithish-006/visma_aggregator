@@ -37,7 +37,6 @@
         search: '',
         startDate: null,
         endDate: null,
-        onlyWarnings: false  // KVB: only no-bill material-purchase rows
     };
 
     // Loading state to prevent duplicate requests
@@ -383,17 +382,6 @@
     }
 
     /**
-     * Reflect the current no-bill flag count on the KVB toggle (hidden at zero).
-     */
-    function updateWarningCount(count) {
-        const badge = document.getElementById('warning-count-badge');
-        if (!badge) return;  // element only exists on the KVB page
-        const n = Number(count) || 0;
-        badge.textContent = n;
-        badge.hidden = n === 0;
-    }
-
-    /**
      * Load categories from API
      */
     async function loadCategories() {
@@ -456,9 +444,6 @@
             if (currentFilters.endDate) {
                 params.set('end_date', currentFilters.endDate);
             }
-            if (currentFilters.onlyWarnings) {
-                params.set('only_warnings', '1');
-            }
 
             const response = await fetch(`/api/${BANK_CODE}/transactions/paginated?${params}`);
             const data = await response.json();
@@ -466,10 +451,6 @@
             allTransactions = data.transactions;
             totalTransactions = data.total;
             totalPages = data.total_pages;
-
-            // Keep the no-bill toggle's badge honest about the whole filtered set,
-            // not just this page (KVB only — the element is absent elsewhere).
-            updateWarningCount(data.warning_count);
 
             // Update the map for tracking
             allTransactionsMap.clear();
@@ -641,10 +622,6 @@
     /**
      * Render the transactions table (scrollable list on both desktop and mobile)
      */
-    // Soft heads-up for a MATERIAL PURCHASE debit with no matching purchase
-    // bill (set server-side, helpers/bill_reconcile). Full reason in the title.
-    const NO_BILL_BADGE = '<span class="no-bill-flag" title="NO CORRESPONDING PURCHASE BILL FOUND — no purchase bill from this vendor is tagged to this project. Worth verifying the project tag.">no bill</span>';
-
     function renderTable() {
         tableBody.innerHTML = '';
 
@@ -676,7 +653,6 @@
                 <td class="editable-cell" data-field="vendor" data-id="${txnId}" data-label="Vendor">${txn.vendor || ''}</td>
                 <td class="editable-cell" data-field="category" data-id="${txnId}" data-label="Category">
                     <span class="category-badge ${isCategoryUncategorized ? 'uncategorized' : ''}">${txn.category || ''}</span>
-                    ${txn.no_bill_warning ? NO_BILL_BADGE : ''}
                 </td>
                 <td class="description-full" data-label="Description">${escapeHtml(txn.description || txn['Transaction Description'] || '')}</td>
                 <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
@@ -1707,13 +1683,7 @@
             search: '',
             startDate: null,
             endDate: null,
-            onlyWarnings: false
         };
-
-        // The no-bill toggle is a filter like any other, so Reset has to release
-        // it too — otherwise Reset leaves the grid showing a subset.
-        const warnToggle = document.getElementById('only-warnings-toggle');
-        if (warnToggle) warnToggle.checked = false;
 
         // Clear dropdowns
         if (dropdowns['edit-category-filter']) dropdowns['edit-category-filter'].clear();
@@ -1794,15 +1764,6 @@
                 th.classList.remove('sorting');
             });
         });
-
-        // "Only no-bill rows" toggle (KVB only)
-        const warnToggle = document.getElementById('only-warnings-toggle');
-        if (warnToggle) {
-            warnToggle.addEventListener('change', () => {
-                currentFilters.onlyWarnings = warnToggle.checked;
-                applyFilters();
-            });
-        }
 
         // Download Excel — the same filters that shape the grid shape the file,
         // so what you exported is what you were looking at.

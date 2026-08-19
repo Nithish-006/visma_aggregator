@@ -14,13 +14,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from helpers.bill_reconcile import (
     NO_ALIASES,
     VendorAliasResolver,
-    build_bill_vendor_index,
-    is_unbilled_material_purchase,
     vendor_key,
     vendor_keys_match,
 )
 from helpers.material_recon import STATUS_OK, STATUS_UNPAID, reconcile_material
-from tests.test_material_recon import bill, group_for, txn
+from test_material_recon import bill, group_for, txn
 
 
 def matches(a, b, resolver=NO_ALIASES):
@@ -127,30 +125,6 @@ def test_merging_a_row_needs_every_spelling_in_it():
     r = reconcile_material(bills, banks, resolver=all_names)
     assert len(r['groups']) == 1
     assert r['groups'][0]['status'] == STATUS_OK
-
-
-# ── The row-level "no bill" badge uses the same rulings ───────────────
-
-def test_the_no_bill_badge_respects_a_link():
-    bills = [{'project': '655 - RCH', 'vendor_name': 'P&P ROOFING'}]
-    flagged = lambda resolver: is_unbilled_material_purchase(
-        'MATERIAL PURCHASE', '655 - RCH', 'PANDP',
-        build_bill_vendor_index(bills, resolver), 'kvb', resolver)
-
-    assert flagged(NO_ALIASES) is True     # names alone: looks unbilled
-    assert flagged(VendorAliasResolver(
-        links={'PANDP': 'P&P ROOFING'})) is False
-
-
-def test_the_no_bill_badge_respects_a_split():
-    bills = [{'project': '648 - X', 'vendor_name': 'ZARON INDUSTRIES'}]
-    flagged = lambda resolver: is_unbilled_material_purchase(
-        'MATERIAL PURCHASE', '648 - X', 'ZARON YES',
-        build_bill_vendor_index(bills, resolver), 'kvb', resolver)
-
-    assert flagged(NO_ALIASES) is False
-    assert flagged(VendorAliasResolver(
-        splits=[('ZARON INDUSTRIES', 'ZARON YES')])) is True
 
 
 # ── Defaults ──────────────────────────────────────────────────────────

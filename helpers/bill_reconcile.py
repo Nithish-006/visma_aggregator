@@ -1,22 +1,15 @@
-"""Flag material-purchase bank debits that no purchase bill can account for.
+"""Who a supplier *is* — the vendor-identity rules the reconciler runs on.
 
-A KVB ``MATERIAL PURCHASE`` debit tagged to a project is a claim that we paid
-a supplier for that project — and that claim should be backed by a purchase
-bill (``bill_invoices``) from the same supplier under the same project. When
-the transaction's vendor matches *no* purchase-bill vendor for its project,
-the tag is most likely a human slip (the ZARON YES on project 648 case: money
-went out, but no bill was ever raised for it). We surface a gentle
-"no corresponding purchase bill" heads-up so someone re-verifies — we do NOT
-block or auto-correct.
+``bill_invoices.vendor_name`` (read off an invoice PDF) and
+``kvb_transactions.client_vendor`` (typed into the UI) are independent free
+text and are never spelled identically, so deciding whether two names are the
+same supplier has to be fuzzy. This module is that decision, and nothing else:
+helpers/material_recon.py builds the material-purchase reconciliation on top of
+it, and helpers/vendor_aliases.py loads the human rulings it honours.
 
 Design notes
 ------------
-* **Join key is the canonical project id.** Both sides carry a free-text
-  ``"<id> - <Stem>"`` tag; the numeric prefix is the reliable link.
-* **Vendor identity is the *anchor*, not any shared word.** ``bill_invoices``.
-  ``vendor_name`` (from the invoice PDF) and ``kvb_transactions``.
-  ``client_vendor`` (typed in the UI) are independent free text and are never
-  spelled identically, so the comparison has to be fuzzy. But fuzziness over a
+* **Vendor identity is the *anchor*, not any shared word.** Fuzziness over a
   bag of words is what let "HARI OM ROOFING INDUSTRIES" and "P&P ROOFING" read
   as one supplier: they share ROOFING, and nothing more was ever required.
 
@@ -39,25 +32,15 @@ Design notes
   the "M/s" courtesy prefix all vanished under the old ``len(tok) > 1`` rule —
   which is precisely why "P&P ROOFING" collapsed to the bare word ROOFING.
   Runs of short tokens are now welded into one initialism instead.
-* **A project with zero purchase bills is never flagged.** We can't tell a
-  genuine mis-tag from "bills simply aren't uploaded yet", so silence beats a
-  storm of warnings.
 """
 
 import re
 from collections import namedtuple
 from difflib import SequenceMatcher
 
-# The one warning humans see. Kept here so every surface renders the same text.
-NO_BILL_WARNING_TEXT = 'NO CORRESPONDING PURCHASE BILL FOUND'
-
 # Only this category is a purchase we expect a bill for. Stored UPPERCASE on
 # save (banks.py), so compare against the canonical upper form.
 MATERIAL_PURCHASE_CATEGORY = 'MATERIAL PURCHASE'
-
-# Leading "<id> -" of a canonical project tag — the same contract the rest of
-# the app tags by (mirrors helpers.projects._CANONICAL_PROJECT_RE).
-_PROJECT_ID_RE = re.compile(r'^\s*(\d+)\s*-')
 
 # Company-form words carry no identity — "BALU IRON PVT LTD" and "Balu Iron
 # Co." are the same supplier. Dropping them keeps the match on the words that
@@ -213,14 +196,6 @@ class VendorAliasResolver:
 NO_ALIASES = VendorAliasResolver()
 
 
-def project_id_from_tag(tag):
-    """Numeric project id from a "<id> - <Stem>" tag, or ``None``."""
-    if not tag:
-        return None
-    m = _PROJECT_ID_RE.match(str(tag))
-    return m.group(1) if m else None
-
-
 def vendor_name_tokens(name):
     """Significant word tokens of a vendor name, **in reading order**.
 
@@ -346,54 +321,3 @@ def vendor_keys_match(a, b, resolver=NO_ALIASES):
     left = ' '.join(sorted(a.tokens))
     right = ' '.join(sorted(b.tokens))
     return SequenceMatcher(None, left, right).ratio() >= _FUZZY_RATIO_THRESHOLD
-
-
-def build_bill_vendor_index(bill_rows, resolver=NO_ALIASES):
-    """Index purchase-bill vendors by project id: ``{id: [VendorKey, ...]}``.
-
-    ``bill_rows`` is any iterable of dict-likes carrying ``project`` and
-    ``vendor_name`` (e.g. rows from ``get_purchase_bill_vendors_by_project``
-    or ``get_bills_for_canonical_project``). Vendors with no significant
-    tokens are skipped.
-
-    Pass the same ``resolver`` here and to
-    :func:`is_unbilled_material_purchase`, or the two sides will disagree
-    about who a supplier is.
-    """
-    index = {}
-    for row in bill_rows:
-        pid = project_id_from_tag(row.get('project'))
-        if not pid:
-            continue
-        key = vendor_key(row.get('vendor_name'), resolver)
-        if not key.tokens:
-            continue
-        index.setdefault(pid, []).append(key)
-    return index
-
-
-def is_unbilled_material_purchase(category, project_tag, vendor, bill_index,
-                                  bank_code='kvb', resolver=NO_ALIASES):
-    """True when this row deserves the NO-CORRESPONDING-PURCHASE-BILL warning.
-
-    Flags only KVB ``MATERIAL PURCHASE`` rows whose project has purchase bills
-    but none from a matching vendor. Callers still gate on ``dr_amount > 0`` —
-    the category is a debit head, but we don't re-check the amount here.
-    """
-    if bank_code != 'kvb':
-        return False
-    if (category or '').strip().upper() != MATERIAL_PURCHASE_CATEGORY:
-        return False
-    pid = project_id_from_tag(project_tag)
-    if not pid:
-        return False
-    bill_keys = bill_index.get(pid)
-    if not bill_keys:
-        # No bills for this project at all — can't distinguish a mis-tag from
-        # bills-not-uploaded, so stay quiet.
-        return False
-    key = vendor_key(vendor, resolver)
-    if not key.tokens:
-        return False
-    return not any(vendor_keys_match(key, bill_key, resolver)
-                   for bill_key in bill_keys)
