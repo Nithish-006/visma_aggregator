@@ -50,7 +50,7 @@
     border: 1px solid var(--proj-border);
     border-radius: 12px;
 }
-/* Client yet to pay + Total Expenses + Net Balance sit three across. */
+/* Client yet to pay + Total Expenses + Profit sit three across. */
 .proj-hero.proj-hero-3 {
     grid-template-columns: 1fr 1fr 1fr;
 }
@@ -89,6 +89,93 @@
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--proj-text-muted);
+}
+
+/* The hero and its disclosure move together, so the drawer tucks under the
+   card rather than floating as a separate block. */
+.proj-hero-wrap { margin: 0.85rem 0 0; }
+.proj-hero-wrap .proj-hero { margin: 0; }
+
+/* Chevron beside the Profit label: the same figure struck three ways lives
+   behind it (project_glance.js). Sits in the label line so it never competes
+   with the rupee figure underneath. */
+.proj-hero-k {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.proj-hero-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--proj-border);
+    border-radius: 5px;
+    background: var(--proj-surface);
+    color: var(--proj-text-muted);
+    cursor: pointer;
+    transition: transform 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.proj-hero-toggle:hover {
+    color: var(--proj-accent);
+    border-color: var(--proj-accent);
+}
+.proj-hero-toggle.is-open {
+    transform: rotate(180deg);
+    color: var(--proj-accent);
+    border-color: var(--proj-accent);
+}
+
+/* The three net positions, named as the Excel export names them. */
+.proj-net-drawer {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.4rem;
+    padding: 0.35rem 1.1rem;
+    background: var(--proj-surface);
+    border: 1px solid var(--proj-border);
+    border-radius: 10px;
+}
+.proj-net-drawer[hidden] { display: none; }
+.proj-net-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+.proj-net-row + .proj-net-row { border-top: 1px solid var(--proj-border); }
+.proj-net-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+.proj-net-k {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--proj-text);
+}
+/* The operands, spelled out — the same "x received - y cost" note the export
+   prints beside each row, so the reader never has to guess the subtraction. */
+.proj-net-f {
+    font-size: 0.72rem;
+    color: var(--proj-text-muted);
+}
+.proj-net-v {
+    font-size: 0.95rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.proj-net-v.profit { color: var(--proj-success); }
+.proj-net-v.loss   { color: var(--proj-danger); }
+.proj-net-v.is-note {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--proj-text-muted);
+    white-space: normal;
 }
 
 /* Two panels side by side: value ladder + GST position. */
@@ -439,6 +526,14 @@
         border-top: 1px solid var(--proj-border);
     }
     .proj-hero-v { font-size: 1.45rem; }
+
+    /* The drawer's figure would be squeezed to a couple of characters beside
+       its spelled-out formula, so it goes underneath it instead. */
+    .proj-net-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.2rem;
+    }
 
     /* The GST panel used to be a table that needed collapsing into cards here.
        It is a .proj-ladder now, which is label-and-figure rows already and

@@ -733,6 +733,11 @@
             const contractTotal = (insights.summary.contract && insights.summary.contract.total)
                 || insights.summary.value.total || 0;
             insights.summary.receivable = contractTotal - summary.received_net;
+            // The cash position moves with the receipt too (the drawer behind
+            // the hero's profit figure reads it). Profit and billed profit
+            // don't: neither is struck against what has been paid.
+            insights.summary.cash_position =
+                summary.received_net - (Number(insights.summary.spend_total) || 0);
             insights.payments.cash_total = summary.received_cash;
             insights.payments.third_party_total = summary.third_party_total;
             insights.payments.total = summary.received_total;

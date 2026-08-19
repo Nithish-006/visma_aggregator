@@ -99,6 +99,11 @@ window.ProjectGlance = (function () {
         // Net, not gross — see helpers/project_finance: money that came in for a
         // third party and went straight back out never paid down our contract.
         const receivable = s ? (Number(s.receivable) || 0) : contract - netRec;
+        // With no PO there is no contract, so both the receivable and the
+        // profit fall back to what we billed (see helpers/project_finance).
+        // Labelling that "Contract" would state an agreement that doesn't
+        // exist, so every line built from it names its real source instead.
+        const fromPo = s ? (s.contract && s.contract.source === 'po') : po > 0;
 
         // Only bail when there is genuinely nothing to say. This guard predates
         // the cost breakdown, and a project can have real costs (bills, labour,
@@ -113,16 +118,28 @@ window.ProjectGlance = (function () {
         const dueCls = receivable > 0.5 ? 'due' : 'settled';
 
         // ── Hero: the three questions people open this for ──
-        // "Client yet to pay" is what the client still owes against the contract;
-        // "Total Expenses" is everything the project has cost; "Net Balance" is
-        // cash actually in hand against that spend — what the client has *paid*
-        // minus what has gone out, not billed value minus cost. Billing is a
-        // promise; this line is the money position, so a project can be in the
-        // black on profit and still short here until the client pays.
+        // "Client yet to pay" is what the client still owes against the
+        // contract; "Total Expenses" is everything the project has cost;
+        // "Profit" is what the job earns — the contract (the PO as varied, or
+        // the actuals once measured) less that cost, which is the subtraction
+        // the client actually runs the project by.
+        //
+        // It used to be cash-in-hand less cost, and that made a profitable
+        // project read as a loss for as long as the client was slow to pay.
+        // Cash is still a real question, just not the headline one, so the
+        // three bottom lines of the Excel export (net position, profit, billed
+        // profit) sit behind the chevron beside this figure, named exactly as
+        // the export names them. They share a cost total and differ only in
+        // what it is struck against — cash received, the contract, or the
+        // invoices raised — which is why none of them is "the" balance.
         const spend = s ? (Number(s.spend_total) || 0) : 0;
         // Net, not gross — money passed on to a third party is not in hand to
         // set against the spend.
-        const netBalance = netRec - spend;
+        const cashPosition = s ? (Number(s.cash_position) || 0) : 0;
+        const profit = s ? (Number(s.profit) || 0) : 0;
+        const billedProfit = s ? (Number(s.billed_profit) || 0) : 0;
+        const hasSalesBills = !!(s && s.has_sales_bills);
+        const contractLabel = fromPo ? 'PO contract value' : 'billed value';
         const expensesCell = s ? `
             <div class="proj-hero-cell">
                 <span class="proj-hero-k">Total Expenses</span>
@@ -136,24 +153,59 @@ window.ProjectGlance = (function () {
             </div>`;
         const netCell = s ? `
             <div class="proj-hero-cell">
-                <span class="proj-hero-k">Net Balance</span>
-                <span class="proj-hero-v ${netBalance >= 0 ? 'profit' : 'loss'}">${formatSignedINR(netBalance)}</span>
-                <span class="proj-hero-sub">${formatINRCompact(netRec)} ${thirdParty > 0 ? 'net ' : ''}paid − ${formatINRCompact(spend)} spent</span>
+                <span class="proj-hero-k">
+                    Profit
+                    <button type="button" class="proj-hero-toggle" data-glance-toggle="net"
+                            aria-expanded="false" title="Show all three net positions">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                </span>
+                <span class="proj-hero-v ${profit >= 0 ? 'profit' : 'loss'}">${formatSignedINR(profit)}</span>
+                <span class="proj-hero-sub">${formatINRCompact(contract)} ${fromPo ? 'contract' : 'billed'} − ${formatINRCompact(spend)} spent</span>
             </div>` : `
             <div class="proj-hero-cell">
-                <span class="proj-hero-k">Net Balance</span>
+                <span class="proj-hero-k">Profit</span>
                 <span class="proj-hero-v is-loading">…</span>
                 <span class="proj-hero-sub">&nbsp;</span>
             </div>`;
+
+        // The drawer. Rendered collapsed and only when insights have landed —
+        // there is nothing to disclose from the cached row alone.
+        const nRow = (label, formula, value, note) => `
+                <div class="proj-net-row">
+                    <div class="proj-net-label">
+                        <span class="proj-net-k">${label}</span>
+                        <span class="proj-net-f">${formula}</span>
+                    </div>
+                    <span class="proj-net-v ${note ? 'is-note' : (Number(value) >= 0 ? 'profit' : 'loss')}">${note || formatSignedINR(value)}</span>
+                </div>`;
+        const netDrawer = s ? `
+            <div class="proj-net-drawer" data-glance-panel="net" hidden>
+                ${nRow('Net Position',
+                       `${formatINRCompact(netRec)} ${thirdParty > 0.5 ? 'net received' : 'received'} − ${formatINRCompact(spend)} cost · cash in hand against cash spent`,
+                       cashPosition)}
+                ${nRow(fromPo ? 'Profit (contract)' : 'Profit (billed — no PO)',
+                       `${formatINRCompact(contract)} ${contractLabel} − ${formatINRCompact(spend)} cost · what the job earns, however much is invoiced`,
+                       profit)}
+                ${nRow('Billed Profit',
+                       hasSalesBills
+                           ? `${formatINRCompact(billed)} sales bills − ${formatINRCompact(spend)} cost · earned on the invoices raised so far`
+                           : 'nothing invoiced yet, so there is no billed figure to strike',
+                       billedProfit,
+                       hasSalesBills ? null : 'No sales bills tagged')}
+            </div>` : '';
         const hero = `
-            <div class="proj-hero proj-hero-3">
-                <div class="proj-hero-cell">
-                    <span class="proj-hero-k">${dueLabel}</span>
-                    <span class="proj-hero-v ${dueCls}">${formatINR(Math.abs(receivable))}</span>
-                    <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received${thirdParty > 0.5 ? ', net' : ''}` : '&nbsp;'}</span>
+            <div class="proj-hero-wrap">
+                <div class="proj-hero proj-hero-3">
+                    <div class="proj-hero-cell">
+                        <span class="proj-hero-k">${dueLabel}</span>
+                        <span class="proj-hero-v ${dueCls}">${formatINR(Math.abs(receivable))}</span>
+                        <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received${thirdParty > 0.5 ? ', net' : ''}` : '&nbsp;'}</span>
+                    </div>
+                    ${expensesCell}
+                    ${netCell}
                 </div>
-                ${expensesCell}
-                ${netCell}
+                ${netDrawer}
             </div>
             ${pct != null ? `<div class="proj-pay-bar"><div class="proj-pay-bar-fill" style="width:${pct}%"></div></div>` : ''}`;
 
@@ -180,12 +232,6 @@ window.ProjectGlance = (function () {
         const actGst = Number(p.po_act_tax) || 0;
         const actTotal = Number(p.po_act_total) || 0;
         const actCount = Number(p.po_act_count) || 0;
-        // With no PO there is no contract, so the receivable falls back to what
-        // we billed (see helpers/project_finance). Labelling that "Contract"
-        // would state an agreement that doesn't exist, so the row names its
-        // real source instead.
-        const fromPo = s ? (s.contract && s.contract.source === 'po') : po > 0;
-
         const lRow = (label, value, cls = '', fmt = formatINR, suffix = '') => `
                     <div class="proj-ladder-row ${cls}"><dt>${label}</dt><dd>${fmt(value)}${suffix}</dd></div>`;
         const lHead = (label, hint = '') => `
@@ -357,9 +403,10 @@ window.ProjectGlance = (function () {
             ? `<p class="proj-cost-warn">${noBillCount} material-purchase payment${noBillCount > 1 ? 's have' : ' has'}
                no matching purchase bill — worth verifying the project tag on the KVB statement.</p>`
             : '';
-        // No profit/balance line here: the hero owns the money position (Net
-        // Balance = paid − spent), and a second "Balance" against billed value
-        // beside it only invited the reader to mix the two up.
+        // No profit/balance line here: the hero owns the bottom line (profit =
+        // contract − cost, with the other two positions behind its chevron), and
+        // a second one against billed value beside it only invited the reader to
+        // mix the two up.
         return `
             <div class="proj-ov-panel proj-ov-costs">${head}
                 ${labourWarning}
@@ -372,6 +419,22 @@ window.ProjectGlance = (function () {
                 </div>
             </div>`;
     }
+
+    // The hero's profit chevron. Bound once on the document rather than after
+    // each render: both callers repaint the panel by replacing innerHTML (the
+    // registry twice per open, from the cached row and then from insights), so
+    // a listener attached to the button would be thrown away with it.
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest && e.target.closest('[data-glance-toggle="net"]');
+        if (!btn) return;
+        const wrap = btn.closest('.proj-hero-wrap');
+        const panel = wrap && wrap.querySelector('[data-glance-panel="net"]');
+        if (!panel) return;
+        const open = panel.hasAttribute('hidden');
+        if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        btn.classList.toggle('is-open', open);
+    });
 
     return {
         render: render,
