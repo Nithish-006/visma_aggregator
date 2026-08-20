@@ -1451,21 +1451,19 @@
         const headline = at.count ? 'Final PO value'
                        : vt.count ? 'Contract value'
                        : 'Total project value';
-        const rows = [[headline, formatINR(fin.total_value), 'headline']];
-        if (vt.count || at.count) {
-            // Once actuals exist they replace the PO and its variations
-            // outright, so every rung above them is struck as one — matching the
-            // glance ladder, which strikes the whole pre-actuals sub-ladder. A
-            // struck "As per PO" over a live "Variations" over a struck subtotal
-            // would state that the components govern but their own sum does not.
-            const supAbove = at.count ? 'is-superseded' : '';
-            rows.push(['As per PO', formatINR(po.total_value), supAbove]);
+        const rows = [];
+        if (at.count) {
+            // Actuals replace the PO and its variations outright, so the gist
+            // shows the figure in force and labels where it came from, rather
+            // than stacking the rungs it replaced above it under a strike.
+            // Those rungs are still on the page — the ledgers below carry all
+            // three books, with "supersedes PO" on the one that wins.
+            rows.push([headline, `${formatINR(fin.total_value)} <span class="proj-gist-sub">actuals — ${at.count} ${at.count > 1 ? 'entries' : 'entry'} measured</span>`, 'headline']);
+        } else {
+            rows.push([headline, formatINR(fin.total_value), 'headline']);
             if (vt.count) {
-                rows.push(['Variations', `${formatDeltaINR(vt.total)} <span class="proj-gist-sub">${vt.count} change${vt.count > 1 ? 's' : ''}</span>`, supAbove]);
-                if (at.count) rows.push(['Revised PO value', formatINR(rev.total_value), 'is-superseded']);
-            }
-            if (at.count) {
-                rows.push(['Actuals', `${formatINR(at.total)} <span class="proj-gist-sub">${at.count} ${at.count > 1 ? 'entries' : 'entry'} measured</span>`]);
+                rows.push(['As per PO', formatINR(po.total_value)]);
+                rows.push(['Variations', `${formatDeltaINR(vt.total)} <span class="proj-gist-sub">${vt.count} change${vt.count > 1 ? 's' : ''}</span>`]);
             }
         }
         rows.push(

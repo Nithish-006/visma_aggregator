@@ -1189,13 +1189,6 @@ html, body {
     text-transform: uppercase;
     vertical-align: middle;
 }
-/* A superseded rung is kept on the panel as history, and has to look like it:
-   still legible, plainly not the number in force. */
-.proj-gist-row.is-superseded .proj-gist-v {
-    color: var(--proj-text-muted);
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
-}
 /* Secondary figure riding along inside a gist value (e.g. "2 changes"). */
 .proj-gist-sub {
     margin-left: 0.4rem;

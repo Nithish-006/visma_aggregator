@@ -247,33 +247,32 @@ window.ProjectGlance = (function () {
                     <div class="proj-ladder-head"><span>${label}</span>${hint ? `<span class="proj-ladder-hint">${hint}</span>` : ''}</div>`;
 
         let ladderRows = '';
-        if (fromPo) {
-            // Once actuals exist they replace the PO and any variations
-            // outright (see resolve_contract), so the rungs above them are
-            // struck through — kept as the history of how the figure moved, but
-            // plainly no longer the number in force.
-            const supAbove = actCount ? ' is-superseded' : '';
+        if (fromPo && actCount) {
+            // Actuals replace the PO and any variations outright (see
+            // resolve_contract), so the ladder states the figure in force and
+            // says in its head where that figure came from. The rungs it
+            // replaced are history, not arithmetic — they belong in the PO
+            // ledger, which keeps all three books side by side. Struck through
+            // here they were a column of crossed-out numbers standing between
+            // the reader and the one figure that governs.
+            ladderRows += lHead('Contract', `actuals — ${actCount} ${actCount > 1 ? 'entries' : 'entry'} measured`);
+            ladderRows += lRow('Basic value', actBasic, 'is-sub');
+            ladderRows += lRow('GST', actGst, 'is-sub');
+            ladderRows += lRow('Final PO value', actTotal, 'is-revised');
+        } else if (fromPo) {
             ladderRows += lHead('Contract', 'as per PO');
-            ladderRows += lRow('Basic value', baseBasic, 'is-sub' + supAbove);
-            ladderRows += lRow('GST', baseGst, 'is-sub' + supAbove);
-            ladderRows += lRow('Total', baseTotal, 'is-sub is-total' + supAbove);
+            ladderRows += lRow('Basic value', baseBasic, 'is-sub');
+            ladderRows += lRow('GST', baseGst, 'is-sub');
+            ladderRows += lRow('Total', baseTotal, 'is-sub is-total');
             // Only once something has actually been agreed: with no changes the
             // block would be three zeros and "Revised PO value" would just
             // restate the Total directly above it.
             if (varCount) {
                 ladderRows += lHead('Variations', `${varCount} change${varCount > 1 ? 's' : ''} agreed`);
-                ladderRows += lRow('Basic value', varBasic, 'is-sub' + supAbove, formatDeltaINR);
-                ladderRows += lRow('GST', varGst, 'is-sub' + supAbove, formatDeltaINR);
-                ladderRows += lRow('Total', varTotal, 'is-sub is-total' + supAbove, formatDeltaINR);
-                ladderRows += lRow('Revised PO value', baseTotal + varTotal, 'is-revised' + supAbove);
-            }
-            // Actuals: the work as finally measured, replacing everything above.
-            if (actCount) {
-                ladderRows += lHead('Actuals', `${actCount} ${actCount > 1 ? 'entries' : 'entry'} measured`);
-                ladderRows += lRow('Basic value', actBasic, 'is-sub');
-                ladderRows += lRow('GST', actGst, 'is-sub');
-                ladderRows += lRow('Total', actTotal, 'is-sub is-total');
-                ladderRows += lRow('Final PO value', actTotal, 'is-revised');
+                ladderRows += lRow('Basic value', varBasic, 'is-sub', formatDeltaINR);
+                ladderRows += lRow('GST', varGst, 'is-sub', formatDeltaINR);
+                ladderRows += lRow('Total', varTotal, 'is-sub is-total', formatDeltaINR);
+                ladderRows += lRow('Revised PO value', baseTotal + varTotal, 'is-revised');
             }
         } else if (contract > 0) {
             ladderRows += lHead('Billed', 'no PO yet — from sales bills');
