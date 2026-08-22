@@ -664,7 +664,7 @@
                     </span>
                 </td>
                 <td style="text-align: center;" data-label="">
-                    ${isModified ? '<span style="color: #f59e0b; font-size: 18px;" title="Unsaved changes">●</span>' : ''}
+                    ${isModified ? '<span style="color: var(--c-warning-text); font-size: 18px;" title="Unsaved changes">●</span>' : ''}
                 </td>
             `;
 

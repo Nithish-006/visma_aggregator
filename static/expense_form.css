@@ -10,13 +10,13 @@
     --bg-hover: var(--c-surface-soft);
     --bg-input: var(--c-input);
     --text-primary: var(--c-text);
-    --text-secondary: var(--c-text);
+    --text-secondary: var(--c-text-muted);
     --text-muted: var(--c-text-muted);
     --border-color: var(--c-border);
     --border-strong: var(--c-border-strong);
-    --income-color: var(--c-success);
+    --income-color: var(--c-success-text);
     --income-gradient: var(--c-success-grad);
-    --expense-color: var(--c-danger);
+    --expense-color: var(--c-danger-text);
     --expense-gradient: var(--c-danger-grad);
     --accent-color: var(--c-accent);
     --axis-color: var(--c-danger);   /* note: repurposed as red in this form */

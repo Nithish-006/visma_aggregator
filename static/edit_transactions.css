@@ -172,7 +172,7 @@
 }
 
 .edit-stats .stat-badge-warning strong {
-    color: #fbbf24;
+    color: var(--c-warning-text);
 }
 
 /* ============================================================================
@@ -199,7 +199,7 @@
 }
 
 .stat-badge-warning strong {
-    color: #fbbf24;
+    color: var(--c-warning-text);
 }
 
 .filter-input {
@@ -293,22 +293,27 @@
     font-size: 0.85rem;
 }
 
+/* HIG "Deference": chrome supports the content, it does not compete with it.
+   The heavy #1a2536 band was the loudest thing on a page whose entire point
+   is the numbers underneath it. A light header with a hairline reads as
+   structure without shouting. */
 .edit-table thead {
-    background: #1a2536;
+    background: var(--c-surface-soft);
     position: sticky;
     top: 0;
     z-index: 10;
+    box-shadow: inset 0 -1px 0 var(--c-border-strong);
 }
 
 .edit-table th {
     padding: 14px 12px;
     text-align: left;
     font-weight: 600;
-    font-size: 0.75rem;
-    color: #e2e8f0;
+    font-size: 0.6875rem;
+    color: var(--c-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    border-bottom: 2px solid var(--border-color);
+    border-bottom: none;
     white-space: nowrap;
 }
 
@@ -319,9 +324,10 @@
     transition: background 0.2s ease, color 0.2s ease;
 }
 
+/* Hover was white-on-white once the header stopped being dark navy. */
 .edit-table th.sortable:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--c-text);
 }
 
 .edit-table th.sortable .sort-icon {
@@ -338,11 +344,11 @@
 
 .edit-table th.sortable.header-sort-active .sort-icon {
     opacity: 1;
-    color: #E08B6F;
+    color: var(--c-accent-text);
 }
 
 .edit-table th.sortable.sorting {
-    background: rgba(224, 139, 111, 0.15);
+    background: var(--c-accent-soft);
 }
 
 .edit-table th.sortable.sorting .sort-icon {
@@ -380,12 +386,15 @@
     transition: background var(--transition-fast);
 }
 
-.edit-table tbody tr:nth-child(even) {
-    background: #F4F2EC;
+/* Hairline separators instead of zebra banding. Striping is a workaround for
+   rows that are hard to track; adequate row height and a 1px rule do the same
+   job without tinting half the data a different colour. */
+.edit-table tbody tr + tr {
+    box-shadow: inset 0 1px 0 var(--c-border);
 }
 
 .edit-table tbody tr:hover {
-    background: rgba(217, 119, 87, 0.08);
+    background: var(--c-surface-soft);
 }
 
 .edit-table tbody tr.selected {
@@ -534,12 +543,12 @@
 }
 
 .combobox-item.combobox-clear {
-    color: var(--text-muted, #94a3b8);
+    color: var(--c-text-muted);
     font-style: italic;
 }
 
 .combobox-item.combobox-empty {
-    color: var(--text-muted, #94a3b8);
+    color: var(--c-text-muted);
     font-style: italic;
     cursor: default;
 }
@@ -587,14 +596,22 @@
 }
 
 /* Category badges - Dark Theme */
+/* Category and project were three competing tint families - coral pills,
+   purple pills and red/green money pills - all fighting for the same glance.
+   They are now one quiet neutral chip. The colour budget on this table is
+   spent on the numbers, which is the only thing here that carries meaning
+   at a glance. (Both also still carried dark-theme text colours: the project
+   badge was #a78bfa on pale lilac, about 1.9:1.) */
 .category-badge {
     display: inline-block;
-    padding: 5px 12px;
-    border-radius: 999px;
+    padding: 4px 10px;
+    border-radius: 6px;
     font-size: 0.75rem;
-    font-weight: 600;
-    background: rgba(217, 119, 87, 0.15);
-    color: var(--primary-light);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    background: var(--c-surface-soft);
+    color: var(--c-text-muted);
+    border: 1px solid var(--c-border);
 }
 
 .category-badge.uncategorized {
@@ -606,17 +623,19 @@
 /* Project badges - Dark Theme */
 .project-badge {
     display: inline-block;
-    padding: 5px 12px;
-    border-radius: 999px;
+    padding: 4px 10px;
+    border-radius: 6px;
     font-size: 0.75rem;
-    font-weight: 600;
-    background: rgba(139, 92, 246, 0.15);
-    color: #a78bfa;
+    font-weight: 500;
+    background: transparent;
+    color: var(--c-text);
+    border: 1px solid var(--c-border-strong);
 }
 
 .project-badge.empty {
-    background: rgba(100, 116, 139, 0.12);
-    color: var(--text-muted);
+    background: transparent;
+    color: var(--c-text-muted);
+    border-color: transparent;
     font-weight: 400;
 }
 
@@ -1195,12 +1214,12 @@ input[type="checkbox"] {
     }
 
     .edit-table tbody .monetary-pill.debit {
-        color: #f87171;
+        color: var(--c-danger-text);
         background: transparent;
     }
 
     .edit-table tbody .monetary-pill.credit {
-        color: #4ade80;
+        color: var(--c-success-text);
         background: transparent;
     }
 
@@ -1542,7 +1561,7 @@ input[type="checkbox"] {
 .split-row-remove {
     background: rgba(239, 68, 68, 0.15);
     border: none;
-    color: #f87171;
+    color: var(--c-danger-text);
     font-size: 0.75rem;
     padding: 6px 12px;
     border-radius: var(--radius-sm);
@@ -1639,7 +1658,7 @@ input[type="checkbox"] {
 .split-project-hint {
     display: none;
     font-size: 0.7rem;
-    color: #fbbf24;
+    color: var(--c-warning-text);
 }
 
 .split-project-combo.has-legacy .split-project-hint {
@@ -1703,14 +1722,14 @@ input[type="checkbox"] {
 .split-validation-message.error {
     display: block;
     background: rgba(239, 68, 68, 0.15);
-    color: #f87171;
+    color: var(--c-danger-text);
     border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .split-validation-message.success {
     display: block;
     background: rgba(34, 197, 94, 0.15);
-    color: #4ade80;
+    color: var(--c-success-text);
     border: 1px solid rgba(34, 197, 94, 0.3);
 }
 

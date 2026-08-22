@@ -20,7 +20,7 @@
 
     /* ---- Text ----------------------------------------------------------- */
     --c-text:            #1F1E1D;   /* primary text */
-    --c-text-muted:      #1F1E1D;   /* secondary/muted (identical today; split for dark mode) */
+    --c-text-muted:      #67655F;   /* secondary/muted - AA 4.89:1 worst-case, 5.83:1 on white */
     --c-text-soft:       #6E6C66;   /* genuinely lighter gray (login secondary text) */
 
     /* ---- Borders -------------------------------------------------------- */
@@ -118,10 +118,10 @@
     /* ---- Accessible status TEXT -----------------------------------------
        Verified against BOTH ivory and each colour's own soft tint, because
        status text usually sits on its own tinted chip:
-         success #047857  4.66:1 on tint / 5.21:1 on ivory
+         success #036B4C  5.73:1 on tint / 6.21:1 on ivory
          danger  #b91c1c  5.41:1 on tint / 6.14:1 on ivory
          warning #A64D08  4.88:1 on tint / 5.41:1 on ivory                */
-    --c-success-text:    #047857;
+    --c-success-text:    #036B4C;
     --c-danger-text:     #b91c1c;
     --c-warning-text:    #A64D08;
 
