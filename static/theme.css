@@ -85,6 +85,102 @@
     /* ---- Motion --------------------------------------------------------- */
     --transition-fast: 0.15s ease;
     --transition:      0.25s ease;
+
+    /* =====================================================================
+       APPLE HIG FOUNDATION
+       Added for the HIG craft pass. Purely additive - nothing below changes
+       how anything currently looks until a stylesheet opts in by using it.
+       ===================================================================== */
+
+    /* ---- Accessible coral ------------------------------------------------
+       MEASURED, not eyeballed. --c-accent #D97757 as TEXT scores only
+       2.96:1 on ivory and 2.63:1 on its own 12% tint - it fails WCAG AA
+       everywhere, even for large text. --c-accent-text is the same hue
+       darkened until it passes on every background we actually use:
+         ivory #FAF9F5 5.67:1 | white 6.15:1 | accent-soft #F6EBE4 5.10:1
+       RULE: coral for fills, borders and bars. --c-accent-text for TEXT. */
+    --c-accent-text:     #A64526;
+
+    /* ---- Accessible FILLS (white label on a coloured button) -------------
+       The same problem in the other direction: white on --c-accent is only
+       3.12:1, so every primary button in the app failed AA. These are the
+       same hues darkened until a white label clears 4.5:1.
+         accent  #D97757 -> 3.12:1   fill #C4522C -> 4.57:1
+         success #059669 -> 3.77:1   fill #05875F -> 4.53:1
+         warning #d97706 -> 3.19:1   fill #B26205 -> 4.52:1
+         danger  #dc2626 -> 4.83:1   already passes, unchanged            */
+    --c-accent-fill:     #C4522C;
+    --c-accent-fill-grad: linear-gradient(135deg, #C4522C 0%, #A64526 100%);
+    --c-success-fill:    #05875F;
+    --c-warning-fill:    #B26205;
+    --c-danger-fill:     #DC2626;
+
+    /* ---- Accessible status TEXT -----------------------------------------
+       Verified against BOTH ivory and each colour's own soft tint, because
+       status text usually sits on its own tinted chip:
+         success #047857  4.66:1 on tint / 5.21:1 on ivory
+         danger  #b91c1c  5.41:1 on tint / 6.14:1 on ivory
+         warning #A64D08  4.88:1 on tint / 5.41:1 on ivory                */
+    --c-success-text:    #047857;
+    --c-danger-text:     #b91c1c;
+    --c-warning-text:    #A64D08;
+
+    /* ---- HIG 8pt spacing grid ------------------------------------------ */
+    --space-1:  4px;
+    --space-2:  8px;
+    --space-3:  12px;
+    --space-4:  16px;
+    --space-5:  20px;
+    --space-6:  24px;
+    --space-8:  32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* ---- HIG type ramp -------------------------------------------------- */
+    --text-caption2:  11px;
+    --text-caption1:  12px;
+    --text-footnote:  13px;
+    --text-subhead:   15px;
+    --text-callout:   16px;
+    --text-body:      17px;
+    --text-headline:  17px;
+    --text-title3:    20px;
+    --text-title2:    22px;
+    --text-title1:    28px;
+
+    /* ---- HIG easing + duration ------------------------------------------ */
+    --ease-default:    cubic-bezier(0.25, 0.1, 0.25, 1);
+    --ease-out:        cubic-bezier(0, 0, 0.58, 1);
+    --ease-in-out:     cubic-bezier(0.42, 0, 0.58, 1);
+    --duration-instant: 100ms;   /* press feedback - must feel immediate   */
+    --duration-fast:    200ms;   /* hover / focus                          */
+    --duration-normal:  300ms;   /* standard transition                    */
+
+    /* ---- HIG focus ring --------------------------------------------------
+       HIG uses a 4px halo, not a 1px outline. Coral at 30% reads clearly on
+       ivory without shouting. */
+    --focus-ring:      0 0 0 4px rgba(217, 119, 87, 0.30);
+    --focus-outline:   2px solid var(--c-accent-strong);
+
+    /* ---- Control metrics -------------------------------------------------
+       Density follows the POINTER, not the viewport (HIG's own macOS rule),
+       so a touchscreen laptop gets touch targets and a desktop stays dense.
+       These two are re-declared under @media (pointer: coarse) below. */
+    --control-h:       28px;   /* desktop control height  */
+    --control-pad-y:   6px;
+    --control-pad-x:   12px;
+    --menu-row-h:      28px;   /* desktop menu row height */
+}
+
+/* Touch pointers get HIG's 44pt minimum. Keyed on the pointer, never on
+   max-width - a large tablet is still driven by a finger. */
+@media (pointer: coarse) {
+    :root {
+        --control-h:     44px;
+        --control-pad-y: 12px;
+        --control-pad-x: 16px;
+        --menu-row-h:    44px;
+    }
 }
 
 /* =========================================================================

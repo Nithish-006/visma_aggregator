@@ -1,0 +1,565 @@
+/* ============================================================================
+   hig.css - APPLE HIG CRAFT LAYER
+   ----------------------------------------------------------------------------
+   Loaded LAST on every page, after theme.css and the page's own stylesheet.
+
+   WHAT THIS LAYER DOES *NOT* DO
+   It does not repaint surfaces. The previous attempt at a global layer
+   (glass.css) forced `background: ... !important` onto 100+ selectors and
+   fought every page's design; it was reverted. This layer only ever:
+       - adds interaction affordances that were missing (focus, press)
+       - normalises rhythm onto the 8pt grid and the HIG radius ramp
+       - fixes measured contrast failures
+       - promotes controls to 44pt on touch pointers
+   Backgrounds, brand colours and layout stay exactly as each page defines
+   them, so a page can never be made unreadable by this file.
+
+   Tokens all come from theme.css. See the "APPLE HIG FOUNDATION" block there.
+   ============================================================================ */
+
+
+/* ============================================================================
+   1. ACCESSIBLE CORAL  -  measured contrast repair
+   ----------------------------------------------------------------------------
+   --c-accent (#D97757) as TEXT scores 2.96:1 on ivory and 2.63:1 on its own
+   12% tint. That is below WCAG AA for normal text (4.5:1) AND below the 3:1
+   floor for large text and UI graphics. Every rule below previously painted
+   text or a glyph in raw coral; they are re-pointed at --c-accent-text
+   (#A64526), the same hue darkened until it clears 4.5:1 on ivory, on white
+   and on every coral tint in the app.
+
+   Selectors are reproduced EXACTLY as the page stylesheets declare them, so
+   specificity matches and the cascade decides on source order alone - no
+   !important needed anywhere in this section.
+   ============================================================================ */
+
+/* -- bill_processor.css + sales_processor.css (identical rule sets) -------- */
+.stat-icon,
+.sort-caret,
+.upload-icon,
+.queue-item-icon,
+.detail-section-title,
+.invoice-card-number,
+.btn-split,
+.split-badge { color: var(--c-accent-text); }
+
+.th-sortable:hover,
+.bp-reset-btn:hover,
+.btn-icon.btn-reprocess:hover { color: var(--c-accent-text); }
+
+.data-table .cell-link { color: var(--c-accent-text); }
+
+/* -- style.css ------------------------------------------------------------ */
+.data-from-badge svg,
+.data-from-badge strong { color: var(--c-accent-text); }
+.file-preview .file-icon { color: var(--c-accent-text); }
+
+/* -- edit_transactions.css ------------------------------------------------ */
+.combobox-item.combobox-current { color: var(--c-accent-text); }
+
+/* -- personal_tracker.css ------------------------------------------------- */
+.project-amount { color: var(--c-accent-text); }
+
+/* -- project_summary.css -------------------------------------------------- */
+.ps-bank-stat-value.bank-transfer,
+.ps-show-all-btn,
+.ps-bill-link,
+.ps-proj-count,
+.ps-proj-card-id,
+.ps-cf-chip.category { color: var(--c-accent-text); }
+
+.ps-tab-btn.active,
+.ps-type-pill.active,
+.ps-type-pill.active .ps-type-count { color: var(--c-accent-text); }
+
+.ps-page-btn:hover:not(:disabled) { color: var(--c-accent-text); }
+.ps-cat-row.ps-cf-active .ps-cat-label { color: var(--c-accent-text); }
+tr.ps-cf-active td:first-child { color: var(--c-accent-text); }
+
+/* -- material_recon.css ---------------------------------------------------
+   These used --c-accent-strong (#C2603F), which is 3.96:1 - passes for large
+   text only, fails for the body-size text it was actually applied to. */
+.mr-head-btn:hover .mr-title,
+.mr-action:hover { color: var(--c-accent-text); }
+
+
+/* ============================================================================
+   1b. ACCESSIBLE FILLS AND STATUS TEXT
+   ----------------------------------------------------------------------------
+   The mirror image of the problem above: a WHITE label on the brand coral is
+   only 3.12:1, so every primary button in the app failed AA. The fills below
+   are the same hues darkened until a white label clears 4.5:1.
+
+   NOTE FOR REVIEW - this is the one place the HIG pass alters a brand-visible
+   colour. --c-accent-fill (#C4522C) is a deeper coral than --c-accent
+   (#D97757). Revert by pointing --c-accent-fill back at --c-accent in
+   theme.css; the contrast failure returns with it.
+
+   Several hover states also LIGHTENED the fill (#ff8266), which made the
+   contrast worse on hover than at rest. Hover now darkens, as it should.
+   ============================================================================ */
+.btn-primary,
+.btn-save,
+.panel-btn-save,
+.fab,
+.bank-btn.active,
+.panel-bank-btn.active,
+.ps-et-bank-btn.active {
+    background: var(--c-accent-fill);
+}
+
+.btn-primary:hover,
+.btn-primary:hover:not(:disabled),
+.btn-save:hover:not(:disabled),
+.panel-btn-save:hover:not(:disabled),
+.fab:hover {
+    background: var(--c-accent-text);
+}
+
+/* Gradient-filled primaries: both stops of the original ramp were lighter
+   than the flat colour, so white sat at roughly 2.5:1 across most of them. */
+.login-btn,
+.proj-primary-btn {
+    background: var(--c-accent-fill-grad);
+}
+
+/* Status text on its own tinted chip. Verified against the tint, not just
+   against ivory - the tint is what these actually sit on. */
+.type-btn.expense.active,
+.panel-type-btn.expense.active { color: var(--c-danger-text); }
+
+.type-btn.income.active,
+.panel-type-btn.income.active { color: var(--c-success-text); }
+
+/* --c-accent-light (#E08B6F) was used as text in a few places; at 2.46:1 on
+   ivory it is the worst offender in the app. */
+.transaction-badge,
+.login-footer span { color: var(--c-accent-text); }
+
+.proj-filter-pill.active,
+.proj-filter-pill.active .proj-filter-count { color: var(--c-accent-text); }
+
+/* Dashboard badges and pagination counters - all previously --primary-light
+   (#E08B6F) at 2.60:1, the weakest text in the app. */
+.stat-badge strong,
+.edit-stats .stat-badge strong,
+.pagination-info span { color: var(--c-accent-text); }
+
+.data-updated-badge strong,
+.data-updated-badge svg { color: var(--c-success-text); }
+
+/* #fbbf24 amber on a pale amber chip - effectively unreadable. */
+.stat-badge-warning strong,
+.edit-stats .stat-badge-warning strong { color: var(--c-warning-text); }
+
+.action-btn.upload-btn { background: var(--c-accent-fill-grad); }
+
+
+/* ============================================================================
+   2. FOCUS  -  a visible ring on everything reachable by keyboard
+   ----------------------------------------------------------------------------
+   HIG uses a soft 4px halo rather than a hairline outline. Several components
+   in this app previously set `outline: none` with no replacement, which makes
+   the page unusable by keyboard. :focus-visible keeps mouse users from ever
+   seeing it.
+   ============================================================================ */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+[role="button"]:focus-visible,
+[role="option"]:focus-visible,
+.btn:focus-visible,
+.dropdown-trigger:focus-visible,
+.bp-dd-trigger:focus-visible,
+.ps-dd-trigger:focus-visible,
+.dropdown-option:focus-visible,
+.bp-dd-option:focus-visible,
+.ps-dd-option:focus-visible,
+.combobox-item:focus-visible {
+    outline: var(--focus-outline);
+    outline-offset: 2px;
+    box-shadow: var(--focus-ring);
+}
+
+/* Text fields read better with the ring hugging the field and no offset. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+    outline-offset: 0;
+}
+
+
+/* ============================================================================
+   3. MENUS AND DROPDOWNS
+   ----------------------------------------------------------------------------
+   Six parallel implementations existed (.dropdown-*, .bp-dd-*, .ps-dd-*,
+   .combobox-*, .dropdown-pill, select2), each with its own radii, row heights
+   and padding. They are normalised here onto ONE macOS-menu spec:
+
+       container   12px radius, 4px inner padding
+       row          8px radius, inset inside that padding
+       row height  28px desktop / 44px touch, via --menu-row-h
+       highlight   a ROUNDED INSET row, the way AppKit draws menu selection,
+                   rather than a full-bleed edge-to-edge band
+
+   Only geometry, state and rhythm are set. Every menu keeps the background
+   and text colours its own stylesheet gives it.
+   ============================================================================ */
+
+/* -- Menu containers ------------------------------------------------------ */
+.dropdown-menu,
+.bp-dd-menu,
+.ps-dd-menu,
+.combobox-dropdown,
+.project-suggestions,
+.edit-project-suggestions,
+.select2-dropdown {
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+/* -- Scroll areas: 4px inset all round so rows can round off cleanly ------ */
+.dropdown-options,
+.bp-dd-options,
+.ps-dd-options,
+.combobox-dropdown {
+    padding: var(--space-1);
+    scrollbar-width: thin;
+}
+
+/* -- Rows ----------------------------------------------------------------- */
+.dropdown-option,
+.bp-dd-option,
+.ps-dd-option,
+.combobox-item,
+.select2-container--default .select2-results__option {
+    min-height: var(--menu-row-h);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    transition: background var(--duration-instant) var(--ease-default);
+}
+
+/* The rounded inset highlight. Each family keeps its own tint; only the
+   SHAPE of the highlight is unified. */
+.dropdown-option:hover,
+.bp-dd-option:hover,
+.ps-dd-option:hover,
+.combobox-item:hover,
+.combobox-item.combobox-highlighted {
+    border-radius: var(--radius-sm);
+}
+
+/* Keyboard highlight must look identical to hover, or arrow-key navigation
+   feels like a different control from the mouse. */
+.dropdown-option:focus-visible,
+.bp-dd-option:focus-visible,
+.ps-dd-option:focus-visible,
+.combobox-item:focus-visible {
+    outline-offset: -2px;
+}
+
+/* An empty/disabled row is informational, not actionable - it must not
+   present a hover affordance. */
+.combobox-item.combobox-empty,
+.bp-dd-empty,
+.dropdown-option.is-empty {
+    min-height: auto;
+    cursor: default;
+}
+
+/* -- Search field inside a menu ------------------------------------------- */
+/* The search field is inset by the same 4px as the rows, and its inner text
+   padding matches the rows' 8px, so the caret and the row labels share one
+   left edge instead of sitting 4px apart. */
+.dropdown-search,
+.bp-dd-search,
+.ps-dd-search {
+    padding: var(--space-1);
+}
+.dropdown-search input,
+.bp-dd-search input,
+.ps-dd-search input {
+    min-height: var(--control-h);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    transition: border-color var(--duration-fast) var(--ease-default),
+                box-shadow   var(--duration-fast) var(--ease-default);
+}
+.dropdown-search input:focus,
+.bp-dd-search input:focus,
+.ps-dd-search input:focus {
+    box-shadow: var(--focus-ring);
+}
+
+/* -- Triggers ------------------------------------------------------------- */
+.dropdown-trigger,
+.bp-dd-trigger,
+.ps-dd-trigger {
+    min-height: var(--control-h);
+    padding: var(--control-pad-y) var(--control-pad-x);
+    border-radius: var(--radius-sm);
+    gap: var(--space-2);
+    transition: border-color var(--duration-fast) var(--ease-default),
+                background   var(--duration-fast) var(--ease-default),
+                box-shadow   var(--duration-fast) var(--ease-default);
+}
+
+/* A trigger label must never wrap - it pushes the control to two lines and
+   crushes the chevron into the corner. Truncate instead. */
+.dropdown-trigger,
+.bp-dd-trigger,
+.ps-dd-trigger {
+    white-space: nowrap;
+}
+.dropdown-trigger .trigger-text,
+.bp-dd-text,
+.ps-dd-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dropdown-trigger::after,
+.bp-dd-arrow,
+.ps-dd-arrow {
+    flex-shrink: 0;
+}
+
+/* HIG uses a chevron, not a filled triangle. Rebuild the ::after marker in
+   style.css as a proper chevron.down drawn from two borders. (Chrome rounds
+   fractional border widths down, so 2px is the thinnest that stays crisp.) */
+.dropdown-trigger::after {
+    width: 7px;
+    height: 7px;
+    border: none;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    border-radius: 1px;
+    transform: rotate(45deg) translate(-2px, -2px);
+    opacity: 0.55;
+    transition: transform var(--duration-fast) var(--ease-default);
+}
+.custom-dropdown.active .dropdown-trigger::after {
+    transform: rotate(225deg) translate(-2px, -2px);
+}
+
+/* -- Pills (expense_form, personal_tracker) ------------------------------- */
+.dropdown-pill,
+.panel-pills .dropdown-pill {
+    min-height: var(--control-h);
+    border-radius: var(--radius-full, 9999px);
+    transition: background var(--duration-fast) var(--ease-default),
+                transform  var(--duration-instant) var(--ease-out);
+}
+
+
+/* ============================================================================
+   4. FORM CONTROLS
+   ----------------------------------------------------------------------------
+   Geometry and focus only - never the fill colour.
+   ============================================================================ */
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
+input[type="email"],
+input[type="password"],
+select,
+textarea {
+    border-radius: var(--radius-sm);
+    transition: border-color var(--duration-fast) var(--ease-default),
+                box-shadow   var(--duration-fast) var(--ease-default);
+}
+
+/* Checkboxes and radios are the one control HIG sizes SMALLER than the touch
+   target - the 44pt area belongs to the row/label, not the glyph. */
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--c-accent);
+}
+
+
+/* ============================================================================
+   5. PRESS FEEDBACK
+   ----------------------------------------------------------------------------
+   "Respond on pointer-down, not on release." Most of this app had hover
+   states but no press state, so a tap produced no acknowledgement until the
+   next page painted.
+   ============================================================================ */
+@media (prefers-reduced-motion: no-preference) {
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-icon,
+    .btn-sm,
+    .back-btn,
+    .back-to-hub,
+    .chip,
+    .time-chip,
+    .dropdown-pill,
+    .ps-month-pill,
+    .ps-type-pill,
+    .ps-page-btn,
+    .ps-tab-btn,
+    .proj-filter-pill,
+    .type-btn,
+    .bank-btn,
+    .panel-type-btn,
+    .panel-bank-btn,
+    .row-action-btn,
+    .pagination-btn,
+    .viewer-btn,
+    .mr-action,
+    .bp-reset-btn,
+    .ps-reset-btn,
+    .filter-toggle,
+    .dropdown-trigger,
+    .bp-dd-trigger,
+    .ps-dd-trigger {
+        transition: background     var(--duration-fast) var(--ease-default),
+                    border-color   var(--duration-fast) var(--ease-default),
+                    color          var(--duration-fast) var(--ease-default),
+                    box-shadow     var(--duration-fast) var(--ease-default),
+                    transform      var(--duration-instant) var(--ease-out);
+    }
+
+    .btn:active,
+    .btn-primary:active,
+    .btn-secondary:active,
+    .btn-icon:active,
+    .btn-sm:active,
+    .back-btn:active,
+    .back-to-hub:active,
+    .chip:active,
+    .time-chip:active,
+    .dropdown-pill:active,
+    .ps-month-pill:active,
+    .ps-type-pill:active,
+    .ps-page-btn:not(:disabled):active,
+    .ps-tab-btn:active,
+    .proj-filter-pill:active,
+    .type-btn:active,
+    .bank-btn:active,
+    .panel-type-btn:active,
+    .panel-bank-btn:active,
+    .row-action-btn:active,
+    .pagination-btn:not(:disabled):active,
+    .viewer-btn:active,
+    .mr-action:active,
+    .bp-reset-btn:active,
+    .ps-reset-btn:active,
+    .filter-toggle:active {
+        transform: scale(0.97);
+    }
+
+    /* Large surfaces scale less - the same 3% on a wide card reads as a
+       glitch rather than a press. */
+    .stat-card:active,
+    .kpi-card:active,
+    .project-card:active,
+    .ps-proj-card:active,
+    .invoice-card:active,
+    .mr-row-head:active {
+        transform: scale(0.99);
+    }
+}
+
+
+/* ============================================================================
+   6. TOUCH DENSITY
+   ----------------------------------------------------------------------------
+   HIG's 44pt minimum, applied where a finger is the input device. Keyed on
+   the pointer rather than a width breakpoint.
+   ============================================================================ */
+@media (pointer: coarse) {
+    .btn,
+    .btn-primary,
+    .btn-secondary,
+    .btn-icon,
+    .btn-sm,
+    .back-btn,
+    .back-to-hub,
+    .row-action-btn,
+    .pagination-btn,
+    .ps-page-btn,
+    .viewer-btn,
+    .filter-toggle,
+    .bp-reset-btn,
+    .ps-reset-btn,
+    .modal-close,
+    .chip,
+    .time-chip,
+    .ps-month-pill,
+    .ps-type-pill,
+    .proj-filter-pill,
+    .logout-btn,
+    .download-btn,
+    .proj-primary-btn,
+    .tab,
+    .bank-btn,
+    .panel-bank-btn,
+    .type-btn,
+    .panel-type-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    /* Small icon buttons keep their VISUAL size and gain a 44pt HIT AREA via
+       a transparent pseudo-element. This is HIG's actual guidance - "add
+       sufficient padding for small visual elements" - and it avoids inflating
+       toolbars and table rows just to satisfy the target minimum. */
+    .icon-btn,
+    .month-btn,
+    .ps-icon-btn,
+    .slide-panel-back,
+    .password-toggle,
+    .row-action-btn,
+    .modal-close {
+        position: relative;
+    }
+    .icon-btn::after,
+    .month-btn::after,
+    .ps-icon-btn::after,
+    .slide-panel-back::after,
+    .password-toggle::after,
+    .row-action-btn::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
+        /* purely a hit target - never paints, never intercepts scrolling */
+        background: transparent;
+        pointer-events: auto;
+    }
+
+    /* Table ROWS stay at their natural height - they are read far more often
+       than tapped, and forcing 44px would halve how many transactions fit. */
+}
+
+
+/* ============================================================================
+   7. REDUCED MOTION
+   ----------------------------------------------------------------------------
+   A gentler equivalent, not the removal of feedback: colour and shadow cues
+   survive, movement does not.
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

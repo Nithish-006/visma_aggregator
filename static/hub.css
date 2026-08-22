@@ -1,19 +1,48 @@
-﻿/* ============================================================================
-   HUB â€” Claude-style light theme (warm ivory + coral)
+/* ============================================================================
+   HUB - Apple HIG craft applied to the VISMA brand
+   ----------------------------------------------------------------------------
+   The palette stays VISMA: warm ivory (#FAF9F5) + coral (#D97757), Inter.
+   What comes from Apple's HIG is the CRAFT underneath it:
+
+     - 8pt spacing grid (4pt allowed for icon sizing only)
+     - HIG type ramp: caption1 12 / footnote 13 / callout 16 / headline 17
+                      title3 20 / title2 22
+     - HIG easing curves + duration scale, not ad-hoc "0.16s ease"
+     - Press feedback on :active (this page previously had none)
+     - Density follows the POINTER, per HIG's macOS rule:
+         pointer: fine   -> 28px controls, 13px text (desktop, dense)
+         pointer: coarse -> 44px minimum touch targets (phone/tablet)
+     - WCAG AA verified, not eyeballed. Measured on #FAF9F5:
+         #1F1E1D  15.80:1  PASS   body text
+         #6E6C66   4.98:1  PASS   secondary labels
+         #D97757   2.96:1  FAIL   <- brand coral is NOT safe as text
+         #B74C29   4.88:1  PASS   <- accessible coral, same hue
+       Brand coral is therefore used for FILLS and BORDERS only; coral TEXT
+       uses --accent-text.
+
+   Note on concentric radii: HIG's inner+padding=outer rule binds only where a
+   rounded child sits IN a rounded parent's corner. The card icon is centred on
+   the left edge, not cornered, so the rule does not apply here and the icon
+   keeps its own 12px radius from the ramp.
    ============================================================================ */
 
 :root {
-    /* Local aliases → central tokens in theme.css (single source of truth) */
+    /* Local aliases -> central tokens in theme.css (single source of truth) */
     --bg: var(--c-bg);
     --surface: var(--c-surface);
     --surface-soft: var(--c-surface-soft);
     --border: var(--c-border);
     --border-strong: var(--c-border-strong);
-    --text: var(--c-text);
-    --text-2: var(--c-text-muted);
-    --text-3: var(--c-text-muted);
-    --accent: var(--c-accent);
+
+    /* Text hierarchy. HIG builds hierarchy with weight + colour, not size
+       alone -- and every level below is AA-verified against the ivory bg. */
+    --text: var(--c-text);                /* 15.80:1 - primary            */
+    --text-2: var(--c-text-soft);         /*  4.98:1 - secondary          */
+    --text-3: var(--c-text-soft);         /*  4.98:1 - tertiary / labels  */
+
+    --accent: var(--c-accent);            /* fills + borders only         */
     --accent-strong: var(--c-accent-strong);
+    --accent-text: #B74C29;               /*  4.88:1 - coral you can READ */
     --accent-soft: var(--c-accent-soft);
     --axis: var(--c-axis);
     --kvb: var(--c-kvb);
@@ -21,8 +50,38 @@
     --ui: var(--font-ui);
     --serif: var(--font-serif);
 
+    /* ---- HIG 8pt spacing grid --------------------------------------- */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+
+    /* ---- HIG radius ramp --------------------------------------------- */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
     --r-card: var(--radius-lg);
-    --r-btn: 10px;
+    --r-btn: var(--radius-sm);
+
+    /* ---- HIG type ramp ------------------------------------------------ */
+    --text-caption1: 12px;
+    --text-footnote: 13px;
+    --text-callout: 16px;
+    --text-headline: 17px;
+    --text-title3: 20px;
+    --text-title2: 22px;
+
+    /* ---- HIG easing + duration --------------------------------------- */
+    --ease-default: cubic-bezier(0.25, 0.1, 0.25, 1);
+    --ease-out: cubic-bezier(0, 0, 0.58, 1);
+    --duration-instant: 100ms;
+    --duration-fast: 200ms;
+    --duration-normal: 300ms;
+
     --shadow: var(--shadow-warm);
     --shadow-hover: var(--shadow-warm-hover);
 }
@@ -36,7 +95,8 @@ body {
     background: var(--bg);
     color: var(--text);
     font-family: var(--ui);
-    font-size: 16px;
+    /* HIG: consistent line-height 1.2-1.5; body sits at the top of that band */
+    font-size: var(--text-callout);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
@@ -50,15 +110,15 @@ a { color: inherit; text-decoration: none; }
     width: 100%;
     max-width: 1040px;
     margin: 0 auto;
-    padding: 0 28px;
+    padding: 0 var(--space-6);
 }
 
-/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Header ---------------------------------------------------------------
+   HIG "Deference": chrome supports content, it does not compete with it.
+   A hairline separator and a plain background, nothing more.              */
 .topbar {
     border-bottom: 1px solid var(--border);
-    background: rgba(250, 249, 245, 0.85);
-    backdrop-filter: saturate(1.2) blur(8px);
-    -webkit-backdrop-filter: saturate(1.2) blur(8px);
+    background: var(--bg);
     position: sticky;
     top: 0;
     z-index: 10;
@@ -68,64 +128,99 @@ a { color: inherit; text-decoration: none; }
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 20px;
+    gap: var(--space-5);
     height: 64px;
 }
 
-.brand { display: flex; align-items: center; gap: 11px; }
+.brand { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+/* Without min-width:0 the flex child refuses to shrink, so the wordmark wraps
+   to a second line on narrow screens and doubles the header height. */
+.brand > div { min-width: 0; }
 
-.brand__logo { width: 28px; height: 28px; border-radius: 6px; object-fit: contain; }
-
-.brand__mark { width: 30px; height: 30px; color: var(--accent); flex-shrink: 0; }
-
-.brand__name {
-    font-size: 17px;
-    font-weight: 600;
-    letter-spacing: -0.2px;
-    color: var(--text);
+.brand__logo {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    object-fit: contain;
 }
 
-.brand__tag { font-size: 12px; color: var(--text-3); margin-left: 2px; }
+.brand__mark { width: 32px; height: 32px; color: var(--accent); flex-shrink: 0; }
 
-.actions { display: flex; align-items: center; gap: 8px; }
+.brand__name {
+    font-size: var(--text-headline);
+    font-weight: 600;
+    /* HIG: tighten tracking as type grows */
+    letter-spacing: -0.012em;
+    line-height: 1.25;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.brand__tag {
+    font-size: var(--text-caption1);
+    color: var(--text-3);
+    margin-left: var(--space-1);
+}
+
+.actions { display: flex; align-items: center; gap: var(--space-2); }
 
 .userchip {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    font-size: 13px;
+    gap: var(--space-2);
+    font-size: var(--text-footnote);
     color: var(--text-2);
-    padding: 0 6px 0 4px;
+    padding: 0 var(--space-2) 0 var(--space-1);
 }
 .userchip svg { width: 16px; height: 16px; color: var(--text-3); }
 
+/* -- Buttons --------------------------------------------------------------
+   Density is set by the POINTER, not the viewport width -- a touchscreen
+   laptop gets touch targets, a desktop gets macOS density. Base values here
+   are the desktop ones; the coarse-pointer block below promotes them.     */
 .btn {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    justify-content: center;
+    gap: var(--space-2);
     font-family: var(--ui);
-    font-size: 13px;
+    font-size: var(--text-footnote);
     font-weight: 500;
     color: var(--text-2);
     background: transparent;
     border: 1px solid var(--border);
     border-radius: var(--r-btn);
-    padding: 7px 12px;
+    /* HIG macOS control metrics: 28px min-height, 6px/12px padding, 13px */
+    min-height: 28px;
+    padding: var(--space-1) var(--space-3);
     cursor: pointer;
-    transition: background .16s ease, border-color .16s ease, color .16s ease;
+    transition:
+        background   var(--duration-fast) var(--ease-default),
+        border-color var(--duration-fast) var(--ease-default),
+        color        var(--duration-fast) var(--ease-default),
+        transform    var(--duration-instant) var(--ease-out);
 }
 .btn:hover { background: var(--surface); border-color: var(--border-strong); color: var(--text); }
-.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.btn svg { width: 15px; height: 15px; }
+
+/* HIG: feedback belongs on the PRESS, not on release. */
+.btn:active { transform: scale(0.97); }
+
+/* HIG focus ring: a 4px halo, not a hairline outline. */
+.btn:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.3);
+}
+.btn svg { width: 16px; height: 16px; }
 
 main { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 
-/* â”€â”€ Card grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Card grid ----------------------------------------------------------- */
 .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(244px, 1fr));
-    gap: 16px;
-    padding: 40px 0;
+    gap: var(--space-4);
+    padding: var(--space-10) 0;
 }
 
 .card {
@@ -135,14 +230,17 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     display: flex;
     align-items: center;
     min-width: 0;
-    gap: 16px;
+    gap: var(--space-4);
     background: var(--card-tint);
     border: 1px solid var(--border-strong);
     border-left: 3px solid var(--card-accent);
     border-radius: var(--r-card);
-    padding: 20px;
+    padding: var(--space-5);
     box-shadow: var(--shadow);
-    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    transition:
+        border-color var(--duration-normal) var(--ease-default),
+        box-shadow   var(--duration-normal) var(--ease-default),
+        transform    var(--duration-fast)   var(--ease-default);
 }
 
 .card:hover {
@@ -151,16 +249,32 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     box-shadow: var(--shadow-hover);
     transform: translateY(-2px);
 }
-.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Press feedback: the card settles back INTO the page under the finger.
+   Overrides the hover lift because :active comes later in the cascade. */
+.card:active {
+    transform: translateY(0) scale(0.985);
+    transition-duration: var(--duration-instant);
+}
+
+.card:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.3);
+}
 
 .card__icon {
     flex-shrink: 0;
-    width: 46px; height: 46px;
-    display: grid; place-items: center;
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
     background: var(--surface-soft);
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     color: var(--card-accent);
-    transition: background .18s ease, color .18s ease;
+    transition:
+        background var(--duration-normal) var(--ease-default),
+        color      var(--duration-normal) var(--ease-default);
 }
 .card__icon svg { width: 24px; height: 24px; }
 
@@ -169,43 +283,62 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
 .card__name {
     margin: 0;
     font-family: var(--ui);
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.1px;
+    font-size: var(--text-headline);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    line-height: 1.3;
     color: var(--text);
 }
 
 .card__desc {
-    margin: 3px 0 0;
-    font-size: 13px;
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-footnote);
     color: var(--text-2);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.card__stat { display: flex; align-items: baseline; gap: 6px; margin-top: 9px; }
+.card__stat {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
 .card__statnum {
-    font-size: 20px;
+    font-size: var(--text-title3);
     font-weight: 600;
-    letter-spacing: -0.4px;
+    letter-spacing: -0.02em;
     color: var(--text);
     font-variant-numeric: tabular-nums;
 }
-.card__statlabel { font-size: 12px; color: var(--text-3); }
+.card__statlabel { font-size: var(--text-caption1); color: var(--text-3); }
 
 .card__arrow {
     flex-shrink: 0;
     color: var(--text-3);
-    transition: transform .18s ease, color .18s ease;
+    transition:
+        transform var(--duration-normal) var(--ease-default),
+        color     var(--duration-normal) var(--ease-default);
 }
-.card__arrow svg { width: 19px; height: 19px; display: block; }
-.card:hover .card__arrow { transform: translateX(3px); color: var(--card-accent); }
+.card__arrow svg { width: 20px; height: 20px; display: block; }
+.card:hover .card__arrow { transform: translateX(var(--space-1)); color: var(--card-accent); }
 
-/* Per-module accent â€” coloured left bar, faint matching tint, coloured icon */
-.card--hero    { grid-column: 1 / -1; padding: 26px 28px; --card-accent: #D97757; --card-tint: #FBF1EC; }
+/* Per-module accent - coloured left bar, faint matching tint, coloured icon */
+.card--hero {
+    grid-column: 1 / -1;
+    padding: var(--space-6);
+    --card-accent: #D97757;
+    --card-tint: #FBF1EC;
+}
 .card--hero .card__icon { background: var(--surface); }
-.card--hero .card__name { font-family: var(--ui); font-weight: 700; font-size: 21px; }
+.card--hero .card__name {
+    font-family: var(--ui);
+    font-weight: 700;
+    font-size: var(--text-title2);
+    letter-spacing: -0.021em;
+    line-height: 1.2;
+}
 
 .card--expense  { --card-accent: #7C6BD6; --card-tint: #F3F0FB; }
 .card--projects { --card-accent: #3B6BC9; --card-tint: #ECF1FA; }
@@ -216,29 +349,83 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
 
 /* gentle load reveal */
 @media (prefers-reduced-motion: no-preference) {
-    .card { opacity: 0; transform: translateY(8px); animation: rise .42s ease forwards; }
-    .card:nth-child(1) { animation-delay: .02s; }
-    .card:nth-child(2) { animation-delay: .07s; }
-    .card:nth-child(3) { animation-delay: .12s; }
-    .card:nth-child(4) { animation-delay: .17s; }
-    .card:nth-child(5) { animation-delay: .22s; }
-    .card:nth-child(6) { animation-delay: .27s; }
-    .card:nth-child(7) { animation-delay: .32s; }
+    .card {
+        opacity: 0;
+        transform: translateY(var(--space-2));
+        animation: rise var(--duration-normal) var(--ease-default) forwards;
+    }
+    .card:nth-child(1) { animation-delay: 20ms; }
+    .card:nth-child(2) { animation-delay: 60ms; }
+    .card:nth-child(3) { animation-delay: 100ms; }
+    .card:nth-child(4) { animation-delay: 140ms; }
+    .card:nth-child(5) { animation-delay: 180ms; }
+    .card:nth-child(6) { animation-delay: 220ms; }
+    .card:nth-child(7) { animation-delay: 260ms; }
     @keyframes rise { to { opacity: 1; transform: translateY(0); } }
 }
 
-/* â”€â”€ Footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Footer -------------------------------------------------------------- */
 .foot {
     border-top: 1px solid var(--border);
-    padding: 20px 0 32px;
+    padding: var(--space-6) 0 var(--space-8);
 }
-.foot__note { font-size: 12.5px; color: var(--text-3); }
+.foot__note { font-size: var(--text-footnote); color: var(--text-3); }
 
-/* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Touch density --------------------------------------------------------
+   HIG's 44pt minimum is a TOUCH requirement, so it keys off the pointer, not
+   the screen size. A desktop keeps macOS density; anything driven by a finger
+   gets full-size targets even on a large tablet.                          */
+@media (pointer: coarse) {
+    .btn {
+        min-height: 44px;
+        min-width: 44px;
+        padding: var(--space-3) var(--space-4);
+    }
+    .userchip { min-height: 44px; }
+    .card { padding: var(--space-6); }
+}
+
+/* -- Responsive ---------------------------------------------------------- */
 @media (max-width: 640px) {
-    .wrap { padding: 0 18px; }
+    .wrap { padding: 0 var(--space-4); }
+    .topbar__row { gap: var(--space-3); }
     .brand__tag { display: none; }
     .btn span { display: none; }
-    .btn { padding: 7px 9px; }
-    .grid { grid-template-columns: minmax(0, 1fr); padding-top: 28px; }
+    .btn { padding: var(--space-3); }
+    .grid { grid-template-columns: minmax(0, 1fr); padding-top: var(--space-8); }
+
+    /* Reclaim header width for the wordmark: the avatar glyph still says
+       "signed in", so the name itself is redundant at this size. */
+    .userchip { font-size: 0; gap: 0; padding: 0 var(--space-1); }
+    .userchip svg { width: 20px; height: 20px; }
+
+    /* HIG "Clarity": a truncated sentence is not clearer than a wrapped one.
+       Descriptions get two lines on phones instead of an ellipsis. */
+    .card__desc {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        line-clamp: 2;
+    }
+}
+
+/* -- Reduced motion -------------------------------------------------------
+   Not "no feedback" -- the colour and shadow cues stay, only the movement
+   and the staggered reveal are dropped.                                   */
+@media (prefers-reduced-motion: reduce) {
+    .card,
+    .card:hover,
+    .card:active,
+    .btn:active {
+        transform: none;
+    }
+    .card:hover .card__arrow { transform: none; }
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
