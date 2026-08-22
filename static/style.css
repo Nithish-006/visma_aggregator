@@ -27,7 +27,7 @@
 
     /* Rich, readable text */
     --text-main: var(--c-text);
-    --text-secondary: var(--c-text);
+    --text-secondary: var(--c-text-muted);
     --text-muted: var(--c-text-muted);
 
     /* Refined borders */
@@ -35,11 +35,11 @@
     --border-strong: var(--c-border-strong);
 
     /* Status Colors with gradients */
-    --success-color: var(--c-success);
+    --success-color: var(--c-success-text);
     --success-gradient: var(--c-success-grad);
-    --danger-color: var(--c-danger);
+    --danger-color: var(--c-danger-text);
     --danger-gradient: var(--c-danger-grad);
-    --warning-color: var(--c-warning);
+    --warning-color: var(--c-warning-text);
     --warning-gradient: var(--c-warning-grad);
 
     /* Bank Colors */
@@ -381,7 +381,7 @@ body {
 .logout-btn:hover {
     background: rgba(239, 68, 68, 0.1);
     border-color: var(--danger-color);
-    color: #f87171;
+    color: var(--c-danger-text);
 }
 
 /* ============================================================================
@@ -927,8 +927,10 @@ body {
     opacity: 0.5;
 }
 
+/* --primary-light (#E08B6F) read fine as the active-sort marker while the
+   table header was dark navy; on the light header it drops to 2.3:1. */
 .header-sort-active {
-    color: var(--primary-light) !important;
+    color: var(--c-accent-text) !important;
 }
 
 .header-sort-active .sort-icon {
@@ -938,10 +940,11 @@ body {
 /* Monetary Pills - Clean and subtle */
 .monetary-pill {
     display: inline-flex;
-    padding: 0.35rem 0.75rem;
+    padding: 0.35rem 0;
     border-radius: 6px;
     font-weight: 600;
     font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
     align-items: center;
     justify-content: flex-end;
@@ -950,14 +953,19 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* Money is the content, not a badge. The filled chips turned every amount
+   into a coloured blob and, worse, carried dark-theme text colours onto a
+   light background - #f87171 on pale red is about 2.3:1. Amounts now read as
+   tabular numerals with the colour doing the debit/credit job on its own,
+   which is both calmer and legible. */
 .monetary-pill.debit {
-    background: rgba(239, 68, 68, 0.12);
-    color: #f87171;
+    background: transparent;
+    color: var(--c-danger-text);
 }
 
 .monetary-pill.credit {
-    background: rgba(34, 197, 94, 0.12);
-    color: #4ade80;
+    background: transparent;
+    color: var(--c-success-text);
 }
 
 .monetary-pill.neutral {
@@ -966,19 +974,22 @@ body {
 }
 
 /* Category & Project Pills */
+/* Matched to the dashboard's .category-badge / .project-badge treatment so
+   the two tables read as one design rather than two. */
 .category-pill,
 .project-pill {
     display: inline-block;
-    padding: 5px 12px;
-    border-radius: 999px;
+    padding: 4px 10px;
+    border-radius: 6px;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
     white-space: nowrap;
 }
 
 .category-pill {
-    background: rgba(217, 119, 87, 0.15);
-    color: var(--primary-light);
+    background: var(--c-surface-soft);
+    color: var(--c-text-muted);
+    border: 1px solid var(--c-border);
 }
 
 .category-pill.uncategorized {
@@ -988,8 +999,9 @@ body {
 }
 
 .project-pill {
-    background: rgba(194, 96, 63, 0.15);
-    color: #a78bfa;
+    background: transparent;
+    color: var(--c-text);
+    border: 1px solid var(--c-border-strong);
 }
 
 .project-pill.empty {

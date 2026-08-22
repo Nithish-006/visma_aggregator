@@ -22,17 +22,17 @@
     --proj-text-dim:      var(--c-text-muted);
     --proj-text-muted:    var(--c-text-muted);
     --proj-accent:        var(--c-accent);      /* coral â€” matches the hub Projects tile */
-    --proj-accent-strong: var(--c-accent-strong);
+    --proj-accent-strong: var(--c-accent-text);   /* used as TEXT in ~20 rules; #C2603F was 3.3-3.8:1 */
     --proj-accent-soft:   var(--c-accent-soft-a);
     --proj-accent-2:      var(--c-cyan);
     --proj-design:        var(--c-teal);        /* teal â€” Designs */
     --proj-design-strong: var(--c-teal-strong);
     --proj-design-soft:   var(--c-teal-soft);
-    --proj-success:       var(--c-success-deep);
+    --proj-success:       var(--c-success-text);
     --proj-success-soft:  var(--c-success-soft);
-    --proj-danger:        var(--c-danger-deep);
+    --proj-danger:        var(--c-danger-text);
     --proj-danger-soft:   var(--c-danger-soft);
-    --proj-warning:       var(--c-warning-deep);
+    --proj-warning:       var(--c-warning-text);  /* #b45309 was 4.30:1 on its own tint */
     --proj-warning-soft:  var(--c-warning-soft);
 }
 

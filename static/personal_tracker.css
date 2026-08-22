@@ -9,13 +9,13 @@
     --bg-card: var(--c-surface);
     --bg-hover: var(--c-surface-soft);
     --text-primary: var(--c-text);
-    --text-secondary: var(--c-text);
+    --text-secondary: var(--c-text-muted);
     --text-muted: var(--c-text-muted);
     --border-color: var(--c-border);
     --border-strong: var(--c-border-strong);
-    --income-color: var(--c-success);
+    --income-color: var(--c-success-text);
     --income-gradient: var(--c-success-grad);
-    --expense-color: var(--c-danger);
+    --expense-color: var(--c-danger-text);
     --expense-gradient: var(--c-danger-grad);
     --accent-color: var(--c-accent);
     --accent-gradient: var(--c-accent-grad);
@@ -340,8 +340,15 @@ body {
    DAILY TRANSACTIONS LIST
    ============================================================================ */
 
+/* HIG grouped-list style: each day is an inset rounded group on the page
+   tint, rather than one edge-to-edge run of rows. The grouping does the work
+   the date header was carrying alone. */
 .date-group {
-    border-bottom: 1px solid var(--border-color);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--radius-lg);
+    margin: 0 16px 12px;
+    overflow: hidden;
 }
 
 .date-header {
@@ -388,11 +395,11 @@ body {
 }
 
 .date-income {
-    color: var(--income-color);
+    color: var(--c-success-text);
 }
 
 .date-expense {
-    color: var(--expense-color);
+    color: var(--c-text-muted);
 }
 
 /* Transaction Row */
@@ -462,8 +469,8 @@ body {
 }
 
 .bank-badge.bank-kvb {
-    border-color: #16a34a;
-    color: #16a34a;
+    border-color: var(--c-success-text);
+    color: var(--c-success-text);
 }
 
 .transaction-project {
@@ -480,12 +487,17 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+/* In a ledger that is ~90% spending, painting every expense red makes the
+   colour meaningless and the page exhausting - it is the default case, not
+   an alert. Apple's own wallet/statement lists keep spends in plain text and
+   spend the colour on the exception. Expenses are now neutral; income stays
+   green because it IS the exception worth spotting. */
 .transaction-amount.income {
-    color: var(--income-color);
+    color: var(--c-success-text);
 }
 
 .transaction-amount.expense {
-    color: var(--expense-color);
+    color: var(--c-text);
 }
 
 /* ============================================================================

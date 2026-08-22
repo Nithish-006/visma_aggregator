@@ -9,12 +9,12 @@
     --bg-card: var(--c-surface);
     --bg-soft: var(--c-surface-soft);
     --text-primary: var(--c-text);
-    --text-secondary: var(--c-text);
+    --text-secondary: var(--c-text-muted);
     --text-muted: var(--c-text-muted);
     --border-color: var(--c-border);
     --border-strong: var(--c-border-strong);
-    --income-color: var(--c-success);
-    --expense-color: var(--c-danger);
+    --income-color: var(--c-success-text);
+    --expense-color: var(--c-danger-text);
     --accent-color: var(--c-accent);
     --accent-strong: var(--c-accent-strong);
     --accent-soft: var(--c-accent-soft);
@@ -1833,8 +1833,8 @@ tr.ps-cf-active td:first-child {
     text-overflow: ellipsis;
 }
 
-.ps-proj-fin-cell .v.income { color: var(--income-color); }
-.ps-proj-fin-cell .v.expense { color: var(--expense-color); }
+.ps-proj-fin-cell .v.income { color: var(--c-success-text); }
+.ps-proj-fin-cell .v.expense { color: var(--c-danger-text); }
 
 /* Designs â€” teal tint */
 .ps-proj-section--designs .ps-proj-count {
@@ -1876,7 +1876,7 @@ tr.ps-cf-active td:first-child {
 
 /* Closed â€” muted grey; the cards read as archived, not active. */
 .ps-proj-section--closed .ps-proj-count {
-    color: #64748b;
+    color: var(--c-text-muted);
     background: rgba(100, 116, 139, 0.14);
 }
 .ps-proj-section--closed .ps-proj-card {
@@ -1889,7 +1889,7 @@ tr.ps-cf-active td:first-child {
     box-shadow: 0 10px 28px rgba(100, 116, 139, 0.16), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 .ps-proj-section--closed .ps-proj-card-id {
-    color: #64748b;
+    color: var(--c-text-muted);
     background: rgba(100, 116, 139, 0.14);
 }
 .ps-proj-card.is-closed { opacity: 0.85; }
