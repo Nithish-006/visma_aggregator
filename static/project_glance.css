@@ -186,11 +186,9 @@
     margin-top: 0.7rem;
 }
 .proj-ov-panel {
-    /* Each panel ends where its content does. The GST panel now answers in a
-       headline and two rows, so stretching it to the height of the contract
-       panel beside it would open a hand's width of blank surface under the
-       last figure — a hole that reads as something failing to load. */
-    align-self: start;
+    /* The two panels are read as a pair, so they start and end together. Left
+       to their natural heights they ended on different lines and the grid
+       looked broken rather than deliberate. */
     background: var(--proj-surface);
     border: 1px solid var(--proj-border);
     border-radius: 10px;
@@ -239,7 +237,6 @@
     line-height: 1.35;
     color: var(--proj-text-muted);
 }
-.proj-cap-foot { margin: 0.25rem 0 0; text-align: right; }
 
 /* Visually hidden, still read aloud — the matrix's row-header column has no
    visible heading, but a screen reader shouldn't meet a blank one. */
@@ -339,6 +336,18 @@
 }
 /* The book in force carries the figures the rest of the panel is built on. */
 .proj-mx-row.is-force td { font-weight: 700; }
+/* Only the variations case earns a total line — it is the one place two live
+   books have to be added up. A rule above it, the way the source sheet sets
+   its totals apart. */
+.proj-mx-row.is-total th,
+.proj-mx-row.is-total td {
+    border-top: 1px solid var(--proj-border-strong);
+    padding-top: 0.42rem;
+}
+.proj-mx-row.is-total th { font-weight: 700; color: var(--proj-text); }
+/* A component that was never recorded — a billed-only project has no
+   basic/GST split. A dash says "not on record"; a 0 would claim it was nil. */
+.proj-mx-nil { color: var(--proj-text-muted); opacity: 0.7; }
 /* Superseded books stay legible but plainly spent: they are here to answer
    "how far did this move", not to be read as live figures. */
 .proj-mx-row.is-old th,
@@ -372,28 +381,6 @@
    with its column name beside it. */
 .proj-amt { white-space: nowrap; }
 
-/* Tier 1: the figure the matrix above exists to produce. */
-.proj-govern {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-top: 0.15rem;
-    padding-top: 0.45rem;
-    border-top: 1px solid var(--proj-border-strong);
-}
-.proj-govern-k {
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: var(--proj-text);
-}
-.proj-govern-v {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--proj-text);
-    font-variant-numeric: tabular-nums;
-}
-.proj-govern-note { margin-top: 0.25rem; text-align: right; }
 /* How far the contract has moved from the PO as signed — the one thing the old
    stack of component rows never actually said. */
 .proj-chip-delta {
@@ -413,8 +400,15 @@
     background: var(--proj-danger-soft);
 }
 
-/* == Received: what actually stayed with us ============================== */
-.proj-recv { margin: 0; }
+/* == Received: what actually stayed with us ==============================
+   The block carries no heading — the rows name themselves, and "RECEIVED"
+   sitting over a row called "Received" was the same word twice. A rule above
+   it does the separating a heading used to. */
+.proj-recv {
+    margin: 0.9rem 0 0;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--proj-border);
+}
 .proj-recv-row {
     display: flex;
     align-items: baseline;
@@ -434,11 +428,10 @@
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
-.proj-recv-row.is-lead dt { font-weight: 600; color: var(--proj-text); }
-/* The pass-through legs are adjustments to the receipt above them, so they sit
-   indented under it rather than reading as receipts of their own. */
-.proj-recv-row.is-sub dt { padding-left: 0.7rem; color: var(--proj-text-muted); }
-.proj-recv-row.is-deduct dd { color: var(--proj-danger); }
+/* Direction, in colour: money in reads green, money passed straight back out
+   reads red. On a row that can be either, the sign alone is easy to miss. */
+.proj-recv-row.is-in dd  { color: var(--proj-success); }
+.proj-recv-row.is-out dd { color: var(--proj-danger); }
 .proj-recv-row.is-net {
     border-top: 1px solid var(--proj-border);
     margin-top: 0.15rem;
@@ -467,28 +460,6 @@
     text-decoration-color: currentColor;
 }
 
-/* Tier 1 again, and the line the panel closes on. */
-.proj-balance {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
-    padding-top: 0.45rem;
-    border-top: 1px solid var(--proj-border-strong);
-}
-.proj-balance-k {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: var(--proj-text);
-}
-.proj-balance-v {
-    font-size: 1.1rem;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-.proj-balance-v.due     { color: var(--proj-danger); }
-.proj-balance-v.settled { color: var(--proj-success); }
 
 /* == GST position: the answer, then the two books it came out of ========== */
 .proj-gst-lead {
