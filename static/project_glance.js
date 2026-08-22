@@ -302,13 +302,12 @@ window.ProjectGlance = (function () {
                             <td data-label="Total">${cell(total)}</td>
                         </tr>`;
         };
-        const mTable = (rows, hiddenRows) => `
+        const mTable = (rows) => `
                     <table class="proj-mx">
                         <thead>
                             <tr><th scope="col"><span class="proj-sr">Source</span></th>
                                 <th scope="col">Basic</th><th scope="col">GST</th><th scope="col">Total</th></tr>
                         </thead>
-                        ${hiddenRows ? `<tbody data-glance-panel="books" hidden>${hiddenRows}</tbody>` : ''}
                         <tbody>${rows}</tbody>
                     </table>`;
 
@@ -328,16 +327,14 @@ window.ProjectGlance = (function () {
                    : hasVars ? `PO + ${varCount} variation${varCount > 1 ? 's' : ''}`
                    : 'As per PO';
 
-        let mxRows = '', mxHidden = '';
+        let mxRows = '';
         if (hasActuals) {
             // Actuals replace the PO and any variations outright (see
             // resolve_contract), so only they are in force and only they are
-            // shown. What they replaced is history — one click away, not on
-            // screen competing with the figure that governs.
+            // shown. What they replaced is history, and the breakdown sheet
+            // carries it in full — including the line items, which is more
+            // than a hidden row here could ever say.
             mxRows = mRow('Actuals', actBasic, actGst, actTotal, { cls: 'is-force', count: actCount });
-            mxHidden = mRow('PO', baseBasic, baseGst, baseTotal, { cls: 'is-old', note: 'superseded' })
-                + (hasVars ? mRow('Variations', varBasic, varGst, varTotal,
-                                  { cls: 'is-old', delta: true, count: varCount, note: 'superseded' }) : '');
         } else if (hasVars) {
             // Both books are in force here — the PO plus the changes agreed
             // against it — so the breakdown stays on screen and earns the
@@ -353,14 +350,17 @@ window.ProjectGlance = (function () {
             mxRows = mRow('Billed', null, null, contract, { cls: 'is-force' });
         }
 
-        // Offered only when there is something behind it. On a plain PO, or on
-        // variations whose breakdown is already on screen, the button would
-        // open onto what the reader is already looking at.
-        const detailsBtn = mxHidden ? `
-                        <button type="button" class="proj-book-toggle" data-glance-toggle="books"
-                                aria-expanded="false" title="Show the PO and variations these actuals replaced">
-                            <span>View details</span>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        // The way into the whole contract: the PO as read with its line items,
+        // the variations agreed against it and the actuals as measured, on one
+        // read-only sheet. Offered wherever there is a contract to open —
+        // including a plain PO, whose line items are worth reading even when
+        // the panel above needs only one row to state it.
+        const detailsBtn = (fromPo && p.id) ? `
+                        <button type="button" class="proj-book-toggle" data-glance-po="${p.id}"
+                                data-glance-po-title="${escapeHtml(p.stem_name || '')}"
+                                title="Line items, variations and actuals in full">
+                            <span>View PO breakdown</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>
                         </button>` : '';
         const contractBlock = mxRows ? `
                     <div class="proj-block-head">
@@ -369,7 +369,7 @@ window.ProjectGlance = (function () {
                         ${deltaChip}
                         ${detailsBtn}
                     </div>
-                    ${mTable(mxRows, mxHidden)}` : '';
+                    ${mTable(mxRows)}` : '';
 
         // ── Received ──
         // No heading: the rows name themselves, and "RECEIVED" over a row
@@ -529,21 +529,189 @@ window.ProjectGlance = (function () {
         btn.classList.toggle('is-open', open);
     });
 
-    // "Show what this replaced": the PO and variation rows an actuals entry
-    // superseded. Bound on the document for the same reason as the chevron
-    // above — the panel is repainted wholesale on every render.
+
+    // ── PO breakdown ───────────────────────────────────
+    // The whole contract on one sheet, read-only: the purchase order as read
+    // from the document with its line items, the variations agreed against it,
+    // the actuals as finally measured, and the figure in force at the bottom.
+    //
+    // Opened from the Project value panel, which deliberately shows only the
+    // book that governs — this is where someone goes when they want the
+    // working behind it. Editing is not here: it lives in the registry's PO
+    // section and Ledger tab, and a second set of inputs over the same rows
+    // would be two places to change the same number.
+    //
+    // Both pages get it, because both render the panel that offers it and the
+    // payload comes from one endpoint (/api/projects/<id>/po-data).
+
+    // Line-item money keeps its paise. The panels round to whole rupees
+    // because they tabulate roll-ups; a rate or a single measured entry is the
+    // document's own figure and is quoted as written.
+    const poNum = (v) => (Number(v) ? formatINR(v) : '—');
+    const poQty = (v) => (Number(v)
+        ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 3 })
+        : '—');
+
+    // One table for every kind of row: PO line items and ledger entries carry
+    // the same shape under different key names, so they are mapped to a common
+    // one rather than given two nearly-identical renderers.
+    function pobTable(rows, totals, totalLabel) {
+        if (!rows.length) return '';
+        const body = rows.map(r => `
+                    <tr>
+                        <td class="proj-pob-desc">${r.description ? escapeHtml(r.description) : '—'}</td>
+                        <td class="proj-pob-num">${poQty(r.quantity)}</td>
+                        <td class="proj-pob-unit">${r.unit ? escapeHtml(r.unit) : '—'}</td>
+                        <td class="proj-pob-num">${poNum(r.rate)}</td>
+                        <td class="proj-pob-num">${poNum(r.basic)}</td>
+                        <td class="proj-pob-num">${poNum(r.tax)}</td>
+                        <td class="proj-pob-num proj-pob-tot">${poNum(r.total)}</td>
+                    </tr>`).join('');
+        const foot = totals ? `
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" class="proj-pob-foot-t">${totalLabel}</td>
+                            <td class="proj-pob-num" data-label="Basic">${poNum(totals.taxable)}</td>
+                            <td class="proj-pob-num" data-label="GST">${poNum(totals.tax)}</td>
+                            <td class="proj-pob-num proj-pob-tot" data-label="Total">${poNum(totals.total)}</td>
+                        </tr>
+                    </tfoot>` : '';
+        return `
+                <div class="proj-pob-scroll">
+                    <table class="proj-pob-table">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th class="proj-pob-num">Qty</th>
+                                <th>Unit</th>
+                                <th class="proj-pob-num">Rate</th>
+                                <th class="proj-pob-num">Basic</th>
+                                <th class="proj-pob-num">GST</th>
+                                <th class="proj-pob-num">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>${body}</tbody>
+                        ${foot}
+                    </table>
+                </div>`;
+    }
+
+    function pobSection(title, badge, tableHtml, emptyText, cls) {
+        return `
+            <section class="proj-pob-sec ${cls || ''}">
+                <div class="proj-block-head">
+                    <span class="proj-block-t">${title}</span>
+                    ${badge ? `<span class="proj-block-badge">${badge}</span>` : ''}
+                </div>
+                ${tableHtml || `<p class="proj-tab-empty">${emptyText}</p>`}
+            </section>`;
+    }
+
+    function poBreakdownHtml(po) {
+        if (!po) return `<p class="proj-tab-empty">No purchase order or contract entries recorded for this project yet.</p>`;
+        const items = Array.isArray(po.line_items) ? po.line_items : [];
+        const vars = Array.isArray(po.variations) ? po.variations : [];
+        const acts = Array.isArray(po.actuals) ? po.actuals : [];
+        const vt = po.variation_totals || null;
+        const at = po.actual_totals || null;
+
+        // The PO's own line items name their columns differently from a ledger
+        // entry (amount vs basic_amount), so both are mapped onto one shape.
+        const poRows = items.map(it => ({
+            description: it.description, quantity: it.quantity, unit: it.unit,
+            rate: it.rate, basic: it.amount, tax: it.tax_amount,
+            total: (Number(it.amount) || 0) + (Number(it.tax_amount) || 0),
+        }));
+        const ledRows = (list) => list.map(v => ({
+            description: v.description, quantity: v.quantity, unit: v.unit,
+            rate: v.rate, basic: v.basic_amount, tax: v.tax_amount,
+            total: v.total_amount,
+        }));
+
+        const poTotals = {
+            taxable: po.taxable_value, tax: po.total_tax, total: po.total_value,
+        };
+        const hasPoDoc = Number(po.total_value) || items.length;
+        const poBadge = po.po_number ? `PO ${escapeHtml(String(po.po_number))}` : '';
+        // A PO with no extracted line items still has its header totals, and
+        // saying so beats an empty table pretending nothing was recorded.
+        const poTable = poRows.length
+            ? pobTable(poRows, poTotals, `Purchase order total`)
+            : (hasPoDoc ? pobTable([], null, '') + `
+                <dl class="proj-recv proj-pob-bare">
+                    <div class="proj-recv-row"><dt>Basic</dt><dd>${poNum(po.taxable_value)}</dd></div>
+                    <div class="proj-recv-row"><dt>GST</dt><dd>${poNum(po.total_tax)}</dd></div>
+                    <div class="proj-recv-row is-net"><dt>Purchase order total</dt><dd>${poNum(po.total_value)}</dd></div>
+                </dl>` : '');
+
+        const inForce = po.final || po.revised || poTotals;
+        return `
+            ${pobSection('Purchase order', poBadge, poTable,
+                         'No purchase order recorded — this contract was entered by hand.')}
+            ${vars.length ? pobSection('Variations', `${vars.length} agreed`,
+                         pobTable(ledRows(vars), vt, 'Variations total'), '', 'is-var') : ''}
+            ${acts.length ? pobSection('Actuals', `${acts.length} measured`,
+                         pobTable(ledRows(acts), at, 'Actuals total'), '', 'is-act') : ''}
+            <div class="proj-pob-force">
+                <span class="proj-balance-k">Contract in force</span>
+                <span class="proj-balance-v">${poNum(inForce.total_value)}</span>
+                <p class="proj-cap">${acts.length
+                    ? 'Actuals replace the purchase order and any variations.'
+                    : (vars.length ? 'Purchase order plus the variations agreed against it.'
+                                   : 'The purchase order as recorded.')}</p>
+            </div>`;
+    }
+
+    // The sheet itself. Built on demand and thrown away on close — it is read
+    // -only, so there is no state worth keeping between openings.
+    function openPoBreakdown(projectId, title) {
+        document.querySelectorAll('[data-glance-pob]').forEach(n => n.remove());
+        const scrim = document.createElement('div');
+        scrim.className = 'proj-pob-scrim';
+        scrim.setAttribute('data-glance-pob', '');
+        scrim.innerHTML = `
+            <div class="proj-pob" role="dialog" aria-modal="true" aria-label="PO breakdown">
+                <div class="proj-pob-head">
+                    <h3 class="proj-pob-title">PO breakdown${title ? ` <span>${escapeHtml(title)}</span>` : ''}</h3>
+                    <button type="button" class="proj-pob-close" data-glance-pob-close aria-label="Close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+                <div class="proj-pob-body"><p class="proj-tab-empty">Loading the purchase order…</p></div>
+            </div>`;
+        document.body.appendChild(scrim);
+        const body = scrim.querySelector('.proj-pob-body');
+        fetch(`/api/projects/${projectId}/po-data`, { credentials: 'same-origin' })
+            .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+            .then(d => { body.innerHTML = poBreakdownHtml(d && d.po); })
+            .catch(() => { body.innerHTML = `<p class="proj-tab-empty">Couldn't load the purchase order.</p>`; });
+        // Close on the scrim, on the button, and on Escape. The Escape listener
+        // stops the event: on the registry the project pop-up is listening for
+        // it too, and one key press should close one thing.
+        const close = () => { scrim.remove(); document.removeEventListener('keydown', onKey, true); };
+        // stopImmediatePropagation, not just stopPropagation: the registry
+        // binds its own Escape handler to `document` too, and when the key
+        // event's target IS the document, both listeners sit on the same node
+        // — where only the immediate form stops the other one. Without it,
+        // one press closed the sheet and the project pop-up behind it.
+        const onKey = (e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            close();
+        };
+        document.addEventListener('keydown', onKey, true);
+        scrim.addEventListener('click', (e) => {
+            if (e.target === scrim || e.target.closest('[data-glance-pob-close]')) close();
+        });
+    }
+
     document.addEventListener('click', function (e) {
-        const btn = e.target.closest && e.target.closest('[data-glance-toggle="books"]');
+        const btn = e.target.closest && e.target.closest('[data-glance-po]');
         if (!btn) return;
-        const panel = btn.closest('.proj-ov-panel');
-        const rows = panel && panel.querySelector('[data-glance-panel="books"]');
-        if (!rows) return;
-        const open = rows.hasAttribute('hidden');
-        if (open) rows.removeAttribute('hidden'); else rows.setAttribute('hidden', '');
-        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-        btn.classList.toggle('is-open', open);
-        const label = btn.querySelector('span');
-        if (label) label.textContent = open ? 'Hide details' : 'View details';
+        e.preventDefault();
+        openPoBreakdown(btn.dataset.glancePo, btn.dataset.glancePoTitle || '');
     });
 
     return {

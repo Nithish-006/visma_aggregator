@@ -716,3 +716,137 @@
     /* Give the in-place overhead field a comfortable tap target. */
     .proj-cost-input { width: 7.5rem; padding: 0.3rem 0.4rem; }
 }
+
+/* == PO breakdown sheet =================================================
+   Opened from the Project value panel. Read-only: the purchase order with
+   its line items, the variations agreed against it, the actuals as
+   measured, and the figure in force. It sits above the registry's project
+   pop-up, so it carries its own scrim and its own Escape handling. */
+.proj-pob-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5vh 1rem;
+    background: rgba(31, 30, 29, 0.42);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+}
+.proj-pob {
+    display: flex;
+    flex-direction: column;
+    width: min(1080px, 100%);
+    max-height: 95vh;
+    background: var(--proj-surface);
+    border: 1px solid var(--proj-border-strong);
+    border-radius: 14px;
+    box-shadow: 0 24px 70px -20px rgba(31, 30, 29, 0.45);
+    overflow: hidden;
+}
+.proj-pob-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 1.1rem;
+    background: #FAEFEB;
+    border-bottom: 1px solid var(--proj-border-strong);
+}
+.proj-pob-title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--proj-text);
+}
+/* The project's name rides along quietly — the sheet can be opened from two
+   pages and should say which project it is showing. */
+.proj-pob-title span {
+    margin-left: 0.5rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--proj-text-muted);
+}
+.proj-pob-close {
+    display: inline-flex;
+    padding: 0.3rem;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    background: none;
+    color: var(--proj-text-muted);
+    cursor: pointer;
+}
+.proj-pob-close:hover,
+.proj-pob-close:focus-visible {
+    color: var(--proj-accent-strong);
+    border-color: var(--proj-border-strong);
+}
+.proj-pob-body {
+    padding: 1rem 1.1rem 1.2rem;
+    overflow-y: auto;
+}
+.proj-pob-sec + .proj-pob-sec { margin-top: 1.3rem; }
+/* Wide tables scroll inside their own box rather than pushing the sheet. */
+.proj-pob-scroll { overflow-x: auto; }
+.proj-pob-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+.proj-pob-table thead th {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--proj-text-muted);
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--proj-border-strong);
+}
+.proj-pob-table td {
+    padding: 0.38rem 0.5rem;
+    font-size: 0.8rem;
+    color: var(--proj-text);
+    border-bottom: 1px solid var(--proj-border);
+    vertical-align: top;
+}
+.proj-pob-num { text-align: right; white-space: nowrap; }
+.proj-pob-table th.proj-pob-num { text-align: right; }
+.proj-pob-desc { min-width: 14rem; }
+.proj-pob-unit { color: var(--proj-text-muted); white-space: nowrap; }
+.proj-pob-tot { font-weight: 700; }
+.proj-pob-table tfoot td {
+    border-bottom: none;
+    border-top: 1px solid var(--proj-border-strong);
+    font-weight: 700;
+    padding-top: 0.45rem;
+}
+.proj-pob-foot-t {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--proj-text-muted);
+}
+/* A PO whose document gave header totals but no line items still states them
+   rather than showing an empty table. */
+.proj-pob-bare { margin-top: 0; border-top: none; padding-top: 0; }
+/* The figure the three sections resolve to, closing the sheet the way the
+   panel closes on its balance. */
+.proj-pob-force {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 0.3rem 0.75rem;
+    margin-top: 1.4rem;
+    padding-top: 0.6rem;
+    border-top: 2px solid var(--proj-border-strong);
+}
+.proj-pob-force .proj-cap { grid-column: 1 / -1; }
+
+@media (max-width: 640px) {
+    .proj-pob-scrim { padding: 0; }
+    .proj-pob { max-height: 100vh; height: 100%; border-radius: 0; border: none; }
+    .proj-pob-desc { min-width: 11rem; }
+}
