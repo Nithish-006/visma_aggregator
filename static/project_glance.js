@@ -398,6 +398,16 @@ window.ProjectGlance = (function () {
         // neighbour is exactly the noise this panel is shedding.
         if (hasThirdParty) recvRows += rRow('Net for VISMA', netRec, 'is-net');
 
+        // The line the panel closes on: the contract, less what actually
+        // stayed with us. The hero states the same figure as "Client yet to
+        // pay" — here it is the result of the subtraction directly above it,
+        // which is why it is worth restating at the foot of the working.
+        const balance = `
+                    <div class="proj-balance">
+                        <span class="proj-balance-k">${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</span>
+                        <span class="proj-balance-v ${dueCls}">${moneyHtml(Math.abs(receivable))}</span>
+                    </div>`;
+
         const ladder = `
             <div class="proj-ov-panel">
                 <div class="proj-ov-head"><h4 class="proj-ov-title">Project value</h4></div>
@@ -405,6 +415,7 @@ window.ProjectGlance = (function () {
                     ${contractBlock}
                     <dl class="proj-recv">${recvRows}
                     </dl>
+                    ${balance}
                 </div>
             </div>`;
 

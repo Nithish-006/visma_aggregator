@@ -439,6 +439,31 @@
 }
 .proj-recv-row.is-net dt { font-weight: 700; color: var(--proj-text); }
 .proj-recv-row.is-net dd { font-weight: 700; }
+
+/* The line the panel closes on. Its own rule above it, weightier than the net
+   it follows, and coloured by direction — red while the client still owes,
+   green once they don't. */
+.proj-balance {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--proj-border-strong);
+}
+.proj-balance-k {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--proj-text);
+}
+.proj-balance-v {
+    font-size: 1.05rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.proj-balance-v.due     { color: var(--proj-danger); }
+.proj-balance-v.settled { color: var(--proj-success); }
 /* The deduction's label is a way in to the list behind it: which payee, for
    what, when. Styled as a link rather than a button so it doesn't compete with
    the figures — the panel is a document, and this is a footnote you can open. */
