@@ -3577,7 +3577,10 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor(dictionary=True)
-                cursor.execute(self._PROJECT_SELECT + " ORDER BY p.is_inactive, p.id")
+                # Newest first: ids are handed out in order, so a larger id is a more
+                # recent project and that is what a reader wants at the top of the
+                # registry. Inactive entries still sink to the bottom as a group.
+                cursor.execute(self._PROJECT_SELECT + " ORDER BY p.is_inactive, p.id DESC")
                 rows = cursor.fetchall()
                 cursor.close()
                 return [self._decorate_project_row(r) for r in rows]
