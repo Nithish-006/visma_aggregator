@@ -25,7 +25,7 @@
     --proj-accent-strong: var(--c-accent-text);   /* used as TEXT in ~20 rules; #C2603F was 3.3-3.8:1 */
     --proj-accent-soft:   var(--c-accent-soft-a);
     --proj-accent-2:      var(--c-cyan);
-    --proj-design:        var(--c-teal);        /* teal â€” Designs */
+    --proj-design:        var(--c-teal-text);        /* teal â€” Designs */
     --proj-design-strong: var(--c-teal-strong);
     --proj-design-soft:   var(--c-teal-soft);
     --proj-success:       var(--c-success-text);

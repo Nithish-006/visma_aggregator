@@ -2391,8 +2391,8 @@ textarea.form-input {
 }
 
 .time-chip.active {
-    background: var(--accent-color);
-    border-color: var(--accent-color);
+    background: var(--c-accent-fill);
+    border-color: var(--c-accent-fill);
     color: white;
 }
 

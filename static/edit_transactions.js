@@ -652,13 +652,13 @@
                 <td data-label="Date">${txn.date}</td>
                 <td class="editable-cell" data-field="vendor" data-id="${txnId}" data-label="Vendor">${txn.vendor || ''}</td>
                 <td class="editable-cell" data-field="category" data-id="${txnId}" data-label="Category">
-                    <span class="category-badge ${isCategoryUncategorized ? 'uncategorized' : ''}">${txn.category || ''}</span>
+                    <span class="category-badge ${isCategoryUncategorized ? 'uncategorized' : categorySlug(txn.category)}">${txn.category || ''}</span>
                 </td>
                 <td class="description-full" data-label="Description">${escapeHtml(txn.description || txn['Transaction Description'] || '')}</td>
                 <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
                 <td class="text-right" data-label="Credit">${txn.cr_amount > 0 ? `<span class="monetary-pill credit">${txn.cr_amount_formatted}</span>` : ''}</td>
                 <td class="editable-cell" data-field="project" data-id="${txnId}" data-label="Project">
-                    <span class="project-badge ${isProjectEmpty ? 'empty' : ''} ${isProjectLegacy ? 'legacy' : ''}"
+                    <span class="project-badge ${isProjectEmpty ? 'empty' : projectHue(projectValue)} ${isProjectLegacy ? 'legacy' : ''}"
                           ${isProjectLegacy ? 'title="Legacy free-text — click to standardize"' : ''}>
                         ${isProjectLegacy ? '<span class="legacy-dot"></span>' : ''}${projectValue || '-'}
                     </span>
@@ -1880,6 +1880,41 @@
         setTimeout(() => {
             notification.remove();
         }, 3000);
+    }
+
+
+    /* ------------------------------------------------------------------
+       Colour coding for the category and project chips.
+
+       categorySlug matches on KEYWORDS rather than the exact category
+       string, so "OFFICE EXP" and "OFFICE EXPENSES" land on the same hue
+       and an unrecognised category falls back to the neutral chip instead
+       of losing its styling.
+
+       projectHue derives a stable index from the name, so a project is
+       always the same colour without anyone maintaining a mapping.
+       ------------------------------------------------------------------ */
+    function categorySlug(category) {
+        const k = String(category || '').toUpperCase();
+        if (!k) return '';
+        if (k.includes('AMOUNT RECEIVED') || k.includes('RECEIVED')) return 'cat-ar';
+        if (k.includes('MATERIAL')) return 'cat-mp';
+        if (k.includes('SALARY')) return 'cat-sa';
+        if (k.includes('TAX') || k.includes('DUT')) return 'cat-dt';
+        if (k.includes('TRANSPORT')) return 'cat-te';
+        if (k.includes('SITE')) return 'cat-se';
+        if (k.includes('FACTORY')) return 'cat-fe';
+        if (k.includes('OFFICE')) return 'cat-oe';
+        if (k.includes('BANK')) return 'cat-bc';
+        return '';
+    }
+
+    function projectHue(name) {
+        const k = String(name || '').trim().toLowerCase();
+        if (!k) return '';
+        let h = 0;
+        for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+        return 'proj-c' + (h % 8);
     }
 
     function escapeHtml(text) {

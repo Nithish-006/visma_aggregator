@@ -1088,7 +1088,7 @@ function renderInvoicesTable() {
     // Render desktop table
     tbody.innerHTML = bills.map(bill => {
         const projectDisplay = bill.project || '';
-        const projectClass = projectDisplay ? '' : 'empty';
+        const projectClass = projectDisplay ? projectHue(projectDisplay) : 'empty';
         const projectText = projectDisplay || 'Click to add';
         const addedDisplay = formatAddedDate(bill.created_at);
         const allocCount = bill.allocation_count || 1;
@@ -1178,7 +1178,7 @@ function renderMobileInvoiceCards() {
         const igst = parseFloat(bill.total_igst) || 0;
         const gst = cgst + sgst + igst;
         const projectDisplay = bill.project || '';
-        const projectClass = projectDisplay ? '' : 'empty';
+        const projectClass = projectDisplay ? projectHue(projectDisplay) : 'empty';
         const projectText = projectDisplay || 'No project';
 
         // Format date nicely
@@ -1358,6 +1358,16 @@ function showEmptyState() {
 // PROJECT EDITING
 // ============================================================================
 
+/* Same stable name -> hue mapping the bank dashboard uses, so a project is
+   the same colour everywhere in the app. See hig.css section 8. */
+function projectHue(name) {
+    const k = String(name || '').trim().toLowerCase();
+    if (!k) return '';
+    let h = 0;
+    for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0;
+    return 'proj-c' + (h % 8);
+}
+
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -1415,7 +1425,7 @@ function closeProjectEdit() {
     const cell = document.querySelector(`.project-cell[data-bill-id="${activeProjectEdit}"]`);
     if (cell) {
         const project = cell.dataset.project || '';
-        const projectClass = project ? '' : 'empty';
+        const projectClass = project ? projectHue(project) : 'empty';
         const projectText = project || 'Click to add';
 
         cell.innerHTML = `

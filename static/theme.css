@@ -54,6 +54,7 @@
 
     /* ---- Secondary accents (teal / cyan — projects "Designs") ----------- */
     --c-teal:            #0e7490;
+    --c-teal-text:       #0B5F76;   /* 5.80:1 on the designs tint, 6.84:1 on ivory */
     --c-teal-strong:     #155e75;
     --c-teal-soft:       rgba(8, 145, 178, 0.14);
     --c-cyan:            #0891b2;
@@ -124,6 +125,43 @@
     --c-success-text:    #036B4C;
     --c-danger-text:     #b91c1c;
     --c-warning-text:    #A64D08;
+
+    /* ---- Category colours -----------------------------------------------
+       Colour here is INFORMATION, not decoration: each expense category owns
+       a hue, so a column of chips can be scanned without reading a word. An
+       earlier pass made these all one neutral grey, which killed the noise
+       but also killed the signal - this is the correction.
+
+       Hues are assigned by meaning (money in = green, statutory = red,
+       people = violet, movement = teal, on-site = earth, and so on), and
+       every pair was SOLVED to land on the same contrast, not eyeballed:
+       each fg sits at ~7.0-7.2:1 on its own tint and 7.5-8.4:1 on ivory.
+       Uniform ratios are what stop nine hues reading as a rainbow - they
+       all carry the same visual weight. 7:1 also clears WCAG AAA. */
+    --cat-ar-bg: #EAF6F0;  --cat-ar-fg: #0F5C38;   /* AMOUNT RECEIVED   */
+    --cat-mp-bg: #EAEFF6;  --cat-mp-fg: #184E95;   /* MATERIAL PURCHASE */
+    --cat-sa-bg: #EEEAF5;  --cat-sa-fg: #5729C2;   /* SALARY AC         */
+    --cat-dt-bg: #F5EAEA;  --cat-dt-fg: #981F1B;   /* DUTIES & TAX      */
+    --cat-te-bg: #EAF4F6;  --cat-te-fg: #105A65;   /* TRANSPORT EXPENSES*/
+    --cat-se-bg: #F6F0EA;  --cat-se-fg: #724513;   /* SITE EXPENSES     */
+    --cat-fe-bg: #F2EBF5;  --cat-fe-fg: #7A2395;   /* FACTORY EXPENSES  */
+    --cat-oe-bg: #F5EAF0;  --cat-oe-fg: #921C57;   /* OFFICE EXPENSES   */
+    --cat-bc-bg: #F0F0EF;  --cat-bc-fg: #574E3D;   /* BANK CHARGES      */
+
+    /* ---- Project chip colours -------------------------------------------
+       Projects are open-ended, so a hue is derived from the name instead of
+       hand-assigned: the same project is always the same colour. The hues
+       are offset from the category ones and the chip is OUTLINED rather
+       than filled, so the two adjacent columns never read as the same kind
+       of thing. Solved to >=5.5:1 on ivory. */
+    --proj-c0-fg: #266897;  --proj-c0-bd: #90BEDF;
+    --proj-c1-fg: #1C6E5E;  --proj-c1-bd: #90DFCF;
+    --proj-c2-fg: #1D7239;  --proj-c2-bd: #90DFAB;
+    --proj-c3-fg: #76601E;  --proj-c3-bd: #DFCB90;
+    --proj-c4-fg: #9B4E27;  --proj-c4-bd: #DFAB90;
+    --proj-c5-fg: #AF2C88;  --proj-c5-bd: #DF90C7;
+    --proj-c6-fg: #8F37CD;  --proj-c6-bd: #BE90DF;
+    --proj-c7-fg: #5454D4;  --proj-c7-bd: #9090DF;
 
     /* ---- HIG 8pt spacing grid ------------------------------------------ */
     --space-1:  4px;

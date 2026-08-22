@@ -37,8 +37,8 @@
     /* Text hierarchy. HIG builds hierarchy with weight + colour, not size
        alone -- and every level below is AA-verified against the ivory bg. */
     --text: var(--c-text);                /* 15.80:1 - primary            */
-    --text-2: var(--c-text-soft);         /*  4.98:1 - secondary          */
-    --text-3: var(--c-text-soft);         /*  4.98:1 - tertiary / labels  */
+    --text-2: var(--c-text-muted);        /*  4.89:1 worst-case - secondary */
+    --text-3: var(--c-text-muted);        /*  4.89:1 worst-case - tertiary  */
 
     --accent: var(--c-accent);            /* fills + borders only         */
     --accent-strong: var(--c-accent-strong);
@@ -213,14 +213,19 @@ a { color: inherit; text-decoration: none; }
 }
 .btn svg { width: 16px; height: 16px; }
 
-main { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+/* Top-aligned: with three labelled groups the page has real content, and
+   vertical centring just pushed it away from where the eye starts. */
+main { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; }
 
 /* -- Card grid ----------------------------------------------------------- */
+/* Two columns, not auto-fill. Each section holds exactly two modules, and
+   an auto-fill track count left them stranded in the left half of a
+   four-column grid with dead space beside them. */
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(244px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-4);
-    padding: var(--space-10) 0;
+    padding: var(--space-6) 0 var(--space-10);
 }
 
 .card {
@@ -340,12 +345,12 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     line-height: 1.2;
 }
 
-.card--expense  { --card-accent: #7C6BD6; --card-tint: #F3F0FB; }
-.card--projects { --card-accent: #3B6BC9; --card-tint: #ECF1FA; }
-.card--axis     { --card-accent: #DC2626; --card-tint: #FBECEC; }
-.card--kvb      { --card-accent: #16A34A; --card-tint: #EAF6EE; }
-.card--purchase { --card-accent: #D9883B; --card-tint: #FBF2E7; }
-.card--sales    { --card-accent: #0E9C9C; --card-tint: #E8F6F5; }
+.card--expense  { --card-accent: #6A57CE; --card-tint: #EFEBFA; }
+.card--projects { --card-accent: #3B6BC9; --card-tint: #E7EEFA; }
+.card--axis     { --card-accent: #DC2626; --card-tint: #FBE8E8; }
+.card--kvb      { --card-accent: #15903F; --card-tint: #E5F5EA; }
+.card--purchase { --card-accent: #C77522; --card-tint: #FAEFDF; }
+.card--sales    { --card-accent: #0E8C8C; --card-tint: #E2F4F3; }
 
 /* gentle load reveal */
 @media (prefers-reduced-motion: no-preference) {
@@ -363,6 +368,56 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     .card:nth-child(7) { animation-delay: 260ms; }
     @keyframes rise { to { opacity: 1; transform: translateY(0); } }
 }
+
+
+/* -- Section labels -------------------------------------------------------
+   HIG wayfinding: every screen should answer "what's here?". Seven modules
+   in one undifferentiated grid made the user do that sorting themselves.
+   Three named groups - where money moves, what documents it, and the
+   registries the rest refers to - answer it before they read a card.
+   Rendered as full-width grid items so the grid itself stays one container. */
+.grid__label {
+    grid-column: 1 / -1;
+    margin: var(--space-4) 0 calc(var(--space-2) * -1);
+    font-size: var(--text-caption1);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2);
+}
+.grid__label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+.grid__labelsub {
+    font-size: var(--text-caption1);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-3);
+    opacity: 0.85;
+}
+.grid__label:first-of-type { margin-top: var(--space-2); }
+
+/* -- Bolder module identity ----------------------------------------------
+   The icon tile is now filled with the module's own colour and the glyph
+   goes white, so each card is identifiable from across the room instead of
+   by a 3px edge. Every fill was checked to clear 3:1 against white, which
+   is the non-text/graphics threshold (purchase orange needed darkening from
+   #D9883B at 2.79:1). */
+.card__icon {
+    background: var(--card-accent);
+    color: #FFFFFF;
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--card-accent) 35%, transparent);
+}
+.card--hero .card__icon { background: var(--card-accent); color: #FFFFFF; }
+.card { border-left-width: 4px; }
+.card:hover .card__icon { transform: scale(1.04); }
 
 /* -- Footer -------------------------------------------------------------- */
 .foot {
@@ -392,7 +447,7 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     .brand__tag { display: none; }
     .btn span { display: none; }
     .btn { padding: var(--space-3); }
-    .grid { grid-template-columns: minmax(0, 1fr); padding-top: var(--space-8); }
+    .grid { grid-template-columns: minmax(0, 1fr); padding-top: var(--space-6); }
 
     /* Reclaim header width for the wordmark: the avatar glyph still says
        "signed in", so the name itself is redundant at this size. */

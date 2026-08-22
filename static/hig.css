@@ -563,3 +563,171 @@ input[type="radio"] {
         scroll-behavior: auto !important;
     }
 }
+
+
+/* ============================================================================
+   8. CATEGORY AND PROJECT COLOUR CODING
+   ----------------------------------------------------------------------------
+   Colour used as information. A category chip is FILLED with its hue's pale
+   tint; a project chip is OUTLINED in a hue derived from its name. Different
+   treatments so the two adjacent table columns never read as one rainbow.
+
+   Classes are attached in JS (categorySlug / projectHue in
+   edit_transactions.js) rather than matched on text, so a renamed category
+   degrades to the neutral base style instead of breaking.
+   ============================================================================ */
+
+/* Base chip - also the fallback for any category we do not recognise */
+.category-badge,
+.category-pill {
+    background: var(--c-surface-soft);
+    color: var(--c-text-muted);
+    border: 1px solid var(--c-border);
+}
+
+.category-badge.cat-ar, .category-pill.cat-ar { background: var(--cat-ar-bg); color: var(--cat-ar-fg); border-color: transparent; }
+.category-badge.cat-mp, .category-pill.cat-mp { background: var(--cat-mp-bg); color: var(--cat-mp-fg); border-color: transparent; }
+.category-badge.cat-sa, .category-pill.cat-sa { background: var(--cat-sa-bg); color: var(--cat-sa-fg); border-color: transparent; }
+.category-badge.cat-dt, .category-pill.cat-dt { background: var(--cat-dt-bg); color: var(--cat-dt-fg); border-color: transparent; }
+.category-badge.cat-te, .category-pill.cat-te { background: var(--cat-te-bg); color: var(--cat-te-fg); border-color: transparent; }
+.category-badge.cat-se, .category-pill.cat-se { background: var(--cat-se-bg); color: var(--cat-se-fg); border-color: transparent; }
+.category-badge.cat-fe, .category-pill.cat-fe { background: var(--cat-fe-bg); color: var(--cat-fe-fg); border-color: transparent; }
+.category-badge.cat-oe, .category-pill.cat-oe { background: var(--cat-oe-bg); color: var(--cat-oe-fg); border-color: transparent; }
+.category-badge.cat-bc, .category-pill.cat-bc { background: var(--cat-bc-bg); color: var(--cat-bc-fg); border-color: transparent; }
+
+/* Uncategorised is the one chip that should nag: it is the only state a
+   person has to act on, so it keeps the amber warning treatment. */
+.category-badge.uncategorized,
+.category-pill.uncategorized {
+    background: var(--c-warning-soft);
+    color: var(--c-warning-text);
+    border-color: rgba(245, 158, 11, 0.35);
+    font-weight: 600;
+}
+
+/* Project chips: outlined, hue from the name. A 5px dot carries the colour
+   so the label itself stays high-contrast text rather than tinted text. */
+.project-badge,
+.project-pill,
+.project-text {
+    background: transparent;
+    color: var(--c-text);
+    border: 1px solid var(--c-border-strong);
+}
+.project-badge[class*="proj-c"]::before,
+.project-pill[class*="proj-c"]::before,
+.project-text[class*="proj-c"]::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: 1px;
+    background: currentColor;
+    color: var(--proj-dot, var(--c-text-muted));
+}
+.project-badge.proj-c0, .project-pill.proj-c0, .project-text.proj-c0 { border-color: var(--proj-c0-bd); --proj-dot: var(--proj-c0-fg); }
+.project-badge.proj-c1, .project-pill.proj-c1, .project-text.proj-c1 { border-color: var(--proj-c1-bd); --proj-dot: var(--proj-c1-fg); }
+.project-badge.proj-c2, .project-pill.proj-c2, .project-text.proj-c2 { border-color: var(--proj-c2-bd); --proj-dot: var(--proj-c2-fg); }
+.project-badge.proj-c3, .project-pill.proj-c3, .project-text.proj-c3 { border-color: var(--proj-c3-bd); --proj-dot: var(--proj-c3-fg); }
+.project-badge.proj-c4, .project-pill.proj-c4, .project-text.proj-c4 { border-color: var(--proj-c4-bd); --proj-dot: var(--proj-c4-fg); }
+.project-badge.proj-c5, .project-pill.proj-c5, .project-text.proj-c5 { border-color: var(--proj-c5-bd); --proj-dot: var(--proj-c5-fg); }
+.project-badge.proj-c6, .project-pill.proj-c6, .project-text.proj-c6 { border-color: var(--proj-c6-bd); --proj-dot: var(--proj-c6-fg); }
+.project-badge.proj-c7, .project-pill.proj-c7, .project-text.proj-c7 { border-color: var(--proj-c7-bd); --proj-dot: var(--proj-c7-fg); }
+
+/* Unassigned project: no dot, no border - absence should look like absence. */
+.project-badge.empty,
+.project-pill.empty,
+.project-text.empty {
+    border-color: transparent;
+    color: var(--c-text-muted);
+}
+
+
+/* ============================================================================
+   9. PROJECT STATUS - bolder, and consistent across registry and summary
+   ----------------------------------------------------------------------------
+   The registry and the summary both group projects into Ongoing / Designs /
+   Others / Closed, but the grouping was carried by a pale gradient you had to
+   look for. Each status now owns a saturated 4px leading edge and a matching
+   section marker - the same device the hub uses for its modules, so status
+   reads the same way everywhere in the app.
+
+   Closed is deliberately the quiet one. It is bold enough to identify at a
+   glance, in a neutral slate, because finished work should be findable
+   without competing with live work for attention.
+   ============================================================================ */
+.project-card,
+.ps-proj-card {
+    --status: var(--c-accent-fill);
+    --status-tint: #FBF1EC;
+    border-left: 4px solid var(--status);
+    background: linear-gradient(150deg, #FFFFFF 0%, var(--status-tint) 100%);
+    transition: border-color var(--duration-fast) var(--ease-default),
+                box-shadow   var(--duration-fast) var(--ease-default),
+                transform    var(--duration-instant) var(--ease-out);
+}
+
+/* border-left-color is repeated on each variant because the per-section rules
+   in projects.css are two classes deep and would otherwise win the colour
+   while this file only supplied the width. */
+.proj-section--designs .project-card,
+.ps-proj-section--designs .ps-proj-card {
+    --status: #0B5F76; --status-tint: #E6F8FB; border-left-color: var(--status);
+}
+
+.proj-section--others .project-card,
+.ps-proj-section--others .ps-proj-card {
+    --status: #A16207; --status-tint: #FBF3E3; border-left-color: var(--status);
+}
+
+.proj-section--projects .project-card,
+.ps-proj-section--projects .ps-proj-card {
+    --status: var(--c-accent-fill); --status-tint: #FBF1EC; border-left-color: var(--status);
+}
+
+.proj-section--closed .project-card,
+.ps-proj-section--closed .ps-proj-card,
+.project-card.is-closed,
+.ps-proj-card.is-closed {
+    --status: #64748B; --status-tint: #F2F4F7; border-left-color: var(--status);
+}
+
+/* Breathing room between a group's heading and its cards, and between the
+   groups themselves - they are separate answers to "what kind of work is
+   this?" and were running together. */
+.proj-section,
+.ps-proj-section { margin-bottom: var(--space-8); }
+.proj-section-head,
+.ps-proj-section-head { margin-bottom: var(--space-4); }
+
+/* The section marker picks up the same colour, so the heading and the cards
+   under it are visibly one group. */
+.proj-section-count,
+.ps-proj-count {
+    box-shadow: inset 0 0 0 1px currentColor;
+    border-radius: 999px;
+}
+.proj-section-head,
+.ps-proj-section-head {
+    border-bottom-width: 2px;
+}
+
+/* Closed work recedes rather than disappears: a dimmed card cannot be read,
+   which is a legibility problem dressed up as hierarchy. Restraint comes
+   from the neutral colour, not from opacity. */
+.project-card.is-closed,
+.ps-proj-card.is-closed {
+    opacity: 1;
+}
+.project-card.is-closed .project-card-stem,
+.ps-proj-card.is-closed .ps-proj-card-name {
+    color: var(--c-text-muted);
+}
+
+.project-card:hover,
+.ps-proj-card:hover {
+    border-left-color: var(--status);
+    box-shadow: 0 1px 2px rgba(31, 30, 29, 0.05), 0 8px 24px rgba(31, 30, 29, 0.09);
+}

@@ -1838,7 +1838,7 @@ tr.ps-cf-active td:first-child {
 
 /* Designs â€” teal tint */
 .ps-proj-section--designs .ps-proj-count {
-    color: #0e7490;
+    color: var(--c-teal-text);
     background: rgba(8, 145, 178, 0.12);
 }
 .ps-proj-section--designs .ps-proj-card {
@@ -1846,12 +1846,12 @@ tr.ps-cf-active td:first-child {
     border-color: rgba(8, 145, 178, 0.24);
 }
 .ps-proj-section--designs .ps-proj-card:hover {
-    border-color: #0e7490;
+    border-color: var(--c-teal-text);
     background: linear-gradient(145deg, #f0fdff 0%, #cffafe 100%);
     box-shadow: 0 10px 28px rgba(8, 145, 178, 0.18), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 .ps-proj-section--designs .ps-proj-card-id {
-    color: #0e7490;
+    color: var(--c-teal-text);
     background: rgba(8, 145, 178, 0.12);
 }
 
