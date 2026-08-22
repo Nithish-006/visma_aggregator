@@ -213,9 +213,9 @@ a { color: inherit; text-decoration: none; }
 }
 .btn svg { width: 16px; height: 16px; }
 
-/* Top-aligned: with three labelled groups the page has real content, and
-   vertical centring just pushed it away from where the eye starts. */
-main { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; }
+/* Centred in the viewport: the whole board is meant to be taken in at once,
+   so it sits in the middle of the frame rather than hanging from the top. */
+main { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 
 /* -- Card grid ----------------------------------------------------------- */
 /* Two columns, not auto-fill. Each section holds exactly two modules, and
@@ -225,7 +225,7 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: flex-sta
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-4);
-    padding: var(--space-6) 0 var(--space-10);
+    padding: var(--space-8) 0;
 }
 
 .card {

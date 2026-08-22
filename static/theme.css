@@ -140,33 +140,41 @@
        Hues are assigned by meaning (money in = green, statutory = red,
        people = violet, movement = teal, on-site = earth, and so on), and
        every pair was SOLVED to land on the same contrast, not eyeballed:
-       each fg sits at ~7.0-7.2:1 on its own tint and 7.5-8.4:1 on ivory.
-       Uniform ratios are what stop nine hues reading as a rainbow - they
-       all carry the same visual weight. 7:1 also clears WCAG AAA. */
-    --cat-ar-bg: #EAF6F0;  --cat-ar-fg: #0F5C38;   /* AMOUNT RECEIVED   */
-    --cat-mp-bg: #EAEFF6;  --cat-mp-fg: #184E95;   /* MATERIAL PURCHASE */
-    --cat-sa-bg: #EEEAF5;  --cat-sa-fg: #5729C2;   /* SALARY AC         */
-    --cat-dt-bg: #F5EAEA;  --cat-dt-fg: #981F1B;   /* DUTIES & TAX      */
-    --cat-te-bg: #EAF4F6;  --cat-te-fg: #105A65;   /* TRANSPORT EXPENSES*/
-    --cat-se-bg: #F6F0EA;  --cat-se-fg: #724513;   /* SITE EXPENSES     */
-    --cat-fe-bg: #F2EBF5;  --cat-fe-fg: #7A2395;   /* FACTORY EXPENSES  */
-    --cat-oe-bg: #F5EAF0;  --cat-oe-fg: #921C57;   /* OFFICE EXPENSES   */
-    --cat-bc-bg: #F0F0EF;  --cat-bc-fg: #574E3D;   /* BANK CHARGES      */
+       each fg sits at ~6.5-6.8:1 on its own tint. Uniform ratios are what
+       stop nine hues reading as a rainbow - they all carry the same visual
+       weight.
+
+       These use the IDENTICAL generator as the project pills below (tint at
+       L94/S55, label solved to 6.5:1 at S62), so the two chip families are
+       the same colour grade and can sit side by side without one looking
+       heavier than the other. */
+    --cat-ar-bg: #E7F8F0;  --cat-ar-fg: #176340;   /* AMOUNT RECEIVED   */
+    --cat-mp-bg: #E7EFF8;  --cat-mp-fg: #235495;   /* MATERIAL PURCHASE */
+    --cat-sa-bg: #ECE7F8;  --cat-sa-fg: #5C2FC6;   /* SALARY AC         */
+    --cat-dt-bg: #F8E8E7;  --cat-dt-fg: #992824;   /* DUTIES & TAX      */
+    --cat-te-bg: #E7F6F8;  --cat-te-fg: #185D67;   /* TRANSPORT EXPENSES*/
+    --cat-se-bg: #F8F0E7;  --cat-se-fg: #744A1B;   /* SITE EXPENSES     */
+    --cat-fe-bg: #F4E7F8;  --cat-fe-fg: #81259D;   /* FACTORY EXPENSES  */
+    --cat-oe-bg: #F8E7F0;  --cat-oe-fg: #95235C;   /* OFFICE EXPENSES   */
+    --cat-bc-bg: #F1F0EE;  --cat-bc-fg: #5A5449;   /* BANK CHARGES      */
+    --cat-un-bg: #F8F2E7;  --cat-un-fg: #70501A;   /* UNCATEGORISED     */
 
     /* ---- Project chip colours -------------------------------------------
        Projects are open-ended, so a hue is derived from the name instead of
        hand-assigned: the same project is always the same colour. The hues
-       are offset from the category ones and the chip is OUTLINED rather
-       than filled, so the two adjacent columns never read as the same kind
-       of thing. Solved to >=5.5:1 on ivory. */
-    --proj-c0-fg: #266897;  --proj-c0-bd: #90BEDF;
-    --proj-c1-fg: #1C6E5E;  --proj-c1-bd: #90DFCF;
-    --proj-c2-fg: #1D7239;  --proj-c2-bd: #90DFAB;
-    --proj-c3-fg: #76601E;  --proj-c3-bd: #DFCB90;
-    --proj-c4-fg: #9B4E27;  --proj-c4-bd: #DFAB90;
-    --proj-c5-fg: #AF2C88;  --proj-c5-bd: #DF90C7;
-    --proj-c6-fg: #8F37CD;  --proj-c6-bd: #BE90DF;
-    --proj-c7-fg: #5454D4;  --proj-c7-bd: #9090DF;
+       are offset from the category ones, and the chip keeps a distinct SHAPE
+       (fully rounded, where categories are rounded rectangles) so the two
+       adjacent columns still read as different kinds of information now that
+       both are filled. Solved to ~6.6-6.9:1 on their own tint, matching the
+       category chips' weight. */
+    --proj-c0-bg: #E7F1F8;  --proj-c0-fg: #1E5780;
+    --proj-c1-bg: #E7F8F5;  --proj-c1-fg: #165F50;
+    --proj-c2-bg: #E7F8ED;  --proj-c2-fg: #176331;
+    --proj-c3-bg: #F8F4E7;  --proj-c3-fg: #675418;
+    --proj-c4-bg: #F8EDE7;  --proj-c4-fg: #84411F;
+    --proj-c5-bg: #F8E7F3;  --proj-c5-fg: #91226F;
+    --proj-c6-bg: #F1E7F8;  --proj-c6-fg: #7629AE;
+    --proj-c7-bg: #E7E7F8;  --proj-c7-fg: #3535D0;
 
     /* ---- HIG 8pt spacing grid ------------------------------------------ */
     --space-1:  4px;

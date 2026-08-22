@@ -1857,7 +1857,7 @@ tr.ps-cf-active td:first-child {
 
 /* Others â€” amber tint */
 .ps-proj-section--others .ps-proj-count {
-    color: #b45309;
+    color: var(--c-warning-text);
     background: rgba(245, 158, 11, 0.14);
 }
 .ps-proj-section--others .ps-proj-card {
@@ -1865,12 +1865,12 @@ tr.ps-cf-active td:first-child {
     border-color: rgba(245, 158, 11, 0.26);
 }
 .ps-proj-section--others .ps-proj-card:hover {
-    border-color: #b45309;
+    border-color: var(--c-warning-text);
     background: linear-gradient(145deg, #fffaf0 0%, #fdecd2 100%);
     box-shadow: 0 10px 28px rgba(245, 158, 11, 0.18), 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 .ps-proj-section--others .ps-proj-card-id {
-    color: #b45309;
+    color: var(--c-warning-text);
     background: rgba(245, 158, 11, 0.14);
 }
 
