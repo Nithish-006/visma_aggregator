@@ -228,30 +228,14 @@ html, body {
     color: var(--proj-warning);
     background: var(--proj-warning-soft);
 }
-.proj-section--others .project-card {
-    background: linear-gradient(145deg, #ffffff 0%, #fdf6ec 100%);
-    border-color: rgba(245, 158, 11, 0.28);
-}
-.proj-section--others .project-card:hover {
-    border-color: var(--proj-warning);
-    background: linear-gradient(145deg, #fffaf0 0%, #fdecd2 100%);
-    box-shadow: 0 10px 30px rgba(245, 158, 11, 0.18), 0 4px 12px rgba(0, 0, 0, 0.05);
-}
+.proj-section--others .project-card { --tile-rgb: 245, 158, 11; }
 .proj-section--others .project-card-id {
     color: var(--proj-warning);
     background: var(--proj-warning-soft);
 }
 
 /* "Projects" â€” subtle indigo tint so the bucket reads as the primary type. */
-.proj-section--projects .project-card {
-    background: linear-gradient(145deg, #ffffff 0%, #FBF1EC 100%);
-    border-color: rgba(217, 119, 87, 0.20);
-}
-.proj-section--projects .project-card:hover {
-    border-color: var(--proj-accent);
-    background: linear-gradient(145deg, #FAEDE6 0%, #F5DDD2 100%);
-    box-shadow: 0 10px 30px rgba(194, 96, 63, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
-}
+.proj-section--projects .project-card { --tile-rgb: 217, 119, 87; }
 
 /* "Designs" â€” teal accent + tinted header rule and cards. */
 .proj-section--designs .proj-section-head {
@@ -261,15 +245,7 @@ html, body {
     color: var(--proj-design);
     background: var(--proj-design-soft);
 }
-.proj-section--designs .project-card {
-    background: linear-gradient(145deg, #ffffff 0%, #ecfdff 100%);
-    border-color: rgba(8, 145, 178, 0.26);
-}
-.proj-section--designs .project-card:hover {
-    border-color: var(--proj-design);
-    background: linear-gradient(145deg, #f0fdff 0%, #cffafe 100%);
-    box-shadow: 0 10px 30px rgba(8, 145, 178, 0.18), 0 4px 12px rgba(0, 0, 0, 0.05);
-}
+.proj-section--designs .project-card { --tile-rgb: 8, 145, 178; }
 .proj-section--designs .project-card-id {
     color: var(--proj-design);
     background: var(--proj-design-soft);
@@ -288,7 +264,14 @@ html, body {
 }
 
 /* Project card â€” grid tile */
+/* The card is a pane of tinted glass. One material, one idiom: a section sets
+   --tile-rgb to its own accent and the fill, the edge and the cast shadow are
+   all struck from it, so the colour coding survives while every card on the
+   page is plainly the same object. The fill is translucent white falling into
+   that tint, which lets the page's warm gradient show through — without
+   something behind it, glass is just a flat panel with extra steps. */
 .project-card {
+    --tile-rgb: 217, 119, 87;
     display: flex;
     flex-direction: column;
     align-items: stretch;
@@ -296,8 +279,14 @@ html, body {
     gap: 1rem;
     width: 100%;
     min-height: 158px;
-    background: #FFFFFF;
-    border: 1px solid var(--proj-border);
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.94) 0%,
+            rgba(255, 255, 255, 0.76) 52%,
+            rgba(var(--tile-rgb), 0.07) 100%);
+    -webkit-backdrop-filter: blur(20px) saturate(118%);
+    backdrop-filter: blur(20px) saturate(118%);
+    border: 1px solid rgba(var(--tile-rgb), 0.14);
     border-radius: 16px;
     padding: 1.4rem 1.4rem;
     cursor: pointer;
@@ -305,14 +294,26 @@ html, body {
     text-align: left;
     color: inherit;
     font: inherit;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    /* Top highlight is what sells the edge as glass rather than paint; the
+       cast shadow carries the tile's own hue instead of neutral grey. */
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.85),
+        0 1px 2px rgba(35, 31, 25, 0.03),
+        0 12px 30px -14px rgba(var(--tile-rgb), 0.20);
 }
 
 .project-card:hover {
     transform: translateY(-2px);
-    border-color: var(--proj-accent);
-    background: linear-gradient(145deg, #FAEDE6 0%, #F5DDD2 100%);
-    box-shadow: 0 10px 30px rgba(194, 96, 63, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
+    border-color: rgba(var(--tile-rgb), 0.34);
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(255, 255, 255, 0.82) 48%,
+            rgba(var(--tile-rgb), 0.14) 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 4px rgba(35, 31, 25, 0.04),
+        0 18px 40px -16px rgba(var(--tile-rgb), 0.32);
 }
 
 .project-card-main {
@@ -1477,14 +1478,10 @@ html, body {
     background: rgba(107, 114, 128, 0.12);
 }
 .project-card.is-closed {
+    --tile-rgb: 107, 114, 128;
     opacity: 0.62;
-    background: linear-gradient(145deg, #fafafa 0%, #f1f1f3 100%);
-    border-color: rgba(107, 114, 128, 0.28);
 }
-.project-card.is-closed:hover {
-    opacity: 0.85;
-    border-color: var(--proj-text-muted);
-}
+.project-card.is-closed:hover { opacity: 0.85; }
 .project-po-badge.closed {
     background: rgba(107, 114, 128, 0.14);
     color: var(--proj-text-muted);

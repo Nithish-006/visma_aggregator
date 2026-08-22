@@ -325,6 +325,8 @@
     // same figures, so they share one set rather than two that can drift.
     const escapeHtml = ProjectGlance.escapeHtml;
     const formatINR = ProjectGlance.formatINR;
+    // Whole rupees, matching the panels the overhead field sits in.
+    const formatRupees = ProjectGlance.formatRupees;
     const formatSignedINR = ProjectGlance.formatSignedINR;
     const formatINRCompact = ProjectGlance.formatINRCompact;
     const formatDeltaINR = ProjectGlance.formatDeltaINR;
@@ -2338,17 +2340,17 @@
         if (!Number.isFinite(value) || value < 0) {
             input.classList.add('error');
             showToast('Overhead must be a number, zero or more.', 'error');
-            input.value = original ? formatINR(original) : '';
+            input.value = original ? formatRupees(original) : '';
             return;
         }
         input.classList.remove('error');
         // Unchanged? Reformat and leave it alone — no request, and no repaint
         // churning the panel for nothing.
         if (Math.abs(original - value) < 0.005) {
-            input.value = value ? formatINR(value) : '';
+            input.value = value ? formatRupees(value) : '';
             return;
         }
-        input.value = formatINR(value); // show the committed value while saving
+        input.value = formatRupees(value); // show the committed value while saving
         input.disabled = true;
         const cached = projects.find(x => x.id === activeProjectId);
         try {

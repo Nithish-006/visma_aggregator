@@ -678,34 +678,69 @@ input[type="radio"] {
    4.7-6.9:1. At 18% the Others amber drops to exactly 4.50 and stops
    clearing, which is what set the ceiling.
    ============================================================================ */
+/* The flat tint is now a pane of tinted glass, which is the same signal
+   carried in a lighter, more material way: a wash of the status hue that runs
+   from almost clear at the top-left to its full strength at the bottom-right,
+   over a blurred read of the page beneath.
+
+   The 14% ceiling above still governs, and it governs the DEEPEST point of the
+   ramp - every other part of the card is lighter than the flat tint it
+   replaces, so contrast can only improve. Nothing here is allowed past 0.14.
+
+   Only the hue is per-variant now (--status-rgb); the material is written once
+   and each bucket sets its own colour, so a new bucket cannot arrive with a
+   subtly different card. */
 .project-card,
 .ps-proj-card {
     --status: var(--c-accent-fill);
-    --status-tint: #F2E2D9;
+    --status-rgb: 196, 82, 44;
     border-left: none;
-    background: var(--status-tint);
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.58) 0%,
+            rgba(255, 255, 255, 0.22) 46%,
+            rgba(255, 255, 255, 0.00) 100%),
+        linear-gradient(150deg,
+            rgba(var(--status-rgb), 0.05) 0%,
+            rgba(var(--status-rgb), 0.14) 100%);
+    -webkit-backdrop-filter: blur(20px) saturate(112%);
+    backdrop-filter: blur(20px) saturate(112%);
+    /* The top edge catches the light; the cast shadow carries the card's own
+       hue rather than neutral grey. Both are what read as "glass" — without
+       them a translucent fill is just a paler card. */
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.75),
+        0 1px 2px rgba(31, 30, 29, 0.04),
+        0 12px 30px -14px rgba(var(--status-rgb), 0.22);
     transition: background   var(--duration-fast) var(--ease-default),
+                border-color var(--duration-fast) var(--ease-default),
                 box-shadow   var(--duration-fast) var(--ease-default),
                 transform    var(--duration-instant) var(--ease-out);
 }
 
 .proj-section--projects .project-card,
-.ps-proj-section--projects .ps-proj-card {
-    --status: var(--c-accent-fill); --status-tint: #F2E2D9; background: var(--status-tint);
-}
+.ps-proj-section--projects .ps-proj-card { --status: var(--c-accent-fill); --status-rgb: 196, 82, 44; }
 .proj-section--designs .project-card,
-.ps-proj-section--designs .ps-proj-card {
-    --status: #0B5F76; --status-tint: #D8EAEC; background: var(--status-tint);
-}
+.ps-proj-section--designs .ps-proj-card  { --status: #0B5F76; --status-rgb: 11, 95, 118; }
 .proj-section--others .project-card,
-.ps-proj-section--others .ps-proj-card {
-    --status: #A16207; --status-tint: #F5E7D4; background: var(--status-tint);
-}
+.ps-proj-section--others .ps-proj-card   { --status: #A16207; --status-rgb: 161, 98, 7; }
 .proj-section--closed .project-card,
 .ps-proj-section--closed .ps-proj-card,
 .project-card.is-closed,
-.ps-proj-card.is-closed {
-    --status: #64748B; --status-tint: #E5E6E6; background: var(--status-tint);
+.ps-proj-card.is-closed                  { --status: #64748B; --status-rgb: 100, 116, 139; }
+
+/* A phone can be asked to blur a 20px backdrop behind forty-odd cards at once,
+   and it costs real frames to do it. What is behind them is a smooth wash, so
+   the blur has almost nothing to bite on: dropping it below the single-column
+   breakpoint looks the same and scrolls better. The translucency, the edge
+   highlight and the tinted shadow — the parts that actually read as glass —
+   all stay. */
+@media (max-width: 640px) {
+    .project-card,
+    .ps-proj-card {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
 }
 
 /* The section marker picks up the same colour, so the heading and the cards
@@ -733,9 +768,23 @@ input[type="radio"] {
 .project-card.is-closed .project-card-stem,
 .ps-proj-card.is-closed .ps-proj-card-name { color: var(--c-text-muted); }
 
+/* Hover deepens the glass rather than recolouring it: the wash gains a little
+   body, the edge firms up, and the tile lifts off its own tinted shadow. */
 .project-card:hover,
 .ps-proj-card:hover {
-    box-shadow: 0 1px 2px rgba(31, 30, 29, 0.05), 0 8px 24px rgba(31, 30, 29, 0.09);
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.66) 0%,
+            rgba(255, 255, 255, 0.26) 44%,
+            rgba(255, 255, 255, 0.00) 100%),
+        linear-gradient(150deg,
+            rgba(var(--status-rgb), 0.07) 0%,
+            rgba(var(--status-rgb), 0.14) 100%);
+    border-color: rgba(var(--status-rgb), 0.38);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        0 1px 2px rgba(31, 30, 29, 0.05),
+        0 18px 40px -16px rgba(var(--status-rgb), 0.34);
 }
 
 
@@ -859,24 +908,8 @@ textarea::placeholder {
 }
 
 .project-card,
-.ps-proj-card,
-.proj-section--projects .project-card,
-.ps-proj-section--projects .ps-proj-card {
-    border: 1px solid rgba(196, 82, 44, 0.22);
-}
-.proj-section--designs .project-card,
-.ps-proj-section--designs .ps-proj-card {
-    border: 1px solid rgba(11, 95, 118, 0.22);
-}
-.proj-section--others .project-card,
-.ps-proj-section--others .ps-proj-card {
-    border: 1px solid rgba(161, 98, 7, 0.24);
-}
-.proj-section--closed .project-card,
-.ps-proj-section--closed .ps-proj-card,
-.project-card.is-closed,
-.ps-proj-card.is-closed {
-    border: 1px solid rgba(100, 116, 139, 0.26);
+.ps-proj-card {
+    border: 1px solid rgba(var(--status-rgb), 0.22);
 }
 
 

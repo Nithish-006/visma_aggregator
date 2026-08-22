@@ -347,6 +347,10 @@ def get_project_summary_project_cards():
     lack the prefix (see below). No stem fuzz, so free-text variants are still
     kept apart. Expense = debits across banks.
 
+    The card's headline KPIs are the registry's: PO Value, Received, Balance
+    (plus Net where the third-party ledger has been used). They are struck from
+    the same fields the registry card uses, so the two pages cannot disagree.
+
     Income is *not* computed here. It is the same "client payments received"
     figure the registry shows — KVB credits plus the manual cash ledger — taken
     from _attach_client_payments so the two pages can't disagree about what a
@@ -403,12 +407,21 @@ def get_project_summary_project_cards():
         third_party = float(p.get('third_party_total') or 0)
         third_party_in = float(p.get('third_party_in_total') or 0)
         income_net = float(p.get('received_net') or 0)
+        # The contract in force — the PO as varied, or the actuals once they
+        # replace it (_decorate_project_row settles that). Carried so this card
+        # can show the registry's own three KPIs (PO Value / Received /
+        # Balance) rather than a second, differently-worded set: the two pages
+        # list the same projects side by side and any divergence in the
+        # headline figures reads as one of them being wrong.
+        po_value = p.get('po_total_value')
         cards.append({
             'id': p['id'],
             'stem_name': p['stem_name'],
             'display': p['display'],
             'project_type': p.get('project_type', 'project'),
             'is_inactive': bool(p.get('is_inactive', False)),
+            'po_total_value': None if po_value is None else float(po_value),
+            'po_extraction_status': p.get('po_extraction_status'),
             'income': income,
             'income_formatted': format_indian_number(income),
             'third_party_total': third_party,
