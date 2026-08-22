@@ -186,6 +186,11 @@
     margin-top: 0.7rem;
 }
 .proj-ov-panel {
+    /* Each panel ends where its content does. The GST panel now answers in a
+       headline and two rows, so stretching it to the height of the contract
+       panel beside it would open a hand's width of blank surface under the
+       last figure — a hole that reads as something failing to load. */
+    align-self: start;
     background: var(--proj-surface);
     border: 1px solid var(--proj-border);
     border-radius: 10px;
@@ -220,86 +225,231 @@
     color: var(--proj-text-muted);
 }
 
-/* Value ladder: basic -> GST -> total -> received -> balance */
-.proj-ladder { margin: 0; }
-.proj-ladder-row {
+/* == The money panels: three type tiers, and only three ==================
+   A RESULT you read first (large, weighted, coloured where the sign matters),
+   the COMPONENTS it is built from (regular weight, dim label, tabular figures)
+   and a CAPTION that says where it came from (micro, muted). The panels used
+   to run five near-identical tiers, which is the same as running one. */
+
+/* Tier 3: the caption. One line, never a paragraph. */
+.proj-cap {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--proj-text-muted);
+}
+.proj-cap-foot { margin: 0.25rem 0 0; text-align: right; }
+
+/* Visually hidden, still read aloud — the matrix's row-header column has no
+   visible heading, but a screen reader shouldn't meet a blank one. */
+.proj-sr {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* A block inside a panel — CONTRACT, RECEIVED — with its source as a badge
+   rather than a sentence, and any control that belongs to it pushed right. */
+.proj-block-head {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.3rem 0;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 0.4rem;
 }
-.proj-ladder-row dt {
-    font-size: 0.82rem;
-    color: var(--proj-text-dim);
-}
-.proj-ladder-row dd {
-    margin: 0;
-    font-size: 0.88rem;
-    font-weight: 600;
+.proj-block-head:not(:first-child) { margin-top: 1rem; }
+.proj-block-t {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     color: var(--proj-text);
-    text-align: right;
+}
+.proj-block-badge {
+    padding: 0.1rem 0.4rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--proj-text-muted);
+    background: var(--proj-surface-soft);
+    border: 1px solid var(--proj-border);
+    border-radius: 5px;
+    white-space: nowrap;
+}
+/* The way in to the books an actuals entry replaced. Quiet by design: it is a
+   footnote you can open, not an action the panel is asking for. */
+.proj-book-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--proj-text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.proj-book-toggle:hover,
+.proj-book-toggle:focus-visible { color: var(--proj-accent-strong); }
+.proj-book-toggle svg { transition: transform 0.15s ease; }
+.proj-book-toggle.is-open svg { transform: rotate(180deg); }
+
+/* == The matrix: one row per book, components as columns =================
+   Basic / GST / Total written once across the top instead of re-typed as three
+   row labels under every heading. Three books fit in three rows. */
+.proj-mx {
+    width: 100%;
+    border-collapse: collapse;
     font-variant-numeric: tabular-nums;
 }
-/* The PO opens the ladder — the agreed figure everything else is measured
-/* Quiet qualifier next to a section heading ("as per PO" / "bills in"). */
-.proj-ladder-hint {
-    margin-left: 0.4rem;
+.proj-mx thead th {
+    padding: 0 0 0.25rem;
     font-size: 0.62rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--proj-text-muted);
-    opacity: 0.8;
+    text-align: right;
+    border-bottom: 1px solid var(--proj-border);
 }
-
-/* "Contract" / "Variations": a heading for the two or three rows under it,
-   not a figure of its own, so it carries no dd. */
-.proj-ladder-head {
-    display: flex;
-    align-items: baseline;
-    margin: 0.55rem 0 0.15rem;
-    font-size: 0.72rem;
+.proj-mx thead th:first-child { text-align: left; }
+.proj-mx tbody th {
+    padding: 0.34rem 0.6rem 0.34rem 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--proj-text-dim);
+    text-align: left;
+    white-space: nowrap;
+}
+.proj-mx td {
+    padding: 0.34rem 0 0.34rem 0.6rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--proj-text);
+    text-align: right;
+}
+/* The book in force carries the figures the rest of the panel is built on. */
+.proj-mx-row.is-force td { font-weight: 700; }
+/* Superseded books stay legible but plainly spent: they are here to answer
+   "how far did this move", not to be read as live figures. */
+.proj-mx-row.is-old th,
+.proj-mx-row.is-old td { color: var(--proj-text-muted); }
+.proj-mx-row.is-old td { font-weight: 500; }
+.proj-mx-count {
+    display: inline-block;
+    min-width: 1.1rem;
+    margin-left: 0.3rem;
+    padding: 0 0.25rem;
+    font-size: 0.62rem;
     font-weight: 700;
+    text-align: center;
+    color: var(--proj-text-muted);
+    background: var(--proj-surface-soft);
+    border: 1px solid var(--proj-border);
+    border-radius: 999px;
+}
+.proj-mx-note {
+    margin-left: 0.35rem;
+    font-size: 0.6rem;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    color: var(--proj-text-muted);
+    opacity: 0.85;
+}
+/* Figures are whole rupees in these panels (see formatRupees) — the paise on a
+   contract or a spend total were two digits of noise on every line. Kept from
+   breaking across lines because the phone layout sets each cell as a flex row
+   with its column name beside it. */
+.proj-amt { white-space: nowrap; }
+
+/* Tier 1: the figure the matrix above exists to produce. */
+.proj-govern {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.15rem;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--proj-border-strong);
+}
+.proj-govern-k {
+    font-size: 0.78rem;
+    font-weight: 700;
     color: var(--proj-text);
 }
-.proj-ladder-head:first-child { margin-top: 0; }
-/* Indented under their heading so the eye can tell a component apart from a
-   figure the panel is actually driving at. */
-.proj-ladder-row.is-sub dt { padding-left: 0.7rem; color: var(--proj-text-muted); }
+.proj-govern-v {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--proj-text);
+    font-variant-numeric: tabular-nums;
+}
+.proj-govern-note { margin-top: 0.25rem; text-align: right; }
+/* How far the contract has moved from the PO as signed — the one thing the old
+   stack of component rows never actually said. */
+.proj-chip-delta {
+    display: inline-block;
+    padding: 0.1rem 0.42rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+}
+.proj-chip-delta.is-up {
+    color: var(--proj-success);
+    background: var(--proj-success-soft);
+}
+.proj-chip-delta.is-down {
+    color: var(--proj-danger);
+    background: var(--proj-danger-soft);
+}
 
-/* The line each block adds up to gets a rule above it, mirroring the way the
-   source sheet separates its totals. */
-.proj-ladder-row.is-total {
+/* == Received: what actually stayed with us ============================== */
+.proj-recv { margin: 0; }
+.proj-recv-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.28rem 0;
+}
+.proj-recv-row dt {
+    font-size: 0.8rem;
+    color: var(--proj-text-dim);
+}
+.proj-recv-row dd {
+    margin: 0;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--proj-text);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.proj-recv-row.is-lead dt { font-weight: 600; color: var(--proj-text); }
+/* The pass-through legs are adjustments to the receipt above them, so they sit
+   indented under it rather than reading as receipts of their own. */
+.proj-recv-row.is-sub dt { padding-left: 0.7rem; color: var(--proj-text-muted); }
+.proj-recv-row.is-deduct dd { color: var(--proj-danger); }
+.proj-recv-row.is-net {
     border-top: 1px solid var(--proj-border);
     margin-top: 0.15rem;
     padding-top: 0.35rem;
 }
-.proj-ladder-row.is-total dt { font-weight: 600; color: var(--proj-text); }
-.proj-ladder-row.is-total dd { font-weight: 700; }
-
-/* The figure the two blocks above exist to produce, and what the balance is
-   measured against — so it reads as a result, not another component. */
-.proj-ladder-row.is-revised {
-    border-top: 1px solid var(--proj-border-strong);
-    margin-top: 0.45rem;
-    padding-top: 0.45rem;
-}
-.proj-ladder-row.is-revised dt { font-weight: 700; color: var(--proj-text); }
-.proj-ladder-row.is-revised dd { font-size: 1rem; font-weight: 700; }
-
-/* Money the client paid us that we forwarded straight on to someone else. It
-   reduces what is in hand, so it reads in the danger colour like any other
-   outflow — but it sits indented under the receipt it comes out of, because it
-   is a subtraction from that line and not a cost of the project. */
-.proj-ladder-row.is-deduct dd { color: var(--proj-danger); }
-
+.proj-recv-row.is-net dt { font-weight: 700; color: var(--proj-text); }
+.proj-recv-row.is-net dd { font-weight: 700; }
 /* The deduction's label is a way in to the list behind it: which payee, for
    what, when. Styled as a link rather than a button so it doesn't compete with
-   the figures — the ladder is a document, and this is a footnote you can open. */
-.proj-ladder-link {
+   the figures — the panel is a document, and this is a footnote you can open. */
+.proj-tp-link {
     padding: 0;
     border: 0;
     background: none;
@@ -311,59 +461,58 @@
     text-underline-offset: 3px;
     text-decoration-color: var(--proj-border-strong);
 }
-.proj-ladder-link:hover,
-.proj-ladder-link:focus-visible {
-    color: var(--proj-accent);
+.proj-tp-link:hover,
+.proj-tp-link:focus-visible {
+    color: var(--proj-accent-strong);
     text-decoration-color: currentColor;
 }
 
-/* The line that carries the weight gets a rule above it, mirroring the way the
-   source sheet separates its totals. */
-.proj-ladder-row.is-balance {
-    border-top: 1px solid var(--proj-border-strong);
-    margin-top: 0.15rem;
-    padding-top: 0.45rem;
-}
-.proj-ladder-row.is-balance dt { font-weight: 700; color: var(--proj-text); }
-.proj-ladder-row.is-balance dd { font-size: 1rem; font-weight: 700; }
-.proj-ladder-row.is-balance dd.due     { color: var(--proj-danger); }
-.proj-ladder-row.is-balance dd.settled { color: var(--proj-success); }
-.proj-ladder-split {
-    display: block;
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: var(--proj-text-muted);
-}
-
-/* GST position: purchase vs sales, and the difference we remit. The two blocks
-   reuse .proj-ladder — see the value panel — so only the remittance line below
-   needs styling of its own. */
-/* Follows the sales block it is drawn from rather than being pinned to the
-   panel floor: this panel runs a couple of rows shorter than the value ladder
-   beside it, and floating the line down to align with "Current balance" would
-   trade a tidy margin at the bottom for a hole in the middle. */
-.proj-gst-extra {
+/* Tier 1 again, and the line the panel closes on. */
+.proj-balance {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 0.75rem;
     margin-top: 0.5rem;
-    padding-top: 0.5rem;
+    padding-top: 0.45rem;
     border-top: 1px solid var(--proj-border-strong);
 }
-.proj-gst-extra-k {
+.proj-balance-k {
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--proj-text);
 }
-.proj-gst-extra-v {
-    font-size: 1rem;
+.proj-balance-v {
+    font-size: 1.1rem;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.proj-balance-v.due     { color: var(--proj-danger); }
+.proj-balance-v.settled { color: var(--proj-success); }
+
+/* == GST position: the answer, then the two books it came out of ========== */
+.proj-gst-lead {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    margin-bottom: 0.9rem;
+}
+.proj-gst-lead-k {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--proj-text-muted);
+}
+.proj-gst-lead-v {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.15;
     color: var(--proj-danger);
     font-variant-numeric: tabular-nums;
 }
 /* Input GST above output GST is money back, not money owed. */
-.proj-gst-extra.is-credit .proj-gst-extra-v { color: var(--proj-success); }
+.proj-gst-lead.is-credit .proj-gst-lead-v { color: var(--proj-success); }
 
 /* Expenses: a two-column tabulation banded like the bills table — tinted
    header, hairline rows, tinted totals. */
@@ -526,9 +675,44 @@
         gap: 0.2rem;
     }
 
-    /* The GST panel used to be a table that needed collapsing into cards here.
-       It is a .proj-ladder now, which is label-and-figure rows already and
-       needs nothing on a phone. */
+    /* The matrix trades four columns for the stacked-card shape the wide
+       tables use everywhere else on a phone: the book name is the card head,
+       and each figure carries its column name from data-label. Four rupee
+       columns on a 360px screen would otherwise wrap mid-figure. */
+    .proj-mx thead { display: none; }
+    .proj-mx tbody,
+    .proj-mx tbody tr { display: block; }
+    /* display:block above outranks the UA's [hidden] rule, which would leave
+       the superseded books on screen with the toggle still claiming to open
+       them. */
+    .proj-mx tbody[hidden] { display: none; }
+    .proj-mx tbody tr + tr,
+    .proj-mx tbody + tbody tr:first-child { margin-top: 0.5rem; }
+    .proj-mx tbody th {
+        display: block;
+        padding: 0 0 0.15rem;
+        border-bottom: 1px solid var(--proj-border);
+    }
+    .proj-mx td {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.22rem 0;
+    }
+    .proj-mx td::before {
+        content: attr(data-label);
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--proj-text-muted);
+    }
+
+    /* The badge and the toggle each need a line of their own once the block
+       title has taken the width. */
+    .proj-block-head { flex-wrap: wrap; gap: 0.3rem 0.45rem; }
+    .proj-book-toggle { margin-left: 0; }
 
     /* Long category heads wrap rather than truncate on a narrow screen. */
     .proj-cost-k { white-space: normal; }

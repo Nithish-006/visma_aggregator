@@ -42,6 +42,22 @@ body {
     min-height: 100vh;
     color: var(--text-primary);
 }
+/* Ambient wash — the thing the glass is glass *against*. Two very soft colour
+   fields fixed behind the page: without them a translucent card sits on a flat
+   fill and just looks like a paler card. Fixed, so scrolling moves the cards
+   across the light rather than dragging it along with them. */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(1100px 640px at 8% -10%, rgba(217, 119, 87, 0.055), transparent 62%),
+        radial-gradient(900px 560px at 96% 2%, rgba(59, 107, 201, 0.042), transparent 60%),
+        radial-gradient(760px 520px at 50% 108%, rgba(14, 140, 140, 0.030), transparent 62%);
+}
+
 
 /* ============================================================================
    HEADER
@@ -1743,7 +1759,11 @@ tr.ps-cf-active td:first-child {
     gap: 16px;
 }
 
+/* Same pane of glass as the registry card (projects.css) — these two grids
+   list the same projects, so they are the same object. A section sets
+   --tile-rgb and the fill, edge and cast shadow all follow from it. */
 .ps-proj-card {
+    --tile-rgb: 217, 119, 87;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -1753,19 +1773,35 @@ tr.ps-cf-active td:first-child {
     font-family: inherit;
     color: inherit;
     cursor: pointer;
-    background: linear-gradient(145deg, #ffffff 0%, #faf3ee 100%);
-    border: 1px solid rgba(217, 119, 87, 0.20);
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.94) 0%,
+            rgba(255, 255, 255, 0.76) 52%,
+            rgba(var(--tile-rgb), 0.07) 100%);
+    -webkit-backdrop-filter: blur(20px) saturate(118%);
+    backdrop-filter: blur(20px) saturate(118%);
+    border: 1px solid rgba(var(--tile-rgb), 0.14);
     border-radius: 16px;
     padding: 18px 20px;
     transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.85),
+        0 1px 2px rgba(35, 31, 25, 0.03),
+        0 12px 30px -14px rgba(var(--tile-rgb), 0.20);
 }
 
 .ps-proj-card:hover {
     transform: translateY(-2px);
-    border-color: var(--accent-color);
-    background: linear-gradient(145deg, #fdf3ee 0%, #f6e6dc 100%);
-    box-shadow: 0 10px 28px rgba(217, 119, 87, 0.16), 0 4px 12px rgba(0, 0, 0, 0.05);
+    border-color: rgba(var(--tile-rgb), 0.34);
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.97) 0%,
+            rgba(255, 255, 255, 0.82) 48%,
+            rgba(var(--tile-rgb), 0.14) 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 2px 4px rgba(35, 31, 25, 0.04),
+        0 18px 40px -16px rgba(var(--tile-rgb), 0.32);
 }
 
 .ps-proj-card-main {
@@ -1835,21 +1871,21 @@ tr.ps-cf-active td:first-child {
 
 .ps-proj-fin-cell .v.income { color: var(--c-success-text); }
 .ps-proj-fin-cell .v.expense { color: var(--c-danger-text); }
+/* The registry card's states, same colours: these cards headline the same
+   three KPIs, and a balance that reads red on one page and plain on the other
+   would look like two different figures. */
+.ps-proj-fin-cell .v.received { color: var(--c-accent-text); }
+.ps-proj-fin-cell .v.due      { color: var(--c-danger-text); }
+.ps-proj-fin-cell .v.settled  { color: var(--c-success-text); }
+.ps-proj-fin-cell .v.pending  { color: var(--c-warning-text); font-weight: 600; }
+.ps-proj-fin-cell .v.muted    { color: var(--text-muted); font-weight: 600; }
 
 /* Designs â€” teal tint */
 .ps-proj-section--designs .ps-proj-count {
     color: var(--c-teal-text);
     background: rgba(8, 145, 178, 0.12);
 }
-.ps-proj-section--designs .ps-proj-card {
-    background: linear-gradient(145deg, #ffffff 0%, #ecfdff 100%);
-    border-color: rgba(8, 145, 178, 0.24);
-}
-.ps-proj-section--designs .ps-proj-card:hover {
-    border-color: var(--c-teal-text);
-    background: linear-gradient(145deg, #f0fdff 0%, #cffafe 100%);
-    box-shadow: 0 10px 28px rgba(8, 145, 178, 0.18), 0 4px 12px rgba(0, 0, 0, 0.05);
-}
+.ps-proj-section--designs .ps-proj-card { --tile-rgb: 8, 145, 178; }
 .ps-proj-section--designs .ps-proj-card-id {
     color: var(--c-teal-text);
     background: rgba(8, 145, 178, 0.12);
@@ -1860,15 +1896,7 @@ tr.ps-cf-active td:first-child {
     color: var(--c-warning-text);
     background: rgba(245, 158, 11, 0.14);
 }
-.ps-proj-section--others .ps-proj-card {
-    background: linear-gradient(145deg, #ffffff 0%, #fdf6ec 100%);
-    border-color: rgba(245, 158, 11, 0.26);
-}
-.ps-proj-section--others .ps-proj-card:hover {
-    border-color: var(--c-warning-text);
-    background: linear-gradient(145deg, #fffaf0 0%, #fdecd2 100%);
-    box-shadow: 0 10px 28px rgba(245, 158, 11, 0.18), 0 4px 12px rgba(0, 0, 0, 0.05);
-}
+.ps-proj-section--others .ps-proj-card { --tile-rgb: 245, 158, 11; }
 .ps-proj-section--others .ps-proj-card-id {
     color: var(--c-warning-text);
     background: rgba(245, 158, 11, 0.14);
@@ -1879,15 +1907,7 @@ tr.ps-cf-active td:first-child {
     color: var(--c-text-muted);
     background: rgba(100, 116, 139, 0.14);
 }
-.ps-proj-section--closed .ps-proj-card {
-    background: linear-gradient(145deg, #ffffff 0%, #f4f5f7 100%);
-    border-color: rgba(100, 116, 139, 0.24);
-}
-.ps-proj-section--closed .ps-proj-card:hover {
-    border-color: #64748b;
-    background: linear-gradient(145deg, #f8fafc 0%, #eef1f5 100%);
-    box-shadow: 0 10px 28px rgba(100, 116, 139, 0.16), 0 4px 12px rgba(0, 0, 0, 0.05);
-}
+.ps-proj-section--closed .ps-proj-card { --tile-rgb: 100, 116, 139; }
 .ps-proj-section--closed .ps-proj-card-id {
     color: var(--c-text-muted);
     background: rgba(100, 116, 139, 0.14);

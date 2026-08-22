@@ -11,11 +11,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=9">
     <!-- Shared with the registry; must load before the page's own sheet. -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_glance.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_glance.css') }}?v=8">
     <!-- Self-contained panel (material_recon.js); scoped under .mr-*. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='material_recon.css') }}?v=4">
-    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=22">
-    <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=10">
+    <link rel="stylesheet" href="{{ url_for('static', filename='project_summary.css') }}?v=24">
+    <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=12">
 </head>
 
 <body>
@@ -269,9 +269,9 @@
         <p>Loading data...</p>
     </div>
 
-    <script src="{{ url_for('static', filename='project_glance.js') }}?v=7"></script>
+    <script src="{{ url_for('static', filename='project_glance.js') }}?v=9"></script>
     <script src="{{ url_for('static', filename='material_recon.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='project_summary.js') }}?v=21"></script>
+    <script src="{{ url_for('static', filename='project_summary.js') }}?v=22"></script>
 <script>
 function hardRefresh() {
     if ('caches' in window) {

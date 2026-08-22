@@ -504,18 +504,62 @@
         });
     }
 
+    function finCell(label, value, cls = '', tip = '') {
+        return `<div class="ps-proj-fin-cell"${tip ? ` title="${escapeHtml(tip)}"` : ''}>
+                        <span class="k">${label}</span>
+                        <span class="v ${cls}">${value}</span>
+                    </div>`;
+    }
+
+    // The same three KPIs the registry card shows — PO Value, Received,
+    // Balance — struck the same way from the same fields, with Net appearing
+    // only where the third-party ledger has actually been used. The two pages
+    // list the same projects, so a card that headlined a different set (Income
+    // / Expense / Txns) invited the reader to compare figures that were never
+    // the same measurement. See buildCard() in projects.js: this mirrors it.
     function landingCardHtml(c) {
+        const poValue = Number(c.po_total_value) || 0;
+        const hasPoValue = c.po_total_value != null && poValue > 0;
+        const received = Number(c.income) || 0;   // client payments, gross
+        const hasReceived = received > 0;
+
+        const cells = [];
+        if (hasPoValue) {
+            cells.push(finCell('PO Value', formatINRCompact(poValue), '',
+                'Total purchase-order value'));
+        } else if (c.po_extraction_status === 'failed') {
+            cells.push(finCell('PO Value', 'Pending', 'pending',
+                'Auto-read failed — enter it on the Projects page'));
+        }
+        if (hasReceived || hasPoValue) {
+            cells.push(finCell('Received', hasReceived ? formatINRCompact(received) : '—',
+                hasReceived ? 'received' : 'muted',
+                'Client payments received'));
+        }
         // Only on the projects the third-party ledger touched. Everywhere else
-        // Net equals the Income beside it, and a cell restating its neighbour is
-        // noise on a card this dense — the same rule the registry card follows.
-        const thirdParty = Number(c.third_party_total) || 0;
-        const thirdPartyIn = Number(c.third_party_in_total) || 0;
+        // Net equals the Received beside it, and a cell restating its neighbour
+        // is noise on a card this dense — the same rule the registry follows.
+        const tpOut = Number(c.third_party_total) || 0;
+        const tpIn = Number(c.third_party_in_total) || 0;
         const bits = [];
-        if (thirdParty > 0.5) bits.push(`${c.third_party_formatted} paid to third parties`);
-        if (thirdPartyIn > 0.5) bits.push(`${c.third_party_in_formatted} received from third parties`);
-        const netCell = bits.length
-            ? `<div class="ps-proj-fin-cell"><span class="k">Net</span><span class="v income" title="For VISMA, after ${escapeHtml(bits.join(' and '))}">${formatINRCompact(c.income_net)}</span></div>`
-            : '';
+        if (tpOut > 0.5) bits.push(`${c.third_party_formatted} paid to third parties`);
+        if (tpIn > 0.5) bits.push(`${c.third_party_in_formatted} received from third parties`);
+        if (bits.length) {
+            cells.push(finCell('Net', formatINRCompact(Number(c.income_net) || 0), 'received',
+                `For VISMA, after ${bits.join(' and ')}`));
+        }
+        if (hasPoValue) {
+            // Against the net, as everywhere else: money forwarded to a
+            // contractor never paid down the PO, and money a third party paid
+            // us did (helpers/project_finance). income_net is that figure.
+            const bal = poValue - (Number(c.income_net) || 0);
+            const settled = bal <= 0.5;
+            cells.push(finCell('Balance', settled ? 'Settled' : formatINRCompact(bal),
+                settled ? 'settled' : 'due',
+                settled ? 'Fully received'
+                        : `Balance due (PO value − ${bits.length ? 'net ' : ''}received)`));
+        }
+        const finBlock = cells.length ? `<div class="ps-proj-fin">${cells.join('')}</div>` : '';
         return `
             <button type="button" class="ps-proj-card${isCardClosed(c) ? ' is-closed' : ''}" data-display="${escapeHtml(c.display)}"
                     data-title="${c.id} − ${escapeHtml(c.stem_name)}">
@@ -523,12 +567,7 @@
                     <span class="ps-proj-card-id">${c.id}</span>
                     <span class="ps-proj-card-name">${escapeHtml(c.stem_name)}</span>
                 </div>
-                <div class="ps-proj-fin">
-                    <div class="ps-proj-fin-cell"><span class="k">Income</span><span class="v income" title="${escapeHtml(c.income_formatted)}">${formatINRCompact(c.income)}</span></div>
-                    ${netCell}
-                    <div class="ps-proj-fin-cell"><span class="k">Expense</span><span class="v expense" title="${escapeHtml(c.expense_formatted)}">${formatINRCompact(c.expense)}</span></div>
-                    <div class="ps-proj-fin-cell"><span class="k">Txns</span><span class="v">${(c.txn_count || 0).toLocaleString()}</span></div>
-                </div>
+                ${finBlock}
             </button>`;
     }
 

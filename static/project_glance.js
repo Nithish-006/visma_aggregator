@@ -60,10 +60,39 @@ window.ProjectGlance = (function () {
         return (n > 0 ? '+' : '') + formatSignedINR(n);
     }
 
+    // Whole rupees, for the money panels. Every figure there is a roll-up of
+    // many rows — a contract, a spend total, a balance — and at that scale the
+    // paise are noise: two digits of it on twenty figures, none of which a
+    // decision turns on. Individual ledger and bill lines keep formatINR, where
+    // the paise are the invoice's own and belong on screen.
+    function formatRupees(value) {
+        const n = Math.round(Number(value) || 0);
+        return '₹' + Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    }
+    // The minus goes before the ₹ ("-₹5,000"), not after it.
+    function formatSignedRupees(value) {
+        const n = Math.round(Number(value) || 0);
+        return (n < 0 ? '-' : '') + formatRupees(n);
+    }
+    // Deltas mark both directions — a bare figure in a column that runs both
+    // ways reads as an absolute value rather than an increase.
+    function formatDeltaRupees(value) {
+        const n = Math.round(Number(value) || 0);
+        return (n > 0 ? '+' : '') + formatSignedRupees(n);
+    }
+    // Wrapped so the figure can't break across lines: on a phone the matrix
+    // cells become flex rows with the column name on the left.
+    const amt = (str) => `<span class="proj-amt">${escapeHtml(str)}</span>`;
+    const moneyHtml = (v) => amt(formatRupees(v));
+    const deltaHtml = (v) => amt(formatDeltaRupees(v));
+
     // ── Project at a glance ────────────────────────────
-    // Mirrors the summary sheet the client actually works from: a value ladder
-    // (basic -> GST -> total -> received -> balance), the GST position of
-    // purchases against sales, and the cost breakdown. Called twice per open —
+    // Mirrors the summary sheet the client actually works from: the contract
+    // and what it is derived from, what has actually been received against it,
+    // the GST position of purchases against sales, and the cost breakdown.
+    // Every block leads with its result and tabulates the components under it,
+    // so the three figures worth knowing are readable in one pass and the
+    // arithmetic is there for anyone who wants it. Called twice per open —
     // once from the cached registry row for an instant paint, then again once
     // /insights lands with the full picture.
     // opts: { project, insights, editableOverhead }
@@ -152,7 +181,7 @@ window.ProjectGlance = (function () {
         const expensesCell = s ? `
             <div class="proj-hero-cell">
                 <span class="proj-hero-k">Total Expenses</span>
-                <span class="proj-hero-v">${formatINR(spend)}</span>
+                <span class="proj-hero-v">${formatRupees(spend)}</span>
                 <span class="proj-hero-sub">&nbsp;</span>
             </div>` : `
             <div class="proj-hero-cell">
@@ -169,7 +198,7 @@ window.ProjectGlance = (function () {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
                 </span>
-                <span class="proj-hero-v ${profit >= 0 ? 'profit' : 'loss'}">${formatSignedINR(profit)}</span>
+                <span class="proj-hero-v ${profit >= 0 ? 'profit' : 'loss'}">${formatSignedRupees(profit)}</span>
                 <span class="proj-hero-sub">${formatINRCompact(contract)} ${fromPo ? 'contract' : 'billed'} − ${formatINRCompact(spend)} spent</span>
             </div>` : `
             <div class="proj-hero-cell">
@@ -186,7 +215,7 @@ window.ProjectGlance = (function () {
                         <span class="proj-net-k">${label}</span>
                         <span class="proj-net-f">${formula}</span>
                     </div>
-                    <span class="proj-net-v ${note ? 'is-note' : (Number(value) >= 0 ? 'profit' : 'loss')}">${note || formatSignedINR(value)}</span>
+                    <span class="proj-net-v ${note ? 'is-note' : (Number(value) >= 0 ? 'profit' : 'loss')}">${note || formatSignedRupees(value)}</span>
                 </div>`;
         const netDrawer = s ? `
             <div class="proj-net-drawer" data-glance-panel="net" hidden>
@@ -208,7 +237,7 @@ window.ProjectGlance = (function () {
                 <div class="proj-hero proj-hero-3">
                     <div class="proj-hero-cell">
                         <span class="proj-hero-k">${dueLabel}</span>
-                        <span class="proj-hero-v ${dueCls}">${formatINR(Math.abs(receivable))}</span>
+                        <span class="proj-hero-v ${dueCls}">${formatRupees(receivable)}</span>
                         <span class="proj-hero-sub">${pct != null ? `${pct}% of ${formatINRCompact(contract)} received${hasThirdParty ? ", net" : ""}` : '&nbsp;'}</span>
                     </div>
                     ${expensesCell}
@@ -218,17 +247,19 @@ window.ProjectGlance = (function () {
             </div>
             ${pct != null ? `<div class="proj-pay-bar"><div class="proj-pay-bar-fill" style="width:${pct}%"></div></div>` : ''}`;
 
-        // ── Value ladder ──
-        // The contract, derived in full: the PO as signed, the changes agreed
-        // since, and the revised figure the client is measured against. Every
-        // row here is the PO's own — the sales bills are a different question
-        // (what we've invoiced) and answer it on the Bills tab and in the
-        // hero's Balance, not in the middle of this subtraction.
+        // ── Project value ──
+        // The contract, stated as one governing figure and derived underneath
+        // it in a matrix: one row per book (the PO as signed, the changes
+        // agreed since, the actuals once measured), with Basic / GST / Total
+        // written once as column heads rather than re-typed as three row
+        // labels per block. The sales bills are a different question (what
+        // we've invoiced) and answer it on the Bills tab, not in the middle of
+        // this subtraction.
         const splitNote = cash > 0
-            ? `<span class="proj-ladder-split">${formatINRCompact(bank)} bank + ${formatINRCompact(cash)} cash</span>`
+            ? `<span class="proj-cap">${formatINRCompact(bank)} bank + ${formatINRCompact(cash)} cash</span>`
             : '';
         // The baseline split and both ledger rollups all ride on the project
-        // row (_decorate_project_row), so the whole ladder paints from the
+        // row (_decorate_project_row), so the whole panel paints from the
         // cached registry entry and doesn't wait on insights.
         const baseBasic = Number(p.po_base_taxable_value) || 0;
         const baseGst = Number(p.po_base_total_tax) || 0;
@@ -241,105 +272,179 @@ window.ProjectGlance = (function () {
         const actGst = Number(p.po_act_tax) || 0;
         const actTotal = Number(p.po_act_total) || 0;
         const actCount = Number(p.po_act_count) || 0;
-        const lRow = (label, value, cls = '', fmt = formatINR, suffix = '') => `
-                    <div class="proj-ladder-row ${cls}"><dt>${label}</dt><dd>${fmt(value)}${suffix}</dd></div>`;
-        const lHead = (label, hint = '') => `
-                    <div class="proj-ladder-head"><span>${label}</span>${hint ? `<span class="proj-ladder-hint">${hint}</span>` : ''}</div>`;
 
-        let ladderRows = '';
+        // One row of the matrix. `delta` signs the figures, for a book that is
+        // a set of changes rather than a value in its own right.
+        const mRow = (label, basic, gst, total, o = {}) => {
+            const fmt = o.delta ? deltaHtml : moneyHtml;
+            // Whole rupees have to keep adding up. Rounding basic and GST apart
+            // can leave the row a rupee short of its own total (0.4 + 0.4 shows
+            // as 0 + 0 = 1), which on an accounts screen reads as a bug in the
+            // figures rather than in the display. So where the three genuinely
+            // reconcile at full precision, the GST shown is what is left of the
+            // rounded total after the rounded basic — off the true rounded GST
+            // by at most a rupee, and never off the row. Where they don't
+            // reconcile, each is rounded on its own and the discrepancy stays
+            // visible, because then it is real.
+            const bR = Math.round(Number(basic) || 0);
+            const tR = Math.round(Number(total) || 0);
+            const reconciles = Math.abs((Number(basic) || 0) + (Number(gst) || 0)
+                                        - (Number(total) || 0)) < 0.005;
+            if (reconciles) { basic = bR; gst = tR - bR; total = tR; }
+            return `
+                        <tr class="proj-mx-row ${o.cls || ''}">
+                            <th scope="row">
+                                <span class="proj-mx-book">${label}</span>
+                                ${o.count ? `<span class="proj-mx-count">${o.count}</span>` : ''}
+                                ${o.note ? `<span class="proj-mx-note">${o.note}</span>` : ''}
+                            </th>
+                            <td data-label="Basic">${fmt(basic)}</td>
+                            <td data-label="GST">${fmt(gst)}</td>
+                            <td data-label="Total">${fmt(total)}</td>
+                        </tr>`;
+        };
+        const mTable = (rows, hiddenRows) => `
+                    <table class="proj-mx">
+                        <thead>
+                            <tr><th scope="col"><span class="proj-sr">Source</span></th>
+                                <th scope="col">Basic</th><th scope="col">GST</th><th scope="col">Total</th></tr>
+                        </thead>
+                        ${hiddenRows ? `<tbody data-glance-panel="books" hidden>${hiddenRows}</tbody>` : ''}
+                        <tbody>${rows}</tbody>
+                    </table>`;
+        // A sub-head inside the panel: what this block is, where its figures
+        // come from, and (for the contract) the way in to the books it
+        // replaced. The source is a badge rather than a sentence — it is a
+        // label on the numbers, not an explanation of them.
+        const blockHead = (title, badge, extra = '') => `
+                    <div class="proj-block-head">
+                        <span class="proj-block-t">${title}</span>
+                        ${badge ? `<span class="proj-block-badge">${badge}</span>` : ''}
+                        ${extra}
+                    </div>`;
+        const booksToggle = `
+                        <button type="button" class="proj-book-toggle" data-glance-toggle="books"
+                                aria-expanded="false" title="Show the PO and variations these actuals replaced">
+                            <span>show what this replaced</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>`;
+
+        let contractBlock = '';
         if (fromPo && actCount) {
             // Actuals replace the PO and any variations outright (see
-            // resolve_contract), so the ladder states the figure in force and
-            // says in its head where that figure came from. The rungs it
-            // replaced are history, not arithmetic — they belong in the PO
-            // ledger, which keeps all three books side by side. Struck through
-            // here they were a column of crossed-out numbers standing between
-            // the reader and the one figure that governs.
-            ladderRows += lHead('Contract', `actuals — ${actCount} ${actCount > 1 ? 'entries' : 'entry'} measured`);
-            ladderRows += lRow('Basic value', actBasic, 'is-sub');
-            ladderRows += lRow('GST', actGst, 'is-sub');
-            ladderRows += lRow('Final PO value', actTotal, 'is-revised');
+            // resolve_contract), so only they are in force and only they are
+            // shown. The books they replaced are history — but "how far did
+            // the final figure move from the PO" is a question you can only
+            // answer with them on screen, so they sit one click away here
+            // rather than a tab away in the ledger.
+            contractBlock = blockHead('Contract', `Actuals · ${actCount} measured`, booksToggle)
+                + mTable(
+                    mRow('Actuals', actBasic, actGst, actTotal, { cls: 'is-force', count: actCount }),
+                    mRow('PO', baseBasic, baseGst, baseTotal, { cls: 'is-old', note: 'superseded' })
+                    + (varCount ? mRow('Variations', varBasic, varGst, varTotal,
+                                       { cls: 'is-old', delta: true, count: varCount, note: 'superseded' }) : ''));
         } else if (fromPo) {
-            ladderRows += lHead('Contract', 'as per PO');
-            ladderRows += lRow('Basic value', baseBasic, 'is-sub');
-            ladderRows += lRow('GST', baseGst, 'is-sub');
-            ladderRows += lRow('Total', baseTotal, 'is-sub is-total');
-            // Only once something has actually been agreed: with no changes the
-            // block would be three zeros and "Revised PO value" would just
-            // restate the Total directly above it.
-            if (varCount) {
-                ladderRows += lHead('Variations', `${varCount} change${varCount > 1 ? 's' : ''} agreed`);
-                ladderRows += lRow('Basic value', varBasic, 'is-sub', formatDeltaINR);
-                ladderRows += lRow('GST', varGst, 'is-sub', formatDeltaINR);
-                ladderRows += lRow('Total', varTotal, 'is-sub is-total', formatDeltaINR);
-                ladderRows += lRow('Revised PO value', baseTotal + varTotal, 'is-revised');
-            }
+            // With variations both books are still in force — the PO plus the
+            // changes agreed against it — so both stay on screen and nothing
+            // collapses.
+            contractBlock = blockHead('Contract',
+                    varCount ? `PO + ${varCount} variation${varCount > 1 ? 's' : ''}` : 'As per PO')
+                + mTable(
+                    mRow('PO', baseBasic, baseGst, baseTotal, { cls: varCount ? '' : 'is-force' })
+                    + (varCount ? mRow('Variations', varBasic, varGst, varTotal,
+                                       { cls: 'is-force', delta: true, count: varCount }) : ''));
         } else if (contract > 0) {
-            ladderRows += lHead('Billed', 'no PO yet — from sales bills');
-            ladderRows += lRow('Total', contract, 'is-sub is-total');
+            // Nothing to derive: the sales-bill total is the only promise on
+            // record, so it goes straight to the governing line. A matrix with
+            // one row, two of whose three columns are zero, states less than
+            // the badge does.
+            contractBlock = blockHead('Value', 'No PO · from sales bills');
         }
-        // The pass-through, spelled out in the sequence the client reads it in:
-        // they paid us X, we passed on Y, someone else paid us Z, we have W. It
-        // gets its own head and indent — the same blocked shape as the contract
-        // rungs — so that on a project carrying both variations and actuals the
-        // receipt lines still read as one block instead of trailing off the end
-        // of a fifteen-row ladder. With an untouched ledger it stays the single
-        // row it was, rather than a head and lines saying nothing happened.
+
+        // The one figure the matrix above exists to produce, and the one the
+        // balance is struck against. The chip beside it is the insight the old
+        // stack of rungs never stated: how far, and how much, the contract has
+        // moved from the PO as signed.
+        const moved = fromPo ? (contract - baseTotal) : 0;
+        const movedPct = (fromPo && baseTotal > 0.5) ? (moved / baseTotal) * 100 : null;
+        const deltaChip = (Math.abs(moved) > 0.5 && movedPct != null)
+            ? `<span class="proj-chip-delta ${moved > 0 ? 'is-up' : 'is-down'}">${
+                   (moved > 0 ? '+' : '') + formatINRCompact(moved)
+               } (${moved > 0 ? '+' : ''}${movedPct.toFixed(1)}%) vs PO</span>`
+            : '';
+        const govern = contract > 0 ? `
+                    <div class="proj-govern">
+                        <span class="proj-govern-k">${fromPo ? 'Contract value' : 'Billed value'}</span>
+                        <span class="proj-govern-v">${moneyHtml(contract)}</span>
+                    </div>
+                    ${deltaChip ? `<div class="proj-govern-note">${deltaChip}</div>` : ''}` : '';
+
+        // ── Receipts ──
+        // Out of the contract subtraction and into a block of their own: they
+        // answer "how much actually stayed with us", not "what was agreed",
+        // and as rungs 10-15 of one long ladder they buried both questions.
+        const rRow = (label, value, cls = '', fmt = moneyHtml, suffix = '') => `
+                        <div class="proj-recv-row ${cls}"><dt>${label}</dt><dd>${fmt(value)}${suffix}</dd></div>`;
+        // Deep-links to the Ledger → Third-party payments tab, but only where
+        // something is listening for it (the registry modal). The summary page
+        // renders the same block with no tabs to jump to.
+        const tpLink = (text, title) => ((opts && opts.linkThirdParty)
+            ? `<button type="button" class="proj-tp-link" data-glance-goto="third-party"
+                    title="${title}">${text}</button>`
+            : text);
+        let recvRows = rRow('Received', rec, 'is-lead', moneyHtml, splitNote);
         if (hasThirdParty) {
-            // The head names only the legs that actually happened — "less what we
-            // passed on" over a project that only ever received from a third
-            // party describes the opposite of what the rows below it show.
-            const headNote = tpOut > 0.5 && tpIn > 0.5
-                ? 'third-party payments both ways'
-                : (tpOut > 0.5 ? 'less what we passed on' : 'plus what a third party paid us');
-            ladderRows += lHead('Received', headNote);
-            ladderRows += lRow('Payments received', rec, 'is-sub', formatINR, splitNote);
-            // Deep-links to the Ledger → Third-party payments tab, but only
-            // where something is listening for it (the registry modal). The
-            // summary page renders the same ladder with no tabs to jump to.
-            const tpLink = (text, title) => ((opts && opts.linkThirdParty)
-                ? `<button type="button" class="proj-ladder-link" data-glance-goto="third-party"
-                        title="${title}">${text}</button>`
-                : text);
             if (tpOut > 0.5) {
-                ladderRows += lRow(
-                    tpLink('Less: paid to third parties', 'Show every third-party payment'),
-                    -tpOut, 'is-sub is-deduct', formatDeltaINR);
+                recvRows += rRow(tpLink('less paid to third parties', 'Show every third-party payment'),
+                                 -tpOut, 'is-sub is-deduct', deltaHtml);
             }
             if (tpIn > 0.5) {
-                ladderRows += lRow(
-                    tpLink('Add: received from third parties', 'Show every third-party receipt'),
-                    tpIn, 'is-sub', formatDeltaINR);
+                recvRows += rRow(tpLink('plus received from third parties', 'Show every third-party receipt'),
+                                 tpIn, 'is-sub', deltaHtml);
             }
-            ladderRows += lRow('Net for VISMA', netRec, 'is-revised');
-        } else {
-            ladderRows += lRow('Payments received', rec, '', formatINR, splitNote);
+            // Struck from the rounded legs above it for the same reason the
+            // matrix reconciles its rows: the subtraction on screen has to come
+            // out to the figure on screen.
+            recvRows += rRow('Net for VISMA',
+                             Math.round(rec) - Math.round(tpOut) + Math.round(tpIn), 'is-net');
         }
-        // Struck against the net: money that arrived earmarked for a contractor
-        // and went straight out again never paid down our own work, so the
-        // ladder reads as one continuous subtraction — contract, less what
-        // actually stayed with us, equals what is still outstanding. Named on
-        // the row only where there is a deduction to name.
-        const balNote = hasThirdParty
-            ? `<span class="proj-ladder-split">contract less the net received</span>` : '';
-        ladderRows += `
-                    <div class="proj-ladder-row is-balance"><dt>${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</dt><dd class="${dueCls}">${formatINR(Math.abs(receivable))}${balNote}</dd></div>`;
+        // The head names only the legs that actually happened — "less what we
+        // passed on" over a project that only ever received from a third party
+        // describes the opposite of what the rows below it show.
+        const recvBadge = !hasThirdParty ? ''
+            : (tpOut > 0.5 && tpIn > 0.5 ? 'Third-party payments both ways'
+               : (tpOut > 0.5 ? 'Less what we passed on' : 'Plus what a third party paid us'));
+        const recvBlock = `
+                    ${blockHead('Received', recvBadge)}
+                    <dl class="proj-recv">${recvRows}
+                    </dl>`;
+
+        // Struck against the net: money that arrived earmarked for a
+        // contractor and went straight out again never paid down our own work.
+        const balance = `
+                    <div class="proj-balance">
+                        <span class="proj-balance-k">${receivable < -0.5 ? 'Client overpaid by' : 'Current balance'}</span>
+                        <span class="proj-balance-v ${dueCls}">${moneyHtml(Math.abs(receivable))}</span>
+                    </div>
+                    <p class="proj-cap proj-cap-foot">${fromPo ? 'contract' : 'billed value'} less ${hasThirdParty ? 'the net received' : 'what has been received'}</p>`;
 
         const ladder = `
             <div class="proj-ov-panel">
                 <div class="proj-ov-head"><h4 class="proj-ov-title">Project value</h4></div>
                 <div class="proj-ov-body">
-                <dl class="proj-ladder">${ladderRows}
-                </dl>
+                    ${contractBlock}
+                    ${govern}
+                    ${recvBlock}
+                    ${balance}
                 </div>
             </div>`;
 
         // ── GST position ──
-        // Laid out like the value ladder beside it — same heads, same indented
-        // basic/GST/total under each — rather than a 2x3 grid of its own. Two
-        // panels side by side that tabulate the same three figures should read
-        // the same way, and the grid left this one standing half the height of
-        // its neighbour.
+        // The answer first: what we remit, or what we carry forward. The two
+        // books it comes out of tabulate underneath in the same matrix the
+        // contract uses — six rows of purchase/sales components standing
+        // between the reader and the one number they opened this for was the
+        // whole problem.
         let gstPanel = '';
         if (s) {
             const g = s.gst;
@@ -351,20 +456,14 @@ window.ProjectGlance = (function () {
                 <div class="proj-ov-head"><h4 class="proj-ov-title">GST position</h4></div>
                 <div class="proj-ov-body">
                 ${hasBills ? `
-                <dl class="proj-ladder">
-                    ${lHead('Purchase', 'bills in')}
-                    ${lRow('Basic value', g.purchase_basic, 'is-sub')}
-                    ${lRow('GST', g.purchase_gst, 'is-sub')}
-                    ${lRow('Total', g.purchase_total, 'is-sub is-total')}
-                    ${lHead('Sales', 'bills out')}
-                    ${lRow('Basic value', g.sales_basic, 'is-sub')}
-                    ${lRow('GST', g.sales_gst, 'is-sub')}
-                    ${lRow('Total', g.sales_total, 'is-sub is-total')}
-                </dl>
-                <div class="proj-gst-extra ${isCredit ? 'is-credit' : ''}">
-                    <span class="proj-gst-extra-k">${isCredit ? 'GST credit' : 'GST extra'}</span>
-                    <span class="proj-gst-extra-v">${formatINR(Math.abs(g.extra))}</span>
+                <div class="proj-gst-lead ${isCredit ? 'is-credit' : ''}">
+                    <span class="proj-gst-lead-k">${isCredit ? 'GST credit' : 'GST extra'}</span>
+                    <span class="proj-gst-lead-v">${moneyHtml(Math.abs(g.extra))}</span>
+                    <span class="proj-cap">output ${formatINRCompact(g.sales_gst)} − input ${formatINRCompact(g.purchase_gst)}</span>
                 </div>
+                ${mTable(
+                    mRow('Purchase', g.purchase_basic, g.purchase_gst, g.purchase_total, { note: 'bills in' })
+                    + mRow('Sales', g.sales_basic, g.sales_gst, g.sales_total, { note: 'bills out' }))}
                 ${isCredit ? `<p class="proj-ov-note">Input GST exceeds output GST — carried forward as credit, not counted as a cost.</p>` : ''}
                 ` : `<p class="proj-tab-empty">No bills tagged to this project yet.</p>`}
                 </div>
@@ -400,11 +499,11 @@ window.ProjectGlance = (function () {
             // focus (see the focusin/focusout handlers).
             const cell = (l.editable && opts && opts.editableOverhead)
                 ? `<input class="proj-cost-input" type="text" inputmode="decimal"
-                          value="${l.amount ? formatINR(l.amount) : ''}" placeholder="${formatINR(0)}"
+                          value="${l.amount ? formatRupees(l.amount) : ''}" placeholder="${formatRupees(0)}"
                           data-overhead-input data-raw="${l.amount || 0}"
                           aria-label="Overhead amount in rupees"
                           title="Costs no bill or bank row covers. Counts toward the total and profit.">`
-                : formatINR(l.amount);
+                : formatRupees(l.amount);
             return `
             <li class="proj-cost-row${(l.editable && opts && opts.editableOverhead) ? ' is-editable' : ''}" data-source="${escapeHtml(l.source)}">
                 <span class="proj-cost-k">${escapeHtml(l.label)}</span>
@@ -428,7 +527,7 @@ window.ProjectGlance = (function () {
                 <ul class="proj-cost-list">${rows}</ul>
                 <div class="proj-cost-foot">
                     <div class="proj-cost-foot-row is-total">
-                        <span>Total expenses</span><span>${formatINR(total)}</span>
+                        <span>Total expenses</span><span>${formatRupees(total)}</span>
                     </div>
                 </div>
             </div>`;
@@ -450,6 +549,23 @@ window.ProjectGlance = (function () {
         btn.classList.toggle('is-open', open);
     });
 
+    // "Show what this replaced": the PO and variation rows an actuals entry
+    // superseded. Bound on the document for the same reason as the chevron
+    // above — the panel is repainted wholesale on every render.
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest && e.target.closest('[data-glance-toggle="books"]');
+        if (!btn) return;
+        const panel = btn.closest('.proj-ov-panel');
+        const rows = panel && panel.querySelector('[data-glance-panel="books"]');
+        if (!rows) return;
+        const open = rows.hasAttribute('hidden');
+        if (open) rows.removeAttribute('hidden'); else rows.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        btn.classList.toggle('is-open', open);
+        const label = btn.querySelector('span');
+        if (label) label.textContent = open ? 'hide what this replaced' : 'show what this replaced';
+    });
+
     return {
         render: render,
         escapeHtml: escapeHtml,
@@ -457,5 +573,6 @@ window.ProjectGlance = (function () {
         formatSignedINR: formatSignedINR,
         formatINRCompact: formatINRCompact,
         formatDeltaINR: formatDeltaINR,
+        formatRupees: formatRupees,
     };
 })();
