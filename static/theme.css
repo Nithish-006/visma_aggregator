@@ -20,8 +20,13 @@
 
     /* ---- Text ----------------------------------------------------------- */
     --c-text:            #1F1E1D;   /* primary text */
-    --c-text-muted:      #67655F;   /* secondary/muted - AA 4.89:1 worst-case, 5.83:1 on white */
-    --c-text-soft:       #6E6C66;   /* genuinely lighter gray (login secondary text) */
+    /* Secondary text. #67655F gave clean hierarchy but read as a strain at
+       the 11-13px these labels actually use, so it was darkened until it
+       clears AAA on every surface in the app (7.19:1 on the darkest card
+       tint, 8.58:1 on white) while still sitting a clear step below primary
+       - the luminance gap to #1F1E1D is 1.94, so the hierarchy survives. */
+    --c-text-muted:      #4E4C47;
+    --c-text-soft:       #4E4C47;   /* aligned with --c-text-muted; they serve the same role now */
 
     /* ---- Borders -------------------------------------------------------- */
     --c-border:          #ECE9E1;

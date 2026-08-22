@@ -731,3 +731,46 @@ input[type="radio"] {
     border-left-color: var(--status);
     box-shadow: 0 1px 2px rgba(31, 30, 29, 0.05), 0 8px 24px rgba(31, 30, 29, 0.09);
 }
+
+
+/* ============================================================================
+   10. SECONDARY TEXT - weight, not just a lighter grey
+   ----------------------------------------------------------------------------
+   Sub-labels, helper text and hints sit at 11-13px, where regular weight in
+   ANY grey reads as faint: the eye is fighting stroke thickness, not colour.
+   500 restores presence without taking more space, which is what the HIG
+   means by building hierarchy from weight rather than size alone.
+
+   Paired with --c-text-muted, which was darkened from #67655F to #4E4C47
+   after this text tested as a strain to read. It now clears AAA on every
+   surface in the app (7.19:1 on the darkest card tint, 8.58:1 on white)
+   while still sitting a clear step below primary - the luminance gap to
+   #1F1E1D is 1.94, so the hierarchy survives the darkening.
+
+   The suffix selectors catch the -hint / -sub / -desc / -meta families across
+   all nine stylesheets; the explicit names are the ones that follow no
+   pattern. Selectors already at 600+ (the uppercase section micro-labels)
+   are deliberately excluded, so this can never make anything lighter.
+   ============================================================================ */
+[class*="-hint"], [class*="-subtitle"], [class*="-desc"],
+[class*="-meta"], [class*="-buyer"], [class*="-created"],
+.card__desc, .card__statlabel, .brand__tag, .foot__note,
+.stat-label, .kpi-label, .chart-subtitle, .field-label,
+.panel-label, .mr-sub, .proj-optional, .panel-optional, .optional,
+.detail-label, .split-label, .ri-eq-label, .page-subtitle,
+.transaction-project, .proj-fin-k, .ps-proj-fin-cell .k,
+.invoice-card-project, .invoice-card-buyer, .invoice-meta-item,
+.reprocess-meta, .review-sub, .review-hint, .date-month,
+.project-created, .grid__labelsub, .pagination-info,
+.category-name, .date-weekday, .card__desc {
+    font-weight: 500;
+}
+
+/* Placeholders are the one grey that SHOULD stay recessive - they are a
+   prompt, not content, and must never be mistaken for a filled-in value. */
+input::placeholder,
+textarea::placeholder {
+    color: var(--c-text-muted);
+    opacity: 0.7;
+    font-weight: 400;
+}
