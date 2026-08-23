@@ -311,6 +311,13 @@ window.ProjectGlance = (function () {
                         <tbody>${rows}</tbody>
                     </table>`;
 
+        // What the figure in force is derived from, said in the head so the
+        // reader knows which book they are looking at before they read a row.
+        const kind = !fromPo ? 'From sales bills'
+                   : hasActuals ? 'Actuals'
+                   : hasVars ? `PO + ${varCount} variation${varCount > 1 ? 's' : ''}`
+                   : 'As per PO';
+
         let mxRows = '';
         if (hasActuals) {
             // Actuals replace the PO and any variations outright (see
@@ -349,6 +356,7 @@ window.ProjectGlance = (function () {
         const contractBlock = mxRows ? `
                     <div class="proj-block-head">
                         <span class="proj-block-t">Contract</span>
+                        <span class="proj-block-badge">${kind}</span>
                         ${detailsBtn}
                     </div>
                     ${mTable(mxRows)}` : '';
