@@ -322,11 +322,6 @@ window.ProjectGlance = (function () {
                    (moved > 0 ? '+' : '') + formatINRCompact(moved)
                } (${moved > 0 ? '+' : ''}${movedPct.toFixed(1)}%)</span>`
             : '';
-        const kind = !fromPo ? 'From sales bills'
-                   : hasActuals ? 'Actuals'
-                   : hasVars ? `PO + ${varCount} variation${varCount > 1 ? 's' : ''}`
-                   : 'As per PO';
-
         let mxRows = '';
         if (hasActuals) {
             // Actuals replace the PO and any variations outright (see
@@ -365,7 +360,6 @@ window.ProjectGlance = (function () {
         const contractBlock = mxRows ? `
                     <div class="proj-block-head">
                         <span class="proj-block-t">Contract</span>
-                        <span class="proj-block-badge">${kind}</span>
                         ${deltaChip}
                         ${detailsBtn}
                     </div>
