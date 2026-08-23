@@ -311,17 +311,6 @@ window.ProjectGlance = (function () {
                         <tbody>${rows}</tbody>
                     </table>`;
 
-        // How far the contract has moved from the PO as signed, and which way.
-        // On an actuals project this is the whole point of the block: measured
-        // work can land well under what was quoted, and that wants saying in
-        // the head rather than left for the reader to subtract.
-        const moved = fromPo ? (contract - baseTotal) : 0;
-        const movedPct = (fromPo && baseTotal > 0.5) ? (moved / baseTotal) * 100 : null;
-        const deltaChip = (movedPct != null && Math.abs(moved) > 0.5)
-            ? `<span class="proj-chip-delta ${moved > 0 ? 'is-up' : 'is-down'}">${
-                   (moved > 0 ? '+' : '') + formatINRCompact(moved)
-               } (${moved > 0 ? '+' : ''}${movedPct.toFixed(1)}%)</span>`
-            : '';
         let mxRows = '';
         if (hasActuals) {
             // Actuals replace the PO and any variations outright (see
@@ -360,7 +349,6 @@ window.ProjectGlance = (function () {
         const contractBlock = mxRows ? `
                     <div class="proj-block-head">
                         <span class="proj-block-t">Contract</span>
-                        ${deltaChip}
                         ${detailsBtn}
                     </div>
                     ${mTable(mxRows)}` : '';

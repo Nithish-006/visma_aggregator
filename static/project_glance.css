@@ -381,25 +381,6 @@
    with its column name beside it. */
 .proj-amt { white-space: nowrap; }
 
-/* How far the contract has moved from the PO as signed — the one thing the old
-   stack of component rows never actually said. */
-.proj-chip-delta {
-    display: inline-block;
-    padding: 0.1rem 0.42rem;
-    font-size: 0.68rem;
-    font-weight: 600;
-    border-radius: 999px;
-    font-variant-numeric: tabular-nums;
-}
-.proj-chip-delta.is-up {
-    color: var(--proj-success);
-    background: var(--proj-success-soft);
-}
-.proj-chip-delta.is-down {
-    color: var(--proj-danger);
-    background: var(--proj-danger-soft);
-}
-
 /* == Received: what actually stayed with us ==============================
    The block carries no heading — the rows name themselves, and "RECEIVED"
    sitting over a row called "Received" was the same word twice. A rule above
