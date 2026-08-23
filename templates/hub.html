@@ -14,8 +14,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=9">
-    <link rel="stylesheet" href="{{ url_for('static', filename='hub.css') }}?v=9">
+    <link rel="stylesheet" href="{{ url_for('static', filename='hub.css') }}?v=14">
     <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=12">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
 </head>
 
 <body>
@@ -58,7 +59,6 @@
                 </div>
                 <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
             </a>
-            <h2 class="grid__label">Records<span class="grid__labelsub">the registries everything else refers to</span></h2>
             <a class="card card--expense" href="/personal-tracker">
                 <span class="card__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
@@ -81,7 +81,6 @@
                 </div>
                 <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
             </a>
-            <h2 class="grid__label">Banks<span class="grid__labelsub">statements, categorising and inline edits</span></h2>
             <a class="card card--axis" href="/dashboard/axis">
                 <span class="card__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
@@ -104,7 +103,6 @@
                 </div>
                 <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
             </a>
-            <h2 class="grid__label">Documents<span class="grid__labelsub">what the money was for</span></h2>
             <a class="card card--purchase" href="/bill-processor">
                 <span class="card__icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>

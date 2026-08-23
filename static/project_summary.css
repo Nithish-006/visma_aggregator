@@ -42,21 +42,9 @@ body {
     min-height: 100vh;
     color: var(--text-primary);
 }
-/* Ambient wash — the thing the glass is glass *against*. Two very soft colour
-   fields fixed behind the page: without them a translucent card sits on a flat
-   fill and just looks like a paler card. Fixed, so scrolling moves the cards
-   across the light rather than dragging it along with them. */
-body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-        radial-gradient(1100px 640px at 8% -10%, rgba(217, 119, 87, 0.055), transparent 62%),
-        radial-gradient(900px 560px at 96% 2%, rgba(59, 107, 201, 0.042), transparent 60%),
-        radial-gradient(760px 520px at 50% 108%, rgba(14, 140, 140, 0.030), transparent 62%);
-}
+/* The ambient wash that used to live here is now ambient.css, shared by every
+   page, and it drifts. Keeping a second static copy here would have doubled
+   the light on this page alone. */
 
 
 /* ============================================================================

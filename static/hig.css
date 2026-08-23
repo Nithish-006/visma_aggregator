@@ -815,7 +815,7 @@ input[type="radio"] {
 .transaction-project, .proj-fin-k, .ps-proj-fin-cell .k,
 .invoice-card-project, .invoice-card-buyer, .invoice-meta-item,
 .reprocess-meta, .review-sub, .review-hint, .date-month,
-.project-created, .grid__labelsub, .pagination-info,
+.project-created, .pagination-info,
 .category-name, .date-weekday {
     font-weight: 500;
 }

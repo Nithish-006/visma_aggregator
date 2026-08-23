@@ -1,0 +1,118 @@
+/* ============================================================================
+   ambient.css — THE GROUND
+   ----------------------------------------------------------------------------
+   Loaded LAST on every page, after each page's own stylesheet and after
+   hig.css. It paints exactly one thing: the light behind the whole app.
+
+   WHY THIS EXISTS
+   The app sat on a flat #FAF9F5 fill. Flat fill reads as paper — a surface
+   things are PRINTED on. Apple's HIG builds its sense of place the other way
+   round: surfaces sit ON something, and that something has depth and very
+   slow life to it. The cards, the glass panels and the tinted chips in this
+   app were all already designed as materials; they just had nothing to be a
+   material against.
+
+   HOW IT IS BUILT
+   One oversized field of soft colour, fixed to the viewport, drifting on two
+   incommensurate cycles:
+
+     - rotate + scale over 240s  (the drift)
+     - opacity  over 41s         (the breath)
+
+   240 and 41 share no useful common factor, so the two never line up and the
+   loop never announces itself. Both are compositor-only properties (transform,
+   opacity), so this costs no layout and no paint on scroll — which matters,
+   because the bank dashboard renders 500-row tables over this.
+
+   HIG's own accessibility guidance warns against full-viewport motion, slow
+   oscillation near 0.2 Hz, and brightness jumps. So: the periods here are
+   ~0.01 Hz, twenty times slower than the band it warns about; the brightness
+   swing is 12%; and all three of prefers-reduced-motion, -reduced-transparency
+   and -contrast turn it down or off at the bottom of this file.
+
+   WHY body::after AND NOT html::before
+   Every page in this app paints its own opaque background on <body>, and one
+   (projects.css) paints html as well. A layer on html would be covered by
+   whichever of those wins. Giving body a stacking context and hanging the
+   field off body::after puts it deterministically above body's own background
+   and below body's content, on all nine pages, without touching any of them.
+   body::before is already used by two pages, so ::after it is.
+   ============================================================================ */
+
+body {
+    /* Establishes the stacking context the z-index below is resolved against.
+       position: relative does NOT break position: fixed descendants (only
+       transform / filter / will-change would), so modals and sticky headers
+       are unaffected. */
+    position: relative;
+    z-index: 0;
+}
+
+body::after {
+    content: '';
+    position: fixed;
+    /* Oversized and centred so the rotation never swings an edge into view. */
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    z-index: -1;
+    pointer-events: none;
+
+    /* Five fields, drawn from the hues the app already uses: brand coral, the
+       projects blue, the tracker violet, the sales teal and the bills amber.
+       Nothing new enters the palette — this is the app's own colour, thrown
+       out of focus. Alphas top out at 0.075: it should read as light in the
+       room, never as a gradient anyone would point at. */
+    background:
+        radial-gradient(38% 30% at 22% 18%, rgba(217, 119, 87, 0.075), transparent 64%),
+        radial-gradient(34% 28% at 78% 26%, rgba( 59, 107, 201, 0.060), transparent 62%),
+        radial-gradient(32% 30% at 30% 74%, rgba(106,  87, 206, 0.050), transparent 62%),
+        radial-gradient(34% 28% at 82% 78%, rgba( 14, 140, 140, 0.055), transparent 62%),
+        radial-gradient(30% 26% at 52% 50%, rgba(199, 117,  34, 0.040), transparent 64%);
+
+    will-change: transform, opacity;
+    animation:
+        ambient-drift  240s linear             infinite,
+        ambient-breath 41s cubic-bezier(0.42, 0, 0.58, 1) infinite alternate;
+}
+
+/* A full rotation rather than a back-and-forth: an alternating transform
+   retraces its own path, and the eye picks that up as a loop. */
+@keyframes ambient-drift {
+    from { transform: rotate(0deg)   scale(1.06); }
+    to   { transform: rotate(360deg) scale(1.06); }
+}
+
+@keyframes ambient-breath {
+    from { opacity: 0.88; }
+    to   { opacity: 1.00; }
+}
+
+/* --------------------------------------------------------------------------
+   Accessibility. Reduced motion is not "no depth" — the light stays, it just
+   stops moving. Losing the field entirely would flatten the app back to paper
+   for the people who asked only for stillness. */
+@media (prefers-reduced-motion: reduce) {
+    body::after {
+        animation: none;
+        transform: scale(1.06);
+        opacity: 0.95;
+        will-change: auto;
+    }
+}
+
+/* Someone who has asked for less transparency has asked for fewer ambiguous
+   surfaces. Halve the light and hold it still. */
+@media (prefers-reduced-transparency: reduce) {
+    body::after {
+        animation: none;
+        opacity: 0.45;
+        will-change: auto;
+    }
+}
+
+/* Maximum contrast means the ground gets out of the way completely. */
+@media (prefers-contrast: more) {
+    body::after { display: none; }
+}

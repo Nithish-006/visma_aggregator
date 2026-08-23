@@ -103,21 +103,9 @@ body {
     display: flex;
     flex-direction: column;
 }
-/* Ambient wash — the thing the glass is glass *against*. Two very soft colour
-   fields fixed behind the page: without them a translucent card sits on a flat
-   fill and just looks like a paler card. Fixed, so scrolling moves the cards
-   across the light rather than dragging it along with them. */
-body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background:
-        radial-gradient(1100px 640px at 8% -10%, rgba(217, 119, 87, 0.055), transparent 62%),
-        radial-gradient(900px 560px at 96% 2%, rgba(59, 107, 201, 0.042), transparent 60%),
-        radial-gradient(760px 520px at 50% 108%, rgba(14, 140, 140, 0.030), transparent 62%);
-}
+/* The ambient wash that used to live here is now ambient.css, shared by every
+   page, and it drifts. Keeping a second static copy on this page would have
+   doubled the light on the hub alone. */
 
 
 a { color: inherit; text-decoration: none; }
@@ -244,12 +232,25 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     padding: var(--space-8) 0;
 }
 
-/* A pane of tinted glass, the same material the project grids use: a
-   translucent white fill falling into the module's own hue, a hairline of that
-   hue, a top highlight for the edge and a cast shadow that carries the tint
-   rather than neutral grey. Each modifier sets --card-rgb and everything else
-   follows. The coloured left bar stays — it is how the modules are told apart
-   at a glance, and glass shouldn't cost the page its wayfinding. */
+/* PEBBLES. Each module is a smooth, matte stone resting on the ivory.
+   Three things make a pebble read as an object rather than a drawn rectangle:
+
+     1. FLAT colour. One even wash of the module's hue — no gradient ramp, no
+        white veil, no backdrop blur. A gradient implies a lit, curved surface;
+        a pebble seen from above is a single matte tone.
+     2. A DEFINED RIM. A hairline of the stone's own hue draws the edge, and
+        two inset rims light it: a bright one along the top where the light
+        lands, a fainter one along the bottom for the bounce off the ground.
+        Between them the stone reads as rounded rather than cut out.
+     3. A CAST SHADOW, not a glow. Two layers: a short contact shadow directly
+        under the stone, and a wide soft one further out. Both carry the card's
+        own hue rather than neutral grey, so a stone tints the ground it sits on.
+
+   GLOSS. The colour underneath stays flat; the shine is a separate specular
+   layer on top of it — bright at the crown, falling off through the upper half
+   and gone by 72%, the way light behaves on a wet polished stone. It is a
+   soft ramp, not the hard 50% break of an old aqua button, and the tint is
+   carried at 0.22 rather than 0.155 because the sheen washes it out. */
 .card {
     --card-accent: var(--border-strong);
     --card-rgb: 35, 31, 25;
@@ -258,29 +259,23 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     align-items: center;
     min-width: 0;
     gap: var(--space-4);
-    /* The hue carries the whole tile, not just the far corner: the colour
-       layer sits almost flat (0.13 -> 0.17 across the diagonal) and the white
-       veil is a short sheen on the near corner rather than half the card. The
-       earlier ramp put all the colour in the bottom-right and left the rest
-       reading as plain white. */
     background:
-        linear-gradient(150deg,
-            rgba(255, 255, 255, 0.42) 0%,
-            rgba(255, 255, 255, 0.12) 34%,
-            rgba(255, 255, 255, 0.00) 68%),
-        linear-gradient(150deg,
-            rgba(var(--card-rgb), 0.13) 0%,
-            rgba(var(--card-rgb), 0.17) 100%);
-    -webkit-backdrop-filter: blur(20px) saturate(118%);
-    backdrop-filter: blur(20px) saturate(118%);
-    border: 1px solid rgba(var(--card-rgb), 0.20);
-    border-left: 3px solid var(--card-accent);
-    border-radius: var(--r-card);
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.58) 0%,
+            rgba(255, 255, 255, 0.26) 38%,
+            rgba(255, 255, 255, 0.04) 58%,
+            rgba(255, 255, 255, 0.00) 72%),
+        rgba(var(--card-rgb), 0.22);
+    border: 1px solid rgba(var(--card-rgb), 0.28);
+    /* Pebbles are rounder than cards. This sits above the radius ramp
+       deliberately — at 16px they still read as tiles. */
+    border-radius: 22px;
     padding: var(--space-5);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.85),
-        0 1px 2px rgba(35, 31, 25, 0.03),
-        0 12px 30px -14px rgba(var(--card-rgb), 0.26);
+        inset 0 1px 0 rgba(255, 255, 255, 0.90),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.35),
+        0 2px 4px -1px rgba(var(--card-rgb), 0.22),
+        0 12px 24px -10px rgba(var(--card-rgb), 0.30);
     transition:
         background   var(--duration-normal) var(--ease-default),
         border-color var(--duration-normal) var(--ease-default),
@@ -288,35 +283,49 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
         transform    var(--duration-fast)   var(--ease-default);
 }
 
+/* Picked up off the ground: the stone rises, the shine sharpens, and the
+   shadow travels further and softens rather than simply darkening. */
 .card:hover {
-    border-color: rgba(var(--card-rgb), 0.34);
-    border-left-color: var(--card-accent);
     background:
-        linear-gradient(150deg,
-            rgba(255, 255, 255, 0.38) 0%,
-            rgba(255, 255, 255, 0.10) 32%,
-            rgba(255, 255, 255, 0.00) 66%),
-        linear-gradient(150deg,
-            rgba(var(--card-rgb), 0.19) 0%,
-            rgba(var(--card-rgb), 0.24) 100%);
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.66) 0%,
+            rgba(255, 255, 255, 0.30) 38%,
+            rgba(255, 255, 255, 0.05) 58%,
+            rgba(255, 255, 255, 0.00) 72%),
+        rgba(var(--card-rgb), 0.27);
+    border-color: rgba(var(--card-rgb), 0.38);
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        0 2px 4px rgba(35, 31, 25, 0.04),
-        0 18px 40px -16px rgba(var(--card-rgb), 0.32);
-    transform: translateY(-2px);
+        inset 0 1px 0 rgba(255, 255, 255, 1),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.42),
+        0 4px 8px -2px rgba(var(--card-rgb), 0.24),
+        0 22px 38px -14px rgba(var(--card-rgb), 0.38);
+    transform: translateY(-3px);
 }
 
-/* Press feedback: the card settles back INTO the page under the finger.
-   Overrides the hover lift because :active comes later in the cascade. */
+/* Press feedback: the stone is pushed down into the ground under the finger,
+   so the gap it was casting a shadow across closes and the shadow collapses to
+   a contact line. Overrides the hover lift — :active comes later in the
+   cascade. */
 .card:active {
     transform: translateY(0) scale(0.985);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.55),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.22),
+        0 1px 2px rgba(var(--card-rgb), 0.22);
     transition-duration: var(--duration-instant);
 }
 
+/* The focus ring is added to the shadow, not swapped for it — a bare
+   box-shadow here would flatten the pebble the moment it was tabbed to. */
 .card:focus-visible {
     outline: 2px solid var(--accent-strong);
     outline-offset: 2px;
-    box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.3);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.90),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.35),
+        0 2px 4px -1px rgba(var(--card-rgb), 0.22),
+        0 12px 24px -10px rgba(var(--card-rgb), 0.30),
+        0 0 0 4px rgba(217, 119, 87, 0.3);
 }
 
 .card__icon {
@@ -421,39 +430,9 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
 }
 
 
-/* -- Section labels -------------------------------------------------------
-   HIG wayfinding: every screen should answer "what's here?". Seven modules
-   in one undifferentiated grid made the user do that sorting themselves.
-   Three named groups - where money moves, what documents it, and the
-   registries the rest refers to - answer it before they read a card.
-   Rendered as full-width grid items so the grid itself stays one container. */
-.grid__label {
-    grid-column: 1 / -1;
-    margin: var(--space-4) 0 calc(var(--space-2) * -1);
-    font-size: var(--text-caption1);
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--text-3);
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-}
-.grid__label::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--border);
-}
-.grid__labelsub {
-    font-size: var(--text-caption1);
-    font-weight: 400;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--text-3);
-    opacity: 0.85;
-}
-.grid__label:first-of-type { margin-top: var(--space-2); }
+/* Section labels (.grid__label / .grid__labelsub) used to group the modules
+   under Records / Banks / Documents. Both the headings and their rules were
+   removed - the board is one uninterrupted run of module cards now. */
 
 /* -- Bolder module identity ----------------------------------------------
    The icon tile is now filled with the module's own colour and the glyph
@@ -461,13 +440,37 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
    by a 3px edge. Every fill was checked to clear 3:1 against white, which
    is the non-text/graphics threshold (purchase orange needed darkening from
    #D9883B at 2.79:1). */
+/* The mark is a small pebble of its own: same matte fill, same rounding
+   proportion, its own contact shadow. It is the one place the hue reaches full
+   strength, so it stays the anchor of the card. */
 .card__icon {
-    background: var(--card-accent);
+    /* The same specular ramp as the card, plus a slight darkening at the foot
+       so the mark reads as a domed lozenge rather than a flat swatch. */
+    background:
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.34) 0%,
+            rgba(255, 255, 255, 0.10) 46%,
+            rgba(255, 255, 255, 0.00) 62%,
+            rgba(0, 0, 0, 0.07) 100%),
+        var(--card-accent);
     color: #FFFFFF;
-    box-shadow: 0 2px 6px color-mix(in srgb, var(--card-accent) 35%, transparent);
+    border-radius: 16px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.45),
+        0 2px 6px color-mix(in srgb, var(--card-accent) 35%, transparent);
 }
-.card--hero .card__icon { background: var(--card-accent); color: #FFFFFF; }
-.card { border-left-width: 4px; }
+/* The hero mark needs the gloss restated: this selector outranks the bare
+   .card__icon above, so setting only a flat colour here would strip its shine. */
+.card--hero .card__icon {
+    background:
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.34) 0%,
+            rgba(255, 255, 255, 0.10) 46%,
+            rgba(255, 255, 255, 0.00) 62%,
+            rgba(0, 0, 0, 0.07) 100%),
+        var(--card-accent);
+    color: #FFFFFF;
+}
 .card:hover .card__icon { transform: scale(1.04); }
 
 /* -- Footer -------------------------------------------------------------- */
