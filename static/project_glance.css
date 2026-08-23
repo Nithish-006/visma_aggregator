@@ -204,7 +204,7 @@
     justify-content: space-between;
     gap: 1rem;
     padding: 0.5rem 0.95rem;
-    background: #FAEFEB;
+    background: #F9E3DA;
     border-bottom: 1px solid var(--proj-border-strong);
 }
 .proj-ov-body { padding: 0.85rem 0.95rem; }
@@ -588,7 +588,7 @@
 /* Totals band, bookending the header. */
 .proj-cost-foot {
     padding: 0.5rem 0.95rem 0.6rem;
-    background: #FAEFEB;
+    background: #F9E3DA;
     border-top: 1px solid var(--proj-border-strong);
 }
 .proj-cost-foot-row {
@@ -732,7 +732,7 @@
     justify-content: space-between;
     gap: 1rem;
     padding: 0.7rem 1.1rem;
-    background: #FAEFEB;
+    background: #F9E3DA;
     border-bottom: 1px solid var(--proj-border-strong);
 }
 .proj-pob-title {

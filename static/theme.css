@@ -38,22 +38,22 @@
     --c-accent:          #D97757;
     --c-accent-strong:   #C2603F;
     --c-accent-light:    #E08B6F;
-    --c-accent-soft:     #F6EBE4;
-    --c-accent-soft-a:   rgba(217, 119, 87, 0.12);
+    --c-accent-soft:     #F5DFD3;
+    --c-accent-soft-a:   rgba(217, 119, 87, 0.20);
     --c-accent-grad:     linear-gradient(135deg, #E08B6F 0%, #D97757 100%);
 
     /* ---- Functional status --------------------------------------------- */
     --c-success:         #059669;
     --c-success-grad:    linear-gradient(135deg, #10b981 0%, #059669 100%);
-    --c-success-soft:    rgba(16, 185, 129, 0.12);
+    --c-success-soft:    rgba(16, 185, 129, 0.20);
     --c-success-deep:    #047857;
     --c-danger:          #dc2626;
     --c-danger-grad:     linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    --c-danger-soft:     rgba(239, 68, 68, 0.10);
+    --c-danger-soft:     rgba(239, 68, 68, 0.18);
     --c-danger-deep:     #b91c1c;
     --c-warning:         #d97706;
     --c-warning-grad:    linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    --c-warning-soft:    rgba(245, 158, 11, 0.14);
+    --c-warning-soft:    rgba(245, 158, 11, 0.22);
     --c-warning-deep:    #b45309;
     --c-info:            #D97757;   /* info = coral in bill/sales processors */
 
@@ -61,7 +61,7 @@
     --c-teal:            #0e7490;
     --c-teal-text:       #0B5F76;   /* 5.80:1 on the designs tint, 6.84:1 on ivory */
     --c-teal-strong:     #155e75;
-    --c-teal-soft:       rgba(8, 145, 178, 0.14);
+    --c-teal-soft:       rgba(8, 145, 178, 0.22);
     --c-cyan:            #0891b2;
 
     /* ---- Bank brand colors --------------------------------------------- */
@@ -140,7 +140,7 @@
        Hues are assigned by meaning (money in = green, statutory = red,
        people = violet, movement = teal, on-site = earth, and so on), and
        every pair was SOLVED to land on the same contrast, not eyeballed:
-       each fg sits at ~6.5-6.8:1 on its own tint. Uniform ratios are what
+       each fg sits at ~6.0:1 on its own tint. Uniform ratios are what
        stop nine hues reading as a rainbow - they all carry the same visual
        weight.
 
@@ -148,16 +148,16 @@
        L94/S55, label solved to 6.5:1 at S62), so the two chip families are
        the same colour grade and can sit side by side without one looking
        heavier than the other. */
-    --cat-ar-bg: #E7F8F0;  --cat-ar-fg: #176340;   /* AMOUNT RECEIVED   */
-    --cat-mp-bg: #E7EFF8;  --cat-mp-fg: #235495;   /* MATERIAL PURCHASE */
-    --cat-sa-bg: #ECE7F8;  --cat-sa-fg: #5C2FC6;   /* SALARY AC         */
-    --cat-dt-bg: #F8E8E7;  --cat-dt-fg: #992824;   /* DUTIES & TAX      */
-    --cat-te-bg: #E7F6F8;  --cat-te-fg: #185D67;   /* TRANSPORT EXPENSES*/
-    --cat-se-bg: #F8F0E7;  --cat-se-fg: #744A1B;   /* SITE EXPENSES     */
-    --cat-fe-bg: #F4E7F8;  --cat-fe-fg: #81259D;   /* FACTORY EXPENSES  */
-    --cat-oe-bg: #F8E7F0;  --cat-oe-fg: #95235C;   /* OFFICE EXPENSES   */
-    --cat-bc-bg: #F1F0EE;  --cat-bc-fg: #5A5449;   /* BANK CHARGES      */
-    --cat-un-bg: #F8F2E7;  --cat-un-fg: #70501A;   /* UNCATEGORISED     */
+    --cat-ar-bg: #CDF6E3;  --cat-ar-fg: #186542;   /* AMOUNT RECEIVED   */
+    --cat-mp-bg: #CDDFF6;  --cat-mp-fg: #214F8C;   /* MATERIAL PURCHASE */
+    --cat-sa-bg: #D9CDF6;  --cat-sa-fg: #522AB2;   /* SALARY AC         */
+    --cat-dt-bg: #F6CFCD;  --cat-dt-fg: #8C2521;   /* DUTIES & TAX      */
+    --cat-te-bg: #CDF1F6;  --cat-te-fg: #195F69;   /* TRANSPORT EXPENSES*/
+    --cat-se-bg: #F6E3CD;  --cat-se-fg: #764B1C;   /* SITE EXPENSES     */
+    --cat-fe-bg: #EDCDF6;  --cat-fe-fg: #772291;   /* FACTORY EXPENSES  */
+    --cat-oe-bg: #F6CDE2;  --cat-oe-fg: #8A2055;   /* OFFICE EXPENSES   */
+    --cat-bc-bg: #E5E3DF;  --cat-bc-fg: #575147;   /* BANK CHARGES      */
+    --cat-un-bg: #F6E7CD;  --cat-un-fg: #70501A;   /* UNCATEGORISED     */
 
     /* ---- Project chip colours -------------------------------------------
        Projects are open-ended, so a hue is derived from the name instead of
@@ -165,16 +165,16 @@
        are offset from the category ones, and the chip keeps a distinct SHAPE
        (fully rounded, where categories are rounded rectangles) so the two
        adjacent columns still read as different kinds of information now that
-       both are filled. Solved to ~6.6-6.9:1 on their own tint, matching the
+       both are filled. Solved to ~6.0:1 on their own tint, matching the
        category chips' weight. */
-    --proj-c0-bg: #E7F1F8;  --proj-c0-fg: #1E5780;
-    --proj-c1-bg: #E7F8F5;  --proj-c1-fg: #165F50;
-    --proj-c2-bg: #E7F8ED;  --proj-c2-fg: #176331;
-    --proj-c3-bg: #F8F4E7;  --proj-c3-fg: #675418;
-    --proj-c4-bg: #F8EDE7;  --proj-c4-fg: #84411F;
-    --proj-c5-bg: #F8E7F3;  --proj-c5-fg: #91226F;
-    --proj-c6-bg: #F1E7F8;  --proj-c6-fg: #7629AE;
-    --proj-c7-bg: #E7E7F8;  --proj-c7-fg: #3535D0;
+    --proj-c0-bg: #CDE5F6;  --proj-c0-fg: #1E567E;
+    --proj-c1-bg: #CDF6EE;  --proj-c1-fg: #176354;
+    --proj-c2-bg: #CDF6DB;  --proj-c2-fg: #186532;
+    --proj-c3-bg: #F6ECCD;  --proj-c3-fg: #695619;
+    --proj-c4-bg: #F6DBCD;  --proj-c4-fg: #803F1E;
+    --proj-c5-bg: #F6CDEA;  --proj-c5-fg: #882068;
+    --proj-c6-bg: #E5CDF6;  --proj-c6-fg: #6A259D;
+    --proj-c7-bg: #CDCDF6;  --proj-c7-fg: #2E2EC2;
 
     /* ---- HIG 8pt spacing grid ------------------------------------------ */
     --space-1:  4px;

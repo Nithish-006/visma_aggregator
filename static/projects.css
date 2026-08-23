@@ -998,7 +998,7 @@ html, body {
     z-index: 2;
     /* Solid colour (accent-soft flattened onto white): a translucent sticky
        header lets scrolled rows bleed through the column titles. */
-    background: #FAEFEB;
+    background: #F9E3DA;
     /* border-collapse drops sticky cell borders â€” draw the rule as a shadow */
     box-shadow: 0 1px 0 var(--proj-border-strong);
     color: var(--proj-text-muted);
@@ -1475,7 +1475,7 @@ html, body {
 }
 .proj-section--closed .proj-section-count {
     color: var(--proj-text-muted);
-    background: rgba(107, 114, 128, 0.12);
+    background: rgba(107, 114, 128, 0.20);
 }
 .project-card.is-closed {
     --tile-rgb: 107, 114, 128;
@@ -1483,7 +1483,7 @@ html, body {
 }
 .project-card.is-closed:hover { opacity: 0.85; }
 .project-po-badge.closed {
-    background: rgba(107, 114, 128, 0.14);
+    background: rgba(107, 114, 128, 0.24);
     color: var(--proj-text-muted);
     border: 1px solid rgba(107, 114, 128, 0.3);
 }

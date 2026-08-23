@@ -232,25 +232,17 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     padding: var(--space-8) 0;
 }
 
-/* PEBBLES. Each module is a smooth, matte stone resting on the ivory.
-   Three things make a pebble read as an object rather than a drawn rectangle:
+/* PAPER PASTEL BLOCKS. Flat colour printed on the page, not objects sitting
+   on it. The pebble treatment that was here — the specular gloss ramp, the two
+   inset light rims, the two-layer cast shadow and the 22px rounding — is all
+   removed. What is left is the part worth keeping from it: ONE even wash of
+   each module's hue, with no gradient, no veil and no backdrop blur.
 
-     1. FLAT colour. One even wash of the module's hue — no gradient ramp, no
-        white veil, no backdrop blur. A gradient implies a lit, curved surface;
-        a pebble seen from above is a single matte tone.
-     2. A DEFINED RIM. A hairline of the stone's own hue draws the edge, and
-        two inset rims light it: a bright one along the top where the light
-        lands, a fainter one along the bottom for the bounce off the ground.
-        Between them the stone reads as rounded rather than cut out.
-     3. A CAST SHADOW, not a glow. Two layers: a short contact shadow directly
-        under the stone, and a wide soft one further out. Both carry the card's
-        own hue rather than neutral grey, so a stone tints the ground it sits on.
-
-   GLOSS. The colour underneath stays flat; the shine is a separate specular
-   layer on top of it — bright at the crown, falling off through the upper half
-   and gone by 72%, the way light behaves on a wet polished stone. It is a
-   soft ramp, not the hard 50% break of an old aqua button, and the tint is
-   carried at 0.22 rather than 0.155 because the sheen washes it out. */
+   No shadow at all. A shadow is a claim about height, and paper has none; the
+   hairline of the block's own hue is what separates it from the ground.
+   The tint drops back to 0.13 — it was pushed to 0.22 only because the gloss
+   was washing it out, and without the sheen that reads heavy rather than
+   pastel. */
 .card {
     --card-accent: var(--border-strong);
     --card-rgb: 35, 31, 25;
@@ -259,73 +251,35 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
     align-items: center;
     min-width: 0;
     gap: var(--space-4);
-    background:
-        linear-gradient(180deg,
-            rgba(255, 255, 255, 0.58) 0%,
-            rgba(255, 255, 255, 0.26) 38%,
-            rgba(255, 255, 255, 0.04) 58%,
-            rgba(255, 255, 255, 0.00) 72%),
-        rgba(var(--card-rgb), 0.22);
-    border: 1px solid rgba(var(--card-rgb), 0.28);
-    /* Pebbles are rounder than cards. This sits above the radius ramp
-       deliberately — at 16px they still read as tiles. */
-    border-radius: 22px;
+    background: rgba(var(--card-rgb), 0.13);
+    border: 1px solid rgba(var(--card-rgb), 0.20);
+    border-radius: var(--r-card);
     padding: var(--space-5);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.90),
-        inset 0 -1px 0 rgba(255, 255, 255, 0.35),
-        0 2px 4px -1px rgba(var(--card-rgb), 0.22),
-        0 12px 24px -10px rgba(var(--card-rgb), 0.30);
     transition:
         background   var(--duration-normal) var(--ease-default),
         border-color var(--duration-normal) var(--ease-default),
-        box-shadow   var(--duration-normal) var(--ease-default),
         transform    var(--duration-fast)   var(--ease-default);
 }
 
-/* Picked up off the ground: the stone rises, the shine sharpens, and the
-   shadow travels further and softens rather than simply darkening. */
+/* Hover deepens the ink rather than lifting the block. A rise with no shadow
+   under it reads as a glitch, and a shadow is exactly what this pass removed. */
 .card:hover {
-    background:
-        linear-gradient(180deg,
-            rgba(255, 255, 255, 0.66) 0%,
-            rgba(255, 255, 255, 0.30) 38%,
-            rgba(255, 255, 255, 0.05) 58%,
-            rgba(255, 255, 255, 0.00) 72%),
-        rgba(var(--card-rgb), 0.27);
-    border-color: rgba(var(--card-rgb), 0.38);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 1),
-        inset 0 -1px 0 rgba(255, 255, 255, 0.42),
-        0 4px 8px -2px rgba(var(--card-rgb), 0.24),
-        0 22px 38px -14px rgba(var(--card-rgb), 0.38);
-    transform: translateY(-3px);
+    background: rgba(var(--card-rgb), 0.19);
+    border-color: rgba(var(--card-rgb), 0.32);
 }
 
-/* Press feedback: the stone is pushed down into the ground under the finger,
-   so the gap it was casting a shadow across closes and the shadow collapses to
-   a contact line. Overrides the hover lift — :active comes later in the
-   cascade. */
+/* HIG: feedback belongs on the PRESS. Scale alone, no elevation change. */
 .card:active {
-    transform: translateY(0) scale(0.985);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.55),
-        inset 0 -1px 0 rgba(255, 255, 255, 0.22),
-        0 1px 2px rgba(var(--card-rgb), 0.22);
+    transform: scale(0.985);
     transition-duration: var(--duration-instant);
 }
 
-/* The focus ring is added to the shadow, not swapped for it — a bare
-   box-shadow here would flatten the pebble the moment it was tabbed to. */
+/* HIG focus ring: a 4px halo, not a hairline outline. The card carries no
+   other box-shadow now, so the ring can own the property outright. */
 .card:focus-visible {
     outline: 2px solid var(--accent-strong);
     outline-offset: 2px;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.90),
-        inset 0 -1px 0 rgba(255, 255, 255, 0.35),
-        0 2px 4px -1px rgba(var(--card-rgb), 0.22),
-        0 12px 24px -10px rgba(var(--card-rgb), 0.30),
-        0 0 0 4px rgba(217, 119, 87, 0.3);
+    box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.3);
 }
 
 .card__icon {
@@ -440,37 +394,17 @@ main { flex: 1; display: flex; flex-direction: column; justify-content: center; 
    by a 3px edge. Every fill was checked to clear 3:1 against white, which
    is the non-text/graphics threshold (purchase orange needed darkening from
    #D9883B at 2.79:1). */
-/* The mark is a small pebble of its own: same matte fill, same rounding
-   proportion, its own contact shadow. It is the one place the hue reaches full
-   strength, so it stays the anchor of the card. */
+/* The mark is the one place the hue reaches full strength, so it stays the
+   anchor of the card — but flat, like everything else on this page now. The
+   specular ramp and the coloured glow are gone with the pebble treatment. */
 .card__icon {
-    /* The same specular ramp as the card, plus a slight darkening at the foot
-       so the mark reads as a domed lozenge rather than a flat swatch. */
-    background:
-        linear-gradient(180deg,
-            rgba(255, 255, 255, 0.34) 0%,
-            rgba(255, 255, 255, 0.10) 46%,
-            rgba(255, 255, 255, 0.00) 62%,
-            rgba(0, 0, 0, 0.07) 100%),
-        var(--card-accent);
+    background: var(--card-accent);
     color: #FFFFFF;
-    border-radius: 16px;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.45),
-        0 2px 6px color-mix(in srgb, var(--card-accent) 35%, transparent);
+    border-radius: var(--radius-md);
 }
-/* The hero mark needs the gloss restated: this selector outranks the bare
-   .card__icon above, so setting only a flat colour here would strip its shine. */
-.card--hero .card__icon {
-    background:
-        linear-gradient(180deg,
-            rgba(255, 255, 255, 0.34) 0%,
-            rgba(255, 255, 255, 0.10) 46%,
-            rgba(255, 255, 255, 0.00) 62%,
-            rgba(0, 0, 0, 0.07) 100%),
-        var(--card-accent);
-    color: #FFFFFF;
-}
+/* Restated because this selector outranks the bare .card__icon above, which
+   would otherwise leave the hero mark on the pale --surface fill set earlier. */
+.card--hero .card__icon { background: var(--card-accent); color: #FFFFFF; }
 .card:hover .card__icon { transform: scale(1.04); }
 
 /* -- Footer -------------------------------------------------------------- */
