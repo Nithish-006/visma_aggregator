@@ -39,7 +39,7 @@ html {
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', sans-serif;
+    font-family: var(--font-ui);
     background: #FAF9F5;
     background-attachment: fixed;
     min-height: 100vh;

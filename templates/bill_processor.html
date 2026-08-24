@@ -13,14 +13,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Central design tokens (must load before page styles) -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=10">
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=11">
 
     <!-- Bill Processor Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='bill_processor.css') }}?v={{ range(10000, 99999) | random }}">
 
     <!-- PDF.js for PDF rendering -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=12">
+    <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=13">
     <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
 </head>
 
@@ -173,7 +173,21 @@
 
         <!-- Filter Bar -->
         <div class="bp-filter-bar">
-            <div class="bp-filters">
+            <!-- Mobile-only: the filter panel folds away so the bill list owns the screen -->
+            <button type="button" class="bp-filter-toggle" id="bpFilterToggle" aria-expanded="false"
+                aria-controls="bpFilters">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                </svg>
+                <span>Filters</span>
+                <svg class="bp-filter-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </button>
+            <div class="bp-filters" id="bpFilters">
                 <div class="bp-filter-group bp-search-group">
                     <label>Search</label>
                     <div class="bp-search-wrapper">

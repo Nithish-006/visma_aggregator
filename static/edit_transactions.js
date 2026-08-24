@@ -47,6 +47,16 @@
     const EDITABLE_FIELDS = ['vendor', 'category', 'project']; // Column order for left/right nav
 
     /**
+     * On a phone this page is a viewer, not an editor -- see the
+     * "MOBILE: READ-ONLY LEDGER" block in edit_transactions.css. The CSS hides
+     * the write controls; this guard stops the ones a tap could still reach.
+     * Breakpoint must stay in step with that media query.
+     */
+    function isMobileView() {
+        return window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    /**
      * Check if a category value is "Uncategorized" (case-insensitive)
      */
     function isUncategorized(category) {
@@ -1079,6 +1089,8 @@
      * Handle cell click for inline editing
      */
     function handleCellClick(e) {
+        if (isMobileView()) return;   // read-only on phones
+
         const cell = e.currentTarget;
         if (cell.classList.contains('editing')) return;
 

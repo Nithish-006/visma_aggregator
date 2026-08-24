@@ -34,10 +34,10 @@
     </script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=10">
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=11">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
-    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=8">
-    <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=12">
+    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=9">
+    <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=13">
     <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
 </head>
 
@@ -225,6 +225,11 @@
                             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
                         </svg>
                         <span>Filters</span>
+                        <svg class="filter-toggle-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
                     </button>
 
                     <!-- Filter Controls -->
@@ -522,7 +527,7 @@
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=9"></script>
+    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=10"></script>
     <script src="{{ url_for('static', filename='upload.js') }}"></script>
     <script src="/static/pwa-register.js"></script>
 <script>
