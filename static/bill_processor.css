@@ -30,7 +30,7 @@
 }
 
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-ui);
     background: #FAF9F5;
     min-height: 100vh;
     color: var(--text-primary);
@@ -3671,4 +3671,75 @@ textarea.form-input {
     .ri-eq-op { align-self: flex-start; }
     .review-footer { justify-content: stretch; }
     .review-footer .btn { flex: 1 1 45%; }
+}
+
+/* ============================================================================
+   MOBILE: COLLAPSIBLE FILTERS + VIEW-ONLY ACTIONS
+   ----------------------------------------------------------------------------
+   Six filter controls stacked two-up push the first bill card off the bottom
+   of a 390px screen, so on a phone the panel folds behind its own toggle and
+   the quick time chips stay out as the everyday filter. The maintenance
+   actions -- Run Validation, Reprocess Flagged -- are long-running jobs that
+   rewrite stored bills; they belong on the desk, not on a phone in a
+   corridor. Refresh and Export All read only, so they stay.
+   ============================================================================ */
+
+/* Desktop: the panel is always open and the toggle does not exist. */
+.bp-filter-toggle {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .bp-filter-toggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 12px 14px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .bp-filter-toggle > span {
+        flex: 1;
+        text-align: left;
+    }
+
+    .bp-filter-arrow {
+        transition: transform 0.25s ease;
+        flex-shrink: 0;
+    }
+
+    /* --c-accent-fill is the darker coral meant to carry white text; plain
+       --c-accent under white is only ~3:1 and fails AA at this size. */
+    .bp-filter-toggle[aria-expanded="true"] {
+        background: var(--c-accent-fill);
+        border-color: var(--c-accent-fill);
+        color: #fff;
+    }
+
+    .bp-filter-toggle[aria-expanded="true"] .bp-filter-arrow {
+        transform: rotate(180deg);
+    }
+
+    /* Collapsed by default; the toggle opens it. */
+    .bp-filters {
+        display: none;
+    }
+
+    .bp-filters.expanded {
+        display: flex;
+        margin-top: 12px;
+    }
+
+    /* Write / long-running maintenance actions: off on mobile. */
+    #validateBtn,
+    #reprocessFlaggedBtn {
+        display: none !important;
+    }
 }

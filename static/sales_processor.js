@@ -64,6 +64,17 @@ function init() {
     // Reset filters
     document.getElementById('resetFilters').addEventListener('click', resetAllFilters);
 
+    // Mobile filter toggle -- the panel is CSS-collapsed on phones only, so on
+    // a desktop this button is display:none and the class is inert.
+    const bpFilterToggle = document.getElementById('bpFilterToggle');
+    const bpFilters = document.getElementById('bpFilters');
+    if (bpFilterToggle && bpFilters) {
+        bpFilterToggle.addEventListener('click', () => {
+            const open = bpFilters.classList.toggle('expanded');
+            bpFilterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
+
     // Project multi-select dropdown
     initProjectDropdown();
 

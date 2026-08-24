@@ -85,7 +85,17 @@
     --shadow-warm-hover:  0 6px 22px rgba(35, 31, 25, 0.07);  /* hub */
 
     /* ---- Typography ----------------------------------------------------- */
-    --font-ui:    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    /* SF first: -apple-system / BlinkMacSystemFont resolve to the real San
+       Francisco at the OS level on macOS and iOS, so Apple devices get the
+       genuine face with no webfont to ship (Apple does not license SF for
+       web distribution -- there is no @font-face route, only this one).
+       Inter sits behind it as the cross-platform face rather than letting
+       Windows fall through to Segoe UI: Inter is an SF-alike by design, so
+       non-Apple stays visually where the app is already tuned. The named
+       "SF Pro Text/Display" entries only matter if someone has installed SF
+       from Apple's developer downloads on a non-Apple OS; harmless if not. */
+    --font-ui:    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+                  "Inter", system-ui, "Segoe UI", sans-serif;
     --font-serif: "Source Serif 4", Georgia, serif;
 
     /* ---- Motion --------------------------------------------------------- */

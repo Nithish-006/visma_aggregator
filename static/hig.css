@@ -967,3 +967,25 @@ h1, .stat-value, .kpi-value { font-weight: 700; }
 /* Placeholders stay at regular - they are a prompt, not content. */
 input::placeholder,
 textarea::placeholder { font-weight: 400; }
+
+/* ============================================================================
+   9. FORM CONTROLS INHERIT THE UI FACE
+   ----------------------------------------------------------------------------
+   Browsers do not inherit font-family into button/input/select/textarea -- they
+   apply their own default, which is Arial here. bill_processor.css and
+   sales_processor.css each worked around it by setting `font-family: inherit`
+   on ~8 individual control classes; style.css and edit_transactions.css never
+   did, so every button, search box and date field on the BANK dashboard has
+   been rendering in Arial while the text around it was Inter.
+
+   One rule, applied everywhere, so the whole app speaks in --font-ui. Scoped
+   to real controls: `.processing-logs` and friends are divs, so the deliberate
+   monospace blocks are untouched.
+   ============================================================================ */
+
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+}

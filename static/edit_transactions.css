@@ -753,7 +753,7 @@ input[type="checkbox"] {
 .edit-table .monetary-pill {
     font-size: 0.8rem;
     padding: 4px 10px;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-ui);
     font-variant-numeric: tabular-nums;
 }
 
@@ -2060,4 +2060,225 @@ input[type="checkbox"] {
 #confirm-tracker-sync:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+}
+
+/* ============================================================================
+   MOBILE: READ-ONLY LEDGER
+   ----------------------------------------------------------------------------
+   A phone is where this ledger gets *read*, not audited. Editing on a 390px
+   card -- tapping a cell, picking a category, remembering to save -- is how
+   wrong values get typed, and the write controls (upload, tracker sync, bulk
+   apply, save/discard) crowd out the rows the reader actually came for.
+   So on <=768px the page is a viewer: filters collapse behind their toggle,
+   every write affordance is gone, and what is left is date / vendor / amount.
+   The desktop page is untouched -- that is still the editing surface.
+   The matching guard lives in edit_transactions.js (isMobileView).
+   ============================================================================ */
+@media (max-width: 768px) {
+
+    /* --- Write controls: off ------------------------------------------- */
+    #upload-btn,
+    #tracker-sync-btn,
+    #save-all-btn,
+    #discard-all-btn,
+    .bulk-edit-bar,
+    #tracker-sync-modal,
+    #upload-modal,
+    #split-modal {
+        display: none !important;
+    }
+
+    /* Selection only exists to feed the bulk bar, so the checkboxes go too. */
+    #select-all-checkbox,
+    .row-checkbox,
+    .edit-table thead th:first-child {
+        display: none !important;
+    }
+
+    .edit-table tbody td:first-child {
+        display: none !important;
+    }
+
+    /* The card grid loses its checkbox column. */
+    .edit-table tbody tr {
+        grid-template-columns: 1fr auto;
+    }
+
+    .edit-table tbody td:nth-child(2),
+    .edit-table tbody td:nth-child(3) {
+        grid-column: 1;
+    }
+
+    .edit-table tbody td:nth-child(6),
+    .edit-table tbody td:nth-child(7) {
+        grid-column: 2;
+    }
+
+    /* "Selected" and "Unsaved" count nothing you can now do. */
+    .edit-stats .stat-badge:nth-child(2),
+    #modified-badge {
+        display: none !important;
+    }
+
+    /* Nothing is editable, so drop the tap-to-edit cue. */
+    .edit-table tbody td.editable-cell {
+        cursor: default;
+    }
+
+    /* --- Filter toggle -------------------------------------------------- */
+    /* The panel is collapsed by default; the chevron says which way it goes. */
+    .edit-filter-toolbar .filter-toggle {
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .edit-filter-toolbar .filter-toggle > span {
+        flex: 1;
+        text-align: left;
+    }
+}
+
+/* ============================================================================
+   MOBILE: TOOLBAR SIZING
+   ----------------------------------------------------------------------------
+   `.edit-toolbar-wrapper` turns into a COLUMN on mobile, and in a column flex
+   container `flex-basis` is a height. The desktop rule `flex: 1 1 620px` that
+   keeps the two toolbar halves side by side on a laptop was therefore giving
+   the filter half a 620px tall box on a phone -- an empty screenful between
+   the Filters button and the first transaction. Both halves size to content
+   here instead.
+   ============================================================================ */
+@media (max-width: 768px) {
+
+    .edit-toolbar-wrapper .edit-filter-toolbar,
+    .edit-toolbar-wrapper .edit-actions-toolbar {
+        flex: 0 0 auto;
+    }
+
+    /* Reading order on the actions row: search, then the count, then export. */
+    .edit-actions-toolbar #download-transactions {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ============================================================================
+   MOBILE: HEADER CLEARANCE
+   ----------------------------------------------------------------------------
+   The fixed header was 78px tall while the content below it cleared only 55px,
+   so the FROM/TILL bar sat under it. Two causes: the username badge (the
+   global `.user-badge span:not(svg)` rule misses it -- the name is a bare text
+   node, not a child span) ate the width, which wrapped the bank name onto a
+   second line. Who is logged in is not news on your own phone, so it goes, the
+   name stays on one line, and the clearance is set to the height that leaves.
+   ============================================================================ */
+@media (max-width: 768px) {
+
+    .header .user-badge {
+        display: none;
+    }
+
+    .header-left .logo {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .edit-main-content {
+        margin-top: 72px;
+    }
+}
+
+/* ============================================================================
+   MOBILE: PUT CATEGORY AND PROJECT BACK ON THE CARD
+   ----------------------------------------------------------------------------
+   The phone card was date / vendor / amount, and category and project were
+   display:none -- readable only by tapping the cell open, which is exactly
+   what the read-only view removes. Two things a reader checks constantly are
+   how a payment was classified and which job it belongs to, so they get their
+   own line under the vendor: category left, project right.
+   ============================================================================ */
+@media (max-width: 768px) {
+
+    .edit-table tbody tr {
+        grid-template-rows: auto auto auto;
+        row-gap: 6px;
+    }
+
+    .edit-table tbody td:nth-child(4) {
+        display: flex !important;
+        align-items: center;
+        grid-column: 1;
+        grid-row: 3;
+        min-width: 0;
+    }
+
+    .edit-table tbody td:nth-child(8) {
+        display: flex !important;
+        align-items: center;
+        justify-content: flex-end;
+        grid-column: 2;
+        grid-row: 3;
+        min-width: 0;
+    }
+
+    /* The amount keeps the right-hand column, but only over the first two
+       rows now -- otherwise it would centre itself against the new line. */
+    .edit-table tbody td:nth-child(6),
+    .edit-table tbody td:nth-child(7) {
+        grid-row: 1 / 3;
+    }
+
+    /* An empty project badge reads as "-" on desktop; on a card it is noise. */
+    .edit-table tbody td:nth-child(8) .project-badge.empty {
+        display: none;
+    }
+
+    .edit-table tbody .category-badge,
+    .edit-table tbody .project-badge {
+        font-size: 0.7rem;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+/* One row for "Total: n" and the export, rather than a stacked full-width
+   block each -- the toolbar is overhead, the rows are the point. */
+@media (max-width: 768px) {
+
+    .edit-actions-toolbar .edit-stats {
+        width: auto;
+        flex: 1 1 auto;
+        justify-content: flex-start;
+        order: 2;
+    }
+
+    .edit-actions-toolbar #download-transactions {
+        width: auto;
+        flex: 0 0 auto;
+        order: 3;
+    }
+}
+
+/* The search box owns its row; `flex: 1` alone let it collapse to an icon
+   whenever the stats and export happened to fit on the same wrap line. */
+@media (max-width: 768px) {
+
+    .edit-actions-toolbar .search-wrapper {
+        flex: 1 1 100%;
+    }
+}
+
+/* The open-state fill: --c-accent (#D97757) under white text is ~3:1, which
+   fails AA at this weight and size. --c-accent-fill is the darker coral the
+   palette provides for exactly this -- a filled surface carrying white. */
+@media (max-width: 768px) {
+
+    .edit-filter-toolbar .filter-toggle.active {
+        background: var(--c-accent-fill);
+        border-color: var(--c-accent-fill);
+    }
 }
