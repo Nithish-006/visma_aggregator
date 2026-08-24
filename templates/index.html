@@ -36,7 +36,7 @@
     <!-- Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=10">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
-    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=8">
     <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=12">
     <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
 </head>
@@ -282,6 +282,15 @@
                         </svg>
                         <span>Download Excel</span>
                     </button>
+                    <button id="tracker-sync-btn" class="action-btn toolbar-action-btn tracker-sync-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        <span>Sync Expense Tracker</span>
+                    </button>
                     <button id="upload-btn" class="action-btn upload-btn toolbar-action-btn">
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -436,6 +445,75 @@
         </div>
     </div>
 
+    <!-- Sync Expense Tracker Modal -->
+    <div id="tracker-sync-modal" class="split-modal-overlay" style="display: none;">
+        <div class="split-modal tracker-sync-modal">
+            <div class="split-modal-header">
+                <h2>Sync Expense Tracker</h2>
+                <button id="close-tracker-sync-modal" class="split-modal-close">&times;</button>
+            </div>
+
+            <div class="split-modal-body">
+                <div id="tracker-sync-loading" class="tracker-sync-loading">Working out what's pending…</div>
+
+                <div id="tracker-sync-content" style="display: none;">
+                    <div class="tracker-sync-summary">
+                        <div class="tracker-sync-window" id="tracker-sync-window">-</div>
+                        <div class="tracker-sync-stats">
+                            <span class="stat-badge">Adding: <strong id="tracker-sync-count">0</strong></span>
+                            <span class="stat-badge">Expense: <strong id="tracker-sync-expense">0</strong></span>
+                            <span class="stat-badge">Income: <strong id="tracker-sync-income">0</strong></span>
+                            <span class="stat-badge" id="tracker-sync-skipped-badge">Skipped: <strong
+                                    id="tracker-sync-skipped">0</strong></span>
+                        </div>
+                    </div>
+
+                    <div id="tracker-sync-empty" class="tracker-sync-empty" style="display: none;">
+                        The expense tracker is already up to date with this statement.
+                    </div>
+
+                    <div class="tracker-sync-table-wrap" id="tracker-sync-table-wrap">
+                        <table class="tracker-sync-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Vendor</th>
+                                    <th>Description</th>
+                                    <th>Project</th>
+                                    <th class="num">Amount</th>
+                                    <th>Type</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tracker-sync-rows"></tbody>
+                        </table>
+                    </div>
+
+                    <details class="tracker-sync-skipped-detail" id="tracker-sync-skipped-detail">
+                        <summary>Skipped rows</summary>
+                        <div class="tracker-sync-table-wrap">
+                            <table class="tracker-sync-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Vendor</th>
+                                        <th class="num">Amount</th>
+                                        <th>Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tracker-sync-skipped-rows"></tbody>
+                            </table>
+                        </div>
+                    </details>
+                </div>
+            </div>
+
+            <div class="split-modal-footer">
+                <button id="cancel-tracker-sync" class="btn btn-secondary">Cancel</button>
+                <button id="confirm-tracker-sync" class="btn btn-primary" disabled>Sync to Tracker</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Footer -->
     <footer class="footer">
         <p>Built for personal money management</p>
@@ -444,7 +522,7 @@
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=6"></script>
+    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=9"></script>
     <script src="{{ url_for('static', filename='upload.js') }}"></script>
     <script src="/static/pwa-register.js"></script>
 <script>

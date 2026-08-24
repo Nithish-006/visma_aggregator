@@ -24,6 +24,7 @@ from helpers.dataframe import (
     filter_by_project,
 )
 from helpers.projects import validate_project_value
+from helpers.tracker_sync import build_plan, insert_plan, jsonify_plan
 from auth import login_required
 
 bp = Blueprint('banks', __name__)
@@ -945,3 +946,71 @@ def download_bank_transactions(bank_code):
         import traceback
         traceback.print_exc()
         return jsonify({'error': f'Export failed: {str(e)}'}), 500
+
+
+@bp.route('/api/<bank_code>/tracker-sync/preview')
+@login_required
+def tracker_sync_preview(bank_code):
+    """What a tracker sync would add: the window, the rows, and what it skips.
+
+    Writes nothing. The window runs from the tracker's own watermark for this
+    bank (re-scanned, since that day is usually only part-entered by hand)
+    through the last date the uploaded statement covers.
+    """
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+    if not Config.USE_DATABASE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    try:
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor(dictionary=True)
+            plan = build_plan(cursor, bank_code,
+                              start=request.args.get('start') or None,
+                              end=request.args.get('end') or None)
+            cursor.close()
+        # Cap the row list so a first-ever sync of a whole statement stays a
+        # sane payload; the counts and totals always cover every row.
+        return jsonify({'success': True, **jsonify_plan(plan, row_limit=500)})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Preview failed: {str(e)}'}), 500
+
+
+@bp.route('/api/<bank_code>/tracker-sync', methods=['POST'])
+@login_required
+def tracker_sync(bank_code):
+    """Insert the pending bank rows into the personal expense tracker.
+
+    The plan is rebuilt server-side rather than taken from the preview, so a
+    stale preview can never write rows that are already there.
+    """
+    if bank_code not in VALID_BANK_CODES:
+        return jsonify({'error': 'Invalid bank code'}), 400
+    if not Config.USE_DATABASE:
+        return jsonify({'error': 'Database not available'}), 503
+
+    data = request.get_json(silent=True) or {}
+    try:
+        with db_manager.get_connection() as conn:
+            cursor = conn.cursor(dictionary=True)
+            plan = build_plan(cursor, bank_code,
+                              start=data.get('start') or None,
+                              end=data.get('end') or None)
+            inserted = insert_plan(cursor, plan)
+            conn.commit()
+            cursor.close()
+
+        return jsonify({
+            'success': True,
+            'inserted': inserted,
+            'message': (f'Synced {inserted} transaction'
+                        f'{"" if inserted == 1 else "s"} to the expense tracker'
+                        if inserted else 'Expense tracker is already up to date'),
+            **jsonify_plan(plan),
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Sync failed: {str(e)}'}), 500

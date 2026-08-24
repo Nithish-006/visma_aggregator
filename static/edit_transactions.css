@@ -1812,3 +1812,252 @@ input[type="checkbox"] {
         min-height: 48px;
     }
 }
+
+/* ==========================================================================
+   Sync Expense Tracker — preview modal
+   ========================================================================== */
+
+.tracker-sync-modal {
+    max-width: 920px;
+}
+
+.tracker-sync-loading {
+    padding: 40px 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.tracker-sync-summary {
+    background: var(--bg-card-hover);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+}
+
+.tracker-sync-window {
+    font-size: 0.95rem;
+    color: var(--text-main);
+    margin-bottom: 12px;
+}
+
+.tracker-sync-window strong {
+    color: var(--primary-color);
+}
+
+.tracker-sync-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* .stat-badge turns into a flex row on narrow screens, which eats the space
+   between the label and its number. */
+.tracker-sync-stats .stat-badge strong {
+    margin-left: 0.25rem;
+}
+
+.tracker-sync-empty {
+    padding: 28px 0;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.tracker-sync-table-wrap {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: auto;
+    max-height: 46vh;
+}
+
+.tracker-sync-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.tracker-sync-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-card-hover);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.72rem;
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+.tracker-sync-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-main);
+    vertical-align: top;
+}
+
+.tracker-sync-table tr:last-child td {
+    border-bottom: none;
+}
+
+.tracker-sync-table th.num,
+.tracker-sync-table td.num {
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.tracker-sync-table .txn-type {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.tracker-sync-table .txn-type.expense {
+    color: var(--danger-color);
+}
+
+.tracker-sync-table .txn-type.income {
+    color: var(--success-color);
+}
+
+.tracker-sync-table .muted {
+    color: var(--text-muted);
+}
+
+.tracker-sync-skipped-detail {
+    margin-top: 16px;
+}
+
+.tracker-sync-skipped-detail summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    padding: 6px 0;
+    user-select: none;
+}
+
+.tracker-sync-skipped-detail summary:hover {
+    color: var(--text-main);
+}
+
+.tracker-sync-skipped-detail[open] summary {
+    margin-bottom: 10px;
+}
+
+/* On a phone a six-column money table is unreadable sideways, so each row
+   becomes a stacked card -- the same pattern the project tables use, with the
+   column name coming from data-label. Vendor is the card heading. */
+@media (max-width: 768px) {
+    .tracker-sync-table-wrap {
+        max-height: none;
+        overflow-x: hidden;
+        border: none;
+    }
+
+    .tracker-sync-table,
+    .tracker-sync-table tbody,
+    .tracker-sync-table tbody td {
+        display: block;
+        width: 100%;
+    }
+
+    /* A column so the vendor can be ordered up to the top of the card. */
+    .tracker-sync-table tbody tr {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .tracker-sync-table thead {
+        display: none;
+    }
+
+    .tracker-sync-table tbody tr {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 10px 12px;
+        margin-bottom: 8px;
+    }
+
+    .tracker-sync-table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        padding: 3px 0;
+        border: none;
+        text-align: right;
+        white-space: normal;
+        font-size: 0.82rem;
+    }
+
+    .tracker-sync-table tbody td::before {
+        content: attr(data-label);
+        flex: 0 0 auto;
+        text-align: left;
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--text-muted);
+    }
+
+    /* Vendor leads the card. */
+    .tracker-sync-table tbody td.card-title {
+        justify-content: flex-start;
+        text-align: left;
+        font-weight: 600;
+        padding: 0 0 6px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid var(--border-color);
+        overflow-wrap: anywhere;
+        font-size: 0.9rem;
+    }
+
+    .tracker-sync-table tbody td.card-title {
+        order: -1;
+    }
+
+    .tracker-sync-table tbody td.card-title::before {
+        content: none;
+    }
+
+    /* The colspan note is a note, not a field. */
+    .tracker-sync-table tbody td[colspan]::before {
+        content: none;
+    }
+}
+
+/* The action side of the toolbar grew again when "Sync Expense Tracker" joined
+   Download and Upload. The wrapper is nowrap globally and the filter side has
+   min-width: 0, so on a ~1440px laptop the filter side was squeezed past its
+   own content and its buttons overlapped the stats badges. Scoped to this
+   page's toolbar: let the two sides wrap onto separate lines instead. */
+.toolbar-wrapper.edit-toolbar-wrapper {
+    flex-wrap: wrap;
+}
+
+.edit-toolbar-wrapper .edit-filter-toolbar {
+    flex: 1 1 620px;
+}
+
+/* ...and let the action side shrink to the row so its own flex-wrap can take
+   effect, instead of running past the right edge on a ~900px window. */
+.edit-toolbar-wrapper .edit-actions-toolbar {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Nothing to sync -> the confirm button must read as unavailable, not just
+   behave that way. */
+#confirm-tracker-sync:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}

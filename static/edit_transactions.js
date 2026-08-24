@@ -2501,10 +2501,173 @@
         updateSplitButtonVisibility();
     };
 
+    /* ------------------------------------------------------------------
+       Sync Expense Tracker.
+
+       The personal expense tracker is typed by hand as a mirror of the bank
+       statement, so it runs behind whatever has been uploaded. This picks up
+       exactly where the tracker stopped for this bank and adds every statement
+       row from there on -- run it once the new rows are tagged and split.
+
+       Preview first, write on confirm. The server rebuilds the plan on
+       confirm, so a stale preview can never write a row twice.
+       ------------------------------------------------------------------ */
+
+    function escapeSyncHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value == null ? '' : String(value);
+        return div.innerHTML;
+    }
+
+    function formatSyncAmount(value) {
+        return Number(value || 0).toLocaleString('en-IN', {
+            minimumFractionDigits: 2, maximumFractionDigits: 2
+        });
+    }
+
+    function formatSyncDate(iso) {
+        if (!iso) return '-';
+        const parts = String(iso).split('-');
+        return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : iso;
+    }
+
+    function openTrackerSyncModal() {
+        const modal = document.getElementById('tracker-sync-modal');
+        if (!modal) return;
+        modal.style.display = 'flex';
+        document.getElementById('tracker-sync-loading').style.display = 'block';
+        document.getElementById('tracker-sync-content').style.display = 'none';
+        document.getElementById('confirm-tracker-sync').disabled = true;
+        loadTrackerSyncPreview();
+    }
+
+    function closeTrackerSyncModal() {
+        const modal = document.getElementById('tracker-sync-modal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    async function loadTrackerSyncPreview() {
+        try {
+            const response = await fetch(`/api/${BANK_CODE}/tracker-sync/preview`);
+            const plan = await response.json();
+            if (!response.ok || plan.error) throw new Error(plan.error || 'Preview failed');
+            renderTrackerSyncPreview(plan);
+        } catch (err) {
+            closeTrackerSyncModal();
+            showNotification(err.message || 'Could not load the sync preview', 'error');
+        }
+    }
+
+    function renderTrackerSyncPreview(plan) {
+        document.getElementById('tracker-sync-loading').style.display = 'none';
+        document.getElementById('tracker-sync-content').style.display = 'block';
+
+        const rowWord = plan.scanned === 1 ? 'row' : 'rows';
+        const windowEl = document.getElementById('tracker-sync-window');
+        if (!plan.start || !plan.end) {
+            windowEl.textContent = 'Nothing has been uploaded for this bank yet.';
+        } else if (plan.watermark) {
+            windowEl.innerHTML = `Tracker is synced to <strong>${formatSyncDate(plan.watermark)}</strong>. ` +
+                `Checking the statement from <strong>${formatSyncDate(plan.start)}</strong> to ` +
+                `<strong>${formatSyncDate(plan.end)}</strong> (${plan.scanned} statement ${rowWord}).`;
+        } else {
+            windowEl.innerHTML = `The tracker has nothing for this bank yet. Checking the whole ` +
+                `statement, <strong>${formatSyncDate(plan.start)}</strong> to ` +
+                `<strong>${formatSyncDate(plan.end)}</strong> (${plan.scanned} statement ${rowWord}).`;
+        }
+
+        document.getElementById('tracker-sync-count').textContent = plan.totals.count;
+        document.getElementById('tracker-sync-expense').textContent = formatSyncAmount(plan.totals.expense);
+        document.getElementById('tracker-sync-income').textContent = formatSyncAmount(plan.totals.income);
+        document.getElementById('tracker-sync-skipped').textContent = plan.skipped.length;
+
+        const hasRows = plan.totals.count > 0;
+        document.getElementById('tracker-sync-empty').style.display = hasRows ? 'none' : 'block';
+        document.getElementById('tracker-sync-table-wrap').style.display = hasRows ? 'block' : 'none';
+        document.getElementById('confirm-tracker-sync').disabled = !hasRows;
+
+        const tbody = document.getElementById('tracker-sync-rows');
+        // data-label / card-title feed the phone layout, where each row is
+        // restacked as a card (see the media query in edit_transactions.css).
+        tbody.innerHTML = plan.rows.map(r => `
+            <tr>
+                <td data-label="Date">${formatSyncDate(r.date)}</td>
+                <td class="card-title" data-label="Vendor">${escapeSyncHtml(r.vendor)}</td>
+                <td data-label="Description">${escapeSyncHtml(r.description)}</td>
+                <td data-label="Project">${escapeSyncHtml(r.project)}</td>
+                <td class="num" data-label="Amount">${formatSyncAmount(r.amount)}</td>
+                <td data-label="Type"><span class="txn-type ${r.transaction_type}">${r.transaction_type}</span></td>
+            </tr>`).join('');
+        if (plan.rows_truncated) {
+            tbody.insertAdjacentHTML('beforeend',
+                `<tr><td colspan="6" class="muted">Showing the first ${plan.rows.length} of ` +
+                `${plan.totals.count} rows &mdash; all of them will be synced.</td></tr>`);
+        }
+
+        const skippedDetail = document.getElementById('tracker-sync-skipped-detail');
+        skippedDetail.style.display = plan.skipped.length ? 'block' : 'none';
+        document.getElementById('tracker-sync-skipped-rows').innerHTML = plan.skipped.map(s => `
+            <tr>
+                <td>${formatSyncDate(s.date)}</td>
+                <td>${escapeSyncHtml(s.vendor || '-')}</td>
+                <td class="num">${s.amount === null ? '-' : formatSyncAmount(s.amount)}</td>
+                <td class="muted">${escapeSyncHtml(s.reason)}</td>
+            </tr>`).join('');
+    }
+
+    async function confirmTrackerSync() {
+        const button = document.getElementById('confirm-tracker-sync');
+        button.disabled = true;
+        button.textContent = 'Syncing...';
+        try {
+            const response = await fetch(`/api/${BANK_CODE}/tracker-sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const result = await response.json();
+            if (!response.ok || result.error) throw new Error(result.error || 'Sync failed');
+            closeTrackerSyncModal();
+            showNotification(result.message);
+        } catch (err) {
+            showNotification(err.message || 'Sync failed', 'error');
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Sync to Tracker';
+        }
+    }
+
+    function setupTrackerSyncEventListeners() {
+        const openBtn = document.getElementById('tracker-sync-btn');
+        if (openBtn) openBtn.addEventListener('click', openTrackerSyncModal);
+
+        ['close-tracker-sync-modal', 'cancel-tracker-sync'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('click', closeTrackerSyncModal);
+        });
+
+        const confirmBtn = document.getElementById('confirm-tracker-sync');
+        if (confirmBtn) confirmBtn.addEventListener('click', confirmTrackerSync);
+
+        const modal = document.getElementById('tracker-sync-modal');
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeTrackerSyncModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.style.display !== 'none') {
+                    closeTrackerSyncModal();
+                }
+            });
+        }
+    }
+
+
     // Initialize on DOM ready
     document.addEventListener('DOMContentLoaded', () => {
         init();
         setupSplitEventListeners();
+        setupTrackerSyncEventListeners();
     });
 
 })();
