@@ -628,10 +628,18 @@
 /* The badge wraps to two lines on long category names, which pushed a plain
    inline mark onto a line of its own where it read as a stray speck. Laying
    the cell out as a row keeps the mark beside the badge at any width. */
-.edit-table td.editable-cell[data-field="category"] {
-    display: flex;
+/* Badge and mark travel together as one inline row INSIDE the cell.
+   This used to set `display: flex` on the <td> itself, which takes the cell
+   out of the table's layout algorithm entirely — it stops being a table-cell,
+   so it no longer shares the row's height or the column's width, and every
+   category cell drifted out of its column. Never change a <td>'s display to
+   lay out its contents; wrap the contents instead. */
+.category-cell {
+    display: inline-flex;
     align-items: center;
     gap: 6px;
+    max-width: 100%;
+    vertical-align: middle;
 }
 
 .category-provenance {
@@ -2286,6 +2294,17 @@ input[type="checkbox"] {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    /* A flex item will not shrink below its content unless told it may, so
+       without this the badge ignores the ellipsis above and pushes the mark
+       off the card. */
+    .category-cell {
+        max-width: 100%;
+    }
+
+    .category-cell > .category-badge {
+        min-width: 0;
     }
 }
 

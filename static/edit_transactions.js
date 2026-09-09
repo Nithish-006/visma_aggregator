@@ -74,6 +74,21 @@
      *   ·  learned   — applied from this vendor's history; hover for the why
      *   ?  suggested — a guess held back for review, row left Uncategorized
      */
+    /**
+     * The whole inner content of a category cell.
+     *
+     * Shared by the row renderer and the escape-cancel path so the two cannot
+     * drift: cancelling an edit used to rebuild the badge alone, which silently
+     * dropped the provenance mark from a row nobody had actually changed.
+     */
+    function categoryCellHtml(txn) {
+        const value = txn.category || txn.Category || '';
+        const slug = isUncategorized(value) ? 'uncategorized' : (categorySlug(value) || '');
+        return `<span class="category-cell">`
+             + `<span class="category-badge ${slug}">${value}</span>`
+             + `${categoryProvenance(txn)}</span>`;
+    }
+
     function categoryProvenance(txn) {
         const source = txn.category_source || '';
         if (source !== 'learned' && source !== 'suggested') return '';
@@ -674,7 +689,6 @@
                 row.classList.add('modified');
             }
 
-            const isCategoryUncategorized = isUncategorized(txn.category);
 
             const projectValue = txn.project || txn.Project || '';
             const isProjectEmpty = !projectValue;
@@ -687,8 +701,7 @@
                 <td data-label="Date">${txn.date}</td>
                 <td class="editable-cell" data-field="vendor" data-id="${txnId}" data-label="Vendor">${txn.vendor || ''}</td>
                 <td class="editable-cell" data-field="category" data-id="${txnId}" data-label="Category">
-                    <span class="category-badge ${isCategoryUncategorized ? 'uncategorized' : categorySlug(txn.category)}">${txn.category || ''}</span>
-                    ${categoryProvenance(txn)}
+                    ${categoryCellHtml(txn)}
                 </td>
                 <td class="description-full" data-label="Description">${escapeHtml(txn.description || txn['Transaction Description'] || '')}</td>
                 <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
@@ -1075,9 +1088,8 @@
                 e.preventDefault();
                 cell.classList.remove('editing');
                 if (field === 'category') {
-                    const val = allTransactionsMap.get(txnId)?.category || allTransactionsMap.get(txnId)?.Category || '';
-                    const isUncat = isUncategorized(val);
-                    cell.innerHTML = `<span class="category-badge ${isUncat ? 'uncategorized' : ''}">${val}</span>`;
+                    // Escape means "no change", so the mark must come back too.
+                    cell.innerHTML = categoryCellHtml(allTransactionsMap.get(txnId) || {});
                 } else {
                     const val = allTransactionsMap.get(txnId)?.project || allTransactionsMap.get(txnId)?.Project || '';
                     const isEmpty = !val;
