@@ -37,6 +37,8 @@
         search: '',
         startDate: null,
         endDate: null,
+        // Rows the categoriser guessed at but was not sure enough to apply.
+        needsReview: false,
     };
 
     // Loading state to prevent duplicate requests
@@ -62,6 +64,26 @@
     function isUncategorized(category) {
         if (!category) return false;
         return category.toLowerCase() === 'uncategorized';
+    }
+
+    /**
+     * Mark on a category the system filled in, so no auto-applied answer ever
+     * looks like something a person decided. A category the user typed carries
+     * no mark at all — their own work should not be labelled back at them.
+     *
+     *   ·  learned   — applied from this vendor's history; hover for the why
+     *   ?  suggested — a guess held back for review, row left Uncategorized
+     */
+    function categoryProvenance(txn) {
+        const source = txn.category_source || '';
+        if (source !== 'learned' && source !== 'suggested') return '';
+        const pct = txn.category_confidence != null
+            ? ` (${Math.round(txn.category_confidence * 100)}% confident)` : '';
+        const note = (txn.category_note || '') + pct;
+        const glyph = source === 'learned' ? '·' : '?';
+        // escapeAttr, not escapeHtml: the note quotes the vendor name, and
+        // escapeHtml leaves " untouched, which would end the attribute early.
+        return `<span class="category-provenance ${source}" title="${escapeAttr(note)}">${glyph}</span>`;
     }
 
     // Dropdown instances
@@ -454,6 +476,9 @@
             if (currentFilters.endDate) {
                 params.set('end_date', currentFilters.endDate);
             }
+            if (currentFilters.needsReview) {
+                params.set('needs_review', '1');
+            }
 
             const response = await fetch(`/api/${BANK_CODE}/transactions/paginated?${params}`);
             const data = await response.json();
@@ -663,6 +688,7 @@
                 <td class="editable-cell" data-field="vendor" data-id="${txnId}" data-label="Vendor">${txn.vendor || ''}</td>
                 <td class="editable-cell" data-field="category" data-id="${txnId}" data-label="Category">
                     <span class="category-badge ${isCategoryUncategorized ? 'uncategorized' : categorySlug(txn.category)}">${txn.category || ''}</span>
+                    ${categoryProvenance(txn)}
                 </td>
                 <td class="description-full" data-label="Description">${escapeHtml(txn.description || txn['Transaction Description'] || '')}</td>
                 <td class="text-right" data-label="Debit">${txn.dr_amount > 0 ? `<span class="monetary-pill debit">${txn.dr_amount_formatted}</span>` : ''}</td>
@@ -1685,6 +1711,18 @@
     }
 
     /**
+     * Show only the rows the categoriser guessed at without applying —
+     * the shortest path between a guess and the person who can settle it.
+     */
+    function toggleNeedsReview() {
+        currentFilters.needsReview = !currentFilters.needsReview;
+        const btn = document.getElementById('filter-needs-review');
+        if (btn) btn.classList.toggle('active', currentFilters.needsReview);
+        currentPage = 1;
+        applyFilters();
+    }
+
+    /**
      * Clear all filters
      */
     function clearAllFilters() {
@@ -1695,7 +1733,10 @@
             search: '',
             startDate: null,
             endDate: null,
+            needsReview: false,
         };
+        const reviewBtn = document.getElementById('filter-needs-review');
+        if (reviewBtn) reviewBtn.classList.remove('active');
 
         // Clear dropdowns
         if (dropdowns['edit-category-filter']) dropdowns['edit-category-filter'].clear();
@@ -1805,6 +1846,8 @@
         });
 
         document.getElementById('filter-uncategorized').addEventListener('click', showUncategorized);
+        const needsReviewBtn = document.getElementById('filter-needs-review');
+        if (needsReviewBtn) needsReviewBtn.addEventListener('click', toggleNeedsReview);
         document.getElementById('clear-all-filters').addEventListener('click', clearAllFilters);
 
         // Date filter listeners
@@ -1933,6 +1976,18 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Escape for use inside a double-quoted HTML attribute.
+     *
+     * escapeHtml() is not enough here: setting textContent and reading back
+     * innerHTML escapes & < >, but leaves " and ' alone, because they need no
+     * escaping in element content. In an attribute a bare " ends the value
+     * early, so anything quoting a vendor name must come through here.
+     */
+    function escapeAttr(text) {
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function truncateText(text, maxLength) {

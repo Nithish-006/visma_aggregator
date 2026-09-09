@@ -6,10 +6,16 @@ Handles Axis Bank and KVB statements with flexible column detection, date parsin
 import re
 import io
 import pandas as pd
+from collections import namedtuple
 from datetime import datetime
 from difflib import get_close_matches
 from typing import Optional, Tuple, Dict, List
 
+from helpers.category_memory import (
+    AUTO_APPLY_CONFIDENCE,
+    REVIEW_CONFIDENCE,
+    extract_purpose,
+)
 from vendor_extractor import extract_vendor, match_vendor
 
 # Try to import msoffcrypto for encrypted file support
@@ -311,6 +317,80 @@ def categorize_transaction(particulars: str, dr_cr_indicator: str, vendor: Optio
     return "UNCATEGORIZED", "UC"
 
 
+#: Categorisation outcome for one row: the category, its code, where the answer
+#: came from and how sure it is. Stored alongside the transaction so the
+#: dashboard can show its working and so a later run never mistakes its own
+#: guess for a person's ruling.
+CategoryDecision = namedtuple(
+    'CategoryDecision', 'category code source confidence explanation')
+
+
+def decide_category(particulars: str, dr_cr_indicator: str, vendor_match,
+                    bank_code: str = 'axis', memory=None) -> CategoryDecision:
+    """Categorise one transaction, preferring history over keywords.
+
+    The order is deliberate:
+
+    1. **Credits are AMOUNT RECEIVED**, structurally, from the DR/CR flag. That
+       was always true and is not open to evidence.
+    2. **What this vendor and this remark have meant before**, when the memory
+       is confident enough to auto-apply. A person's forty past rulings on a
+       supplier are better evidence than the accident of the word "steel"
+       appearing in its name — and history is the only thing that can produce
+       CRANE RENT or CAPITAL AC at all, since no keyword list contains them.
+    3. **Keyword scoring**, unchanged, as the fallback.
+
+    A middle band of confidence is recorded but deliberately *not* applied: the
+    row stays UNCATEGORIZED and carries its suggestion, so it surfaces in the
+    dashboard's review filter instead of being quietly guessed at.
+    """
+    if dr_cr_indicator and str(dr_cr_indicator).strip().upper() in ['CR', 'CREDIT', 'C']:
+        return CategoryDecision('AMOUNT RECEIVED', 'AR', 'credit', 1.0, None)
+
+    suggestion = None
+    if memory is not None:
+        purpose = extract_purpose(particulars, getattr(vendor_match, 'family', None))
+        suggestion = memory.suggest(getattr(vendor_match, 'vendor', None), purpose)
+
+    if suggestion is not None and suggestion.confidence >= AUTO_APPLY_CONFIDENCE:
+        return CategoryDecision(
+            suggestion.category,
+            suggestion.code or get_category_code(suggestion.category),
+            'learned',
+            round(suggestion.confidence, 3),
+            _explain(suggestion),
+        )
+
+    category, code = categorize_transaction(particulars, dr_cr_indicator,
+                                            getattr(vendor_match, 'vendor', None))
+
+    if (suggestion is not None
+            and suggestion.confidence >= REVIEW_CONFIDENCE
+            and category == 'UNCATEGORIZED'):
+        # Not sure enough to write, too suggestive to throw away.
+        return CategoryDecision('UNCATEGORIZED', 'UC', 'suggested',
+                                round(suggestion.confidence, 3),
+                                _explain(suggestion))
+
+    return CategoryDecision(category, code, 'keyword', None, None)
+
+
+def _explain(suggestion) -> str:
+    """One line a person can check the guess against."""
+    seen = int(round(suggestion.support))
+    share = int(round(suggestion.purity * 100))
+    if suggestion.signal == 'purpose':
+        return (f"payment remark \"{suggestion.matched_vendor}\" meant "
+                f"{suggestion.category} in {share}% of ~{seen} past payments")
+    subject = f"\"{suggestion.matched_vendor}\""
+    if suggestion.signal == 'both':
+        subject += " and the payment remark"
+    elif suggestion.signal == 'conflict':
+        subject += f" (remark suggested {suggestion.runner_up})"
+    return (f"{subject}: {suggestion.category} in {share}% of "
+            f"~{seen} past transactions")
+
+
 def extract_vendor_from_particulars(particulars: str, bank_code: str = 'axis') -> Optional[str]:
     """
     Extract vendor/client name from transaction particulars.
@@ -514,7 +594,8 @@ def process_bank_statement(
     auto_detect_header: bool = True,
     header_row: Optional[int] = None,
     password: Optional[str] = None,
-    opening_balance: Optional[float] = None
+    opening_balance: Optional[float] = None,
+    memory=None
 ) -> pd.DataFrame:
     """
     Process a bank statement Excel file into standardized format
@@ -526,6 +607,10 @@ def process_bank_statement(
         header_row: Manual header row number (0-indexed) if auto_detect is False
         password: Password for encrypted Excel files (KVB files are often encrypted)
         opening_balance: Opening balance for KVB (since KVB doesn't provide running balance)
+        memory: Optional CategoryMemory of what this bank's vendors and payment
+            remarks have meant before. When omitted, categorisation is keyword
+            scoring alone - the behaviour that existed before the memory, and
+            what the CLI and Excel-only paths still get.
 
     Returns:
         Processed DataFrame with standardized columns
@@ -543,16 +628,19 @@ def process_bank_statement(
 
     # Route to bank-specific processor
     if bank_code == 'kvb':
-        return _process_kvb_statement(file_path, file_data, auto_detect_header, header_row, opening_balance)
+        return _process_kvb_statement(file_path, file_data, auto_detect_header, header_row,
+                                      opening_balance, memory=memory)
     else:
-        return _process_axis_statement(file_path, file_data, auto_detect_header, header_row)
+        return _process_axis_statement(file_path, file_data, auto_detect_header, header_row,
+                                       memory=memory)
 
 
 def _process_axis_statement(
     file_path: str,
     file_data: io.BytesIO = None,
     auto_detect_header: bool = True,
-    header_row: Optional[int] = None
+    header_row: Optional[int] = None,
+    memory=None
 ) -> pd.DataFrame:
     """Process Axis Bank statement"""
     safe_print("[*] Using Axis Bank processing logic...")
@@ -647,7 +735,7 @@ def _process_axis_statement(
         vendor = vendor_match.vendor
 
         # Categorize transaction
-        category, code = categorize_transaction(particulars_text, dr_cr, vendor)
+        decision = decide_category(particulars_text, dr_cr, vendor_match, 'axis', memory)
 
         # Determine DR and CR amounts
         dr_amount = amount if dr_cr in ['DR', 'DEBIT', 'D'] else 0.0
@@ -660,9 +748,12 @@ def _process_axis_statement(
             'Date': date_value,
             'Transaction Description': particulars_text,
             'Client/Vendor': vendor if vendor else 'Unknown',
-            'Category': category,
-            'Broader Category': category,
-            'Code': code,
+            'Category': decision.category,
+            'Broader Category': decision.category,
+            'Code': decision.code,
+            'Category Source': decision.source,
+            'Category Confidence': decision.confidence,
+            'Category Explanation': decision.explanation,
             'DR Amount': dr_amount,
             'CR Amount': cr_amount,
             'Running Balance': running_balance,
@@ -698,7 +789,8 @@ def _process_kvb_statement(
     file_data: io.BytesIO = None,
     auto_detect_header: bool = True,
     header_row: Optional[int] = None,
-    opening_balance: Optional[float] = None
+    opening_balance: Optional[float] = None,
+    memory=None
 ) -> pd.DataFrame:
     """
     Process KVB (Karur Vysya Bank) statement
@@ -842,15 +934,18 @@ def _process_kvb_statement(
         vendor = vendor_match.vendor
 
         # Categorize transaction
-        category, code = categorize_transaction(particulars_text, dr_cr, vendor)
+        decision = decide_category(particulars_text, dr_cr, vendor_match, 'kvb', memory)
 
         records.append({
             'Date': date_value,
             'Transaction Description': particulars_text,
             'Client/Vendor': vendor if vendor else 'Unknown',
-            'Category': category,
-            'Broader Category': category,
-            'Code': code,
+            'Category': decision.category,
+            'Broader Category': decision.category,
+            'Code': decision.code,
+            'Category Source': decision.source,
+            'Category Confidence': decision.confidence,
+            'Category Explanation': decision.explanation,
             'DR Amount': dr_amount,
             'CR Amount': cr_amount,
             'Running Balance': running_balance,

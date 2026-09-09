@@ -620,6 +620,50 @@
     font-weight: 700;
 }
 
+/* Provenance mark: this category was filled in by the system, not by a person.
+   Deliberately the quietest thing in the cell -- the note is on hover, because
+   a table where every machine-filled row shouts is a table nobody reads. Only
+   'learned' and 'suggested' are marked; a category the user typed carries no
+   mark, since labelling their own work back at them is noise. */
+/* The badge wraps to two lines on long category names, which pushed a plain
+   inline mark onto a line of its own where it read as a stray speck. Laying
+   the cell out as a row keeps the mark beside the badge at any width. */
+.edit-table td.editable-cell[data-field="category"] {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.category-provenance {
+    flex: 0 0 auto;
+    width: 15px;
+    height: 15px;
+    line-height: 14px;
+    text-align: center;
+    border-radius: 50%;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: help;
+    color: var(--c-text-muted);
+    background: var(--c-surface-soft);
+    border: 1px solid var(--c-border-strong);
+}
+
+/* A held-back guess is the one worth catching the eye: it is waiting on a
+   decision, where a learned row is already done. */
+.category-provenance.suggested {
+    color: #854d0e;
+    background: rgba(253, 224, 71, 0.4);
+    border-color: rgba(133, 77, 14, 0.25);
+}
+
+/* The "Needs review" filter, while it is on. */
+#filter-needs-review.active {
+    background: var(--c-accent);
+    border-color: var(--c-accent);
+    color: #fff;
+}
+
 /* Project badges - Dark Theme */
 .project-badge {
     display: inline-block;
