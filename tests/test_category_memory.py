@@ -202,6 +202,52 @@ def test_a_conflict_falls_out_of_the_auto_band():
 
 
 # ============================================================================
+# CATEGORIES THE STATEMENT CANNOT SEPARATE
+# ============================================================================
+#
+# The client's answer to "when is a labour payment SITE and when is it
+# FACTORY?" was: it depends which job it was for. That fact is in no part of
+# the statement -- the same man, paid for LABOUR, four days apart, ₹300 each
+# time, is SITE one week and FACTORY the next. So the evidence can say which
+# way this payee usually goes, and still not say which way THIS payment goes.
+
+def test_a_divided_payee_on_a_contested_pair_is_held_back():
+    """Two-thirds SITE would otherwise sail past the auto bar on support."""
+    mem = memory([row('ARJUNAN S', 'SITE EXPENSES')] * 103
+                 + [row('ARJUNAN S', 'FACTORY EXPENSES')] * 54)
+    suggestion = mem.suggest('ARJUNAN S')
+    assert suggestion.contested
+    assert suggestion.runner_up == 'FACTORY EXPENSES'
+
+
+def test_a_settled_payee_on_a_contested_pair_is_not_held_back():
+    """58 SITE to 4 FACTORY is a decision the user has made in practice."""
+    mem = memory([row('DHANAPAL', 'SITE EXPENSES')] * 58
+                 + [row('DHANAPAL', 'FACTORY EXPENSES')] * 4)
+    suggestion = mem.suggest('DHANAPAL')
+    assert not suggestion.contested
+    assert suggestion.confidence >= 0.80
+
+
+def test_a_divided_payee_on_an_UNcontested_pair_is_not_held_back():
+    """The rule must not quietly become "never answer when unsure".
+
+    MATERIAL PURCHASE and OFFICE EXPENSES are separable from the statement, so
+    a divided payee there is ordinary uncertainty, handled by the score alone.
+    """
+    mem = memory([row('SOME SHOP', 'MATERIAL PURCHASE')] * 70
+                 + [row('SOME SHOP', 'OFFICE EXPENSES')] * 30)
+    assert not mem.suggest('SOME SHOP').contested
+
+
+def test_contested_rows_still_teach_the_memory():
+    """Holding a row back is about answering, not about learning."""
+    mem = memory([row('ARJUNAN S', 'SITE EXPENSES')] * 103
+                 + [row('ARJUNAN S', 'FACTORY EXPENSES')] * 54)
+    assert mem.rows_learned == 157
+
+
+# ============================================================================
 # CATEGORY SPELLING
 # ============================================================================
 
@@ -213,3 +259,46 @@ def test_a_conflict_falls_out_of_the_auto_band():
 ])
 def test_folds_the_typos_in_typed_category_names(typed, expected):
     assert canonical_category(typed) == expected
+
+
+# ============================================================================
+# THE DECISION THE UPLOAD ACTUALLY MAKES
+# ============================================================================
+
+from bank_statement_processor import decide_category  # noqa: E402
+from vendor_extractor import match_vendor  # noqa: E402
+
+
+def decide(narration, bank, mem, drcr='DR'):
+    return decide_category(narration, drcr, match_vendor(narration, bank), bank, mem)
+
+
+def test_a_settled_supplier_is_applied():
+    mem = memory([row('POWER STEELS', 'MATERIAL PURCHASE', purpose='PUR', code='MP')] * 20)
+    d = decide('IMPS-615319937985-POWER STEELS-UTIB-xxxxxxxxxxx0657-PUR', 'kvb', mem)
+    assert (d.category, d.code, d.source) == ('MATERIAL PURCHASE', 'MP', 'learned')
+
+
+def test_a_contested_row_is_left_for_the_user_however_strong_the_evidence():
+    """157 prior payments, and it still must not choose — the deciding fact
+    (which job) is not in the statement, so the score is not about this row."""
+    mem = memory([row('ARJUNAN S', 'SITE EXPENSES', purpose='LABOUR')] * 103
+                 + [row('ARJUNAN S', 'FACTORY EXPENSES', purpose='LABOUR')] * 54)
+    d = decide('UPI/P2A/608304124225/ARJUNAN S           /labour/AXIS BANK', 'axis', mem)
+    assert d.category == 'UNCATEGORIZED'
+    assert d.source == 'suggested'
+    assert 'depends which job' in d.explanation
+
+
+def test_credits_are_still_settled_by_the_flag():
+    mem = memory([row('ANY', 'SITE EXPENSES')] * 20)
+    d = decide('NEFT CR-CNRB0000967-SV CONSTRUCTIONS-VISMA ASSOCIA', 'kvb', mem, drcr='CR')
+    assert (d.category, d.source) == ('AMOUNT RECEIVED', 'credit')
+
+
+def test_without_a_memory_nothing_changes():
+    """The CLI and Excel-only paths must behave exactly as they did before."""
+    narration = 'UPI/P2A/608304124225/PUSHPARAJ R          /porter/CANARA BANK'
+    d = decide(narration, 'axis', None)
+    assert d.source == 'keyword'
+    assert d.confidence is None

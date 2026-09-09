@@ -154,11 +154,18 @@ def report_mode(label, test, predict, show):
     by_signal = collections.defaultdict(lambda: [0, 0])
     misses = []
     no_suggestion = 0
+    contested_held = contested_would_be_right = 0
 
     for row in test:
         suggestion = predict(row)
         if suggestion is None:
             no_suggestion += 1
+            continue
+        if suggestion.contested:
+            # Never applied by decide_category(), so it must not be scored as
+            # though it were — it goes to the review queue like an unseen row.
+            contested_held += 1
+            contested_would_be_right += int(suggestion.category == row['category'])
             continue
         band = band_for(suggestion.confidence)
         correct = suggestion.category == row['category']
@@ -175,6 +182,12 @@ def report_mode(label, test, predict, show):
     print(f"\n    --- {label}")
     print(f"        no suggestion at all          : {no_suggestion}/{len(test)}"
           f" = {pct(no_suggestion, len(test))}")
+    if contested_held:
+        # The cost of the contested rule, stated plainly: how many rows it
+        # holds back, and how often it was holding back a correct answer.
+        print(f"        held: contested pair          : {contested_held}/{len(test)}"
+              f" = {pct(contested_held, len(test))}"
+              f"  (would have been right {pct(contested_would_be_right, contested_held)})")
     print(f"        {'band':>12}  {'n':>5}  {'correct':>8}  {'precision':>10}"
           f"  {'cum n':>6}  {'cum prec':>9}")
 

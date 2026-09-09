@@ -352,6 +352,19 @@ def decide_category(particulars: str, dr_cr_indicator: str, vendor_match,
         purpose = extract_purpose(particulars, getattr(vendor_match, 'family', None))
         suggestion = memory.suggest(getattr(vendor_match, 'vendor', None), purpose)
 
+    # A contested pair is never applied, however confident the score looks.
+    # The categories in CONTESTED_CATEGORY_GROUPS are separated by which job
+    # the work was for, and that fact is in nobody's bank statement — so the
+    # score measures which way this payee usually goes, not which way this
+    # payment goes. Leaving the row blank for a person to assign is
+    # recoverable; filing it to the wrong job silently is not.
+    if (suggestion is not None
+            and suggestion.contested
+            and suggestion.confidence >= REVIEW_CONFIDENCE):
+        return CategoryDecision('UNCATEGORIZED', 'UC', 'suggested',
+                                round(suggestion.confidence, 3),
+                                _explain(suggestion))
+
     if suggestion is not None and suggestion.confidence >= AUTO_APPLY_CONFIDENCE:
         return CategoryDecision(
             suggestion.category,
@@ -379,6 +392,11 @@ def _explain(suggestion) -> str:
     """One line a person can check the guess against."""
     seen = int(round(suggestion.support))
     share = int(round(suggestion.purity * 100))
+    if suggestion.contested:
+        # Say what is actually being asked of them: pick the job, not check a guess.
+        return (f"{suggestion.matched_vendor}: {share}% of ~{seen} past payments were "
+                f"{suggestion.category}, the rest {suggestion.runner_up} — "
+                f"depends which job, so left for you to assign")
     if suggestion.signal == 'purpose':
         return (f"payment remark \"{suggestion.matched_vendor}\" meant "
                 f"{suggestion.category} in {share}% of ~{seen} past payments")

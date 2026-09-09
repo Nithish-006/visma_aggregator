@@ -142,5 +142,13 @@ stamps `'manual'`, which is what stops the memory learning from its own
 guesses. Rows scored between `REVIEW_CONFIDENCE` and `AUTO_APPLY_CONFIDENCE`
 stay UNCATEGORIZED and surface under the dashboard's "Needs review" filter.
 
+**Some categories are never auto-applied.** SITE vs FACTORY EXPENSES (and the
+TRANSPORT/rent family) are separated by *which job the work was for*, which
+appears nowhere in a bank statement — the same payee, same remark, same amount,
+days apart, goes both ways. `CONTESTED_CATEGORY_GROUPS` lists them; when the
+winner and runner-up sit in one group and the runner-up holds a real share, the
+row is held for the user to assign however high the score. They are still
+learned from — only genuinely divided payees stop.
+
 Thresholds are measured, not chosen — re-run
 `python scripts/category_memory_dryrun.py --prod` after new statements land.

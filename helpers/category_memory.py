@@ -100,14 +100,62 @@ _FUZZY_MATCH_FACTOR = 0.9
 # Thresholds, measured rather than chosen
 # ---------------------------------------------------------------------------
 # scripts/category_memory_dryrun.py holds out the most recent quarter of each
-# bank table and scores the bands. At the time of writing, on production:
+# bank table and scores the bands. At the time of writing, on production, with
+# the contested-pair rule below in force:
 #
-#            rows >= AUTO   precision      unseen    overall (was keyword)
-#   KVB       111 of 181      97.3%         12.7%     82.3%  (15.5%)
-#   Axis       77 of 436      88.3%         15.1%     53.7%  (12.4%)
+#            rows >= AUTO   precision   held: contested   unseen   (was keyword)
+#   KVB       111 of 181      97.3%          4.4%          12.7%      15.5%
+#   Axis       71 of 436      91.5%         28.4%          15.1%      12.4%
+#
+# Axis applies to far fewer rows than KVB, and that is the intended shape
+# rather than a shortfall: most of the difference is the contested pairs,
+# where the client has said the answer is not in the statement at all.
 #
 # Re-run it after a few more statements land; if precision above AUTO drifts
 # below ~85% the bar should move up, not the expectations.
+
+#: Categories a bank statement cannot separate, because the fact that decides
+#: between them never reaches it.
+#:
+#: The client's own words: which of these a labour payment belongs to "depends
+#: which job it was for" — and the job is not in the narration, the vendor, the
+#: remark or the amount. The same man, paid for LABOUR, four days apart, ₹300
+#: each time, is SITE one week and FACTORY the next. There is no rule to learn,
+#: so a confident guess here is a coin flip wearing a percentage.
+#:
+#: When the winner and runner-up sit in one group and the runner-up holds a
+#: real share, the row is held for review instead of applied. It is *not*
+#: excluded from learning: a payee who is 94% SITE is still settled, and only
+#: the genuinely divided ones stop.
+#:
+#: This costs coverage on purpose. Leaving a row blank for a person to assign
+#: is recoverable; filing it to the wrong job silently is not.
+CONTESTED_CATEGORY_GROUPS = (
+    frozenset({'SITE EXPENSES', 'FACTORY EXPENSES'}),
+    frozenset({'TRANSPORT EXPENSES', 'TRUCK RENT', 'AUTO RENT',
+               'TRAILER RENT', 'HYDRA RENT', 'CRANE RENT'}),
+    frozenset({'SITE EXPENSES', 'LABOUR PAYMENT', 'CONTRACT PAYMENT'}),
+)
+
+#: How much of the evidence the runner-up must hold before a contested pair
+#: counts as genuinely divided. Below this the winner is simply the answer —
+#: a payee who is 58 SITE to 4 FACTORY has been settled by the user in
+#: practice, and holding those rows back would be noise, not caution.
+#:
+#: Swept against the Axis holdout at the auto-apply bar:
+#:
+#:   share   applied  wrong  precision   held  (of which right)
+#:   off          77      9      88.3%      0
+#:   0.20         77      9      88.3%      0
+#:   0.15         74      7      90.5%      3   1
+#:   0.10         71      6      91.5%      6   3
+#:   0.05         69      6      91.3%      8   5
+#:
+#: 0.10 buys the last avoidable error; 0.05 only starts holding back correct
+#: answers. The differences here are one or two rows, so this is chosen as
+#: much on the client's stated preference — when in doubt leave it blank and
+#: they will assign it — as on the margin in the table.
+CONTESTED_RUNNER_UP_SHARE = 0.10
 
 #: At or above this, the category is written as if a person had chosen it.
 AUTO_APPLY_CONFIDENCE = 0.80
@@ -129,7 +177,7 @@ _MASKED_RE = re.compile(r'^x+\d*$', re.IGNORECASE)
 CategorySuggestion = namedtuple(
     'CategorySuggestion',
     'category code confidence purity support match_kind matched_vendor runner_up '
-    'signal')
+    'signal contested')
 
 
 # ============================================================================
@@ -436,6 +484,14 @@ class CategoryMemory:
         support = min(1.0, total / self._saturation) if self._saturation else 1.0
         factor = _FUZZY_MATCH_FACTOR if match_kind in ('anchor', 'fuzzy') else 1.0
 
+        runner_up = ranked[1][0] if len(ranked) > 1 else None
+        contested = bool(
+            runner_up
+            and ranked[1][1] / total >= CONTESTED_RUNNER_UP_SHARE
+            and any({category, runner_up} <= group
+                    for group in CONTESTED_CATEGORY_GROUPS)
+        )
+
         return CategorySuggestion(
             category=category,
             code=evidence.codes.get(category),
@@ -446,8 +502,9 @@ class CategoryMemory:
             support=total,
             match_kind=match_kind,
             matched_vendor=display,
-            runner_up=ranked[1][0] if len(ranked) > 1 else None,
+            runner_up=runner_up,
             signal=signal,
+            contested=contested,
         )
 
 
