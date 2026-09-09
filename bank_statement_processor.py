@@ -388,8 +388,25 @@ def decide_category(particulars: str, dr_cr_indicator: str, vendor_match,
     return CategoryDecision(category, code, 'keyword', None, None)
 
 
+#: category_note is VARCHAR(255). The note is built from a vendor name parsed
+#: out of a narration, which nothing bounds, so it is clamped here rather than
+#: left to MySQL — under strict mode an over-length value is an error, and that
+#: error would fail the whole upload batch over a cosmetic string.
+_MAX_NOTE_CHARS = 255
+
+
 def _explain(suggestion) -> str:
     """One line a person can check the guess against."""
+    return _clamp(_compose_explanation(suggestion))
+
+
+def _clamp(note: str) -> str:
+    if len(note) <= _MAX_NOTE_CHARS:
+        return note
+    return note[:_MAX_NOTE_CHARS - 1].rstrip() + '…'
+
+
+def _compose_explanation(suggestion) -> str:
     seen = int(round(suggestion.support))
     share = int(round(suggestion.purity * 100))
     if suggestion.contested:

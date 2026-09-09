@@ -302,3 +302,17 @@ def test_without_a_memory_nothing_changes():
     d = decide(narration, 'axis', None)
     assert d.source == 'keyword'
     assert d.confidence is None
+
+
+def test_the_note_can_never_overflow_its_column():
+    """category_note is VARCHAR(255) and the vendor name inside it is parsed
+    from a narration, so nothing bounds it upstream. Under strict mode an
+    over-length value is an error that would fail the whole upload batch."""
+    from bank_statement_processor import _explain, _MAX_NOTE_CHARS
+    from helpers.category_memory import CategorySuggestion
+    monster = CategorySuggestion(
+        category='X' * 80, code='XX', confidence=0.9, purity=0.64, support=207.0,
+        match_kind='exact', matched_vendor='V' * 300, runner_up='Y' * 80,
+        signal='both', contested=True)
+    assert len(_explain(monster)) <= _MAX_NOTE_CHARS
+    assert len(_explain(monster._replace(contested=False))) <= _MAX_NOTE_CHARS
