@@ -114,3 +114,41 @@ Categories are defined in `bank_statement_processor.py` with pattern matching:
 - OFFICE EXP (OE), FACTORY EXP (FE), SITE EXP (SE), TRANSPORT EXP (TE)
 - MATERIAL PURCHASE (MP), DUTIES & TAX (DT), SALARY AC (SA), BANK CHARGES (BC)
 - AMOUNT RECEIVED (AR) - auto-assigned to all credit transactions
+
+Users have since typed many more (CRANE RENT, AUTO RENT, CAPITAL AC, LABOUR
+PAYMENT, ...) that appear in no keyword list, so keyword scoring alone cannot
+reach them. See below.
+
+### Categorisation on upload
+
+`decide_category()` in `bank_statement_processor.py` decides one row, in order:
+
+1. **Credit → AMOUNT RECEIVED**, structurally, from the DR/CR flag.
+2. **Vendor + payment-remark history** (`helpers/category_memory.py`), when
+   confident enough. This is the only path that can produce the typed-in
+   categories above.
+3. **Keyword scoring** (`categorize_transaction`), unchanged, as fallback.
+
+The memory is built once per upload by `helpers/category_loader.py` from rows
+already settled in the bank table, grouped by the vendor-identity rules in
+`helpers/bill_reconcile.py` — so vendor aliases taught to the material
+reconciler improve categorisation too. The second signal is the remark the
+payer typed, which both banks carry in a family-specific narration slot
+(`extract_purpose`); NEFT/RTGS narrations end in a *branch*, not a remark.
+
+Provenance is stored per row in `category_source` / `category_confidence` /
+`category_note` (migration: `migrations/add_category_source.py`). A human edit
+stamps `'manual'`, which is what stops the memory learning from its own
+guesses. Rows scored between `REVIEW_CONFIDENCE` and `AUTO_APPLY_CONFIDENCE`
+stay UNCATEGORIZED and surface under the dashboard's "Needs review" filter.
+
+**Some categories are never auto-applied.** SITE vs FACTORY EXPENSES (and the
+TRANSPORT/rent family) are separated by *which job the work was for*, which
+appears nowhere in a bank statement — the same payee, same remark, same amount,
+days apart, goes both ways. `CONTESTED_CATEGORY_GROUPS` lists them; when the
+winner and runner-up sit in one group and the runner-up holds a real share, the
+row is held for the user to assign however high the score. They are still
+learned from — only genuinely divided payees stop.
+
+Thresholds are measured, not chosen — re-run
+`python scripts/category_memory_dryrun.py --prod` after new statements land.

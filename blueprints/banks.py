@@ -19,6 +19,7 @@ from extensions import db_manager, state
 from bank_statement_processor import process_bank_statement
 from helpers.formatting import format_indian_number, sanitize_for_excel, safe_col_width
 from helpers.bankdata import get_bank_df, reload_bank_data
+from helpers.category_loader import get_category_memory
 from helpers.dataframe import (
     filter_by_date_range, filter_by_category, filter_by_vendor,
     filter_by_project,
@@ -426,6 +427,7 @@ def get_bank_transactions_paginated(bank_code):
     search = request.args.get('search', None)
     sort_by = request.args.get('sort_by', 'date')
     sort_order = request.args.get('sort_order', 'desc')
+    needs_review = request.args.get('needs_review', '').lower() in ('1', 'true', 'yes')
 
     # Get paginated data directly from database
     result = db_manager.get_paginated_transactions(
@@ -439,7 +441,8 @@ def get_bank_transactions_paginated(bank_code):
         end_date=end_date,
         search=search,
         sort_by=sort_by,
-        sort_order=sort_order
+        sort_order=sort_order,
+        needs_review=needs_review
     )
 
     # Format transactions for frontend
@@ -475,11 +478,17 @@ def get_bank_transactions_paginated(bank_code):
             'net': net,
             'net_formatted': format_indian_number(net),
             'project': row_project,
+            # Where this category came from, so the row can show its working.
+            'category_source': row.get('Category Source') or '',
+            'category_confidence': (float(row['Category Confidence'])
+                                    if row.get('Category Confidence') is not None else None),
+            'category_note': row.get('Category Note') or '',
         })
 
     # Also return filtered options so dropdowns can update in the same response
     has_active_filters = any([
-        category and category != 'All', project, vendor, start_date, end_date, search
+        category and category != 'All', project, vendor, start_date, end_date,
+        search, needs_review
     ])
 
     if has_active_filters:
@@ -532,6 +541,19 @@ def get_bank_filter_options(bank_code):
     return jsonify(options)
 
 
+def _categorization_stats(df):
+    """How the just-processed statement was categorised, by provenance.
+
+    ``learned`` was written from history, ``suggested`` is waiting for a person
+    in the review filter, ``keyword`` fell through to the old scoring, and
+    ``credit`` was settled by the DR/CR flag.
+    """
+    if df is None or df.empty or 'Category Source' not in df.columns:
+        return {}
+    counts = df['Category Source'].value_counts(dropna=True)
+    return {str(source): int(n) for source, n in counts.items()}
+
+
 @bp.route('/api/<bank_code>/upload', methods=['POST'])
 @login_required
 def upload_bank_statement(bank_code):
@@ -561,7 +583,15 @@ def upload_bank_statement(bank_code):
         file.save(filepath)
 
 
-        df = process_bank_statement(filepath, bank_code, password=password)
+        # What this bank's vendors and payment remarks have meant before. Built
+        # once for the whole file, from rows already settled in the DB — so a
+        # category the user fixed yesterday categorises today's upload. Falls
+        # back to an empty memory (i.e. keyword scoring) if history can't be
+        # read, which must never block an upload.
+        memory = get_category_memory(bank_code) if Config.USE_DATABASE else None
+
+        df = process_bank_statement(filepath, bank_code, password=password,
+                                    memory=memory)
 
         if Config.USE_DATABASE:
 
@@ -602,7 +632,10 @@ def upload_bank_statement(bank_code):
                     'inserted': results['inserted'],
                     'duplicates': results['duplicates'],
                     'errors': results['errors']
-                }
+                },
+                # So the user can see at a glance how much of the statement the
+                # memory handled, and how much still wants their eyes.
+                'categorization': _categorization_stats(df)
             })
         else:
             output_file = filepath.replace('.xlsx', '_PROCESSED.xlsx')
@@ -681,6 +714,10 @@ def update_bank_transaction(bank_code):
                 # DATETIME transaction_date column). Fall back to the legacy value
                 # match only when no id is supplied.
                 if transaction_id is not None:
+                    # Stamping 'manual' is what keeps the vendor-history
+                    # categoriser honest: it must be able to tell a person's
+                    # ruling from its own earlier guess, or it starts learning
+                    # from itself and drifts without anyone noticing.
                     query = f"""
                     UPDATE {table}
                     SET
@@ -688,6 +725,9 @@ def update_bank_transaction(bank_code):
                         code = %s,
                         client_vendor = %s,
                         project = %s,
+                        category_source = 'manual',
+                        category_confidence = NULL,
+                        category_note = NULL,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = %s
                     LIMIT 1
@@ -701,6 +741,9 @@ def update_bank_transaction(bank_code):
                         code = %s,
                         client_vendor = %s,
                         project = %s,
+                        category_source = 'manual',
+                        category_confidence = NULL,
+                        category_note = NULL,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE DATE(transaction_date) = %s
                       AND transaction_description = %s

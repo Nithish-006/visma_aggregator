@@ -131,6 +131,18 @@ _SPLIT_TAG_RE = re.compile(r'\[SPLIT\s*\d+\s*/\s*\d+\]')
 _NON_ALNUM_RE = re.compile(r'[^A-Za-z0-9]')
 
 
+def _none_if_missing(value):
+    """NULL for anything pandas may hand back as absent (None, NaN, NaT)."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    return value
+
+
 def _txn_dedup_key(description) -> str:
     s = '' if description is None else str(description)
     norm_prefix = _NON_ALNUM_RE.sub('', s).upper()[:40]
@@ -439,8 +451,9 @@ class DatabaseManager:
         query_template = f"""
         INSERT IGNORE INTO {table} (
             transaction_date, transaction_description, client_vendor,
-            category, code, dr_amount, cr_amount, project
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            category, code, dr_amount, cr_amount, project,
+            category_source, category_confidence, category_note
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         try:
@@ -466,7 +479,14 @@ class DatabaseManager:
                             row['Code'],
                             float(row['DR Amount']),
                             float(row['CR Amount']),
-                            row.get('Project')
+                            row.get('Project'),
+                            # A statement processed without a memory carries no
+                            # provenance at all, and pandas turns a column of
+                            # mixed None/float into NaN — neither is a value
+                            # MySQL should see.
+                            _none_if_missing(row.get('Category Source')),
+                            _none_if_missing(row.get('Category Confidence')),
+                            _none_if_missing(row.get('Category Explanation')),
                         ))
                     except Exception as e:
                         results['errors'] += 1
@@ -551,6 +571,45 @@ class DatabaseManager:
         """
         return self.fetch_dataframe(query)
 
+    def get_categorization_history(self, bank_code: str = 'axis') -> List[Dict]:
+        """Settled transactions, as evidence for categorising the next upload.
+
+        Deliberately narrow and deliberately not a DataFrame: this feeds
+        ``helpers/category_memory``, which wants plain rows, and is read on
+        every upload. Uncategorised rows are excluded in SQL rather than in
+        Python — they are evidence of nothing and there is no reason to carry
+        them across the wire.
+        """
+        table = self.get_table_name(bank_code)
+        query = f"""
+        SELECT transaction_date, transaction_description, client_vendor,
+               category, code, cr_amount
+        FROM {table}
+        WHERE category IS NOT NULL
+          AND category <> ''
+          AND UPPER(category) <> 'UNCATEGORIZED'
+        """
+        rows = []
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query)
+                for date, description, vendor, category, code, cr in cursor.fetchall():
+                    rows.append({
+                        'date': date,
+                        'description': description or '',
+                        'vendor': vendor,
+                        'category': category,
+                        'code': code,
+                        'is_credit': float(cr or 0) > 0,
+                    })
+                cursor.close()
+        except Exception as e:
+            # An upload must never fail because the history could not be read;
+            # the processor falls back to keyword scoring on an empty memory.
+            print(f"[!] Could not read categorization history for {bank_code}: {e}")
+        return rows
+
     def get_transaction_count(self, bank_code: str = 'axis') -> int:
         """Get total number of transactions for a specific bank"""
         table = self.get_table_name(bank_code)
@@ -560,7 +619,8 @@ class DatabaseManager:
     def get_paginated_transactions(self, bank_code: str = 'axis', page: int = 1, per_page: int = 50,
                                     category: str = None, project: str = None, vendor: str = None,
                                     start_date: str = None, end_date: str = None, search: str = None,
-                                    sort_by: str = 'date', sort_order: str = 'desc') -> Dict:
+                                    sort_by: str = 'date', sort_order: str = 'desc',
+                                    needs_review: bool = False) -> Dict:
         """
         Get paginated transactions with filters applied at database level.
         Returns dict with 'transactions' list and 'total' count.
@@ -578,6 +638,12 @@ class DatabaseManager:
                 placeholders = ','.join(['%s'] * len(categories))
                 conditions.append(f"category IN ({placeholders})")
                 params.extend(categories)
+
+        # Rows the categoriser had an opinion about but was not sure enough to
+        # apply. Deliberately the only way to reach them in bulk: a guess the
+        # user never sees is a guess that never gets corrected.
+        if needs_review:
+            conditions.append("category_source = 'suggested'")
 
         # Project filter (supports multiple comma-separated values)
         if project:
@@ -639,7 +705,10 @@ class DatabaseManager:
             code as Code,
             dr_amount as `DR Amount`,
             cr_amount as `CR Amount`,
-            project as Project
+            project as Project,
+            category_source as `Category Source`,
+            category_confidence as `Category Confidence`,
+            category_note as `Category Note`
         FROM {table}
         WHERE {where_clause}
         ORDER BY {sort_column} {sort_direction}, id {sort_direction}
@@ -2242,6 +2311,53 @@ class DatabaseManager:
                 return True
         except Exception as e:
             print(f"[!] Error ensuring validation columns: {e}")
+            return False
+
+    def ensure_category_source_columns(self):
+        """Additive migration: record where each row's category came from.
+
+        Without this, the memory cannot tell a person's ruling from its own
+        earlier guess, and would learn from itself — the one failure mode that
+        makes a system like this drift quietly instead of visibly.
+
+        - category_source     'manual' | 'learned' | 'suggested' | 'keyword' | 'credit'
+        - category_confidence the score behind a learned/suggested answer
+        - category_note       the one-line explanation shown in the dashboard
+
+        Existing rows stay NULL, which is read as "predates the memory". They
+        are still learned from: the tables are heavily hand-curated, so a
+        settled category on an old row is the user's, not the parser's.
+        """
+        specs = [
+            ("category_source",
+             "ALTER TABLE {t} ADD COLUMN category_source "
+             "VARCHAR(16) NULL AFTER code"),
+            ("category_confidence",
+             "ALTER TABLE {t} ADD COLUMN category_confidence "
+             "DECIMAL(4,3) NULL AFTER category_source"),
+            ("category_note",
+             "ALTER TABLE {t} ADD COLUMN category_note "
+             "VARCHAR(255) NULL AFTER category_confidence"),
+        ]
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                for bank_code in BANK_CONFIG:
+                    table = self.get_table_name(bank_code)
+                    for column, alter_sql in specs:
+                        cursor.execute(
+                            "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s "
+                            "AND COLUMN_NAME = %s",
+                            (table, column)
+                        )
+                        if cursor.fetchone()[0] == 0:
+                            cursor.execute(alter_sql.format(t=table))
+                cursor.close()
+                print("[+] Category source columns ensured")
+                return True
+        except Exception as e:
+            print(f"[!] Error ensuring category source columns: {e}")
             return False
 
     def revalidate_existing_bills(self) -> Dict:
