@@ -1242,9 +1242,66 @@ html, body {
 
 .proj-po-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.6rem;
 }
-.proj-po-actions button { flex: 1; }
+/* Three buttons now, so they share a row while it fits and wrap to full width
+   rather than squeezing "Replace document" down to an ellipsis. */
+.proj-po-actions button {
+    flex: 1 1 8.5rem;
+    white-space: nowrap;
+}
+
+/* -- Replace the PO document ------------------------------------------- */
+/* Framed like the values editor it sits beside, because it is the same kind of
+   thing: a form that supersedes what the panel above is showing. */
+.proj-po-replace {
+    margin-top: 0.85rem;
+    padding: 0.9rem 1rem 1rem;
+    background: var(--proj-surface-soft);
+    border: 1px solid var(--proj-border-strong);
+    border-radius: 10px;
+}
+.proj-po-replace-now {
+    margin: 0 0 0.9rem;
+    font-size: 0.82rem;
+    color: var(--proj-text-muted);
+}
+.proj-po-replace-now strong {
+    color: var(--proj-text);
+    font-weight: 600;
+    word-break: break-all;
+}
+.proj-po-replace .proj-field-label { display: block; margin-bottom: 0.35rem; }
+.proj-po-mode { margin-bottom: 0.6rem; }
+/* "A different PO" is the option that deletes the ledgers, so the segment says
+   so in colour before the sentence underneath spells it out. */
+.proj-po-mode input[value="new"]:checked + span {
+    background: linear-gradient(135deg, #f87171 0%, var(--proj-danger) 100%);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
+
+/* What the chosen mode will actually do, counted from this project. Neutral
+   while nothing is at stake; danger-tinted once rows are going to be deleted. */
+.proj-po-replace-effect {
+    margin: 0 0 0.9rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 8px;
+    background: var(--proj-surface);
+    border: 1px solid var(--proj-border);
+    color: var(--proj-text-dim);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+.proj-po-replace-effect.is-destructive {
+    background: var(--proj-danger-soft);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: var(--proj-danger);
+}
+.proj-po-replace-effect strong { font-weight: 700; }
+
+.proj-po-replace-file { display: block; }
+.proj-po-replace .proj-modal-footer { margin-top: 1rem; }
 
 @media (max-width: 640px) {
     .proj-gist-grid { grid-template-columns: 1fr; }

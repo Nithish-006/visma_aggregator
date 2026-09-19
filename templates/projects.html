@@ -264,11 +264,46 @@
                                 <p id="detail-po-edit-error" class="proj-error hidden"></p>
                             </form>
 
+                            <!-- Replace the document itself (hidden until "Replace document" clicked).
+                                 Its one real question is whether the incoming file is the same
+                                 order or a different one, because that decides whether the
+                                 variations and actuals below survive it. -->
+                            <form id="detail-po-replace-form" class="proj-po-replace hidden">
+                                <p class="proj-po-replace-now">
+                                    Superseding <strong id="detail-po-replace-current">the file on record</strong>
+                                </p>
+
+                                <span class="proj-field-label">Which document is this?</span>
+                                <div class="proj-type-toggle proj-type-toggle--full proj-po-mode" role="radiogroup" aria-label="Replacement kind">
+                                    <label class="proj-type-option">
+                                        <input type="radio" name="po_replace_mode" value="revision" checked>
+                                        <span>Revision of this PO</span>
+                                    </label>
+                                    <label class="proj-type-option">
+                                        <input type="radio" name="po_replace_mode" value="new">
+                                        <span>A different PO</span>
+                                    </label>
+                                </div>
+                                <p id="detail-po-replace-effect" class="proj-po-replace-effect"></p>
+
+                                <label class="proj-po-replace-file">
+                                    <span class="proj-field-label">New PO document</span>
+                                    <input id="detail-po-replace-input" name="po_file" class="proj-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.xls,.docx,.doc" required>
+                                </label>
+                                <p class="proj-note">The figures above are re-read from this file and replace the stored ones, hand-corrected values included. The superseded document is kept on disk.</p>
+                                <div class="proj-modal-footer">
+                                    <button type="button" id="detail-po-replace-cancel" class="proj-secondary-btn">Cancel</button>
+                                    <button type="submit" id="detail-po-replace-submit" class="proj-primary-btn">Upload &amp; process</button>
+                                </div>
+                                <p id="detail-po-replace-error" class="proj-error hidden"></p>
+                            </form>
+
                             <div id="detail-po-actions" class="proj-po-actions">
                                 <button type="button" id="detail-po-reprocess" class="proj-secondary-btn">Reprocess PO</button>
+                                <button type="button" id="detail-po-replace-btn" class="proj-secondary-btn">Replace document</button>
                                 <button type="button" id="detail-po-edit-btn" class="proj-primary-btn">Edit PO values</button>
                             </div>
-                            <p class="proj-note">PO file is locked to keep naming consistent. You can reprocess the file or correct the extracted values.</p>
+                            <p class="proj-note"><strong>Reprocess</strong> re-reads the file already on record, <strong>Replace document</strong> swaps in a revised or different PO and re-reads that, and <strong>Edit PO values</strong> corrects the figures by hand.</p>
                         </div>
                     </div>
 

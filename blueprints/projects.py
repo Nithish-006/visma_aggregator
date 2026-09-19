@@ -92,6 +92,39 @@ def _po_summary_for_response(project_id):
     return po
 
 
+def _save_po_upload(project_id, file):
+    """Write an uploaded PO onto disk under the project, timestamp-named.
+
+    Shared by the first attach and by a replacement, so both land in the same
+    place under the same naming rule and neither can overwrite the other's
+    document. Returns (abs_path, rel_path, stored_filename), or
+    (None, None, error_message) if there is nothing usable to save.
+    """
+    if not file or not file.filename:
+        return None, None, 'No file provided'
+    if not _project_po_allowed(file.filename):
+        return None, None, 'Unsupported PO file type'
+
+    safe = secure_filename(file.filename)
+    ts = now_ist().strftime('%Y%m%d_%H%M%S')
+    po_filename = f"{ts}_{safe}"
+    proj_dir = os.path.join(PROJECTS_UPLOAD_ROOT, str(project_id))
+    os.makedirs(proj_dir, exist_ok=True)
+    abs_path = os.path.join(proj_dir, po_filename)
+    rel_path = os.path.relpath(abs_path, Config.UPLOAD_FOLDER).replace('\\', '/')
+    file.save(abs_path)
+    return abs_path, rel_path, po_filename
+
+
+def _discard_po_upload(abs_path):
+    """Roll back a just-written upload after the DB refused it."""
+    if abs_path and os.path.exists(abs_path):
+        try:
+            os.remove(abs_path)
+        except OSError:
+            pass
+
+
 def _run_po_extraction(project_id, abs_path, filename, *, force=False):
     """Extract a PO's gist and upsert into project_pos.
 
@@ -786,28 +819,14 @@ def api_upload_project_po(project_id):
         return jsonify({'error': 'po_already_attached',
                         'message': 'This project already has a PO; editing is disabled.'}), 409
 
-    file = request.files.get('po_file')
-    if not file or not file.filename:
-        return jsonify({'error': 'No file provided'}), 400
-    if not _project_po_allowed(file.filename):
-        return jsonify({'error': 'Unsupported PO file type'}), 400
-
-    safe = secure_filename(file.filename)
-    ts = now_ist().strftime('%Y%m%d_%H%M%S')
-    po_filename = f"{ts}_{safe}"
-    proj_dir = os.path.join(PROJECTS_UPLOAD_ROOT, str(project_id))
-    os.makedirs(proj_dir, exist_ok=True)
-    po_save_path = os.path.join(proj_dir, po_filename)
-    po_rel_path = os.path.relpath(po_save_path, Config.UPLOAD_FOLDER).replace('\\', '/')
-    file.save(po_save_path)
+    po_save_path, po_rel_path, po_filename = _save_po_upload(
+        project_id, request.files.get('po_file'))
+    if po_save_path is None:
+        return jsonify({'error': po_filename}), 400
 
     ok, err = db_manager.attach_project_po(project_id, po_filename, po_rel_path)
     if not ok:
-        if os.path.exists(po_save_path):
-            try:
-                os.remove(po_save_path)
-            except OSError:
-                pass
+        _discard_po_upload(po_save_path)
         return jsonify({'error': err or 'attach_failed'}), 409
 
     po_summary = _run_po_extraction(project_id, po_save_path, po_filename, force=True)
@@ -816,6 +835,83 @@ def api_upload_project_po(project_id):
         'success': True,
         'project': db_manager.get_project(project_id),
         'po': po_summary,
+    })
+
+
+# What replacing a PO document means for the ledgers hanging off it. Both are
+# written against one specific contract, so the answer turns entirely on whether
+# the incoming document is the same order or a different one — which only the
+# person holding both documents can say, so the client states it.
+#
+#   revision  the same order re-issued: a corrected rate, an amended date, a
+#             clean scan of the one already on file. The agreed changes and the
+#             measured work still belong to it, so both ledgers are left alone.
+#   new       a different order supersedes this one. Its variations and actuals
+#             restated the OLD contract's scope and would silently restate the
+#             new one, so they are cleared — the replacement starts from the
+#             document, with nothing carried over.
+PO_REPLACE_MODES = ('revision', 'new')
+
+
+@bp.route('/api/projects/<int:project_id>/replace-po', methods=['POST'])
+@login_required
+def api_replace_project_po(project_id):
+    """Swap in a revised or brand-new PO document and re-extract its figures.
+
+    Always replaces the stored gist outright (force, so a hand-corrected row
+    goes too — those corrections described the document being superseded).
+    With mode='new' it also empties the variation and actuals ledgers, leaving
+    the contract standing at the incoming PO alone.
+    """
+    project = db_manager.get_project(project_id)
+    if not project:
+        return jsonify({'error': 'not_found'}), 404
+    if not project.get('po_path'):
+        return jsonify({'error': 'no_po',
+                        'message': 'No PO is attached yet — upload one instead.'}), 400
+
+    mode = (request.form.get('mode') or 'revision').strip().lower()
+    if mode not in PO_REPLACE_MODES:
+        return jsonify({'error': 'invalid_mode',
+                        'message': "mode must be 'revision' or 'new'."}), 400
+
+    po_save_path, po_rel_path, po_filename = _save_po_upload(
+        project_id, request.files.get('po_file'))
+    if po_save_path is None:
+        return jsonify({'error': po_filename}), 400
+
+    old_path, err = db_manager.replace_project_po_file(
+        project_id, po_filename, po_rel_path)
+    if err:
+        _discard_po_upload(po_save_path)
+        return jsonify({'error': 'replace_failed', 'message': err}), 400
+
+    print(f"[+] Project {project_id} PO replaced ({mode}): {old_path} -> {po_rel_path}")
+
+    # Cleared before extracting, so the summary the extraction hands back
+    # already shows the contract the caller asked for.
+    cleared = {}
+    if mode == 'new':
+        for kind, key in (('variation', 'variations'), ('actual', 'actuals')):
+            count, cerr = db_manager.clear_po_ledger(project_id, kind)
+            cleared[key] = count
+            if cerr:
+                print(f"[!] Could not clear {kind}s for project {project_id}: {cerr}")
+
+    po_summary = _run_po_extraction(project_id, po_save_path, po_filename, force=True)
+
+    # A document we could not read is reported as a failure even though the swap
+    # itself stuck: "View PO document" now serves the new file, so its figures
+    # have to be typed in by hand rather than inherited from a document nobody
+    # is looking at any more. The superseded file stays on disk untouched.
+    failed = bool(po_summary and po_summary.get('extraction_status') == 'failed')
+    return jsonify({
+        'success': not failed,
+        'mode': mode,
+        'cleared': cleared,
+        'project': db_manager.get_project(project_id),
+        'po': po_summary,
+        'message': ((po_summary or {}).get('extraction_error') if failed else None),
     })
 
 

@@ -3965,6 +3965,41 @@ class DatabaseManager:
         except Exception as e:
             return False, str(e)
 
+    def replace_project_po_file(self, project_id: int, po_filename: str,
+                                po_path: str) -> Tuple[Optional[str], Optional[str]]:
+        """Point a project at a newly uploaded PO document, returning the old path.
+
+        The mirror image of attach_project_po: that one refuses to touch a
+        project that already has a file, this one requires one to be there. A PO
+        does get superseded — a revised document from the client, or a fresh
+        order replacing it — and the file used to be a one-shot write, so the
+        only way to follow a superseded PO was to retype its figures underneath
+        a document that no longer matched them.
+
+        Returns (previous_po_path, None) on success. The caller keeps that old
+        file on disk (upload names are timestamped, so nothing is overwritten)
+        rather than deleting a document that bills may already cite.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT po_path FROM projects WHERE id = %s", (project_id,))
+                row = cursor.fetchone()
+                if not row:
+                    cursor.close()
+                    return None, 'missing_project'
+                old_path = row[0]
+                cursor.execute(
+                    "UPDATE projects SET po_filename = %s, po_path = %s WHERE id = %s",
+                    (po_filename, po_path, project_id)
+                )
+                conn.commit()
+                cursor.close()
+                return old_path, None
+        except Exception as e:
+            return None, str(e)
+
     # ── Project PO gist (project_pos) ────────────────────────
 
     @staticmethod
@@ -4398,6 +4433,31 @@ class DatabaseManager:
                 return (True, None) if deleted else (False, 'not_found')
         except Exception as e:
             return False, str(e)
+
+    def clear_po_ledger(self, project_id: int, kind: str) -> Tuple[int, Optional[str]]:
+        """Empty one ledger for a project. Returns (rows_deleted, error).
+
+        Only one caller has any business doing this: replacing the PO with a
+        *different* order. Variations and actuals are both written against a
+        specific contract — a variation is a delta on that PO's scope and an
+        actual is that PO's scope as measured — so carrying them over onto an
+        unrelated order would quietly restate the new contract by the old one's
+        history. Row-at-a-time deletion is the only route for everything else,
+        so a misclick in the grid can still only cost one line.
+        """
+        spec = self._ledger(kind)
+        self.ensure_po_ledger_table(kind)
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    f"DELETE FROM {spec['table']} WHERE project_id = %s", (project_id,))
+                deleted = cursor.rowcount
+                conn.commit()
+                cursor.close()
+                return deleted, None
+        except Exception as e:
+            return 0, str(e)
 
     def update_bill(self, invoice_id: int, bill_data: Dict) -> Tuple[bool, Optional[str]]:
         """

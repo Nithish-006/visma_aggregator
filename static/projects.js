@@ -34,6 +34,21 @@
     const editLiAdd = document.getElementById('detail-po-li-add');
     const editLiWarn = document.getElementById('detail-po-li-warn');
 
+    // Replace the PO document (a revision of it, or a different order)
+    const replaceBtn = document.getElementById('detail-po-replace-btn');
+    const replaceForm = document.getElementById('detail-po-replace-form');
+    const replaceCancel = document.getElementById('detail-po-replace-cancel');
+    const replaceInput = document.getElementById('detail-po-replace-input');
+    const replaceError = document.getElementById('detail-po-replace-error');
+    const replaceCurrent = document.getElementById('detail-po-replace-current');
+    const replaceEffect = document.getElementById('detail-po-replace-effect');
+    const replaceModeRadios = () =>
+        Array.from(replaceForm.querySelectorAll('input[name="po_replace_mode"]'));
+    const replaceMode = () => {
+        const on = replaceModeRadios().find(r => r.checked);
+        return on && on.value === 'new' ? 'new' : 'revision';
+    };
+
     const toast = document.getElementById('proj-toast');
 
     const detailOverview = document.getElementById('detail-overview');
@@ -666,11 +681,26 @@
     }
 
     // Revert the inline PO-values form back to the read-only gist.
-    function exitPoEditForm() {
-        editForm.classList.add('hidden');
+    // The PO admin block has three faces and shows exactly one: the action
+    // buttons, the values editor, or the document swap. Routed through here so
+    // opening one can't leave another half-open underneath it.
+    function setPoAdminView(view) {
+        editForm.classList.toggle('hidden', view !== 'edit');
+        replaceForm.classList.toggle('hidden', view !== 'replace');
+        poActions.classList.toggle('hidden', view !== 'actions');
+        // The gist is what the values editor edits, so it steps aside for that
+        // one — but the swap form needs it on screen, because "is this the same
+        // order?" is answered by reading the figures currently on record.
+        gistEl.classList.toggle('hidden', view === 'edit');
         editError.classList.add('hidden');
-        poActions.classList.remove('hidden');
-        gistEl.classList.remove('hidden');
+        replaceError.classList.add('hidden');
+        // Leaving the swap form drops the chosen file and returns the kind to
+        // its safe default, so it can never reopen holding a stale answer.
+        if (view !== 'replace') replaceForm.reset();
+    }
+
+    function exitPoEditForm() {
+        setPoAdminView('actions');
     }
 
     // ── Cash form reveal (+ Add) ───────────────────────
@@ -2442,7 +2472,9 @@
     });
 
     // ── Edit values ────────────────────────────────────
-    editBtn.addEventListener('click', () => {
+    // Split out from the button so a replacement that couldn't be auto-read can
+    // drop the user straight into the form, on the figures they now have to type.
+    function openPoEditForm() {
         const po = currentPo || {};
         editForm.total_value.value = po.total_value ?? '';
         editForm.po_number.value = po.po_number ?? '';
@@ -2454,13 +2486,74 @@
         editForm.payment_terms.value = po.payment_terms ?? '';
         editForm.amount_in_words.value = po.amount_in_words ?? '';
         renderPoEditLineItems(po.line_items);
-        editError.classList.add('hidden');
-        editForm.classList.remove('hidden');
-        poActions.classList.add('hidden');
-        gistEl.classList.add('hidden');
-    });
+        setPoAdminView('edit');
+    }
+
+    editBtn.addEventListener('click', openPoEditForm);
 
     editCancel.addEventListener('click', exitPoEditForm);
+
+    // ── Replace the PO document ───────────────
+    // "Reprocess" re-reads the file already on record; this swaps the file
+    // itself. The one question it has to ask is whether the incoming document is
+    // this same order re-issued or a different one, because the variations and
+    // actuals hanging off a PO were agreed against that *specific* order —
+    // carry them onto an unrelated one and the new contract is silently restated
+    // by the old one's history. So the consequence is spelled out under the
+    // choice, counted from what this project actually holds, before anything is
+    // sent.
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+    function poLedgerCounts() {
+        const vt = (currentPo && currentPo.variation_totals) || { count: 0 };
+        const at = (currentPo && currentPo.actual_totals) || { count: 0 };
+        return { variations: vt.count || 0, actuals: at.count || 0 };
+    }
+
+    // "2 variations and 1 actuals entry", or '' when there is nothing to name.
+    function poLedgerPhrase({ variations, actuals }) {
+        const parts = [];
+        if (variations) parts.push(plural(variations, 'variation', 'variations'));
+        if (actuals) parts.push(plural(actuals, 'actuals entry', 'actuals entries'));
+        return parts.join(' and ');
+    }
+
+    function renderPoReplaceEffect() {
+        const phrase = poLedgerPhrase(poLedgerCounts());
+        const isNew = replaceMode() === 'new';
+        replaceEffect.classList.toggle('is-destructive', isNew && !!phrase);
+        if (!isNew) {
+            replaceEffect.innerHTML = phrase
+                ? `The PO figures are re-read from the new file. This project's ${phrase}
+                   stay as they are — they were agreed against this same order.`
+                : `The PO figures are re-read from the new file. Nothing else on the
+                   project moves.`;
+        } else {
+            replaceEffect.innerHTML = phrase
+                ? `The PO figures are re-read from the new file, and this project's ${phrase}
+                   <strong>will be deleted</strong> — they belong to the order being
+                   superseded. This can't be undone.`
+                : `The PO figures are re-read from the new file. There are no variations or
+                   actuals to clear.`;
+        }
+    }
+
+    replaceBtn.addEventListener('click', () => {
+        replaceForm.reset();
+        replaceCurrent.textContent = detailPoFilename.textContent || 'the file on record';
+        renderPoReplaceEffect();
+        // The gist sits in a fold that starts closed, and you can't judge which
+        // document this is without seeing the one already read.
+        detailPoBlock.open = true;
+        setPoAdminView('replace');
+        replaceForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    replaceCancel.addEventListener('click', exitPoEditForm);
+
+    replaceForm.addEventListener('change', (e) => {
+        if (e.target.name === 'po_replace_mode') renderPoReplaceEffect();
+    });
 
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -2507,6 +2600,89 @@
         } finally {
             btn.disabled = false;
             btn.textContent = 'Save changes';
+        }
+    });
+
+    replaceForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!activeProjectId) return;
+        replaceError.classList.add('hidden');
+        replaceError.textContent = '';
+
+        if (!replaceInput.files || !replaceInput.files[0]) {
+            replaceError.textContent = 'Please choose the new PO document.';
+            replaceError.classList.remove('hidden');
+            return;
+        }
+        const mode = replaceMode();
+        const phrase = poLedgerPhrase(poLedgerCounts());
+        // Wiping a ledger is the one irreversible thing in this flow, so it is
+        // named out loud, with its count, before it happens.
+        if (mode === 'new' && phrase
+            && !confirm(`Replacing this PO with a different order will delete `
+                        + `this project's ${phrase}.\n\nThis can't be undone. Continue?`)) {
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('po_file', replaceInput.files[0]);
+        fd.append('mode', mode);
+
+        const btn = document.getElementById('detail-po-replace-submit');
+        const orig = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Processing…';
+        try {
+            const res = await fetch(`/api/projects/${activeProjectId}/replace-po`, {
+                method: 'POST', body: fd, credentials: 'same-origin',
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                replaceError.textContent = data.message || data.error || `Failed (HTTP ${res.status})`;
+                replaceError.classList.remove('hidden');
+                return;
+            }
+            // Past here the swap has stuck whether or not the AI could read the
+            // file, so the panel shows the new document either way — leaving
+            // the old name up would misattribute whatever figures are on screen.
+            const proj = data.project || {};
+            if (proj.po_filename) {
+                detailPoFilename.textContent = proj.po_filename;
+                // Same URL, a different file behind it now: bust the browser's
+                // copy so "View PO document" can't serve the superseded one.
+                detailPoLink.href = `/api/projects/${activeProjectId}/po?v=${Date.now()}`;
+            }
+            currentPo = data.po || null;
+            setPoAdminView('actions');
+            renderPoGist(currentPo);
+            detailPoBlock.open = true;
+            // The contract value has moved, so the registry rows and the glance
+            // ladder are both stale.
+            await loadProjects();
+            loadInsights(activeProjectId);
+
+            const clearedPhrase = poLedgerPhrase({
+                variations: (data.cleared || {}).variations || 0,
+                actuals: (data.cleared || {}).actuals || 0,
+            });
+            if (data.success) {
+                showToast(clearedPhrase
+                    ? `PO replaced — ${clearedPhrase} cleared.`
+                    : 'PO replaced and re-read.');
+            } else {
+                // File swapped, figures unreadable: they now have to be typed
+                // in, so open the form on them rather than leaving a zeroed PO
+                // for someone to trip over later.
+                showToast(data.message
+                    || "Couldn't read the new PO — enter the values by hand.", 'error');
+                openPoEditForm();
+            }
+        } catch (err) {
+            replaceError.textContent = `Network error: ${err.message}`;
+            replaceError.classList.remove('hidden');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = orig;
         }
     });
 
