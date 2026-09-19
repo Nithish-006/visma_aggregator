@@ -224,3 +224,132 @@ def jsonify_plan(plan, row_limit=None):
                    'income': float(plan['totals']['income']),
                    'count': plan['totals']['count']},
     }
+
+
+# ---------------------------------------------------------------------------
+# Refresh: pull an already-synced window back in line with the bank
+# ---------------------------------------------------------------------------
+# A sync copies the bank row as it stood at that moment. Rows tagged later --
+# project attributed, category fixed, a payment split across projects -- leave
+# the tracker holding the stale version. A refresh re-pairs the two sides over
+# a window and makes the tracker say what the bank now says.
+#
+# Pairing uses the same (date, amount, type) key the sync dedups on, matched
+# greedily in statement order -- the order the sync itself inserted in, so the
+# nth tracker row of a group is the nth bank row of it. Where a group holds
+# several bank rows that disagree, position is the only thing telling them
+# apart, so those pairings are flagged `ordered` for a human to eyeball.
+
+
+def _tracker_key(row):
+    return (_as_date(row['transaction_date']),
+            _as_money(row['amount']), row['transaction_type'])
+
+
+def _bank_as_tracker(row):
+    """The tracker row a bank row should produce today."""
+    is_credit = (row['cr_amount'] or 0) > 0
+    return {
+        'bank_id': row['id'],
+        'date': _as_date(row['transaction_date']),
+        'vendor': (row['client_vendor'] or '').strip() or 'Unknown',
+        'description': purpose(row['transaction_description'], row['category']),
+        'project': (row['project'] or '').strip() or 'General',
+        'amount': _as_money(row['cr_amount'] if is_credit else row['dr_amount']),
+        'transaction_type': 'income' if is_credit else 'expense',
+    }
+
+
+_REFRESH_FIELDS = ('vendor', 'description', 'project')
+
+
+def build_refresh_plan(cursor, bank_code, start, end):
+    """Diff the tracker against the bank over a window. Writes nothing.
+
+    Plan keys:
+        bank, start, end
+        updates -- {tracker_id, date, amount, transaction_type, bank_id,
+                    changes: {field: (was, now)}, ordered: pairing rested on
+                    statement order because the group's bank rows disagree}
+        inserts -- bank rows the tracker never got (insert_plan row dicts)
+        orphans -- tracker rows with no bank row left to back them; a payment
+                   later split into parts shows up here alongside its parts
+                   in `inserts`
+    """
+    if bank_code not in BANK_TABLES:
+        raise ValueError(f'unknown bank: {bank_code}')
+
+    cursor.execute("""SELECT id, transaction_date, vendor, description, project,
+                             amount, transaction_type
+                      FROM personal_transactions
+                      WHERE bank = %s AND transaction_date BETWEEN %s AND %s
+                      ORDER BY transaction_date, id""", (bank_code, start, end))
+    tracker_rows = cursor.fetchall()
+
+    cursor.execute(f"""SELECT id, transaction_date, transaction_description, client_vendor,
+                              category, dr_amount, cr_amount, project
+                       FROM {BANK_TABLES[bank_code]}
+                       WHERE transaction_date BETWEEN %s AND %s
+                       ORDER BY transaction_date, id""", (start, end))
+    pool, ambiguous = {}, set()
+    for r in cursor.fetchall():
+        if own_account_transfer(r):
+            continue
+        want = _bank_as_tracker(r)
+        if not want['amount'] or want['amount'] <= 0:
+            continue
+        key = (want['date'], want['amount'], want['transaction_type'])
+        pool.setdefault(key, []).append(want)
+
+    for key, candidates in pool.items():
+        if len(candidates) > 1 and len({tuple(c[f] for f in _REFRESH_FIELDS)
+                                        for c in candidates}) > 1:
+            ambiguous.add(key)
+
+    plan = {'bank': bank_code, 'start': start, 'end': end,
+            'updates': [], 'inserts': [], 'orphans': []}
+
+    taken = set()
+    for tr in tracker_rows:
+        key = _tracker_key(tr)
+        queue = pool.get(key) or []
+        want = next((w for w in queue if w['bank_id'] not in taken), None)
+        if want is None:
+            plan['orphans'].append({'tracker_id': tr['id'], 'date': key[0],
+                                    'amount': key[1], 'transaction_type': key[2],
+                                    'vendor': tr['vendor'], 'project': tr['project']})
+            continue
+        taken.add(want['bank_id'])
+        changes = {f: ((tr[f] or ''), want[f])
+                   for f in _REFRESH_FIELDS if (tr[f] or '') != want[f]}
+        if changes:
+            plan['updates'].append({'tracker_id': tr['id'], 'date': key[0],
+                                    'amount': key[1],
+                                    'transaction_type': key[2],
+                                    'bank_id': want['bank_id'], 'changes': changes,
+                                    'ordered': key in ambiguous})
+
+    for key, candidates in pool.items():
+        for want in candidates:
+            if want['bank_id'] not in taken:
+                plan['inserts'].append({**want, 'bank': bank_code})
+    plan['inserts'].sort(key=lambda r: (r['date'], r['bank_id']))
+    return plan
+
+
+def apply_refresh(cursor, plan, delete_orphans=False):
+    """Write a refresh plan. Caller commits. Returns counts."""
+    for u in plan['updates']:
+        sets = ', '.join(f'{f} = %s' for f in u['changes'])
+        cursor.execute(f'UPDATE personal_transactions SET {sets} WHERE id = %s',
+                       [now for _, now in u['changes'].values()] + [u['tracker_id']])
+    if plan['inserts']:
+        insert_plan(cursor, {'rows': plan['inserts']})
+    deleted = 0
+    if delete_orphans and plan['orphans']:
+        ids = [o['tracker_id'] for o in plan['orphans']]
+        cursor.execute('DELETE FROM personal_transactions WHERE id IN (%s)'
+                       % ','.join(['%s'] * len(ids)), ids)
+        deleted = cursor.rowcount
+    return {'updated': len(plan['updates']), 'inserted': len(plan['inserts']),
+            'deleted': deleted}
