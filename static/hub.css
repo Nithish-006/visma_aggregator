@@ -1,89 +1,43 @@
 /* ============================================================================
-   HUB - Apple HIG craft applied to the VISMA brand
+   HUB - paper pastel, as a board of tiles
    ----------------------------------------------------------------------------
-   The palette stays VISMA: warm ivory (#FAF9F5) + coral (#D97757), Inter.
-   What comes from Apple's HIG is the CRAFT underneath it:
+   The hub wears the same paper as every other page: theme.css tokens, the
+   ivory ground with ambient.css light drifting over it, SF/Inter, hairlines.
 
-     - 8pt spacing grid (4pt allowed for icon sizing only)
-     - HIG type ramp: caption1 12 / footnote 13 / callout 16 / headline 17
-                      title3 20 / title2 22
-     - HIG easing curves + duration scale, not ad-hoc "0.16s ease"
-     - Press feedback on :active (this page previously had none)
-     - Density follows the POINTER, per HIG's macOS rule:
-         pointer: fine   -> 28px controls, 13px text (desktop, dense)
-         pointer: coarse -> 44px minimum touch targets (phone/tablet)
-     - WCAG AA verified, not eyeballed. Measured on #FAF9F5:
-         #1F1E1D  15.80:1  PASS   body text
-         #6E6C66   4.98:1  PASS   secondary labels
-         #D97757   2.96:1  FAIL   <- brand coral is NOT safe as text
-         #B74C29   4.88:1  PASS   <- accessible coral, same hue
-       Brand coral is therefore used for FILLS and BORDERS only; coral TEXT
-       uses --accent-text.
+   Layout: Project Summary runs the full width, the same height as every
+   other tile. Below it the pairs - records, banks, bills - stack one pair
+   per column on wide screens and one pair per row on narrow ones, so
+   Expense Tracker (the one used most on the phone) always opens the second
+   row.
 
-   Note on concentric radii: HIG's inner+padding=outer rule binds only where a
-   rounded child sits IN a rounded parent's corner. The card icon is centred on
-   the left edge, not cornered, so the rule does not apply here and the icon
-   keeps its own 12px radius from the ramp.
+   Colour: each module keeps the hue it has always had on the hub. That one
+   --hue drives the tile - a wash printed on the paper and a hairline of the
+   same hue - and its logo is drawn in the same hue, so the two banks' real
+   logos sit among equals instead of being the only colour on the board.
+
+     Project Summary   coral   #D97757  (the brand accent)
+     Expense Tracker   violet  #6A57CE
+     Projects Registry blue    #3B6BC9
+     Axis Bank         maroon  #AE285D  (from its logo)
+     Karur Vysya Bank  green   #00854A  (from its logo)
+     Purchase Bills    amber   #C77522
+     Sales Bills       teal    #0E8C8C
+
+   The washes are pale enough that ink text sits on them at over 10:1.
+   Logos sit straight on the wash, with no card behind them: the banks'
+   (static/banks/, cropped from the public-domain logos on Wikimedia
+   Commons) and the modules' own (static/modules/), one treatment for all.
    ============================================================================ */
 
 :root {
-    /* Local aliases -> central tokens in theme.css (single source of truth) */
     --bg: var(--c-bg);
-    --surface: var(--c-surface);
-    --surface-soft: var(--c-surface-soft);
+    --text: var(--c-text);
+    --text-2: var(--c-text-muted);
     --border: var(--c-border);
     --border-strong: var(--c-border-strong);
-
-    /* Text hierarchy. HIG builds hierarchy with weight + colour, not size
-       alone -- and every level below is AA-verified against the ivory bg. */
-    --text: var(--c-text);                /* 15.80:1 - primary            */
-    --text-2: var(--c-text-muted);        /*  4.89:1 worst-case - secondary */
-    --text-3: var(--c-text-muted);        /*  4.89:1 worst-case - tertiary  */
-
-    --accent: var(--c-accent);            /* fills + borders only         */
-    --accent-strong: var(--c-accent-strong);
-    --accent-text: #B74C29;               /*  4.88:1 - coral you can READ */
-    --accent-soft: var(--c-accent-soft);
-    --axis: var(--c-axis);
-    --kvb: var(--c-kvb);
-
     --ui: var(--font-ui);
-    --serif: var(--font-serif);
-
-    /* ---- HIG 8pt spacing grid --------------------------------------- */
-    --space-1: 4px;
-    --space-2: 8px;
-    --space-3: 12px;
-    --space-4: 16px;
-    --space-5: 20px;
-    --space-6: 24px;
-    --space-8: 32px;
-    --space-10: 40px;
-
-    /* ---- HIG radius ramp --------------------------------------------- */
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --r-card: var(--radius-lg);
-    --r-btn: var(--radius-sm);
-
-    /* ---- HIG type ramp ------------------------------------------------ */
-    --text-caption1: 12px;
-    --text-footnote: 13px;
-    --text-callout: 16px;
-    --text-headline: 17px;
-    --text-title3: 20px;
-    --text-title2: 22px;
-
-    /* ---- HIG easing + duration --------------------------------------- */
-    --ease-default: cubic-bezier(0.25, 0.1, 0.25, 1);
-    --ease-out: cubic-bezier(0, 0, 0.58, 1);
-    --duration-instant: 100ms;
-    --duration-fast: 200ms;
-    --duration-normal: 300ms;
-
-    --shadow: var(--shadow-warm);
-    --shadow-hover: var(--shadow-warm-hover);
+    --r-tile: 18px;
+    --r-chip: var(--radius-md);
 }
 
 * { box-sizing: border-box; }
@@ -92,40 +46,32 @@ html { -webkit-text-size-adjust: 100%; }
 body {
     margin: 0;
     min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
     background: var(--bg);
     color: var(--text);
     font-family: var(--ui);
-    /* HIG: consistent line-height 1.2-1.5; body sits at the top of that band */
     font-size: var(--text-callout);
     line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-    display: flex;
-    flex-direction: column;
 }
-/* The ambient wash that used to live here is now ambient.css, shared by every
-   page, and it drifts. Keeping a second static copy on this page would have
-   doubled the light on the hub alone. */
-
 
 a { color: inherit; text-decoration: none; }
 
 .wrap {
     width: 100%;
-    max-width: 1040px;
+    max-width: 1240px;
     margin: 0 auto;
     padding: 0 var(--space-6);
 }
 
-/* -- Header ---------------------------------------------------------------
-   HIG "Deference": chrome supports content, it does not compete with it.
-   A hairline separator and a plain background, nothing more.              */
+/* -- Top bar: the same chrome as the inner pages --------------------------- */
 .topbar {
-    border-bottom: 1px solid var(--border);
-    background: var(--bg);
     position: sticky;
     top: 0;
     z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
 }
 
 .topbar__row {
@@ -137,338 +83,250 @@ a { color: inherit; text-decoration: none; }
 }
 
 .brand { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
-/* Without min-width:0 the flex child refuses to shrink, so the wordmark wraps
-   to a second line on narrow screens and doubles the header height. */
-.brand > div { min-width: 0; }
-
-.brand__logo {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-sm);
-    object-fit: contain;
-}
-
-.brand__mark { width: 32px; height: 32px; color: var(--accent); flex-shrink: 0; }
-
+.brand__mark { width: 30px; height: auto; flex-shrink: 0; }
 .brand__name {
-    font-size: var(--text-headline);
-    font-weight: 600;
-    /* HIG: tighten tracking as type grows */
-    letter-spacing: -0.012em;
-    line-height: 1.25;
-    color: var(--text);
+    font-size: var(--text-title3);
+    font-weight: 700;
+    letter-spacing: -0.015em;
     white-space: nowrap;
 }
 
-.brand__tag {
-    font-size: var(--text-caption1);
-    color: var(--text-3);
-    margin-left: var(--space-1);
-}
-
 .actions { display: flex; align-items: center; gap: var(--space-2); }
+
+.topbar__date {
+    margin-right: var(--space-2);
+    font-size: var(--text-footnote);
+    color: var(--text-2);
+    white-space: nowrap;
+}
 
 .userchip {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
+    padding: 0 var(--space-2) 0 var(--space-1);
     font-size: var(--text-footnote);
     color: var(--text-2);
-    padding: 0 var(--space-2) 0 var(--space-1);
 }
-.userchip svg { width: 16px; height: 16px; color: var(--text-3); }
+.userchip svg { width: 16px; height: 16px; }
 
-/* -- Buttons --------------------------------------------------------------
-   Density is set by the POINTER, not the viewport width -- a touchscreen
-   laptop gets touch targets, a desktop gets macOS density. Base values here
-   are the desktop ones; the coarse-pointer block below promotes them.     */
 .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    font-family: var(--ui);
+    min-height: 32px;
+    padding: var(--space-1) var(--space-3);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--c-surface);
+    font-family: inherit;
     font-size: var(--text-footnote);
     font-weight: 500;
     color: var(--text-2);
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: var(--r-btn);
-    /* HIG macOS control metrics: 28px min-height, 6px/12px padding, 13px */
-    min-height: 28px;
-    padding: var(--space-1) var(--space-3);
     cursor: pointer;
-    transition:
-        background   var(--duration-fast) var(--ease-default),
-        border-color var(--duration-fast) var(--ease-default),
-        color        var(--duration-fast) var(--ease-default),
-        transform    var(--duration-instant) var(--ease-out);
 }
-.btn:hover { background: var(--surface); border-color: var(--border-strong); color: var(--text); }
+.btn:hover { color: var(--text); border-color: var(--text-2); }
+.btn:disabled { cursor: progress; }
+.btn svg { width: 15px; height: 15px; }
+.btn.is-busy svg { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* HIG: feedback belongs on the PRESS, not on release. */
-.btn:active { transform: scale(0.97); }
-
-/* HIG focus ring: a 4px halo, not a hairline outline. */
-.btn:focus-visible {
-    outline: 2px solid var(--accent-strong);
-    outline-offset: 2px;
-    box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.3);
+/* -- Board ----------------------------------------------------------------- */
+/* Centred in the viewport, as before: the whole board is meant to be taken
+   in at once. (main.wrap, not main: the .wrap shorthand would otherwise zero
+   the vertical padding.) */
+main.wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: var(--space-8);
+    padding-bottom: var(--space-10);
 }
-.btn svg { width: 16px; height: 16px; }
 
-/* Centred in the viewport: the whole board is meant to be taken in at once,
-   so it sits in the middle of the frame rather than hanging from the top. */
-main { flex: 1; display: flex; flex-direction: column; justify-content: center; }
-
-/* -- Card grid ----------------------------------------------------------- */
-/* Two columns, not auto-fill. Each section holds exactly two modules, and
-   an auto-fill track count left them stranded in the left half of a
-   four-column grid with dead space beside them. */
-.grid {
+.board {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-4);
-    padding: var(--space-8) 0;
+    gap: var(--space-5);
 }
 
-/* PAPER PASTEL BLOCKS. Flat colour printed on the page, not objects sitting
-   on it. The pebble treatment that was here — the specular gloss ramp, the two
-   inset light rims, the two-layer cast shadow and the 22px rounding — is all
-   removed. What is left is the part worth keeping from it: ONE even wash of
-   each module's hue, with no gradient, no veil and no backdrop blur.
+/* Each tile is a small grid: the name with its number directly under it,
+   and the logo beside them spanning both lines - so the number sits right
+   under the name however tall the logo is. The pair is centred in a roomy
+   tile, so the extra height reads as space around it, not a gap inside it.
+   (.tile__top only groups the name and logo in the markup; display:
+   contents lets both join this grid.) */
+.tile {
+    --hue: var(--c-text-muted);
 
-   No shadow at all. A shadow is a claim about height, and paper has none; the
-   hairline of the block's own hue is what separates it from the ground.
-   The tint drops back to 0.13 — it was pushed to 0.22 only because the gloss
-   was washing it out, and without the sheen that reads heavy rather than
-   pastel. */
-.card {
-    --card-accent: var(--border-strong);
-    --card-rgb: 35, 31, 25;
     position: relative;
-    display: flex;
-    align-items: center;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "name   logo"
+        "figure logo";
+    align-content: center;
+    align-items: start;
+    column-gap: var(--space-5);
+    row-gap: var(--space-2);
     min-width: 0;
-    gap: var(--space-4);
-    background: rgba(var(--card-rgb), 0.13);
-    border: 1px solid rgba(var(--card-rgb), 0.20);
-    border-radius: var(--r-card);
-    padding: var(--space-5);
+    min-height: clamp(128px, 17vh, 156px);
+    padding: var(--space-6) var(--space-8);
+    border-radius: var(--r-tile);
+    /* One pale wash of the module's hue, printed on the paper. The flat
+       surface colour is the fallback where color-mix() is not supported. */
+    background: var(--c-surface);
+    background: color-mix(in srgb, var(--hue) 22%, var(--bg));
+    border: 1px solid var(--border);
+    border-color: color-mix(in srgb, var(--hue) 32%, transparent);
     transition:
-        background   var(--duration-normal) var(--ease-default),
-        border-color var(--duration-normal) var(--ease-default),
-        transform    var(--duration-fast)   var(--ease-default);
+        background-color var(--duration-normal) var(--ease-default),
+        border-color var(--duration-normal) var(--ease-default);
 }
 
-/* Hover deepens the ink rather than lifting the block. A rise with no shadow
-   under it reads as a glitch, and a shadow is exactly what this pass removed. */
-.card:hover {
-    background: rgba(var(--card-rgb), 0.19);
-    border-color: rgba(var(--card-rgb), 0.32);
+/* Hover deepens the ink rather than lifting the tile - paper has no height. */
+.tile:hover {
+    background: color-mix(in srgb, var(--hue) 30%, var(--bg));
+    border-color: color-mix(in srgb, var(--hue) 50%, transparent);
+}
+.tile:focus-visible {
+    outline: 2px solid var(--hue);
+    outline-offset: 3px;
+    box-shadow: none;
 }
 
-/* HIG: feedback belongs on the PRESS. Scale alone, no elevation change. */
-.card:active {
-    transform: scale(0.985);
-    transition-duration: var(--duration-instant);
-}
+.tile--summary  { --hue: #D97757; grid-column: 1 / -1; }
+.tile--expense  { --hue: #6A57CE; }
+.tile--projects { --hue: #3B6BC9; }
+.tile--axis     { --hue: #AE285D; }
+.tile--kvb      { --hue: #00854A; }
+.tile--purchase { --hue: #C77522; }
+.tile--sales    { --hue: #0E8C8C; }
 
-/* HIG focus ring: a 4px halo, not a hairline outline. The card carries no
-   other box-shadow now, so the ring can own the property outright. */
-.card:focus-visible {
-    outline: 2px solid var(--accent-strong);
-    outline-offset: 2px;
-    box-shadow: 0 0 0 4px rgba(217, 119, 87, 0.3);
-}
+.tile__top { display: contents; }
+.tile__name { grid-area: name; }
+.tile__logo { grid-area: logo; }
+.tile__figure,
+.tile__desc { grid-area: figure; }
 
-.card__icon {
-    flex-shrink: 0;
-    width: 48px;
-    height: 48px;
+/* Every tile's mark is its logo alone, printed straight on the wash - no
+   card behind it. The five module logos (static/modules/) are drawn to sit
+   at the same weight as the two banks' real ones (static/banks/): solid
+   shapes in two tones of the module's hue, one idea each - the summary's
+   donut, the expense wallet, the registry's numbered folder, a bill coming
+   in, an invoice going out. The KVB emblem brings its own yellow square,
+   which the rounded clip turns into a tile of its own. */
+.tile__logo {
     display: grid;
     place-items: center;
-    background: var(--surface-soft);
-    border-radius: var(--radius-md);
-    color: var(--card-accent);
-    transition:
-        background var(--duration-normal) var(--ease-default),
-        color      var(--duration-normal) var(--ease-default);
-}
-.card__icon svg { width: 24px; height: 24px; }
-
-.card__body { flex: 1; min-width: 0; }
-
-.card__name {
-    margin: 0;
-    font-family: var(--ui);
-    font-size: var(--text-headline);
-    font-weight: 600;
-    letter-spacing: -0.012em;
-    line-height: 1.3;
-    color: var(--text);
-}
-
-.card__desc {
-    margin: var(--space-1) 0 0;
-    font-size: var(--text-footnote);
-    color: var(--text-2);
+    flex-shrink: 0;
+    align-self: center;
+    width: 60px;
+    height: 60px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    border-radius: 16px;
+}
+.tile__logo img { display: block; width: 100%; height: 100%; }
+
+.tile__name {
+    font-size: var(--text-title2);
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+}
+/* The full-width block gets a name to match its width. */
+.tile--summary .tile__name {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
-.card__stat {
+.tile__figure {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
+    column-gap: var(--space-2);
 }
-.card__statnum {
-    font-size: var(--text-title3);
+
+.tile__count {
+    font-size: 30px;
     font-weight: 600;
-    letter-spacing: -0.02em;
-    color: var(--text);
+    line-height: 1;
+    letter-spacing: -0.025em;
     font-variant-numeric: tabular-nums;
 }
-.card__statlabel { font-size: var(--text-caption1); color: var(--text-3); }
+.tile__count[data-state="error"] { color: var(--text-2); }
 
-.card__arrow {
-    flex-shrink: 0;
-    color: var(--text-3);
-    transition:
-        transform var(--duration-normal) var(--ease-default),
-        color     var(--duration-normal) var(--ease-default);
-}
-.card__arrow svg { width: 20px; height: 20px; display: block; }
-.card:hover .card__arrow { transform: translateX(var(--space-1)); color: var(--card-accent); }
-
-/* Per-module accent - coloured left bar, faint matching tint, coloured icon */
-.card--hero {
-    grid-column: 1 / -1;
-    padding: var(--space-6);
-    --card-accent: #D97757;
-    --card-rgb: 217, 119, 87;
-}
-.card--hero .card__icon { background: var(--surface); }
-.card--hero .card__name {
-    font-family: var(--ui);
-    font-weight: 700;
-    font-size: var(--text-title2);
-    letter-spacing: -0.021em;
-    line-height: 1.2;
+.tile__unit {
+    font-size: var(--text-footnote);
+    font-weight: 500;
+    color: var(--text-2);
 }
 
-.card--expense  { --card-accent: #6A57CE; --card-rgb: 106, 87, 206; }
-.card--projects { --card-accent: #3B6BC9; --card-rgb: 59, 107, 201; }
-.card--axis     { --card-accent: #DC2626; --card-rgb: 220, 38, 38; }
-.card--kvb      { --card-accent: #15903F; --card-rgb: 21, 144, 63; }
-.card--purchase { --card-accent: #C77522; --card-rgb: 199, 117, 34; }
-.card--sales    { --card-accent: #0E8C8C; --card-rgb: 14, 140, 140; }
+/* Project Summary has no count, so its one line takes the count's place. */
+.tile__desc {
+    max-width: 60ch;
+    font-size: var(--text-subhead);
+    color: var(--text-2);
+}
 
-/* gentle load reveal */
-@media (prefers-reduced-motion: no-preference) {
-    .card {
-        opacity: 0;
-        transform: translateY(var(--space-2));
-        animation: rise var(--duration-normal) var(--ease-default) forwards;
+/* Wide screens: three columns under Project Summary, one pair per column. */
+@media (min-width: 1024px) {
+    .board {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: auto auto auto;
+        grid-auto-flow: column;
     }
-    .card:nth-child(1) { animation-delay: 20ms; }
-    .card:nth-child(2) { animation-delay: 60ms; }
-    .card:nth-child(3) { animation-delay: 100ms; }
-    .card:nth-child(4) { animation-delay: 140ms; }
-    .card:nth-child(5) { animation-delay: 180ms; }
-    .card:nth-child(6) { animation-delay: 220ms; }
-    .card:nth-child(7) { animation-delay: 260ms; }
-    @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+    .tile--summary { grid-row: 1; }
 }
 
-
-/* Section labels (.grid__label / .grid__labelsub) used to group the modules
-   under Records / Banks / Documents. Both the headings and their rules were
-   removed - the board is one uninterrupted run of module cards now. */
-
-/* -- Bolder module identity ----------------------------------------------
-   The icon tile is now filled with the module's own colour and the glyph
-   goes white, so each card is identifiable from across the room instead of
-   by a 3px edge. Every fill was checked to clear 3:1 against white, which
-   is the non-text/graphics threshold (purchase orange needed darkening from
-   #D9883B at 2.79:1). */
-/* The mark is the one place the hue reaches full strength, so it stays the
-   anchor of the card — but flat, like everything else on this page now. The
-   specular ramp and the coloured glow are gone with the pebble treatment. */
-.card__icon {
-    background: var(--card-accent);
-    color: #FFFFFF;
-    border-radius: var(--radius-md);
-}
-/* Restated because this selector outranks the bare .card__icon above, which
-   would otherwise leave the hero mark on the pale --surface fill set earlier. */
-.card--hero .card__icon { background: var(--card-accent); color: #FFFFFF; }
-.card:hover .card__icon { transform: scale(1.04); }
-
-/* -- Footer -------------------------------------------------------------- */
-.foot {
-    border-top: 1px solid var(--border);
-    padding: var(--space-6) 0 var(--space-8);
-}
-.foot__note { font-size: var(--text-footnote); color: var(--text-3); }
-
-/* -- Touch density --------------------------------------------------------
-   HIG's 44pt minimum is a TOUCH requirement, so it keys off the pointer, not
-   the screen size. A desktop keeps macOS density; anything driven by a finger
-   gets full-size targets even on a large tablet.                          */
-@media (pointer: coarse) {
-    .btn {
-        min-height: 44px;
-        min-width: 44px;
-        padding: var(--space-3) var(--space-4);
-    }
-    .userchip { min-height: 44px; }
-    .card { padding: var(--space-6); }
-}
-
-/* -- Responsive ---------------------------------------------------------- */
+/* -- Phone ----------------------------------------------------------------- */
 @media (max-width: 640px) {
     .wrap { padding: 0 var(--space-4); }
+    /* A list starts at the top, not in the middle of the screen. */
+    main.wrap { justify-content: flex-start; padding-top: var(--space-4); padding-bottom: var(--space-6); }
+
     .topbar__row { gap: var(--space-3); }
-    .brand__tag { display: none; }
-    .btn span { display: none; }
-    .btn { padding: var(--space-3); }
-    .grid { grid-template-columns: minmax(0, 1fr); padding-top: var(--space-6); }
+    .brand__mark { width: 26px; }
+    .brand__name { font-size: var(--text-headline); }
+    /* Icons only, without outlines: three outlined 44px squares outweigh the
+       brand beside them. The shared login's name adds nothing here. */
+    .topbar__date,
+    .userchip,
+    .btn__label { display: none; }
+    .btn { padding: var(--space-2); border-color: transparent; background: transparent; }
+    .btn svg { width: 19px; height: 19px; }
 
-    /* Reclaim header width for the wordmark: the avatar glyph still says
-       "signed in", so the name itself is redundant at this size. */
-    .userchip { font-size: 0; gap: 0; padding: 0 var(--space-1); }
-    .userchip svg { width: 20px; height: 20px; }
-
-    /* HIG "Clarity": a truncated sentence is not clearer than a wrapped one.
-       Descriptions get two lines on phones instead of an ellipsis. */
-    .card__desc {
-        white-space: normal;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        line-clamp: 2;
+    /* One module per row, read like a list: the logo on the left, the name
+       with its number right under it. Project Summary's description takes
+       the number's place. */
+    .board { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+    .tile {
+        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-areas:
+            "logo name"
+            "logo figure";
+        column-gap: 14px;
+        row-gap: 2px;
+        min-height: 0;
+        padding: 18px;
     }
+    .tile__logo { width: 46px; height: 46px; border-radius: 13px; }
+    .tile__name { font-size: var(--text-headline); }
+    .tile__count { font-size: 22px; }
+    .tile__unit { font-size: var(--text-caption1); }
+
+    .tile--summary .tile__name { font-size: var(--text-title2); }
+    .tile__desc { font-size: var(--text-footnote); }
 }
 
-/* -- Reduced motion -------------------------------------------------------
-   Not "no feedback" -- the colour and shadow cues stay, only the movement
-   and the staggered reveal are dropped.                                   */
+/* -- Preferences ----------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-    .card,
-    .card:hover,
-    .card:active,
-    .btn:active {
-        transform: none;
-    }
-    .card:hover .card__arrow { transform: none; }
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
+    .tile { transition: none; }
+    .btn.is-busy svg { animation: none; }
+}
+
+@media (forced-colors: active) {
+    .tile { border: 1px solid CanvasText; }
 }

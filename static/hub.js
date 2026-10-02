@@ -1,177 +1,124 @@
 /**
- * Hub Page JavaScript
- * Handles dynamic content for the multi-bank hub dashboard
+ * Hub page JavaScript
+ * Fills the date line and the module counts, and runs Refresh.
  */
 
+const countFormat = new Intl.NumberFormat('en-IN');
+
+/**
+ * Where each module's count comes from. The bank counts are rendered by the
+ * server, so they are only re-fetched on Refresh (see refreshBankStats).
+ */
+const COUNT_SOURCES = [
+    { id: 'projects-count', url: '/api/projects', pick: activeProjectCount },
+    { id: 'personal-count', url: '/api/personal/summary', pick: data => data.transaction_count },
+    { id: 'bill-count', url: '/api/bills/stats', pick: data => data.invoice_count },
+    { id: 'sales-count', url: '/api/sales/stats', pick: data => data.invoice_count },
+];
+
 document.addEventListener('DOMContentLoaded', function () {
-    // Refresh stats periodically (optional)
-    // refreshBankStats();
+    showToday();
+    formatServerCounts();
+    loadCounts();
 
-    // Load personal tracker count
-    loadPersonalTrackerCount();
-
-    // Load bill processor count
-    loadBillProcessorCount();
-
-    // Load sales bill count
-    loadSalesBillCount();
-
-    // Load active projects count
-    loadProjectsCount();
-
-    // Add animation on card hover
-    initCardAnimations();
+    const refreshBtn = document.getElementById('refresh-cache-btn');
+    if (refreshBtn) refreshBtn.addEventListener('click', refreshCache);
 });
 
 /**
- * Initialize card hover animations
+ * Today's date for the bar, in the Indian long form ("Friday, 2 October 2026").
  */
-function initCardAnimations() {
-    const cards = document.querySelectorAll('.bank-card');
+function showToday() {
+    const el = document.getElementById('today');
+    if (!el) return;
+    const now = new Date();
+    el.textContent = now.toLocaleDateString('en-IN', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+    // Local date, not toISOString(): that is UTC, a day behind before 5:30 am IST.
+    const pad = n => String(n).padStart(2, '0');
+    el.dateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
 
-    cards.forEach(card => {
-        card.addEventListener('mouseenter', function () {
-            this.style.transform = 'translateY(-4px)';
-        });
-
-        card.addEventListener('mouseleave', function () {
-            this.style.transform = 'translateY(0)';
-        });
+/**
+ * The server renders bank counts as bare integers; group them the same way
+ * as the counts loaded below.
+ */
+function formatServerCounts() {
+    document.querySelectorAll('.tile__count[data-count]').forEach(el => {
+        setCount(el, Number(el.dataset.count));
     });
 }
 
 /**
- * Refresh bank statistics from the API
+ * Write a count into its cell. A count that cannot be loaded shows a dash
+ * rather than 0 - "0 bills" would be a claim about the data, not an error.
+ */
+function setCount(el, value) {
+    if (typeof el === 'string') el = document.getElementById(el);
+    if (!el) return;
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        el.textContent = countFormat.format(value);
+        delete el.dataset.state;
+        el.removeAttribute('title');
+    } else if (!/\d/.test(el.textContent)) {
+        // Keep a number that is already showing; only an empty cell gets the dash.
+        el.textContent = '—';
+        el.dataset.state = 'error';
+        el.title = "Couldn't load this count. Use Refresh to try again.";
+    }
+}
+
+async function fetchJSON(url) {
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error(`${url} returned ${response.status}`);
+    return response.json();
+}
+
+/**
+ * Load one count. Resolves to true on success so Refresh can report failures.
+ */
+async function loadCount(source) {
+    try {
+        const data = await fetchJSON(source.url);
+        setCount(source.id, Number(source.pick(data)));
+        return true;
+    } catch (error) {
+        console.error(`Error loading ${source.id}:`, error);
+        setCount(source.id, null);
+        return false;
+    }
+}
+
+function loadCounts() {
+    return Promise.all(COUNT_SOURCES.map(loadCount));
+}
+
+/**
+ * "Active" mirrors the registry: type === 'project' and not closed (is_inactive).
+ */
+function activeProjectCount(data) {
+    const projects = data.projects || [];
+    return projects.filter(p => {
+        const isClosed = p.is_inactive === true || p.is_inactive === 1;
+        const type = p.project_type || (p.is_project === false ? 'other' : 'project');
+        return !isClosed && type === 'project';
+    }).length;
+}
+
+/**
+ * Re-fetch both banks' transaction counts.
  */
 async function refreshBankStats() {
     try {
-        const response = await fetch('/api/hub/stats');
-        if (!response.ok) {
-            throw new Error('Failed to fetch stats');
-        }
-
-        const data = await response.json();
-
-        // Update Axis count
-        if (data.axis) {
-            const axisCount = document.getElementById('axis-count');
-            if (axisCount) {
-                axisCount.textContent = formatNumber(data.axis.transaction_count);
-            }
-        }
-
-        // Update KVB count
-        if (data.kvb) {
-            const kvbCount = document.getElementById('kvb-count');
-            if (kvbCount) {
-                kvbCount.textContent = formatNumber(data.kvb.transaction_count);
-            }
-        }
+        const data = await fetchJSON('/api/hub/stats');
+        if (data.axis) setCount('axis-count', Number(data.axis.transaction_count));
+        if (data.kvb) setCount('kvb-count', Number(data.kvb.transaction_count));
+        return true;
     } catch (error) {
         console.error('Error refreshing bank stats:', error);
-    }
-}
-
-/**
- * Load personal tracker transaction count
- */
-async function loadPersonalTrackerCount() {
-    try {
-        const response = await fetch('/api/personal/summary');
-        if (!response.ok) {
-            throw new Error('Failed to fetch personal summary');
-        }
-
-        const data = await response.json();
-        const personalCount = document.getElementById('personal-count');
-        if (personalCount && data.transaction_count !== undefined) {
-            personalCount.textContent = formatNumber(data.transaction_count);
-        }
-    } catch (error) {
-        console.error('Error loading personal tracker count:', error);
-        const personalCount = document.getElementById('personal-count');
-        if (personalCount) {
-            personalCount.textContent = '0';
-        }
-    }
-}
-
-/**
- * Load bill processor invoice count
- */
-async function loadBillProcessorCount() {
-    try {
-        const response = await fetch('/api/bills/stats');
-        if (!response.ok) {
-            throw new Error('Failed to fetch bill stats');
-        }
-
-        const data = await response.json();
-        const billCount = document.getElementById('bill-count');
-        if (billCount && data.invoice_count !== undefined) {
-            billCount.textContent = formatNumber(data.invoice_count);
-        }
-    } catch (error) {
-        console.error('Error loading bill processor count:', error);
-        const billCount = document.getElementById('bill-count');
-        if (billCount) {
-            billCount.textContent = '0';
-        }
-    }
-}
-
-/**
- * Load sales bill invoice count
- */
-async function loadSalesBillCount() {
-    try {
-        const response = await fetch('/api/sales/stats');
-        if (!response.ok) {
-            throw new Error('Failed to fetch sales stats');
-        }
-
-        const data = await response.json();
-        const salesCount = document.getElementById('sales-count');
-        if (salesCount && data.invoice_count !== undefined) {
-            salesCount.textContent = formatNumber(data.invoice_count);
-        }
-    } catch (error) {
-        console.error('Error loading sales bill count:', error);
-        const salesCount = document.getElementById('sales-count');
-        if (salesCount) {
-            salesCount.textContent = '0';
-        }
-    }
-}
-
-/**
- * Load active projects count for the Projects Registry card.
- * "Active" mirrors the registry: type === 'project' and not closed (is_inactive).
- */
-async function loadProjectsCount() {
-    const projectsCount = document.getElementById('projects-count');
-    try {
-        const response = await fetch('/api/projects', { credentials: 'same-origin' });
-        if (!response.ok) {
-            throw new Error('Failed to fetch projects');
-        }
-
-        const data = await response.json();
-        const projects = data.projects || [];
-        const activeCount = projects.filter(p => {
-            const isClosed = p.is_inactive === true || p.is_inactive === 1;
-            const type = p.project_type || (p.is_project === false ? 'other' : 'project');
-            return !isClosed && type === 'project';
-        }).length;
-
-        if (projectsCount) {
-            projectsCount.textContent = formatNumber(activeCount);
-        }
-    } catch (error) {
-        console.error('Error loading projects count:', error);
-        if (projectsCount) {
-            projectsCount.textContent = '0';
-        }
+        return false;
     }
 }
 
@@ -182,38 +129,30 @@ async function loadProjectsCount() {
  */
 async function refreshCache() {
     const btn = document.getElementById('refresh-cache-btn');
-    const icon = btn.querySelector('svg');
+    const label = btn.querySelector('.btn__label');
     btn.disabled = true;
-    icon.style.animation = 'spin 0.8s linear infinite';
+    btn.classList.add('is-busy');
 
+    let ok = true;
     try {
         if ('caches' in window) {
             const names = await caches.keys();
             await Promise.all(names.map(name => caches.delete(name)));
         }
-
-        await refreshBankStats();
-        await loadPersonalTrackerCount();
-        await loadBillProcessorCount();
-        await loadSalesBillCount();
-        await loadProjectsCount();
-
-        btn.querySelector('span').textContent = 'Done!';
-        setTimeout(() => { btn.querySelector('span').textContent = 'Refresh'; }, 1500);
+        const results = await Promise.all([refreshBankStats(), loadCounts()]);
+        ok = results[0] && results[1].every(Boolean);
     } catch (error) {
         console.error('Error clearing cache:', error);
-        btn.querySelector('span').textContent = 'Error';
-        setTimeout(() => { btn.querySelector('span').textContent = 'Refresh'; }, 1500);
+        ok = false;
     } finally {
         btn.disabled = false;
-        icon.style.animation = '';
+        btn.classList.remove('is-busy');
     }
-}
 
-/**
- * Format number with commas
- */
-function formatNumber(num) {
-    if (num === null || num === undefined) return '0';
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    label.textContent = ok ? 'Refreshed' : 'Refresh failed';
+    btn.setAttribute('aria-label', label.textContent);
+    setTimeout(() => {
+        label.textContent = 'Refresh';
+        btn.setAttribute('aria-label', 'Refresh counts');
+    }, 1800);
 }

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Axis Bank symbol, cropped from https://commons.wikimedia.org/wiki/File:Axis_Bank_logo.svg (public domain, trademark of Axis Bank Ltd). Only the framing (viewBox) changed; the wordmark paths and editor metadata were removed, the symbol is untouched. -->
+<svg viewBox="-37.8 -52.8 360 360" width="64" height="64"
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+  
+  
+  
+   version="1.0"
+   id="svg2"
+   sodipodi:version="0.32"
+   inkscape:version="0.46"
+   sodipodi:docname="1000px-Axis_Bank_Logo.svg"
+   inkscape:output_extension="org.inkscape.output.svg.inkscape">
+  
+  <defs
+     id="defs26">
+    <inkscape:perspective
+       sodipodi:type="inkscape:persp3d"
+       inkscape:vp_x="0 : 160.625 : 1"
+       inkscape:vp_y="0 : 1000 : 0"
+       inkscape:vp_z="1250 : 160.625 : 1"
+       inkscape:persp3d-origin="625 : 107.08333 : 1"
+       id="perspective30" />
+  </defs>
+  
+  <g
+     id="#ae285dff">
+    <path
+       d="M 142.27,10.47 C 156.13,34.28 170.11,58.02 183.82,81.92 C 161.66,121.01 139.82,160.29 116.91,198.95 C 108.12,213.79 99.57,228.77 90.88,243.66 C 62.7,243.83 34.52,243.82 6.34,243.78 C 7.2,241.85 8.05,239.91 9.09,238.07 C 53.46,162.19 98,86.41 142.27,10.47 z"
+       id="path5"
+       style="opacity:1;fill:#ae285d" />
+    <path
+       d="M 142.28,155.63 C 170.56,155.62 198.84,155.42 227.12,155.89 C 243.96,185.25 261.34,214.29 278.03,243.73 C 249.75,243.87 221.48,243.76 193.2,243.74 C 176.37,214.28 158.79,185.27 142.28,155.63 z"
+       id="path23"
+       style="opacity:1;fill:#ae285d" />
+  </g>
+</svg>

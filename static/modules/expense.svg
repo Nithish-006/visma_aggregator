@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Expense Tracker: a wallet, a card peeking out, the rupee -->
+  <rect x="11" y="6" width="25" height="12" rx="3" fill="#B9AFF0" transform="rotate(-8 23.5 12)"/>
+  <rect x="5" y="13" width="38" height="28" rx="6" fill="#6A57CE"/>
+  <rect x="29" y="22" width="16" height="11" rx="5.5" fill="#4A3AA8"/>
+  <circle cx="35.5" cy="27.5" r="2.3" fill="#FFFFFF"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11.5 20h10M11.5 24.5h10"/>
+    <path d="M14 20h1.5a4.5 4.5 0 0 1 0 9H13l7 6.5"/>
+  </g>
+</svg>

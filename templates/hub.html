@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Dashboard · Visma Financials</title>
+    <title>Visma Financials</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#FAF9F5">
@@ -11,10 +11,11 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+    <!-- Same stack as every other page: tokens, page styles, HIG layer, ambient light. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=11">
-    <link rel="stylesheet" href="{{ url_for('static', filename='hub.css') }}?v=15">
+    <link rel="stylesheet" href="{{ url_for('static', filename='hub.css') }}?v=22">
     <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=13">
     <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
 </head>
@@ -23,116 +24,96 @@
     <header class="topbar">
         <div class="wrap topbar__row">
             <a class="brand" href="/">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="" class="brand__logo">
-                <div>
-                    <span class="brand__name">Visma Financials</span>
-                    <span class="brand__tag">· Multi-Bank Dashboard</span>
-                </div>
+                <!-- The logo, traced from static/logo.png (whose white background
+                     would show as a box on the ivory page). -->
+                <svg class="brand__mark" viewBox="0 0 928 844" aria-hidden="true" focusable="false">
+                    <path fill="#232323" d="M0 0 L490 843 L777 378 L575 378 L494 510 L286 113 L669 164 L908 165 L927 143 L199 0 Z" />
+                    <path fill="#000000" d="M199 0 L492 557 L494 510 L260 59 L908 165 L927 143 Z" />
+                    <path fill="#000000" d="M777 378 L606 378 L495 562 L490 843 Z" />
+                    <path fill="#C09A39" d="M428 252 L570 252 L498 377 Z" />
+                </svg>
+                <span class="brand__name">Visma Financials</span>
             </a>
             <div class="actions">
+                <time class="topbar__date" id="today"></time>
                 <span class="userchip">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                    {{ session.get('username', 'User') }}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    <span>{{ session.get('username', 'User') }}</span>
                 </span>
-                <button class="btn" id="refresh-cache-btn" type="button" title="Refresh data" onclick="refreshCache()">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                    <span>Refresh</span>
+                <button class="btn" id="refresh-cache-btn" type="button" aria-label="Refresh counts">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    <span class="btn__label">Refresh</span>
                 </button>
-                <a class="btn" href="/logout" title="Sign out">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                    <span>Sign out</span>
+                <a class="btn" href="/logout" aria-label="Sign out">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    <span class="btn__label">Sign out</span>
                 </a>
             </div>
         </div>
     </header>
 
     <main class="wrap">
-        <div class="grid">
-            <!-- Overview -->
-            <a class="card card--hero" href="/project-summary">
-                <span class="card__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+        <!-- Order: Project Summary, then the pairs - records (Expense Tracker
+             first: it is the one used most on the phone), banks, bills. Phones
+             read the pairs as rows; wide screens stack each pair in a column,
+             so Expense Tracker still opens the second row. -->
+        <nav class="board" aria-label="Modules">
+            <a class="tile tile--summary" href="/project-summary">
+                <span class="tile__top">
+                    <span class="tile__name">Project Summary</span>
+                    <span class="tile__logo"><img src="{{ url_for('static', filename='modules/summary.svg') }}" alt="" width="44" height="44"></span>
                 </span>
-                <div class="card__body">
-                    <h3 class="card__name">Project Summary</h3>
-                    <p class="card__desc">A comprehensive view across every project</p>
-                </div>
-                <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+                <span class="tile__desc">Spend by category, labour and bank activity for every project.</span>
             </a>
-            <a class="card card--expense" href="/personal-tracker">
-                <span class="card__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+
+            <a class="tile tile--expense" href="/personal-tracker">
+                <span class="tile__top">
+                    <span class="tile__name">Expense Tracker</span>
+                    <span class="tile__logo"><img src="{{ url_for('static', filename='modules/expense.svg') }}" alt="" width="44" height="44"></span>
                 </span>
-                <div class="card__body">
-                    <h3 class="card__name">Expense Tracker</h3>
-                    <p class="card__desc">Personal expenses</p>
-                    <div class="card__stat"><span class="card__statnum" id="personal-count">—</span><span class="card__statlabel">expenses</span></div>
-                </div>
-                <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+                <span class="tile__figure"><span class="tile__count" id="personal-count">—</span><span class="tile__unit">entries</span></span>
             </a>
-            <a class="card card--projects" href="/projects">
-                <span class="card__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="13" y2="17"></line></svg>
+            <a class="tile tile--projects" href="/projects">
+                <span class="tile__top">
+                    <span class="tile__name">Projects Registry</span>
+                    <span class="tile__logo"><img src="{{ url_for('static', filename='modules/projects.svg') }}" alt="" width="44" height="44"></span>
                 </span>
-                <div class="card__body">
-                    <h3 class="card__name">Projects Registry</h3>
-                    <p class="card__desc">Registry &amp; Quick Insights</p>
-                    <div class="card__stat"><span class="card__statnum" id="projects-count">—</span><span class="card__statlabel">active projects</span></div>
-                </div>
-                <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+                <span class="tile__figure"><span class="tile__count" id="projects-count">—</span><span class="tile__unit">active projects</span></span>
             </a>
-            <a class="card card--axis" href="/dashboard/axis">
-                <span class="card__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+
+            <a class="tile tile--axis" href="/dashboard/axis">
+                <span class="tile__top">
+                    <span class="tile__name">Axis Bank</span>
+                    <span class="tile__logo tile__logo--bank"><img src="{{ url_for('static', filename='banks/axis.svg') }}" alt="" width="44" height="44"></span>
                 </span>
-                <div class="card__body">
-                    <h3 class="card__name">Axis Bank</h3>
-                    <p class="card__desc">Transactions</p>
-                    <div class="card__stat"><span class="card__statnum" id="axis-count">{{ bank_stats.get('axis', {}).get('transaction_count', 0) }}</span><span class="card__statlabel">transactions</span></div>
-                </div>
-                <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+                <span class="tile__figure"><span class="tile__count" id="axis-count" data-count="{{ bank_stats.get('axis', {}).get('transaction_count', 0) }}">{{ bank_stats.get('axis', {}).get('transaction_count', 0) }}</span><span class="tile__unit">transactions</span></span>
             </a>
-            <a class="card card--kvb" href="/dashboard/kvb">
-                <span class="card__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+            <a class="tile tile--kvb" href="/dashboard/kvb">
+                <span class="tile__top">
+                    <span class="tile__name">Karur Vysya Bank</span>
+                    <span class="tile__logo tile__logo--bank"><img src="{{ url_for('static', filename='banks/kvb.svg') }}" alt="" width="44" height="44"></span>
                 </span>
-                <div class="card__body">
-                    <h3 class="card__name">Karur Vysya Bank</h3>
-                    <p class="card__desc">Transactions</p>
-                    <div class="card__stat"><span class="card__statnum" id="kvb-count">{{ bank_stats.get('kvb', {}).get('transaction_count', 0) }}</span><span class="card__statlabel">transactions</span></div>
-                </div>
-                <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+                <span class="tile__figure"><span class="tile__count" id="kvb-count" data-count="{{ bank_stats.get('kvb', {}).get('transaction_count', 0) }}">{{ bank_stats.get('kvb', {}).get('transaction_count', 0) }}</span><span class="tile__unit">transactions</span></span>
             </a>
-            <a class="card card--purchase" href="/bill-processor">
-                <span class="card__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+
+            <a class="tile tile--purchase" href="/bill-processor">
+                <span class="tile__top">
+                    <span class="tile__name">Purchase Bills</span>
+                    <span class="tile__logo"><img src="{{ url_for('static', filename='modules/purchase.svg') }}" alt="" width="44" height="44"></span>
                 </span>
-                <div class="card__body">
-                    <h3 class="card__name">Purchase Bills</h3>
-                    <p class="card__desc">AI-powered bill extraction</p>
-                    <div class="card__stat"><span class="card__statnum" id="bill-count">—</span><span class="card__statlabel">invoices</span></div>
-                </div>
-                <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+                <span class="tile__figure"><span class="tile__count" id="bill-count">—</span><span class="tile__unit">bills</span></span>
             </a>
-            <a class="card card--sales" href="/sales-processor">
-                <span class="card__icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="9" y1="9" x2="15" y2="9"></line><line x1="12" y1="6" x2="12" y2="12"></line></svg>
+            <a class="tile tile--sales" href="/sales-processor">
+                <span class="tile__top">
+                    <span class="tile__name">Sales Bills</span>
+                    <span class="tile__logo"><img src="{{ url_for('static', filename='modules/sales.svg') }}" alt="" width="44" height="44"></span>
                 </span>
-                <div class="card__body">
-                    <h3 class="card__name">Sales Bills</h3>
-                    <p class="card__desc">AI-powered sales extraction</p>
-                    <div class="card__stat"><span class="card__statnum" id="sales-count">—</span><span class="card__statlabel">invoices</span></div>
-                </div>
-                <span class="card__arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+                <span class="tile__figure"><span class="tile__count" id="sales-count">—</span><span class="tile__unit">bills</span></span>
             </a>
-        </div>
+        </nav>
     </main>
 
-    <footer class="foot">
-        <div class="wrap"><span class="foot__note">Built for personal money management</span></div>
-    </footer>
-
-    <script src="{{ url_for('static', filename='hub.js') }}"></script>
+    <script src="{{ url_for('static', filename='hub.js') }}?v=6"></script>
     <script src="/static/pwa-register.js"></script>
 </body>
 
