@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Project Summary: the whole, broken into its parts -->
+  <path fill="#D97757" d="M24.0 6.0 A19 19 0 1 1 18.76 43.26 L21.38 34.13 A9.5 9.5 0 1 0 24.0 15.5Z"/>
+  <path fill="#A64526" d="M17.5 42.85 A19 19 0 0 1 5.42 21.05 L14.71 23.02 A9.5 9.5 0 0 0 20.75 33.93Z"/>
+  <path fill="#C09A39" transform="translate(-1.01 -1.24)" d="M5.74 19.76 A19 19 0 0 1 22.67 6.05 L23.34 15.52 A9.5 9.5 0 0 0 14.87 22.38Z"/>
+</svg>

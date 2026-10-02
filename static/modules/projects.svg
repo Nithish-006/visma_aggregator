@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Projects Registry: a folder of numbered projects -->
+  <path fill="#24509F" d="M5 12a4 4 0 0 1 4-4h9.5l4 4.5H39a4 4 0 0 1 4 4V38a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/>
+  <rect x="10" y="14" width="28" height="12" rx="2" fill="#DCE7FA"/>
+  <rect x="5" y="19" width="38" height="23" rx="4" fill="#3B6BC9"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round">
+    <path d="M22 23.5l-2 14M29 23.5l-2 14M17 28h14.5M16 33h14.5"/>
+  </g>
+</svg>
