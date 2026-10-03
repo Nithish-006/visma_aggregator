@@ -300,17 +300,27 @@ main.wrap {
 
     /* One module per row, read like a list: the logo on the left, the name
        with its number right under it. Project Summary's description takes
-       the number's place. */
-    .board { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+       the number's place.
+       The list fills the screen below the bar: the rows share whatever height
+       the phone has, so a tall phone gets roomier tiles instead of an empty
+       strip under Sales Bills. A short phone keeps each row at its floor and
+       scrolls, as before. Project Summary leads with a slightly larger share. */
+    .board {
+        flex: 1;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: minmax(min-content, 1.2fr);
+        grid-auto-rows: minmax(84px, 1fr);
+        gap: 14px;
+    }
     .tile {
         grid-template-columns: auto minmax(0, 1fr);
         grid-template-areas:
             "logo name"
             "logo figure";
-        column-gap: 14px;
+        column-gap: var(--space-4);
         row-gap: 2px;
         min-height: 0;
-        padding: 18px;
+        padding: 16px 20px;
     }
     .tile__logo { width: 46px; height: 46px; border-radius: 13px; }
     .tile__name { font-size: var(--text-headline); }
