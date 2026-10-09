@@ -585,6 +585,9 @@
         const turningOn = editPanel.classList.contains('hidden');
         if (turningOn) switchTab('overview'); // the edit panel lives on the Overview tab
         setEditMode(turningOn);
+        // The panel sits under the whole overview; on a phone that is a screen
+        // and more below the fold, so the tap looked like it did nothing.
+        if (turningOn) editPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
 

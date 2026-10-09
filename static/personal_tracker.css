@@ -1690,3 +1690,39 @@ body {
         padding: 16px 18px;
     }
 }
+
+/* ============================================================================
+   PHONE
+   ----------------------------------------------------------------------------
+   The header holds back, the month and four tools, which is wider than a
+   375px phone: Logout was being pushed past the right edge, out of reach.
+   Logout lives on the hub, so the phone header keeps back, the month, search,
+   export and refresh. A hairline splits "back to hub" from "previous month"
+   so the two chevrons stop reading as one «. Long notes stop at two lines;
+   the full text is one tap away in the edit panel.
+   ============================================================================ */
+@media (max-width: 767px) {
+    .header-left { gap: 4px; }
+    .header-right { gap: 0; }
+    .header-right a[href="/logout"] { display: none; }
+    .icon-btn { width: 36px; }
+
+    .month-nav {
+        gap: 2px;
+        padding-left: 6px;
+        border-left: 1px solid var(--c-border);
+    }
+    .month-label { min-width: 84px; }
+
+    .transaction-project {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* "(optional)" as on the add form. */
+    .panel-optional {
+        text-transform: lowercase;
+    }
+}
