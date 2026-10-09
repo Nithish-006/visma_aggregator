@@ -752,3 +752,33 @@
         padding-right: 0.25rem;
     }
 }
+
+/* Phone: the panel is stacked under the page, not pinned beside it, so the
+   80vh cap left the queue scrolling inside a ~185px window of its own. It
+   takes its natural height and scrolls with the page, and the status chips
+   are one swipeable row instead of three wrapped ones. */
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
+    .mr-panel {
+        max-height: none;
+        overflow: visible;
+    }
+
+    .mr-list {
+        flex: none;
+        overflow-y: visible;
+    }
+
+    .mr-chips {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+
+    .mr-chips::-webkit-scrollbar {
+        display: none;
+    }
+
+    .mr-chip {
+        flex: none;
+    }
+}

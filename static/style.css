@@ -2156,7 +2156,7 @@ body {
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
 
     /* Header - mobile layout */
     .header {

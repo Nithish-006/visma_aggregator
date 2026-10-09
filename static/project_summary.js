@@ -1084,6 +1084,8 @@
                     </tr>`;
                 }).join('');
             }
+            // The paged rows need the same phone labels as the top-20 view.
+            applyMobileTableCards('vendor-table');
 
             // Bind cross-filter clicks on vendor rows
             tbody.querySelectorAll('[data-cf-type="vendor"]').forEach(row => {

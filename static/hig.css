@@ -514,12 +514,13 @@ input[type="radio"] {
     /* Small icon buttons keep their VISUAL size and gain a 44pt HIT AREA via
        a transparent pseudo-element. This is HIG's actual guidance - "add
        sufficient padding for small visual elements" - and it avoids inflating
-       toolbars and table rows just to satisfy the target minimum. */
+       toolbars and table rows just to satisfy the target minimum.
+       .password-toggle is left out: it is already absolutely placed inside
+       the password field, and making it relative dropped it out of the box. */
     .icon-btn,
     .month-btn,
     .ps-icon-btn,
     .slide-panel-back,
-    .password-toggle,
     .row-action-btn,
     .modal-close {
         position: relative;
@@ -544,6 +545,21 @@ input[type="radio"] {
 
     /* Table ROWS stay at their natural height - they are read far more often
        than tapped, and forcing 44px would halve how many transactions fit. */
+}
+
+/* iOS Safari zooms the whole page into any field set under 16px the moment
+   it is tapped, and leaves it zoomed - the filter searches (13px), the
+   tracker search (15px) and the reconciliation pickers (11px) all did. On a
+   phone every field is 16px, which is also simply easier to read. This is the
+   one place the layer uses !important: a page's class rule (.mr-merge-pick,
+   .bp-filter-select ...) outranks a bare `select`, and any field it misses
+   zooms the page. */
+@media (pointer: coarse) and (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
 }
 
 

@@ -579,6 +579,25 @@ input[type="number"] {
     }
 }
 
+/* Phone: one label style for every field, the same small caps the tracker's
+   own edit panel uses, instead of caps for two sections and sentence case for
+   the rest. "(optional)" stays a quiet lowercase aside. */
+@media (max-width: 767px) {
+    .field-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 10px;
+    }
+
+    .optional {
+        font-size: inherit;
+        text-transform: lowercase;
+        letter-spacing: normal;
+    }
+}
+
 @media (min-width: 1024px) {
     .header {
         max-width: 800px;

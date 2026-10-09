@@ -1537,7 +1537,7 @@ body {
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     .header {
         padding: 12px 16px;
         flex-wrap: wrap;
@@ -2119,7 +2119,7 @@ textarea.form-input {
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     .modal-edit {
         width: 100%;
         height: 100vh;
@@ -2560,7 +2560,7 @@ textarea.form-input {
    MOBILE HEADER STYLES
    ============================================================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     /* Hide desktop elements */
     .header-right .btn {
         display: none;
@@ -2750,7 +2750,7 @@ textarea.form-input {
    MOBILE DETAIL MODAL (VIEW-ONLY)
    ============================================================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     .modal {
         padding: 0;
         align-items: flex-end;
@@ -2870,7 +2870,7 @@ textarea.form-input {
    MOBILE UPLOAD/EDIT MODALS (HIDDEN FOR VIEW-ONLY)
    ============================================================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     /* Hide upload modal on mobile - view only */
     #uploadModal,
     #editModal,
@@ -2888,7 +2888,7 @@ textarea.form-input {
    TOUCH-FRIENDLY INTERACTIONS
    ============================================================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     /* Larger touch targets */
     .btn, button {
         min-height: 44px;
@@ -3053,7 +3053,7 @@ textarea.form-input {
     text-align: center;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     .mobile-loading {
         display: flex;
         flex-direction: column;
@@ -3080,7 +3080,7 @@ textarea.form-input {
     font-size: 0.8125rem;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     .pull-indicator.show {
         display: flex;
         align-items: center;
@@ -3092,7 +3092,7 @@ textarea.form-input {
    TOAST MOBILE POSITIONING
    ============================================================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     .toast {
         bottom: calc(20px + var(--safe-area-bottom, 0px));
         left: 16px;
@@ -3510,7 +3510,7 @@ textarea.form-input {
     display: none;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     .bp-filter-toggle {
         display: flex;
         align-items: center;
@@ -3562,5 +3562,391 @@ textarea.form-input {
     #validateBtn,
     #reprocessFlaggedBtn {
         display: none !important;
+    }
+}
+
+/* ============================================================================
+   PHONE: QUIET CHROME, ONE LAYER OF CARDS
+   ----------------------------------------------------------------------------
+   The same top bar as the hub on a phone: a bare back arrow, the title, and
+   hard refresh as a bare icon (it had been hidden along with the desktop
+   buttons, leaving the installed app no way to reload). The seven stat tiles
+   took four rows of the first screen; they are now one swipeable strip
+   without icons. The invoice list sat inside a bordered section, so every
+   bill was a card inside a card: the section's chrome goes and the bills
+   line up with the page edge. Refresh and Export become icons beside
+   "Invoice Summary", with Flagged only under it. On each invoice the GST
+   split is left to the detail sheet; the "To:" customer line stays.
+   ============================================================================ */
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
+    .header {
+        flex-wrap: nowrap;
+        gap: 4px;
+        padding: 8px 4px;
+        padding-top: calc(8px + var(--safe-area-top, 0px));
+    }
+
+    .header-left {
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .back-btn {
+        width: 44px;
+        height: 44px;
+        background: transparent;
+        border-color: transparent;
+    }
+
+    .page-title {
+        font-size: 1.0625rem;
+        font-weight: 600;
+    }
+
+    .header-right {
+        width: auto;
+    }
+
+    .header-right .btn[onclick="hardRefresh()"] {
+        display: inline-flex;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        gap: 0;
+        justify-content: center;
+        font-size: 0;
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+        color: var(--text-secondary);
+    }
+
+    .header-right .btn[onclick="hardRefresh()"] svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .summary-stats {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        margin: 0 -12px 12px;
+        padding: 0 12px;
+    }
+
+    .summary-stats::-webkit-scrollbar {
+        display: none;
+    }
+
+    .stat-card {
+        flex: none;
+        padding: 10px 14px;
+        gap: 0;
+    }
+
+    .stat-icon {
+        display: none;
+    }
+
+    /* Search | Filters on one row, as on the bank dashboard: the search box
+       used to be folded away inside the closed panel. Open, the panel adds
+       From | To and Project. Its "Added" picker goes - the chip row under
+       it sets the same filter - and that row is labelled "Added" so it is
+       not mistaken for the invoice date. */
+    .bp-filter-bar {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+        padding: 0;
+        margin-bottom: 4px;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+    }
+
+    .bp-filter-bar .bp-filters,
+    .bp-filter-bar .bp-filters.expanded {
+        display: contents;
+    }
+
+    .bp-filters:not(.expanded) > :not(.bp-search-group) {
+        display: none;
+    }
+
+    .bp-search-group .bp-search-input {
+        height: 44px;
+    }
+
+    .bp-filters > .bp-filter-group {
+        grid-column: 1 / -1;
+        margin: 0;
+    }
+
+    .bp-filters > .bp-search-group {
+        grid-column: 1 / span 4;
+        grid-row: 1;
+    }
+
+    .bp-search-group > label,
+    .bp-filters > .bp-filter-dropdown > label {
+        display: none;
+    }
+
+    .bp-filter-bar .bp-filter-toggle {
+        grid-column: 5 / span 2;
+        grid-row: 1;
+        justify-content: center;
+        gap: 6px;
+        padding: 0 10px;
+        min-height: 44px;
+    }
+
+    .bp-filter-toggle > span {
+        flex: none;
+    }
+
+    .bp-filter-toggle .bp-filter-arrow {
+        display: none;
+    }
+
+    .bp-filters > .bp-filter-group:has(#filterDateFrom),
+    .bp-filters > .bp-filter-group:has(#filterDateTo) {
+        grid-column: span 3;
+    }
+
+    .bp-filters > .bp-filter-group:has(#addedFilter) {
+        display: none;
+    }
+
+    .bp-filters > .bp-reset-btn {
+        grid-column: 1 / -1;
+        min-height: 40px;
+    }
+
+    .mobile-time-filters {
+        padding: 6px 0 10px;
+        background: transparent;
+        border-bottom: none;
+    }
+
+    .time-chips-scroll {
+        align-items: center;
+        margin: 0 -12px;
+    }
+
+    .time-chips-scroll::before {
+        content: "Added";
+        flex: none;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .main-tabs-section {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .tabs-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 0;
+        padding: 4px 0 8px;
+        background: transparent;
+        border-bottom: none;
+    }
+
+    .tabs-header .tabs-actions {
+        display: contents;
+    }
+
+    .tabs-header .tabs-title {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .tabs-header #refreshBtn,
+    .tabs-header #exportAllBtn {
+        grid-row: 1;
+        flex: none;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        gap: 0;
+        justify-content: center;
+        font-size: 0;
+        background: transparent;
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    .tabs-header #refreshBtn svg,
+    .tabs-header #exportAllBtn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .tabs-header .bp-flagged-toggle {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        justify-self: start;
+    }
+
+    .mobile-invoice-list {
+        padding: 0;
+    }
+
+    .invoice-card-gst {
+        display: none;
+    }
+
+    /* Money reads as money: the totals were bare figures. */
+    .invoice-card-total::before,
+    #statTotalValue::before,
+    #statTotalGST::before,
+    #statTotalCGST::before,
+    #statTotalSGST::before,
+    #statTotalIGST::before {
+        content: "\20B9";
+    }
+
+    /* Detail sheet: one line per field, label left and value right. The row
+       rule above never set its direction, so each label sat over a value
+       that was right-aligned in 60% of the width and wrapped into a ragged
+       middle column. Fields with no value are left out instead of listing
+       a dash each. */
+    .detail-grid {
+        gap: 0;
+    }
+
+    .detail-item {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 12px;
+        padding: 9px 0;
+        background: transparent;
+        border-radius: 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+
+    .detail-label {
+        flex: none;
+    }
+
+    .detail-value {
+        flex: 1 1 auto;
+        max-width: none;
+        text-align: right;
+    }
+
+    .detail-item:has(.detail-value.empty) {
+        display: none;
+    }
+
+    /* Line items: a nine-column table squeezed the description to a word a
+       line and scrolled sideways. Each item is now a list row: number,
+       description and amount on the first line, then "HSN 2710 · 448 Ltr
+       × 90.03 · GST 0". Taxable is left to the tax summary below. */
+    .line-items-table,
+    .line-items-table tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .line-items-table thead {
+        display: none;
+    }
+
+    .line-items-table tbody tr {
+        display: flex;
+        width: 100%;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 2px 6px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .line-items-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .line-items-table tbody tr::after {
+        content: "";
+        order: -1;
+        flex: 0 0 100%;
+        height: 0;
+    }
+
+    .line-items-table tbody td {
+        padding: 0;
+        border: none;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-align: left;
+    }
+
+    .line-items-table tbody td:nth-child(1) {
+        order: -3;
+        flex: 0 0 18px;
+        color: var(--text-muted);
+    }
+
+    .line-items-table tbody td:nth-child(2) {
+        order: -3;
+        flex: 1 1 0;
+        min-width: 0;
+        /* the cell carries an inline max-width of 200px for the desktop table */
+        max-width: none !important;
+        font-size: 0.8125rem;
+        color: var(--text-primary);
+    }
+
+    .line-items-table tbody td:nth-child(9) {
+        order: -2;
+        margin-left: auto;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+
+    .line-items-table tbody td:nth-child(3) {
+        margin-left: 24px;
+    }
+
+    .line-items-table tbody td:nth-child(3)::before {
+        content: "HSN ";
+    }
+
+    .line-items-table tbody td:nth-child(3)::after,
+    .line-items-table tbody td:nth-child(5)::after {
+        content: " \00B7";
+    }
+
+    .line-items-table tbody td:nth-child(5) {
+        margin-left: -2px;
+    }
+
+    .line-items-table tbody td:nth-child(6)::before {
+        content: "\00D7 ";
+    }
+
+    .line-items-table tbody td:nth-child(7) {
+        display: none;
+    }
+
+    .line-items-table tbody td:nth-child(8)::before {
+        content: "\00B7  GST ";
     }
 }

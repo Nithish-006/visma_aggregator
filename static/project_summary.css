@@ -1517,7 +1517,7 @@ tr.ps-cf-active td:first-child {
    RESPONSIVE - 768px
    ============================================================================ */
 
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     .ps-bill-detail-grid {
         grid-template-columns: 1fr;
     }
@@ -1922,7 +1922,7 @@ tr.ps-cf-active td:first-child {
    so the page reads the same everywhere on a phone. Decorated in JS via
    applyMobileTableCards() which stamps each <td> with data-label.
    ============================================================================ */
-@media (max-width: 768px) {
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
     /* No more sideways scroll â€” cards own the full width. */
     .ps-table-wrap { overflow-x: visible; }
 
@@ -2029,5 +2029,366 @@ tr.ps-cf-active td:first-child {
         flex-wrap: wrap;
         justify-content: center;
         gap: 8px;
+    }
+}
+
+/* ============================================================================
+   PHONE: ROOM FOR THE NUMBERS
+   ----------------------------------------------------------------------------
+   On a 375px phone the sticky header (a six-line project name beside a filled
+   Export button) and the sticky filter bar (eleven month pills over four rows,
+   two labelled dropdowns, a full-width Reset) held more than half the screen
+   for the whole scroll, and the header ran 60px past the right edge, so the
+   page slid sideways and refresh was cut off.
+     - Header: the hub's quiet bar. The name gets two lines, Export is a bare
+       download icon, Logout stays on the hub.
+     - Filters scroll away with the page. Months are one swipeable row, the
+       labels go (the controls already say "All Categories" / "All Vendors"),
+       and Reset is an icon at the end of the dropdowns' row.
+     - Landing: the type pills are one swipeable row and card names drop to
+       body size.
+     - Tables: a section is already a card, so its rows are list rows with a
+       hairline between them, not a card each. The title and its amount share
+       the first line; the rest is one wrapped line of LABEL value. Project is
+       dropped from each row (it is the project on screen), as are empty cells.
+   ============================================================================ */
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
+    .ps-header {
+        padding: 8px 4px 8px 4px;
+        gap: 4px;
+    }
+
+    .ps-header-left {
+        flex: 1 1 auto;
+        min-width: 0;
+        gap: 4px;
+    }
+
+    .ps-title {
+        font-size: 1.0625rem;
+        font-weight: 600;
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        overflow-wrap: anywhere;
+    }
+
+    .ps-header-right {
+        flex: none;
+        gap: 0;
+    }
+
+    .ps-header a.ps-icon-btn[href="/logout"] {
+        display: none;
+    }
+
+    /* The label is a bare text node, so it is hidden by size, not display. */
+    .ps-export-btn {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        gap: 0;
+        justify-content: center;
+        font-size: 0;
+        background: transparent;
+        border-color: transparent;
+        color: var(--c-accent-text);
+    }
+
+    .ps-export-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .ps-filter-bar {
+        position: static;
+        padding: 12px 0 4px;
+        background: transparent;
+        border-bottom: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+
+    .ps-filters {
+        gap: 8px;
+    }
+
+    .ps-filter-group label {
+        display: none;
+    }
+
+    .ps-month-pills,
+    .ps-type-filter {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        margin: 0 -12px;
+        padding: 2px 12px;
+    }
+
+    .ps-month-pills::-webkit-scrollbar,
+    .ps-type-filter::-webkit-scrollbar {
+        display: none;
+    }
+
+    .ps-month-pill,
+    .ps-type-pill {
+        flex: none;
+    }
+
+    .ps-filter-dropdown {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: none;
+        order: 2;
+    }
+
+    .ps-filter-bar .ps-reset-btn {
+        flex: 0 0 44px;
+        width: 44px;
+        order: 3;
+        align-self: stretch;
+        justify-content: center;
+        padding: 0;
+        gap: 0;
+        font-size: 0;
+    }
+
+    .ps-reset-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    /* An open Category / Vendor list spans the filter row under both
+       dropdowns. Hung off the Vendor dropdown at max-content width it ran
+       140px past the right edge and slid the whole page sideways. */
+    .ps-filters {
+        position: relative;
+    }
+
+    .ps-filters .ps-custom-dropdown {
+        position: static;
+    }
+
+    .ps-filters .ps-dd-menu {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+    }
+
+    /* Landing */
+    .ps-type-filter {
+        margin: 0 -14px 20px;
+        padding: 2px 14px;
+    }
+
+    .ps-proj-card {
+        min-height: 0;
+        gap: 10px;
+    }
+
+    .ps-proj-card-name {
+        font-size: 1rem;
+        line-height: 1.3;
+    }
+
+    /* Tables as list rows */
+    .ps-table tbody tr {
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 2px 12px;
+        margin: 0;
+        padding: 12px 0;
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid var(--border-color);
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .ps-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .ps-table tbody tr.ps-cf-active {
+        margin: 0 -10px;
+        padding: 12px 10px;
+        border-radius: 10px;
+    }
+
+    .ps-table tbody tr.ps-total-row {
+        margin: 4px -10px 0;
+        padding: 12px 10px;
+        border-radius: 10px;
+    }
+
+    /* Line one: the title, then its amount pushed right; a zero-height
+       full-width item after them breaks the line. */
+    .ps-table tbody tr::after {
+        content: "";
+        order: -1;
+        flex: 0 0 100%;
+        height: 0;
+    }
+
+    .ps-table tbody td {
+        display: inline-flex;
+        width: auto;
+        flex: 0 1 auto;
+        justify-content: flex-start;
+        gap: 5px;
+        padding: 0;
+        text-align: left;
+        color: var(--text-secondary);
+    }
+
+    /* "45 bills | Total ... | GST ..." goes under the section name rather
+       than squeezing it into a narrow column beside it. */
+    .ps-section-title:has(.ps-bills-summary-text) {
+        flex-wrap: wrap;
+        row-gap: 2px;
+    }
+
+    .ps-bills-summary-text {
+        flex: 1 1 100%;
+        margin-left: 0;
+    }
+
+    .ps-table tbody td:last-child {
+        padding-bottom: 0;
+    }
+
+    .ps-table tbody td::before {
+        font-size: 0.625rem;
+    }
+
+    .ps-table tbody td.ps-cell-title {
+        order: -3;
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 0;
+        margin: 0;
+        border-bottom: none;
+        color: var(--text-primary);
+    }
+
+    .ps-table tbody td.text-expense,
+    .ps-table tbody td.text-income,
+    .ps-table tbody td[data-label="Salary"] {
+        order: -2;
+        margin-left: auto;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .ps-table tbody td.text-expense::before,
+    .ps-table tbody td.text-income::before,
+    .ps-table tbody td[data-label="Salary"]::before {
+        content: none;
+    }
+
+    .ps-table tbody td.cell-wrap {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
+    /* "% 3.4%" says it twice. */
+    .ps-table tbody td[data-label="%"]::before {
+        content: none;
+    }
+
+    /* Bill pop-up: a sheet from the bottom edge, like the bill sheets on the
+       Purchase and Sales pages, and its line items read the same way there:
+       number, description and amount, then "HSN 8546 · 110.2 × ₹235.00".
+       They had been four bare figures with nothing saying which was which. */
+    .ps-bill-modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .ps-bill-modal-content {
+        max-height: 92vh;
+        border-radius: 18px 18px 0 0;
+    }
+
+    .ps-bill-modal-content .ps-table tbody tr {
+        gap: 2px 6px;
+        padding: 10px 0;
+    }
+
+    .ps-bill-modal-content .ps-table tbody td {
+        font-size: 0.75rem;
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(1) {
+        order: -3;
+        flex: 0 0 18px;
+        color: var(--text-muted);
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(2) {
+        order: -3;
+        flex: 1 1 0;
+        min-width: 0;
+        font-size: 0.8125rem;
+        color: var(--text-primary);
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(6) {
+        order: -2;
+        margin-left: auto;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(3) {
+        margin-left: 24px;
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(3)::before {
+        content: "HSN";
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(4)::before {
+        content: "\00B7";
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(5)::before {
+        content: "\00D7";
+    }
+
+    /* No HSN on the line: the quantity starts the second line instead. */
+    .ps-bill-modal-content .ps-table tbody td:nth-child(3):empty + td {
+        margin-left: 24px;
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(3):empty + td::before {
+        content: none;
+    }
+
+    .ps-bill-modal-content .ps-table tbody td:nth-child(n+3)::before {
+        font-size: inherit;
+        font-weight: inherit;
+        letter-spacing: normal;
+        text-transform: none;
+        color: inherit;
+    }
+
+    .ps-table tbody td:empty,
+    .ps-table tbody td[data-label="Project"] {
+        display: none;
+    }
+
+    .ps-table tbody td.ps-empty {
+        flex: 1 1 100%;
+        justify-content: center;
     }
 }

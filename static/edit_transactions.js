@@ -52,10 +52,11 @@
      * On a phone this page is a viewer, not an editor -- see the
      * "MOBILE: READ-ONLY LEDGER" block in edit_transactions.css. The CSS hides
      * the write controls; this guard stops the ones a tap could still reach.
-     * Breakpoint must stay in step with that media query.
+     * Breakpoint must stay in step with that media query, which also counts a
+     * phone held sideways (wider than 768px, but never taller than ~430px).
      */
     function isMobileView() {
-        return window.matchMedia('(max-width: 768px)').matches;
+        return window.matchMedia('(max-width: 768px), (pointer: coarse) and (max-height: 500px)').matches;
     }
 
     /**
@@ -666,7 +667,7 @@
      * Check if mobile view is active
      */
     function isMobileView() {
-        return window.innerWidth <= 768;
+        return window.matchMedia('(max-width: 768px), (pointer: coarse) and (max-height: 500px)').matches;
     }
 
     /**

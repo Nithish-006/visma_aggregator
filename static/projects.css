@@ -1948,3 +1948,218 @@ html, body {
     .proj-led-gst-opt { padding: 0.25rem 0.6rem; }
 
 }
+
+/* ============================================================================
+   PHONE: QUIET CHROME
+   ----------------------------------------------------------------------------
+   The hub's top bar on a phone: a bare back chevron and the title, with
+   New Project as a tinted text button rather than a filled gradient one.
+   The type pills are one swipeable row instead of two wrapped ones, and the
+   card names drop to body size so a long name takes two lines, not four.
+   ============================================================================ */
+@media (max-width: 640px) {
+    .proj-header {
+        gap: 0.25rem;
+        padding: 0.5rem 0.75rem 0.5rem 0.25rem;
+    }
+
+    .proj-header-left {
+        gap: 0.25rem;
+    }
+
+    .proj-back-btn {
+        width: 44px;
+        height: 44px;
+        background: transparent;
+        border-color: transparent;
+    }
+
+    .proj-title {
+        font-size: 1.0625rem;
+        font-weight: 600;
+    }
+
+    /* Scoped to the header: hig.css repaints .proj-primary-btn after this
+       file, and the modals' filled primaries stay as they are. */
+    .proj-header .proj-primary-btn {
+        padding: 0.45rem 0.8rem;
+        background: var(--proj-accent-soft);
+        color: var(--c-accent-text);
+        box-shadow: none;
+        font-size: 0.8125rem;
+    }
+
+    .proj-header .proj-primary-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .proj-filter-bar {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        margin: 0 -1rem 1.25rem;
+        padding: 2px 1rem;
+    }
+
+    .proj-filter-bar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .proj-filter-pill {
+        flex: none;
+    }
+
+    .project-card {
+        gap: 0.75rem;
+        padding: 1rem 1.1rem;
+    }
+
+    .project-card-stem {
+        font-size: 1rem;
+        line-height: 1.3;
+    }
+
+    /* Pop-ups rise from the bottom edge as sheets, like the bill sheets,
+       instead of floating in a margin. The project's name gets the full
+       width, with its actions on a row under it and the close button in the
+       corner; before, the name was squeezed into three lines beside them. */
+    .proj-modal {
+        align-items: flex-end;
+    }
+
+    .proj-modal-card,
+    .proj-modal-card--detail {
+        width: 100%;
+        max-height: 92vh;
+        border-bottom: none;
+        border-radius: 18px 18px 0 0;
+    }
+
+    .proj-modal-header {
+        position: relative;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        padding: 1rem 1rem 0.85rem;
+    }
+
+    .proj-modal-header h2 {
+        flex: 1 1 100%;
+        padding-right: 2.5rem;
+        font-size: 1.0625rem;
+        line-height: 1.3;
+    }
+
+    .proj-modal-header-actions {
+        flex: 1 1 100%;
+        justify-content: flex-start;
+    }
+
+    .proj-modal-header .proj-modal-close {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+    }
+
+    .proj-modal-body {
+        padding: 1rem;
+    }
+
+    .proj-tabs {
+        margin-top: 0.25rem;
+        scrollbar-width: none;
+    }
+
+    .proj-tabs::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* The Ledger's sub-tabs ran 150px past the sheet: "Third-party payments"
+       sat out of sight behind a thin scrollbar. On a phone all of them show,
+       two to a row. */
+    .proj-subtabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        border-radius: 14px;
+        overflow: visible;
+    }
+
+    .proj-subtab {
+        border-radius: 10px;
+        padding: 0.5rem 0.5rem;
+        text-align: center;
+    }
+
+    /* Read-only lists in the sheet (PO lines, bills, payments, labour):
+       list rows with a hairline, not a card each. The heading and its
+       amount share the first line; the rest is one wrapped line of
+       LABEL value. The editable ledger tables keep their own card layout. */
+    .proj-li-scroll:has(> .proj-li-table:not(.proj-led-table)) {
+        padding: 0 12px;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody tr {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 2px 12px;
+        margin: 0;
+        padding: 10px 0;
+        background: transparent;
+        border: none;
+        border-bottom: 1px solid var(--proj-border);
+        border-radius: 0;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody tr::after {
+        content: "";
+        order: -1;
+        flex: 0 0 100%;
+        height: 0;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody td {
+        display: inline-flex;
+        width: auto;
+        flex: 0 1 auto;
+        justify-content: flex-start;
+        gap: 5px;
+        padding: 0;
+        text-align: left;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody td::before {
+        font-size: 0.625rem;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody td.proj-li-title {
+        order: -3;
+        flex: 1 1 0;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border-bottom: none;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody td[data-label="Amount"],
+    .proj-li-table:not(.proj-led-table) tbody td[data-label="Cost"] {
+        order: -2;
+        margin-left: auto;
+        font-weight: 600;
+        color: var(--proj-text);
+        white-space: nowrap;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody td[data-label="Amount"]::before,
+    .proj-li-table:not(.proj-led-table) tbody td[data-label="Cost"]::before {
+        content: none;
+    }
+
+    .proj-li-table:not(.proj-led-table) tbody td.proj-li-desc:not(.proj-li-title) {
+        flex: 1 1 100%;
+    }
+}
