@@ -1063,6 +1063,23 @@ async function bulkReprocessFlagged() {
 // RENDER TABLES
 // ============================================================================
 
+// "No invoices yet" only when nothing is stored at all. When a search, the
+// flagged toggle, a date or project filter or an Added chip has hidden every
+// invoice, the empty page says so instead of claiming there are none.
+function setEmptyStateText(emptyState) {
+    const val = (id) => (document.getElementById(id)?.value || '').trim();
+    const filtering = Boolean(searchQuery) || flaggedOnly || Boolean(currentAddedFilter)
+        || selectedProjects.length > 0 || Boolean(val('filterDateFrom')) || Boolean(val('filterDateTo'));
+    const title = emptyState.querySelector('h3');
+    const hint = emptyState.querySelector('p');
+    if (title) title.textContent = filtering ? 'No invoices match' : 'No invoices yet';
+    if (hint) {
+        hint.textContent = filtering
+            ? 'Try a different search, filter or date range.'
+            : 'Upload bills from desktop to view them here';
+    }
+}
+
 function renderInvoicesTable() {
     const tbody = document.getElementById('invoicesBody');
     const emptyState = document.getElementById('invoicesEmpty');
@@ -1075,6 +1092,7 @@ function renderInvoicesTable() {
     if (bills.length === 0) {
         tableContainer.style.display = 'none';
         if (mobileList) mobileList.innerHTML = '';
+        setEmptyStateText(emptyState);
         emptyState.style.display = 'flex';
         return;
     }
@@ -1195,7 +1213,7 @@ function renderMobileInvoiceCards() {
                             <line x1="3" y1="12" x2="3.01" y2="12"></line>
                             <line x1="3" y1="18" x2="3.01" y2="18"></line>
                         </svg>
-                        ${bill.line_item_count || 0} items
+                        ${bill.line_item_count || 0} ${Number(bill.line_item_count) === 1 ? 'item' : 'items'}
                     </span>
                     <span class="invoice-meta-item invoice-added">
                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

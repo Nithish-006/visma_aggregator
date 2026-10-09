@@ -2578,3 +2578,205 @@ input[type="checkbox"] {
         display: none;
     }
 }
+
+/* ============================================================================
+   PHONE: CLEAR PARTS
+   ----------------------------------------------------------------------------
+   The page reads as separate things, each with its own edge, on a 12px
+   gutter:
+     1. the statement's date range, a full-width light blue band under the bar;
+     2. the count and the export, two buttons side by side under it;
+     3. a search card - Search | Filters, and the filter panel when open;
+     4. the transactions, each its own card with a gap between, the way the
+        bills are listed on the Purchase and Sales pages.
+   Before, these sat loose on the page colour with only hairlines between
+   rows, so the controls, the count and the records ran into one another.
+   ============================================================================ */
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
+    .main-content,
+    .edit-main-content {
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    /* 1. Date range: a full-width light blue band straight under the bar,
+       edge to edge (out through the page gutter), its text centred. */
+    .edit-main-content {
+        padding-top: 0;
+    }
+
+    .mobile-data-info {
+        justify-content: center;
+        gap: 10px;
+        margin: 0 -12px 12px;
+        padding: 9px 16px;
+        background: #E6EEF9;
+        border: none;
+        border-bottom: 1px solid rgba(59, 107, 201, 0.16);
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .mobile-data-info .mobile-date-label {
+        color: #3D5A86;
+    }
+
+    .mobile-data-info .mobile-date-separator {
+        color: rgba(59, 107, 201, 0.45);
+        opacity: 1;
+    }
+
+    /* 2 + 3. One grid holds both: the two buttons in row 1, Search | Filters
+       in row 2 and the filter panel in row 3. The search card is drawn by a
+       pseudo-element laid under rows 2-3, so it hugs the search row when the
+       panel is shut and grows around the panel when it opens. Spacing is all
+       margins (no row gap) so the card's padding stays even. */
+    .edit-toolbar-wrapper {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 0 8px;
+        padding: 0;
+        margin-bottom: 16px;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+    }
+
+    .edit-toolbar-wrapper::after {
+        content: "";
+        grid-column: 1 / -1;
+        grid-row: 2 / 4;
+        z-index: 0;
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* 2. Count and export: two equal buttons. */
+    .edit-actions-toolbar .edit-stats {
+        grid-column: 1 / span 3;
+        grid-row: 1;
+        display: flex;
+        margin: 0 0 12px;
+    }
+
+    .edit-actions-toolbar #download-transactions {
+        grid-column: 4 / span 3;
+        grid-row: 1;
+        margin: 0 0 12px;
+    }
+
+    .edit-stats .stat-badge:first-child,
+    .edit-actions-toolbar #download-transactions {
+        flex: 1;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+        height: 44px;
+        padding: 0 12px;
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: 12px;
+        box-shadow: var(--shadow-sm);
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .edit-stats .stat-badge:first-child {
+        display: flex;
+        color: var(--text-muted);
+    }
+
+    .edit-actions-toolbar #download-transactions {
+        color: var(--c-accent-text);
+    }
+
+    /* 3. The search card's contents sit above its background. */
+    .edit-actions-toolbar .search-wrapper {
+        grid-column: 1 / span 4;
+        grid-row: 2;
+        z-index: 1;
+        width: auto;
+        margin: 10px 0 10px 10px;
+    }
+
+    .edit-filter-toolbar .filter-toggle {
+        grid-column: 5 / span 2;
+        grid-row: 2;
+        z-index: 1;
+        justify-self: stretch;
+        margin: 10px 10px 10px 0;
+    }
+
+    .edit-filter-toolbar .filter-content {
+        grid-row: 3;
+        z-index: 1;
+        margin: 0 10px 10px;
+    }
+
+    /* Inside a white card, the field and the toggle take the soft fill so
+       they still read as controls. */
+    .edit-toolbar-wrapper .search-input,
+    .edit-filter-toolbar .filter-toggle:not(.active) {
+        background: var(--c-surface-soft);
+    }
+
+    /* 3. Transactions as cards */
+    .edit-table-container {
+        width: auto;
+        margin: 0;
+        border: none;
+        background: transparent;
+    }
+
+    .edit-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .edit-table tbody tr,
+    .edit-table tbody tr:last-child {
+        padding: 14px 16px;
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: 14px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .pagination-controls {
+        padding-top: 1.25rem;
+    }
+
+    /* A hand-typed project name (not one from the registry) wears a red dot
+       and a dashed red edge so it gets fixed on the desktop, where tapping it
+       standardises it. A phone is read-only, so there the alarm had no action
+       and no explanation; it shows as a plain neutral badge instead. */
+    .edit-table tbody .project-badge.legacy {
+        background: var(--c-surface-soft);
+        color: var(--c-text-muted);
+        border: 1px solid var(--c-border-strong);
+    }
+
+    .edit-table tbody .project-badge .legacy-dot {
+        display: none;
+    }
+
+    /* A search or filter with no matches left a blank page over a
+       "Showing 0-0 of 0" pager. renderTable() empties and refills the body
+       in one go, so an empty body only ever means "nothing matched". */
+    .edit-table tbody:empty::before {
+        content: "No transactions match this search or these filters.";
+        padding: 32px 16px;
+        text-align: center;
+        color: var(--text-muted);
+        background: var(--c-surface);
+        border: 1px dashed var(--c-border-strong);
+        border-radius: 14px;
+    }
+
+    /* style.css pins the pager on with !important on phones. */
+    .edit-table-container:has(tbody:empty) + .pagination-controls {
+        display: none !important;
+    }
+}

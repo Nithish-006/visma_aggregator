@@ -4131,3 +4131,178 @@ textarea.form-input {
         content: "\00B7  GST ";
     }
 }
+
+/* ============================================================================
+   PHONE: TIDY TOP
+   ----------------------------------------------------------------------------
+   The top of the page reads in the same order and the same style as the bank
+   pages, every part on the page gutter:
+     1. four equal tiles, two by two - Total Value | Total GST, Invoices |
+        Vendors - drawn like the bank page's Total and Download buttons. The
+        CGST / SGST / IGST split is left to the desktop page and to each
+        bill's own sheet; seven figures do not fit a phone tidily;
+     2. a search card - Search | Filters at one height, and the filter panel
+        inside the same card when it is open;
+     3. the "Added" chips;
+     4. one bar over the list - Flagged only on the left, refresh and export
+        on the right. The "Invoice Summary" heading goes.
+   ============================================================================ */
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
+    /* 1. Four tiles */
+    .summary-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 0 0 12px;
+        padding: 0;
+        overflow: visible;
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .summary-stats .stat-card {
+        min-width: 0;
+        padding: 10px 14px;
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: 12px;
+        box-shadow: var(--shadow-sm);
+        transform: none;
+    }
+
+    .summary-stats .stat-card:has(#statTotalValue)     { order: 1; }
+    .summary-stats .stat-card:has(#statTotalGST)       { order: 2; }
+    .summary-stats .stat-card:has(#statTotalInvoices)  { order: 3; }
+    .summary-stats .stat-card:has(#statUniqueVendors)  { order: 4; }
+
+    .summary-stats .stat-card:has(#statTotalCGST),
+    .summary-stats .stat-card:has(#statTotalSGST),
+    .summary-stats .stat-card:has(#statTotalIGST) {
+        display: none;
+    }
+
+    .summary-stats .stat-info {
+        flex-direction: column-reverse;
+        gap: 2px;
+        min-width: 0;
+    }
+
+    .summary-stats .stat-info .stat-label {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .summary-stats .stat-info .stat-value {
+        overflow: hidden;
+        font-size: 1rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* 2. Search card */
+    .bp-filter-bar {
+        gap: 10px 8px;
+        padding: 10px;
+        margin-bottom: 8px;
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .bp-filters > .bp-search-group {
+        min-width: 0;
+    }
+
+    .bp-search-group .bp-search-input,
+    .bp-filter-bar .bp-filter-toggle {
+        height: 44px;
+        min-height: 44px;
+    }
+
+    .bp-search-group .bp-search-input,
+    .bp-filter-bar .bp-filter-toggle[aria-expanded="false"] {
+        background: var(--c-surface-soft);
+    }
+
+    /* 3. Added chips: slimmer, and the row fades out at the right edge so
+       it reads as "swipe for more" rather than being cut off. */
+    .mobile-time-filters {
+        padding: 2px 0 8px;
+    }
+
+    .time-chips-scroll {
+        -webkit-mask-image: linear-gradient(to right, #000 85%, transparent);
+        mask-image: linear-gradient(to right, #000 85%, transparent);
+    }
+
+    .time-chips-scroll .time-chip {
+        min-height: 36px;
+        height: 36px;
+        padding: 0 14px;
+        font-size: 0.8125rem;
+    }
+
+    /* 4. List bar */
+    .tabs-header .tabs-title {
+        display: none;
+    }
+
+    .tabs-header {
+        padding: 2px 0 8px;
+    }
+
+    .tabs-header .bp-flagged-toggle {
+        grid-row: 1;
+        grid-column: 1;
+        align-self: center;
+        padding: 6px 12px;
+        background: var(--c-surface);
+        border: 1px solid var(--c-border);
+        border-radius: 999px;
+    }
+}
+
+/* ============================================================================
+   PHONE: BILL CARD HEADER, TAP STATES
+   ----------------------------------------------------------------------------
+   A long invoice number ("BT/JAJ/26-27/EXP/00004471/R1") took the width and
+   squeezed the date and its status badge into a two-line stack. The number
+   now wraps within its own column and the date with its badge stays one
+   line on the right.
+   On a touch screen :hover sticks after a tap, so a sheet's close button
+   stayed filled red once tapped; touch screens get no hover fill.
+   ============================================================================ */
+@media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
+    .invoice-card-header {
+        gap: 10px;
+        align-items: center;
+    }
+
+    .invoice-card-number {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        line-height: 1.3;
+    }
+
+    .invoice-card-date {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+}
+
+@media (hover: none) {
+    .modal-close:hover {
+        background: transparent;
+        color: var(--text-secondary);
+    }
+}
