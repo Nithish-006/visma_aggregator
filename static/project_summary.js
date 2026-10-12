@@ -1121,7 +1121,7 @@
                 tbody.innerHTML = '<tr><td colspan="6" class="ps-empty">No transactions</td></tr>';
             } else {
                 tbody.innerHTML = result.transactions.map(t => `<tr>
-                    <td>${t.date}</td>
+                    <td>${escapeHtml(VismaDate.format(t.date))}</td>
                     <td>${t.vendor}</td>
                     <td>${t.category}</td>
                     <td>${t.project || '-'}</td>
@@ -1176,7 +1176,7 @@
 
         tbody.innerHTML = data.bills.map(b => `<tr>
             <td><a href="#" class="ps-bill-link" data-bill-id="${b.id}">${escapeHtml(b.invoice_number || '-')}</a></td>
-            <td>${escapeHtml(b.invoice_date || '-')}</td>
+            <td>${escapeHtml(VismaDate.format(b.invoice_date, '-'))}</td>
             <td class="cell-wrap">${escapeHtml(b.vendor_name || '-')}</td>
             <td>${escapeHtml(b.vendor_gstin || '-')}</td>
             <td class="text-right">${b.line_item_count || 0}</td>
@@ -1238,7 +1238,7 @@
 
         tbody.innerHTML = data.bills.map(b => `<tr>
             <td><a href="#" class="ps-sales-bill-link" data-bill-id="${b.id}">${escapeHtml(b.invoice_number || '-')}</a></td>
-            <td>${escapeHtml(b.invoice_date || '-')}</td>
+            <td>${escapeHtml(VismaDate.format(b.invoice_date, '-'))}</td>
             <td class="cell-wrap">${escapeHtml(b.buyer_name || '-')}</td>
             <td>${escapeHtml(b.buyer_gstin || '-')}</td>
             <td class="text-right">${b.line_item_count || 0}</td>
@@ -1322,7 +1322,7 @@
                         <div class="ps-bill-detail-grid">
                             <div class="ps-bill-detail-section">
                                 <h4>Invoice Details</h4>
-                                <div class="ps-bill-detail-row"><span>Date:</span><span>${escapeHtml(bill.invoice_date || '-')}</span></div>
+                                <div class="ps-bill-detail-row"><span>Date:</span><span>${escapeHtml(VismaDate.format(bill.invoice_date, '-'))}</span></div>
                                 <div class="ps-bill-detail-row"><span>IRN:</span><span style="word-break:break-all;">${escapeHtml(bill.irn || '-')}</span></div>
                                 <div class="ps-bill-detail-row"><span>Project:</span><span>${escapeHtml(bill.project || '-')}</span></div>
                             </div>

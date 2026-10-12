@@ -1113,7 +1113,7 @@ class DatabaseManager:
                 # Convert date objects and Decimals for JSON serialization
                 for row in results:
                     if row.get('invoice_date'):
-                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%m-%Y')
                     if row.get('created_at'):
                         row['created_at'] = row['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                     # Convert Decimal fields to float
@@ -1141,7 +1141,7 @@ class DatabaseManager:
 
                 # Convert dates and Decimals
                 if invoice.get('invoice_date'):
-                    invoice['invoice_date'] = invoice['invoice_date'].strftime('%d-%b-%Y')
+                    invoice['invoice_date'] = invoice['invoice_date'].strftime('%d-%m-%Y')
                 if invoice.get('created_at'):
                     invoice['created_at'] = invoice['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                 if invoice.get('updated_at'):
@@ -1637,7 +1637,7 @@ class DatabaseManager:
                 if result:
                     # Format dates for display
                     if result.get('invoice_date'):
-                        result['invoice_date'] = result['invoice_date'].strftime('%d-%b-%Y')
+                        result['invoice_date'] = result['invoice_date'].strftime('%d-%m-%Y')
                     if result.get('created_at'):
                         result['created_at'] = result['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                     return result
@@ -1735,7 +1735,7 @@ class DatabaseManager:
                 bills = []
                 for row in rows:
                     if row.get('invoice_date'):
-                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%m-%Y')
                     for key, val in row.items():
                         if isinstance(val, DecimalType):
                             row[key] = float(val)
@@ -1832,7 +1832,7 @@ class DatabaseManager:
                 bills = []
                 for row in rows:
                     if row.get('invoice_date'):
-                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%m-%Y')
                     for key, val in row.items():
                         if isinstance(val, DecimalType):
                             row[key] = float(val)
@@ -1942,7 +1942,7 @@ class DatabaseManager:
 
                 for row in rows:
                     if row.get('invoice_date'):
-                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%m-%Y')
                     for key, val in row.items():
                         if isinstance(val, DecimalType):
                             row[key] = float(val)
@@ -2018,7 +2018,7 @@ class DatabaseManager:
                     if key not in bills_map:
                         inv_date = row.get('invoice_date')
                         if inv_date and hasattr(inv_date, 'strftime'):
-                            inv_date = inv_date.strftime('%d-%b-%Y')
+                            inv_date = inv_date.strftime('%d-%m-%Y')
                         alloc_total = float(row['total_amount']) if row.get('total_amount') else 0
                         bill_total = float(row['bill_total_amount']) if row.get('bill_total_amount') else 0
                         ratio = (alloc_total / bill_total) if bill_total else 1.0
@@ -2134,7 +2134,7 @@ class DatabaseManager:
                     if bid not in bills_map:
                         inv_date = row.get('invoice_date')
                         if inv_date and hasattr(inv_date, 'strftime'):
-                            inv_date = inv_date.strftime('%d-%b-%Y')
+                            inv_date = inv_date.strftime('%d-%m-%Y')
                         bills_map[bid] = {
                             'bill_id': bid,
                             'invoice_number': row.get('invoice_number', ''),
@@ -2432,7 +2432,7 @@ class DatabaseManager:
                 if isinstance(val, DecimalType):
                     row[key] = float(val)
                 elif hasattr(val, 'strftime'):
-                    row[key] = val.strftime('%d-%b-%Y')
+                    row[key] = val.strftime('%d-%m-%Y')
         return invoice, items
 
     def approve_bill_validation(self, invoice_id: int, kind: str = 'purchase',
@@ -2691,7 +2691,7 @@ class DatabaseManager:
 
                 for row in results:
                     if row.get('invoice_date'):
-                        row['invoice_date'] = row['invoice_date'].strftime('%d-%b-%Y')
+                        row['invoice_date'] = row['invoice_date'].strftime('%d-%m-%Y')
                     if row.get('created_at'):
                         row['created_at'] = row['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                     for key, val in row.items():
@@ -2716,7 +2716,7 @@ class DatabaseManager:
                     return None
 
                 if invoice.get('invoice_date'):
-                    invoice['invoice_date'] = invoice['invoice_date'].strftime('%d-%b-%Y')
+                    invoice['invoice_date'] = invoice['invoice_date'].strftime('%d-%m-%Y')
                 if invoice.get('created_at'):
                     invoice['created_at'] = invoice['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                 if invoice.get('updated_at'):
@@ -2836,7 +2836,7 @@ class DatabaseManager:
 
                 if result:
                     if result.get('invoice_date'):
-                        result['invoice_date'] = result['invoice_date'].strftime('%d-%b-%Y')
+                        result['invoice_date'] = result['invoice_date'].strftime('%d-%m-%Y')
                     if result.get('created_at'):
                         result['created_at'] = result['created_at'].strftime('%Y-%m-%d %H:%M:%S')
                     return result
@@ -4004,7 +4004,7 @@ class DatabaseManager:
 
     @staticmethod
     def _parse_po_date(value):
-        """Accept 'DD-MMM-YYYY' (or a few common forms) -> date / None."""
+        """Accept 'DD-MM-YYYY' / 'DD-MMM-YYYY' (or a few common forms) -> date / None."""
         if not value:
             return None
         s = str(value).strip()

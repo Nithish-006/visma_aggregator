@@ -16,6 +16,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=20">
     <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=14">
     <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dates.css') }}?v=2">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+    <script src="{{ url_for('static', filename='dates.js') }}?v=1"></script>
 </head>
 
 <body>
@@ -203,7 +207,7 @@
                                         <input name="po_number" type="text" class="proj-input">
                                     </label>
                                     <label>PO date
-                                        <input name="po_date" type="text" placeholder="DD-MMM-YYYY" class="proj-input">
+                                        <input name="po_date" type="text" placeholder="DD-MM-YYYY" class="proj-input">
                                     </label>
                                     <label>Client
                                         <input name="client_name" type="text" class="proj-input">

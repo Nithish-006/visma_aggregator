@@ -42,13 +42,9 @@ window.MaterialRecon = (function () {
         return `${n} ${word}${n === 1 ? '' : 's'}`;
     }
 
-    // 2026-03-14 -> 14 Mar. The year is noise in a column where every row
-    // belongs to the same project; the full date stays in the title.
+    // 2026-03-14 -> 14-03-2026, the app-wide date format.
     function shortDate(iso) {
-        if (!iso) return '';
-        const d = new Date(iso + 'T00:00:00');
-        if (isNaN(d)) return escapeHtml(iso);
-        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+        return escapeHtml(VismaDate.format(iso));
     }
 
     // ── Deep links ────────────────────────────────────────────────────
@@ -201,7 +197,7 @@ window.MaterialRecon = (function () {
             <ul class="mr-lines">${rows.map(b => `
                 <li class="mr-line mr-line--bill" data-bill-id="${b.id != null ? escapeHtml(b.id) : ''}"
                     title="Invoice ${escapeHtml(b.invoice_number)}${b.is_split ? ' — split across projects; only this project’s share is counted' : ''}">
-                    <span class="mr-line-date">${escapeHtml(b.invoice_date || '')}</span>
+                    <span class="mr-line-date">${shortDate(b.invoice_date)}</span>
                     <span class="mr-line-name">${escapeHtml(b.invoice_number)}${b.is_split ? ' <em class="mr-split">split</em>' : ''}</span>
                     <span class="mr-line-amt">${escapeHtml(b.amount_formatted)}</span>
                 </li>`).join('')}</ul>

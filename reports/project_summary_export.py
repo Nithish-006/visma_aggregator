@@ -22,6 +22,13 @@ from helpers.projects import parse_project_selection
 from helpers.project_finance import compute_project_finance
 
 
+def _dmy(value):
+    """'2026-10-12' / '2026-10-12 14:03:00' -> '12-10-2026', the app-wide date format."""
+    s = str(value or '')[:10]
+    m = re.match(r'^(\d{4})-(\d{2})-(\d{2})$', s)
+    return f'{m.group(3)}-{m.group(2)}-{m.group(1)}' if m else s
+
+
 def export_project_summary():
     """Export the selected project's report as the pop-up-structured workbook.
 
@@ -839,7 +846,7 @@ def export_single_project_summary(project_id):
         })
     for c in cash_payments:
         pay_entries.append({
-            'date': (c.get('payment_date') or c.get('created_at') or '')[:10],
+            'date': _dmy(c.get('payment_date') or c.get('created_at')),
             'sort': c.get('payment_date') or c.get('created_at') or '',
             'source': 'Cash', 'particulars': c.get('note') or '',
             'vendor': '', 'amount': float(c.get('amount') or 0),
@@ -851,7 +858,7 @@ def export_single_project_summary(project_id):
         incoming = t.get('direction') == 'in'
         amount = float(t.get('amount') or 0)
         pay_entries.append({
-            'date': (t.get('payment_date') or t.get('created_at') or '')[:10],
+            'date': _dmy(t.get('payment_date') or t.get('created_at')),
             'sort': t.get('payment_date') or t.get('created_at') or '',
             'source': 'Third-Party In' if incoming else 'Third-Party Out',
             'particulars': t.get('purpose') or t.get('note') or '',

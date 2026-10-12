@@ -1,0 +1,73 @@
+/* flatpickr, dressed in the VISMA tokens (see dates.js). Loaded after
+   flatpickr.min.css so these win without !important. */
+
+.flatpickr-calendar {
+    font-family: var(--font-ui);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+}
+.flatpickr-calendar.arrowTop::before,
+.flatpickr-calendar.arrowTop::after { border-bottom-color: var(--c-border-strong); }
+.flatpickr-calendar.arrowBottom::before,
+.flatpickr-calendar.arrowBottom::after { border-top-color: var(--c-border-strong); }
+
+.flatpickr-months .flatpickr-month,
+.flatpickr-current-month .flatpickr-monthDropdown-months,
+.flatpickr-current-month input.cur-year,
+span.flatpickr-weekday {
+    color: var(--c-text);
+    fill: var(--c-text);
+}
+.flatpickr-months .flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month { color: var(--c-text-muted); fill: var(--c-text-muted); }
+.flatpickr-months .flatpickr-prev-month:hover svg,
+.flatpickr-months .flatpickr-next-month:hover svg { fill: var(--c-accent-text); }
+span.flatpickr-weekday { font-weight: 600; color: var(--c-text-muted); }
+
+.flatpickr-day { color: var(--c-text); border-radius: var(--radius-sm); }
+.flatpickr-day:hover,
+.flatpickr-day:focus,
+.flatpickr-day.inRange {
+    background: var(--c-surface-soft);
+    border-color: var(--c-surface-soft);
+}
+.flatpickr-day.today { border-color: var(--c-accent); }
+.flatpickr-day.today:hover { background: var(--c-accent-soft); border-color: var(--c-accent); color: var(--c-text); }
+.flatpickr-day.selected,
+.flatpickr-day.selected:hover,
+.flatpickr-day.selected:focus {
+    background: var(--c-accent-fill);
+    border-color: var(--c-accent-fill);
+    color: #fff;
+}
+.flatpickr-day.prevMonthDay,
+.flatpickr-day.nextMonthDay,
+.flatpickr-day.flatpickr-disabled,
+.flatpickr-day.flatpickr-disabled:hover { color: var(--c-text-muted); opacity: 0.45; }
+
+:root {
+    --visma-date-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234E4C47' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+}
+
+/* The visible field is a text input now; keep it looking like the date
+   control it replaced and leave room for a calendar glyph. */
+input.visma-date.visma-date {  /* doubled: outranks page rules like .edit-filter-toolbar .filter-input */
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    background-image: var(--visma-date-icon);
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px 16px;
+    padding-right: 34px;
+}
+/* The bank dashboard's toolbar rule (.edit-filter-toolbar .filter-input.date-input)
+   sets the `background` shorthand and `padding` at higher specificity; match it. */
+.edit-filter-toolbar .filter-input.date-input.visma-date {
+    background-image: var(--visma-date-icon);
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px 16px;
+    padding-right: 34px;
+}
