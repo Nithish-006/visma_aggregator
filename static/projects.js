@@ -173,7 +173,7 @@
         card.type = 'button';
         card.className = 'project-card' + (isClosed(p) ? ' is-closed' : '');
         card.dataset.id = p.id;
-        const created = p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+        const created = VismaDate.format(p.created_at);
         const closedBadge = isClosed(p) ? `<span class="project-po-badge closed">Closed</span>` : '';
         const badge = p.has_po
             ? `<span class="project-po-badge has-po">PO uploaded</span>`
@@ -676,11 +676,7 @@
     }
 
     function fmtDate(s) {
-        if (!s) return '—';
-        const d = new Date(s);
-        return Number.isNaN(d.getTime())
-            ? String(s)
-            : d.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+        return VismaDate.format(s, '—');
     }
 
     // Revert the inline PO-values form back to the read-only gist.
@@ -1335,7 +1331,7 @@
             </div>`;
         const rows = data.bills.map(b => `
             <tr>
-                <td class="proj-li-unit">${b.invoice_date ? escapeHtml(b.invoice_date) : '—'}</td>
+                <td class="proj-li-unit">${escapeHtml(fmtDate(b.invoice_date))}</td>
                 <td class="proj-li-unit">${b.invoice_number ? escapeHtml(b.invoice_number) : '—'}</td>
                 <td class="proj-li-desc">${escapeHtml((isPurchase ? b.vendor_name : b.buyer_name) || '—')}</td>
                 <td class="proj-li-num">${b.line_item_count != null ? b.line_item_count : '—'}</td>
@@ -1503,7 +1499,7 @@
         }
         rows.push(
             ['PO number', po.po_number ? escapeHtml(po.po_number) : '—'],
-            ['PO date', po.po_date ? escapeHtml(po.po_date) : '—'],
+            ['PO date', escapeHtml(fmtDate(po.po_date))],
             ['Client', po.client_name ? escapeHtml(po.client_name) : '—'],
             // Baseline, not revised: these sit above the scope line items, which
             // sum to the baseline taxable, and the whole panel is checked
@@ -2481,7 +2477,7 @@
         const po = currentPo || {};
         editForm.total_value.value = po.total_value ?? '';
         editForm.po_number.value = po.po_number ?? '';
-        editForm.po_date.value = po.po_date ?? '';
+        editForm.po_date.value = VismaDate.format(po.po_date);
         editForm.client_name.value = po.client_name ?? '';
         editForm.taxable_value.value = po.taxable_value ?? '';
         editForm.total_tax.value = po.total_tax ?? '';

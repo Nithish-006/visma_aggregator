@@ -26,15 +26,14 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /**
- * Today's date for the bar, in the Indian long form ("Friday, 2 October 2026").
+ * Today's date for the bar, in the app-wide format ("Friday, 02-10-2026").
  */
 function showToday() {
     const el = document.getElementById('today');
     if (!el) return;
     const now = new Date();
-    el.textContent = now.toLocaleDateString('en-IN', {
-        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-    });
+    el.textContent = now.toLocaleDateString('en-IN', { weekday: 'long' })
+        + ', ' + VismaDate.format(now);
     // Local date, not toISOString(): that is UTC, a day behind before 5:30 am IST.
     const pad = n => String(n).padStart(2, '0');
     el.dateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;

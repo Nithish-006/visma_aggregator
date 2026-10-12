@@ -132,7 +132,7 @@ def get_personal_transactions():
             transactions.append({
                 'id': row['id'],
                 'date': row['transaction_date'].strftime('%Y-%m-%d'),
-                'date_formatted': row['transaction_date'].strftime('%d %b %Y'),
+                'date_formatted': row['transaction_date'].strftime('%d-%m-%Y'),
                 'vendor': row['vendor'],
                 'description': row['description'] or '',
                 'project': row['project'],
@@ -327,7 +327,7 @@ def export_personal_transactions():
             bottom=Side(style='thin', color='D1D5DB')
         )
         currency_fmt = '#,##0.00'
-        date_fmt = 'DD-MMM-YYYY'
+        date_fmt = 'DD-MM-YYYY'
         income_fill = PatternFill(start_color='DCFCE7', end_color='DCFCE7', fill_type='solid')
         expense_fill = PatternFill(start_color='FEE2E2', end_color='FEE2E2', fill_type='solid')
 

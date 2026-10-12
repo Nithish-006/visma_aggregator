@@ -86,8 +86,8 @@
 /* Date filter group styling */
 .edit-filter-toolbar .filter-group-date {
     flex: 0 0 auto;
-    min-width: 120px;
-    max-width: 130px;
+    min-width: 140px;
+    max-width: 150px;   /* dd-mm-yyyy + the picker's calendar glyph */
 }
 
 .edit-filter-toolbar .filter-input.date-input {

@@ -879,7 +879,7 @@ function renderReviewModal(d) {
 
     const idLine = [
         inv.invoice_number ? `Invoice ${escapeHtml(inv.invoice_number)}` : null,
-        inv.invoice_date ? escapeHtml(inv.invoice_date) : null,
+        inv.invoice_date ? escapeHtml(VismaDate.format(inv.invoice_date)) : null,
         inv.project_name ? `Project: ${escapeHtml(inv.project_name)}` : null,
         inv.filename ? escapeHtml(truncate(inv.filename, 40)) : null,
     ].filter(Boolean).join(' · ');
@@ -1126,7 +1126,7 @@ function renderInvoicesTable() {
         return `
             <tr>
                 <td class="cell-link" onclick="viewInvoiceDetail(${bill.id})">${bill.invoice_number || '-'}</td>
-                <td>${bill.invoice_date || '-'}</td>
+                <td>${escapeHtml(VismaDate.format(bill.invoice_date, '-'))}</td>
                 <td class="cell-wrap">${bill.vendor_name || '-'}</td>
                 <td>${bill.vendor_gstin || '-'}</td>
                 <td class="cell-wrap">${bill.buyer_name || '-'}</td>
@@ -1267,18 +1267,7 @@ function renderMobileInvoiceCards() {
 }
 
 function formatMobileDate(dateStr) {
-    if (!dateStr) return '-';
-    try {
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return dateStr;
-        return date.toLocaleDateString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: '2-digit'
-        });
-    } catch {
-        return dateStr;
-    }
+    return VismaDate.format(dateStr, '-');
 }
 
 function formatAddedDate(dateStr) {
@@ -1311,11 +1300,7 @@ function formatAddedDate(dateStr) {
         }
 
         // Otherwise show date
-        return date.toLocaleDateString('en-IN', {
-            day: 'numeric',
-            month: 'short',
-            year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
-        });
+        return VismaDate.format(date);
     } catch {
         return dateStr;
     }
@@ -1844,7 +1829,7 @@ async function viewInvoiceDetail(invoiceId) {
                 <div class="detail-section-title">Invoice Header</div>
                 <div class="detail-grid">
                     ${detailItem('Invoice Number', bill.invoice_number)}
-                    ${detailItem('Invoice Date', bill.invoice_date)}
+                    ${detailItem('Invoice Date', VismaDate.format(bill.invoice_date))}
                     ${detailItem('E-Way Bill', bill.eway_bill_number)}
                     ${detailItem('IRN', bill.irn)}
                     ${detailItem('Ack Number', bill.ack_number)}
@@ -2385,7 +2370,7 @@ function showProcessingResults() {
         let detailMessage = '';
         if (result.is_duplicate && result.existing_bill) {
             const existing = result.existing_bill;
-            detailMessage = `<span class="duplicate-warning">DUPLICATE BILL</span> - Already processed on ${existing.created_at || 'N/A'}<br>Existing: Invoice #${existing.invoice_number} | ${existing.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(existing.total_amount)}`;
+            detailMessage = `<span class="duplicate-warning">DUPLICATE BILL</span> - Already processed on ${VismaDate.format(existing.created_at, 'N/A')}<br>Existing: Invoice #${existing.invoice_number} | ${existing.vendor_name || 'Unknown Vendor'} | ${formatIndianCurrency(existing.total_amount)}`;
         } else if (result.is_duplicate) {
             detailMessage = `<span class="duplicate-warning">DUPLICATE BILL</span> - Invoice #${result.invoice_number || 'N/A'} already exists`;
         } else if (savedOk) {
@@ -2658,22 +2643,9 @@ function populateEditForm(bill) {
 }
 
 function formatDateForInput(dateStr) {
-    if (!dateStr) return '';
-    // Handle various date formats
-    try {
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return '';
-        // Build the YYYY-MM-DD from LOCAL date parts. Using toISOString() here
-        // converts to UTC and can roll the day back across the timezone offset
-        // (e.g. local midnight in IST becomes the previous day in UTC), which
-        // made the edit form show the date one day earlier than stored.
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-    } catch {
-        return '';
-    }
+    // Server sends dd-mm-yyyy; the extractor may send anything. new Date()
+    // can't read day-first strings, so parse explicitly. Local, not UTC.
+    return VismaDate.iso(dateStr);
 }
 
 let editProjectHighlightIndex = -1;

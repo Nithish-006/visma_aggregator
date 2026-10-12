@@ -316,22 +316,22 @@ def get_running_balance():
     lowest_date_idx = df['running_balance'].idxmin() if len(df) > 0 else None
     peak_date_idx = df['running_balance'].idxmax() if len(df) > 0 else None
 
-    lowest_date = df.loc[lowest_date_idx, 'date'].strftime('%d %b %Y') if lowest_date_idx is not None else None
-    peak_date = df.loc[peak_date_idx, 'date'].strftime('%d %b %Y') if peak_date_idx is not None else None
+    lowest_date = df.loc[lowest_date_idx, 'date'].strftime('%d-%m-%Y') if lowest_date_idx is not None else None
+    peak_date = df.loc[peak_date_idx, 'date'].strftime('%d-%m-%Y') if peak_date_idx is not None else None
 
     # Calculate last 30 days for sparkline
     if len(df) > 0:
         last_date = df['date'].max()
         thirty_days_ago = last_date - pd.Timedelta(days=30)
         sparkline_df = df[df['date'] >= thirty_days_ago].sort_values('date')
-        sparkline_dates = sparkline_df['date'].dt.strftime('%d %b').tolist()
+        sparkline_dates = sparkline_df['date'].dt.strftime('%d-%m-%Y').tolist()
         sparkline_balance = sparkline_df['running_balance'].tolist()
     else:
         sparkline_dates = []
         sparkline_balance = []
 
     return jsonify({
-        'dates': df_sample['date'].dt.strftime('%d %b %Y').tolist(),
+        'dates': df_sample['date'].dt.strftime('%d-%m-%Y').tolist(),
         'balance': df_sample['running_balance'].tolist(),
         'lowest_balance': lowest_balance,
         'lowest_date': lowest_date,
@@ -465,7 +465,7 @@ def get_transactions():
     for idx, row in df_sorted.iterrows():
         transactions.append({
             'id': int(idx) if hasattr(idx, '__int__') else idx,  # Transaction ID for editing
-            'date': row['date'].strftime('%d %b %Y'),
+            'date': row['date'].strftime('%d-%m-%Y'),
             'date_raw': row['date'].strftime('%Y-%m-%d'),
             'description': row['Transaction Description'],
             'vendor': row['Client/Vendor'],

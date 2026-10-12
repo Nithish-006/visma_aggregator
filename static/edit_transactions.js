@@ -420,13 +420,10 @@
     }
 
     /**
-     * Format an ISO date for display (e.g. "05 Jan 2026").
+     * Format an ISO date for display (e.g. "05-01-2026").
      */
     function formatDisplayDate(dateStr) {
-        if (!dateStr) return '--';
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return String(dateStr);
-        return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        return VismaDate.format(dateStr, '--');
     }
 
     /**

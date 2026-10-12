@@ -485,20 +485,18 @@
 
         Object.keys(grouped).sort((a, b) => new Date(b) - new Date(a)).forEach(dateStr => {
             const dayTransactions = grouped[dateStr];
-            const date = new Date(dateStr);
+            const date = VismaDate.parse(dateStr);
             const dayIncome = dayTransactions.filter(t => t.transaction_type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
             const dayExpense = dayTransactions.filter(t => t.transaction_type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
             const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-            const months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
 
             html += `
                 <div class="date-group">
                     <div class="date-header">
                         <div class="date-info">
-                            <span class="date-day">${String(date.getDate()).padStart(2, '0')}</span>
+                            <span class="date-day">${VismaDate.format(date)}</span>
                             <span class="date-weekday">${days[date.getDay()]}</span>
-                            <span class="date-month">${months[date.getMonth()]}.${date.getFullYear()}</span>
                         </div>
                         <div class="date-totals">
                             ${dayIncome > 0 ? `<span class="date-income">${formatCompact(dayIncome)}</span>` : ''}
