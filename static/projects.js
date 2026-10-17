@@ -2477,7 +2477,7 @@
         const po = currentPo || {};
         editForm.total_value.value = po.total_value ?? '';
         editForm.po_number.value = po.po_number ?? '';
-        editForm.po_date.value = VismaDate.format(po.po_date);
+        editForm.po_date.value = VismaDate.iso(po.po_date);
         editForm.client_name.value = po.client_name ?? '';
         editForm.taxable_value.value = po.taxable_value ?? '';
         editForm.total_tax.value = po.total_tax ?? '';

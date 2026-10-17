@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /**
- * Today's date for the bar, in the app-wide format ("Friday, 02-10-2026").
+ * Today's date for the bar, in the app-wide format ("Friday, 2 Oct").
  */
 function showToday() {
     const el = document.getElementById('today');

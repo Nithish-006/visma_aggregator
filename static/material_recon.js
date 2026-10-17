@@ -42,7 +42,7 @@ window.MaterialRecon = (function () {
         return `${n} ${word}${n === 1 ? '' : 's'}`;
     }
 
-    // 2026-03-14 -> 14-03-2026, the app-wide date format.
+    // 2026-03-14 -> 14 Mar, the app-wide display format.
     function shortDate(iso) {
         return escapeHtml(VismaDate.format(iso));
     }

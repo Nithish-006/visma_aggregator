@@ -7,6 +7,8 @@
     border: 1px solid var(--c-border-strong);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
+    width: 252px;
+    overflow: hidden;
 }
 .flatpickr-calendar.arrowTop::before,
 .flatpickr-calendar.arrowTop::after { border-bottom-color: var(--c-border-strong); }
@@ -17,16 +19,60 @@
 .flatpickr-current-month .flatpickr-monthDropdown-months,
 .flatpickr-current-month input.cur-year,
 span.flatpickr-weekday {
-    color: var(--c-text);
+    color: #11100F;
     fill: var(--c-text);
+}
+.flatpickr-months {
+    height: 30px;
+    padding: 0 4px;
+    background: var(--c-accent-soft);
+    border-bottom: 1px solid var(--c-border);
+}
+.flatpickr-months .flatpickr-month { height: 30px; }
+.flatpickr-current-month {
+    left: 12.5%;
+    width: 75%;
+    height: 30px;
+    padding-top: 4px;
+    transform: none;
+    background: transparent;
+    color: #11100F;
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+.flatpickr-months .flatpickr-prev-month,
+.flatpickr-months .flatpickr-next-month { padding: 6px 10px; }
+.flatpickr-current-month .flatpickr-monthDropdown-months,
+.flatpickr-current-month span.cur-month,
+.flatpickr-current-month input.cur-year {
+    color: #11100F;
+    font-size: 0.8125rem;
+    font-weight: 600;
 }
 .flatpickr-months .flatpickr-prev-month,
 .flatpickr-months .flatpickr-next-month { color: var(--c-text-muted); fill: var(--c-text-muted); }
 .flatpickr-months .flatpickr-prev-month:hover svg,
 .flatpickr-months .flatpickr-next-month:hover svg { fill: var(--c-accent-text); }
-span.flatpickr-weekday { font-weight: 600; color: var(--c-text-muted); }
+span.flatpickr-weekday { font-size: 0.72rem; font-weight: 600; color: var(--c-text-muted); }
 
-.flatpickr-day { color: var(--c-text); border-radius: var(--radius-sm); }
+.flatpickr-innerContainer,
+.flatpickr-rContainer,
+.flatpickr-days,
+.dayContainer {
+    width: 250px;
+    min-width: 250px;
+    max-width: 250px;
+}
+.flatpickr-weekdays { height: 24px; }
+
+.flatpickr-day {
+    max-width: 33px;
+    height: 30px;
+    line-height: 30px;
+    margin: 1px;
+    color: #11100F;
+    border-radius: var(--radius-sm);
+}
 .flatpickr-day:hover,
 .flatpickr-day:focus,
 .flatpickr-day.inRange {
@@ -48,7 +94,7 @@ span.flatpickr-weekday { font-weight: 600; color: var(--c-text-muted); }
 .flatpickr-day.flatpickr-disabled:hover { color: var(--c-text-muted); opacity: 0.45; }
 
 :root {
-    --visma-date-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234E4C47' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
+    --visma-date-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23A64526' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E");
 }
 
 /* The visible field is a text input now; keep it looking like the date
@@ -70,4 +116,25 @@ input.visma-date.visma-date {  /* doubled: outranks page rules like .edit-filter
     background-position: right 10px center;
     background-size: 16px 16px;
     padding-right: 34px;
+}
+
+/* Filter fields inherit the exact geometry of their neighbouring controls. */
+.bp-filter-input.visma-date,
+.edit-filter-toolbar .filter-input.date-input.visma-date {
+    color: #11100F;
+}
+.bp-filter-input.visma-date:hover,
+.edit-filter-toolbar .filter-input.date-input.visma-date:hover {
+    border-color: var(--c-accent);
+}
+.bp-filter-input.visma-date:not(:placeholder-shown),
+.edit-filter-toolbar .filter-input.date-input.visma-date:not(:placeholder-shown) {
+    border-color: var(--c-accent);
+    background-color: rgba(217, 119, 87, 0.04);
+}
+.bp-filter-input.visma-date:focus,
+.edit-filter-toolbar .filter-input.date-input.visma-date:focus {
+    outline: none;
+    border-color: var(--c-accent);
+    box-shadow: 0 0 0 3px rgba(217, 119, 87, 0.1);
 }

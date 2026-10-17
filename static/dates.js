@@ -1,11 +1,10 @@
 /**
- * One date format for the whole app: dd-mm-yyyy.
+ * Friendly dates for display, precise dates for filters and form fields.
  *
  * Two halves:
- *   VismaDate.format(x)  - any date the server or a picker hands us -> "12-10-2026"
- *   date pickers         - every <input type="date"> is upgraded to a flatpickr
- *                          that SHOWS dd-mm-yyyy while its .value stays the
- *                          ISO "2026-10-12" every caller and endpoint expects.
+ *   VismaDate.format(x)     - current year -> "12 Oct"; other years -> "12 Oct 2025"
+ *   date pickers            - filters show dd-mm-yyyy; other fields show
+ *                             "12 Oct 2026". Their values stay ISO dates.
  *
  * The native date input can't do this: it renders in the browser's locale
  * (mm/dd/yyyy on a US-English Chrome), whatever the page asks for.
@@ -56,12 +55,13 @@
         return dt.getMonth() === mo - 1 && dt.getDate() === d ? dt : null;
     }
 
-    /** -> "12-10-2026"; text that isn't a date comes back unchanged. */
+    /** Current year -> "12 Oct"; other years -> "12 Oct 2025". */
     function format(value, fallback) {
         if (value == null || value === '') return fallback !== undefined ? fallback : '';
         const d = parse(value);
         if (!d) return String(value);
-        return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+        const short = `${d.getDate()} ${d.toLocaleDateString('en-IN', { month: 'short' })}`;
+        return d.getFullYear() === new Date().getFullYear() ? short : `${short} ${d.getFullYear()}`;
     }
 
     /** -> "2026-10-12", the value a date input and the API want. Local, not UTC. */
@@ -79,10 +79,12 @@
     function upgrade(input) {
         if (input._vismaPicker || typeof window.flatpickr !== 'function') return;
 
+        const isFilter = input.id.startsWith('filter') || input.classList.contains('filter-input');
+        input._vismaIsFilter = isFilter;
         const fp = window.flatpickr(input, {
             dateFormat: 'Y-m-d',          // what .value holds
             altInput: true,
-            altFormat: 'd-m-Y',           // what the user sees
+            altFormat: isFilter ? 'd-m-Y' : 'j M Y',
             altInputClass: input.className + ' visma-date',
             allowInput: true,             // typing 12-10-2026 works too
             disableMobile: true,          // the native mobile picker would show the locale format again
@@ -125,7 +127,7 @@
         alt.title = input.title || '';
         alt.disabled = input.disabled;
         alt.required = input.required;
-        if (!alt.placeholder) alt.placeholder = 'dd-mm-yyyy';
+        if (!alt.placeholder) alt.placeholder = input._vismaIsFilter ? 'dd-mm-yyyy' : '20 Aug 2026';
         // A <label for="..."> should still focus the field the user can see.
         if (input.id && !alt.getAttribute('aria-label')) {
             const label = document.querySelector(`label[for="${input.id}"]`);

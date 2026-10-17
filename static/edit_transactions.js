@@ -420,7 +420,7 @@
     }
 
     /**
-     * Format an ISO date for display (e.g. "05-01-2026").
+     * Format an ISO date for display (e.g. "5 Jan").
      */
     function formatDisplayDate(dateStr) {
         return VismaDate.format(dateStr, '--');
@@ -696,7 +696,7 @@
                 <td data-label="">
                     <input type="checkbox" class="row-checkbox" data-id="${txnId}" ${isSelected ? 'checked' : ''}>
                 </td>
-                <td data-label="Date">${txn.date}</td>
+                <td data-label="Date">${VismaDate.format(txn.date)}</td>
                 <td class="editable-cell" data-field="vendor" data-id="${txnId}" data-label="Vendor">${txn.vendor || ''}</td>
                 <td class="editable-cell" data-field="category" data-id="${txnId}" data-label="Category">
                     ${categoryCellHtml(txn)}
@@ -2603,9 +2603,7 @@
     }
 
     function formatSyncDate(iso) {
-        if (!iso) return '-';
-        const parts = String(iso).split('-');
-        return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : iso;
+        return VismaDate.format(iso, '-');
     }
 
     function openTrackerSyncModal() {
