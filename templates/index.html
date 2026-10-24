@@ -36,7 +36,7 @@
     <!-- Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=12">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
-    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=16">
+    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=31">
     <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=15">
     <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
@@ -247,16 +247,16 @@
                         <div class="filter-group filter-group-vendor">
                             <div id="edit-vendor-filter" class="custom-dropdown"></div>
                         </div>
-                        <div class="filter-group filter-group-date filter-group-from">
-                            <input type="date" id="edit-start-date" class="filter-input date-input" title="From Date">
-                        </div>
-                        <div class="filter-group filter-group-date filter-group-to">
-                            <input type="date" id="edit-end-date" class="filter-input date-input" title="To Date">
+                        <div class="filter-date-range">
+                            <div class="filter-group filter-group-date filter-group-from">
+                                <input type="date" id="edit-start-date" class="filter-input date-input" title="From Date">
+                            </div>
+                            <div class="filter-group filter-group-date filter-group-to">
+                                <input type="date" id="edit-end-date" class="filter-input date-input" title="To Date">
+                            </div>
                         </div>
                         <div class="filter-quick">
                             <button id="filter-uncategorized" class="btn btn-primary btn-compact">Uncategorized</button>
-                            <button id="filter-needs-review" class="btn btn-secondary btn-compact"
-                                    title="Rows the categoriser had a guess for but was not confident enough to apply">Needs review</button>
                             <button id="clear-all-filters" class="btn btn-secondary btn-compact">Reset</button>
                         </div>
                     </div>
@@ -538,7 +538,7 @@
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=14"></script>
+    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=15"></script>
     <script src="{{ url_for('static', filename='upload.js') }}"></script>
     <script src="/static/pwa-register.js"></script>
 <script>

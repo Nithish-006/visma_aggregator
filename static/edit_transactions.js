@@ -37,8 +37,6 @@
         search: '',
         startDate: null,
         endDate: null,
-        // Rows the categoriser guessed at but was not sure enough to apply.
-        needsReview: false,
     };
 
     // Loading state to prevent duplicate requests
@@ -514,10 +512,6 @@
             if (currentFilters.endDate) {
                 params.set('end_date', currentFilters.endDate);
             }
-            if (currentFilters.needsReview) {
-                params.set('needs_review', '1');
-            }
-
             const response = await fetch(`/api/${BANK_CODE}/transactions/paginated?${params}`);
             const data = await response.json();
 
@@ -1746,18 +1740,6 @@
     }
 
     /**
-     * Show only the rows the categoriser guessed at without applying —
-     * the shortest path between a guess and the person who can settle it.
-     */
-    function toggleNeedsReview() {
-        currentFilters.needsReview = !currentFilters.needsReview;
-        const btn = document.getElementById('filter-needs-review');
-        if (btn) btn.classList.toggle('active', currentFilters.needsReview);
-        currentPage = 1;
-        applyFilters();
-    }
-
-    /**
      * Clear all filters
      */
     function clearAllFilters() {
@@ -1768,10 +1750,7 @@
             search: '',
             startDate: null,
             endDate: null,
-            needsReview: false,
         };
-        const reviewBtn = document.getElementById('filter-needs-review');
-        if (reviewBtn) reviewBtn.classList.remove('active');
 
         // Clear dropdowns
         if (dropdowns['edit-category-filter']) dropdowns['edit-category-filter'].clear();
@@ -1881,8 +1860,6 @@
         });
 
         document.getElementById('filter-uncategorized').addEventListener('click', showUncategorized);
-        const needsReviewBtn = document.getElementById('filter-needs-review');
-        if (needsReviewBtn) needsReviewBtn.addEventListener('click', toggleNeedsReview);
         document.getElementById('clear-all-filters').addEventListener('click', clearAllFilters);
 
         // Date filter listeners

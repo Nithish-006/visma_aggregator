@@ -70,8 +70,10 @@
    Categories" read "All Cat...". They now have a band of their own, on a grid
    whose shape follows the width, and no dropdown is narrower than ~200px:
 
-     >= 1536px   category | project | vendor | from | to | quick   (one row)
-     1024-1535   category | project | vendor
+     >= 1536px   category | project | vendor | date range | quick (one row)
+     1200-1535   category | project | vendor | date range
+                                               quick              (two rows)
+     1024-1199   category | project | vendor
                  from | to | quick                                (two rows)
      769-1023    category | project
                  vendor
@@ -104,6 +106,10 @@
 .edit-filter-toolbar .filter-group-to       { grid-area: to; }
 .edit-filter-toolbar .filter-quick          { grid-area: quick; }
 
+.edit-filter-toolbar .filter-date-range {
+    display: contents;
+}
+
 /* The preset filters and Reset sit together at the end of the band. */
 .edit-filter-toolbar .filter-quick {
     display: flex;
@@ -111,10 +117,37 @@
     gap: 0.5rem;
 }
 
+@media (min-width: 1200px) {
+    .edit-filter-toolbar .filter-content {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(32rem, 1.2fr);
+        grid-template-areas:
+            "cat proj vend dates"
+            "quick quick quick quick";
+        row-gap: 0.75rem;
+        column-gap: 0.75rem;
+    }
+
+    .edit-filter-toolbar .filter-quick {
+        justify-content: flex-end;
+    }
+
+    .edit-filter-toolbar .filter-date-range {
+        display: flex;
+        grid-area: dates;
+        width: 100%;
+        gap: 1.25rem;
+    }
+
+    .edit-filter-toolbar .filter-date-range .filter-group-date {
+        width: auto;
+        flex: 1 1 0;
+    }
+}
+
 @media (min-width: 1536px) {
     .edit-filter-toolbar .filter-content {
-        grid-template-columns: repeat(3, minmax(0, 1fr)) repeat(2, 12rem) auto;
-        grid-template-areas: "cat proj vend from to quick";
+        grid-template-columns: repeat(3, minmax(12rem, 1fr)) minmax(32rem, 1.2fr) auto;
+        grid-template-areas: "cat proj vend dates quick";
     }
 }
 
@@ -190,8 +223,9 @@
 }
 
 .edit-actions-toolbar .search-wrapper {
-    flex: 1 1 200px;
-    max-width: 320px;
+    flex: 0 1 420px;
+    width: min(420px, 100%);
+    max-width: 420px;
 }
 
 /* Search and the counts read from the left, the actions from the right; on a
@@ -2242,6 +2276,114 @@ input[type="checkbox"] {
     justify-content: flex-start;   /* .edit-actions-group pushes itself right */
     padding-top: 0.75rem;
     border-top: 1px solid var(--c-border);
+}
+
+/* Desktop page actions sit above the filter card instead of competing with
+   search and counts inside it. Mobile keeps its purpose-built grid below. */
+@media (min-width: 769px) and (min-height: 501px) {
+    .toolbar-wrapper.edit-toolbar-wrapper {
+        position: relative;
+        margin-top: 3.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .edit-toolbar-wrapper .edit-actions-group {
+        position: absolute;
+        top: -3rem;
+        right: 0;
+        flex-wrap: nowrap;
+        z-index: 2;
+    }
+
+    .edit-toolbar-wrapper .edit-stats {
+        display: none !important;
+    }
+
+    .edit-actions-toolbar #download-transactions {
+        background: #217346;
+        border-color: #217346;
+        color: #fff;
+    }
+
+    .edit-actions-toolbar #download-transactions svg {
+        color: #fff;
+    }
+
+    .edit-actions-toolbar #download-transactions:hover {
+        background: #185c37;
+        border-color: #185c37;
+    }
+
+    .edit-actions-toolbar #tracker-sync-btn {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #fff;
+    }
+
+    .edit-actions-toolbar #tracker-sync-btn:hover {
+        background: #1d4ed8;
+        border-color: #1d4ed8;
+    }
+}
+
+/* Wide screens have enough room for search and every filter on one calm row.
+   `display: contents` lets the existing controls share the wrapper's grid
+   without duplicating markup or changing the phone layout. */
+@media (min-width: 1536px) and (min-height: 501px) {
+    .toolbar-wrapper.edit-toolbar-wrapper {
+        display: grid;
+        grid-template-columns:
+            minmax(16rem, 1.2fr)
+            repeat(3, minmax(10rem, 1fr))
+            minmax(24rem, 1.6fr)
+            auto;
+        grid-template-areas: "search cat proj vend dates quick";
+        gap: 1rem;
+        align-items: center;
+        padding: 1rem 1.25rem;
+    }
+
+    .edit-toolbar-wrapper .edit-filter-toolbar,
+    .edit-toolbar-wrapper .edit-filter-toolbar .filter-content,
+    .edit-toolbar-wrapper .edit-actions-toolbar {
+        display: contents;
+    }
+
+    .edit-actions-toolbar .search-wrapper {
+        grid-area: search;
+        width: 100%;
+        max-width: none;
+    }
+
+    .edit-actions-toolbar .search-input,
+    .edit-filter-toolbar .dropdown-trigger,
+    .edit-filter-toolbar .filter-input.date-input,
+    .edit-filter-toolbar .btn-compact {
+        height: 40px;
+    }
+
+    .edit-filter-toolbar .filter-date-range .filter-group-date {
+        position: relative;
+        display: block;
+    }
+
+    .edit-filter-toolbar .filter-date-range .filter-group-date::before {
+        position: absolute;
+        left: 0.75rem;
+        top: 50%;
+        z-index: 1;
+        transform: translateY(-50%);
+        pointer-events: none;
+    }
+
+    .edit-filter-toolbar .filter-group-from .filter-input.date-input {
+        padding-left: 3.5rem;
+    }
+
+    .edit-filter-toolbar .filter-group-to .filter-input.date-input {
+        padding-left: 2.75rem;
+    }
+
 }
 
 /* Nothing to sync -> the confirm button must read as unavailable, not just
