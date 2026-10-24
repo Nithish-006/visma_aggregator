@@ -58,7 +58,7 @@ body {
     background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.92) 100%);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(0,0,0,0.06);
+    border-bottom: 1px solid var(--c-border);
     padding: 14px 24px;
     display: flex;
     justify-content: space-between;
@@ -656,7 +656,7 @@ body {
 .ps-cat-bar-track {
     flex: 1;
     height: 22px;
-    background: var(--border-color);
+    background: var(--c-track);
     border-radius: 4px;
     overflow: hidden;
     position: relative;

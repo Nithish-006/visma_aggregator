@@ -13,10 +13,19 @@
 
 :root {
     /* ---- Surfaces ------------------------------------------------------- */
-    --c-bg:              #FAF9F5;   /* page background (warm ivory) */
+    /* Three distinct levels, so a card never has to rely on a shadow alone.
+       Ivory was #FAF9F5, only 1.05:1 from a white card: on an ordinary LCD
+       the two printed as one sheet. One step deeper puts white cards at
+       1.13:1 off the page and the soft fill at 1.21:1 off white, which a
+       cheap panel still resolves, while staying the same warm paper. */
+    --c-bg:              #F3F1EB;   /* page background (warm ivory) */
     --c-surface:         #FFFFFF;   /* cards / panels */
-    --c-surface-soft:    #F4F2EC;   /* soft fill: hover, secondary bg, gradient end */
+    --c-surface-soft:    #ECE9E1;   /* soft fill: hover, secondary bg, table head */
     --c-input:           #FFFFFF;   /* form inputs */
+    /* A FILL that has to read as a quiet channel: progress tracks, count
+       bubbles, the clear-search dot. These used to borrow --c-border, which
+       is now a visible line colour and far too heavy as a fill. */
+    --c-track:           #E2DED3;
 
     /* ---- Text ----------------------------------------------------------- */
     --c-text:            #1F1E1D;   /* primary text */
@@ -29,10 +38,19 @@
     --c-text-soft:       #4E4C47;   /* aligned with --c-text-muted; they serve the same role now */
 
     /* ---- Borders -------------------------------------------------------- */
-    --c-border:          #ECE9E1;
-    --c-border-strong:   #DDD8CC;
-    --c-border-a:        rgba(0, 0, 0, 0.08);   /* translucent border (projects) */
-    --c-border-strong-a: rgba(0, 0, 0, 0.14);
+    /* MEASURED, not eyeballed. The old hairlines (#ECE9E1, #DDD8CC, black at
+       8%/14%) sat at 1.15-1.4:1 - fine on a calibrated panel, invisible on an
+       ordinary LCD, so rows, inputs and cards ran together. Every line now
+       clears WCAG's 3:1 for UI boundaries on all three surfaces:
+         --c-border        3.25 ivory | 3.67 white | 3.03 soft
+         --c-border-strong 4.56 ivory | 5.15 white | 4.25 soft  (controls,
+                           table-head rule, hover)
+         --c-border-a      3.18 ivory | 3.23 white  (translucent, projects)
+       Same warm grey family, so the paper look is unchanged - only crisper. */
+    --c-border:          #8B8577;
+    --c-border-strong:   #726D61;
+    --c-border-a:        rgba(0, 0, 0, 0.44);   /* translucent border (projects) */
+    --c-border-strong-a: rgba(0, 0, 0, 0.55);
 
     /* ---- Accent (coral) ------------------------------------------------- */
     --c-accent:          #D97757;
@@ -76,10 +94,12 @@
     --radius-lg: 16px;
 
     /* ---- Shadows -------------------------------------------------------- */
-    --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-    --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
-    --shadow-lg:      0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
-    --shadow-card:    0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    /* Roughly doubled: at 2-4% black a shadow is below what an LCD can
+       render, so it was doing nothing. Now it supports the border's edge. */
+    --shadow-sm:      0 1px 3px rgba(0, 0, 0, 0.10), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.10), 0 2px 4px rgba(0, 0, 0, 0.06);
+    --shadow-lg:      0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.06);
+    --shadow-card:    0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
     --shadow-primary: 0 4px 14px rgba(217, 119, 87, 0.25);
     --shadow-warm:        0 1px 3px rgba(35, 31, 25, 0.08);   /* hub */
     --shadow-warm-hover:  0 6px 22px rgba(35, 31, 25, 0.07);  /* hub */
@@ -113,9 +133,13 @@
        2.96:1 on ivory and 2.63:1 on its own 12% tint - it fails WCAG AA
        everywhere, even for large text. --c-accent-text is the same hue
        darkened until it passes on every background we actually use:
-         ivory #FAF9F5 5.67:1 | white 6.15:1 | accent-soft #F6EBE4 5.10:1
+         ivory #F3F1EB 5.80:1 | white 6.55:1 | accent-soft #F5DFD3 5.11:1
+         selected-pill tint #EBD5C9 4.64:1
+       (It was #A64526; the deeper ivory pulled the coral tints of the
+       selected filter pills down with it, to 4.27:1, so it went one step
+       darker on the same hue.)
        RULE: coral for fills, borders and bars. --c-accent-text for TEXT. */
-    --c-accent-text:     #A64526;
+    --c-accent-text:     #9F3F21;
 
     /* ---- Accessible FILLS (white label on a coloured button) -------------
        The same problem in the other direction: white on --c-accent is only
@@ -157,17 +181,25 @@
        These use the IDENTICAL generator as the project pills below (tint at
        L94/S55, label solved to 6.5:1 at S62), so the two chip families are
        the same colour grade and can sit side by side without one looking
-       heavier than the other. */
-    --cat-ar-bg: #CDF6E3;  --cat-ar-fg: #186542;   /* AMOUNT RECEIVED   */
+       heavier than the other.
+
+       LCD floor: the light-hued tints (green, teal, sand) landed at only
+       1.17-1.25:1 against white and bleached to near-white on an ordinary
+       panel, where the darker hues held at 1.3-1.5. Those were deepened
+       (L*89, a little more chroma) to a 1.32:1 floor and their labels
+       re-solved to 6.0:1. SITE and UNCATEGORISED also sat 9 degrees of hue
+       apart - the same sand twice - so SITE moved toward terracotta and
+       UNCATEGORISED toward yellow. */
+    --cat-ar-bg: #B8EBD4;  --cat-ar-fg: #0B5D3B;   /* AMOUNT RECEIVED   */
     --cat-mp-bg: #CDDFF6;  --cat-mp-fg: #214F8C;   /* MATERIAL PURCHASE */
     --cat-sa-bg: #D9CDF6;  --cat-sa-fg: #522AB2;   /* SALARY AC         */
     --cat-dt-bg: #F6CFCD;  --cat-dt-fg: #8C2521;   /* DUTIES & TAX      */
-    --cat-te-bg: #CDF1F6;  --cat-te-fg: #195F69;   /* TRANSPORT EXPENSES*/
-    --cat-se-bg: #F6E3CD;  --cat-se-fg: #764B1C;   /* SITE EXPENSES     */
+    --cat-te-bg: #BAE8EE;  --cat-te-fg: #0F5963;   /* TRANSPORT EXPENSES*/
+    --cat-se-bg: #FCD9BE;  --cat-se-fg: #734619;   /* SITE EXPENSES     */
     --cat-fe-bg: #EDCDF6;  --cat-fe-fg: #772291;   /* FACTORY EXPENSES  */
     --cat-oe-bg: #F6CDE2;  --cat-oe-fg: #8A2055;   /* OFFICE EXPENSES   */
     --cat-bc-bg: #E5E3DF;  --cat-bc-fg: #575147;   /* BANK CHARGES      */
-    --cat-un-bg: #F6E7CD;  --cat-un-fg: #70501A;   /* UNCATEGORISED     */
+    --cat-un-bg: #EFDEB9;  --cat-un-fg: #604F12;   /* UNCATEGORISED     */
 
     /* ---- Project chip colours -------------------------------------------
        Projects are open-ended, so a hue is derived from the name instead of
@@ -176,11 +208,12 @@
        (fully rounded, where categories are rounded rectangles) so the two
        adjacent columns still read as different kinds of information now that
        both are filled. Solved to ~6.0:1 on their own tint, matching the
-       category chips' weight. */
+       category chips' weight. c1-c3 got the same LCD-floor deepening as the
+       light category tints above. */
     --proj-c0-bg: #CDE5F6;  --proj-c0-fg: #1E567E;
-    --proj-c1-bg: #CDF6EE;  --proj-c1-fg: #176354;
-    --proj-c2-bg: #CDF6DB;  --proj-c2-fg: #186532;
-    --proj-c3-bg: #F6ECCD;  --proj-c3-fg: #695619;
+    --proj-c1-bg: #B6EAE0;  --proj-c1-fg: #0A5B4C;
+    --proj-c2-bg: #B8EBCA;  --proj-c2-fg: #0B5D2B;
+    --proj-c3-bg: #EBDFB9;  --proj-c3-fg: #614E11;
     --proj-c4-bg: #F6DBCD;  --proj-c4-fg: #803F1E;
     --proj-c5-bg: #F6CDEA;  --proj-c5-fg: #882068;
     --proj-c6-bg: #E5CDF6;  --proj-c6-fg: #6A259D;

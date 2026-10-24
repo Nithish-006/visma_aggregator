@@ -31,7 +31,7 @@
 
 body {
     font-family: var(--font-ui);
-    background: #FAF9F5;
+    background: var(--c-bg);
     min-height: 100vh;
     color: var(--text-primary);
     letter-spacing: -0.01em;
@@ -48,7 +48,7 @@ body {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    border-bottom: 1px solid var(--c-border);
     padding: 14px 24px;
     display: flex;
     justify-content: space-between;
@@ -132,7 +132,7 @@ body {
 
 .stat-card {
     background: #FFFFFF;
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--c-border);
     border-radius: var(--radius-lg);
     padding: 16px;
     display: flex;
@@ -345,7 +345,7 @@ body {
     padding: 0;
     border: none;
     border-radius: 50%;
-    background: var(--border-color);
+    background: var(--c-track);
     color: var(--text-primary);
     font-size: 14px;
     line-height: 1;
@@ -3266,7 +3266,7 @@ textarea.form-input {
 .bulk-progress { padding: 4px 0; }
 .bulk-progress-bar {
     height: 8px;
-    background: var(--border-color);
+    background: var(--c-track);
     border-radius: 4px;
     overflow: hidden;
     margin-bottom: 10px;

@@ -23,7 +23,14 @@
      Purchase Bills    amber   #C77522
      Sales Bills       teal    #0E8C8C
 
-   The washes are pale enough that ink text sits on them at over 10:1.
+   The washes are pale enough that ink text sits on them at over 9.7:1 (and
+   the grey unit/description text at 5.0:1 or better). They were 22% and are
+   now 26%, so each module's hue survives an ordinary LCD instead of washing
+   out to the paper (1.23-1.41:1 off the page, now 1.28-1.51:1). The hairline
+   is the hue deepened 15% toward ink: the raw hue is too light to draw an
+   edge (coral and amber cannot reach 3:1 on ivory at any opacity), so the
+   old 32% wash measured 1.4-2.0:1. Deepened, every tile's edge is 3.48:1 or
+   better against the page.
    Logos sit straight on the wash, with no card behind them: the banks'
    (static/banks/, cropped from the public-domain logos on Wikimedia
    Commons) and the modules' own (static/modules/), one treatment for all.
@@ -177,9 +184,9 @@ main.wrap {
     /* One pale wash of the module's hue, printed on the paper. The flat
        surface colour is the fallback where color-mix() is not supported. */
     background: var(--c-surface);
-    background: color-mix(in srgb, var(--hue) 22%, var(--bg));
+    background: color-mix(in srgb, var(--hue) 26%, var(--bg));
     border: 1px solid var(--border);
-    border-color: color-mix(in srgb, var(--hue) 32%, transparent);
+    border-color: color-mix(in srgb, var(--hue) 85%, var(--text));
     transition:
         background-color var(--duration-normal) var(--ease-default),
         border-color var(--duration-normal) var(--ease-default);
@@ -188,7 +195,7 @@ main.wrap {
 /* Hover deepens the ink rather than lifting the tile - paper has no height. */
 .tile:hover {
     background: color-mix(in srgb, var(--hue) 30%, var(--bg));
-    border-color: color-mix(in srgb, var(--hue) 50%, transparent);
+    border-color: color-mix(in srgb, var(--hue) 70%, var(--text));
 }
 .tile:focus-visible {
     outline: 2px solid var(--hue);
