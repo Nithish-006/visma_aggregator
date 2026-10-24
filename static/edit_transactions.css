@@ -18,7 +18,7 @@
     padding: 0.75rem 1rem;
     border-radius: 12px;
     margin-bottom: 0.875rem;
-    border: 1px solid rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--c-border);
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -360,9 +360,14 @@
     50% { opacity: 0.3; }
 }
 
+/* Hairline separators instead of zebra banding. Striping is a workaround for
+   rows that are hard to track; adequate row height and a 1px rule do the same
+   job without tinting half the data a different colour. The rule is the
+   shared --c-border (3:1), drawn ONCE per row here: an inset shadow on
+   `tr + tr` used to add a second, paler line right under this one. */
 .edit-table td {
     padding: 12px;
-    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    border-bottom: 1px solid var(--c-border);
     color: var(--text-main);
     vertical-align: middle;
 }
@@ -384,13 +389,6 @@
 .edit-table tbody tr {
     background: var(--bg-card);
     transition: background var(--transition-fast);
-}
-
-/* Hairline separators instead of zebra banding. Striping is a workaround for
-   rows that are hard to track; adequate row height and a 1px rule do the same
-   job without tinting half the data a different colour. */
-.edit-table tbody tr + tr {
-    box-shadow: inset 0 1px 0 var(--c-border);
 }
 
 .edit-table tbody tr:hover {
@@ -424,6 +422,11 @@
 .editable-cell:hover {
     background: rgba(217, 119, 87, 0.1);
 }
+
+/* A row's hover fill is painted inside each cell and clipped by that cell's
+   radius, so rounded editable cells punched white notches into a hovered row
+   once the fill was strong enough to see. Square cells inside the table. */
+.edit-table td.editable-cell { border-radius: 0; }
 
 /* Excel-like focused cell highlight */
 .editable-cell.cell-focused {
@@ -695,7 +698,9 @@
 .project-badge.legacy {
     background: rgba(239, 68, 68, 0.10);
     color: #b91c1c;
-    border: 1px dashed rgba(239, 68, 68, 0.45);
+    /* The dashed edge IS the "not a registry project" signal, so it has to
+       survive an LCD: 45% red measured 1.7:1. */
+    border: 1px dashed rgba(220, 38, 38, 0.8);
     cursor: pointer;
 }
 
@@ -2622,7 +2627,7 @@ input[type="checkbox"] {
     }
 
     .mobile-data-info .mobile-date-separator {
-        color: rgba(59, 107, 201, 0.45);
+        color: #3567C5;   /* 4.61:1 on the strip; at 45% it was 1.81 */
         opacity: 1;
     }
 

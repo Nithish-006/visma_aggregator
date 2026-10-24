@@ -615,7 +615,7 @@
 .proj-pay-bar {
     height: 7px;
     border-radius: 999px;
-    background: var(--proj-border);
+    background: var(--c-track);
     overflow: hidden;
 }
 .proj-pay-bar-fill {

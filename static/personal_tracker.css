@@ -39,7 +39,7 @@ html {
 
 body {
     font-family: var(--font-ui);
-    background: #FAF9F5;
+    background: var(--c-bg);
     background-attachment: fixed;
     min-height: 100vh;
     min-height: -webkit-fill-available;
@@ -59,7 +59,7 @@ body {
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    border-bottom: 1px solid var(--c-border);
     padding: calc(12px + var(--safe-area-top)) 16px 12px;
     display: flex;
     justify-content: space-between;
@@ -616,7 +616,7 @@ body {
 
 .project-bar {
     height: 4px;
-    background: var(--border-color);
+    background: var(--c-track);
     border-radius: 2px;
     overflow: hidden;
     margin-top: 8px;

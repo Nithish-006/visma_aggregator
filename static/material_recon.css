@@ -193,7 +193,7 @@
     height: 6px;
     margin: 0.3rem 0 0.7rem;
     border-radius: 999px;
-    background: var(--c-border);
+    background: var(--c-track);
     overflow: hidden;
 }
 
@@ -301,7 +301,7 @@
 .mr-chip span {
     padding: 0 0.3rem;
     border-radius: 999px;
-    background: var(--c-border);
+    background: var(--c-track);
     color: var(--c-text);
     font-size: 0.68rem;
     font-variant-numeric: tabular-nums;

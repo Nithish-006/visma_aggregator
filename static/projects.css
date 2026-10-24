@@ -222,7 +222,7 @@ html, body {
 /* "Others" section reads as non-project at a glance: amber accent + tinted
    header rule, plus a distinct id pill / hover on its cards. */
 .proj-section--others .proj-section-head {
-    border-bottom-color: rgba(245, 158, 11, 0.35);
+    border-bottom-color: #A16207;
 }
 .proj-section--others .proj-section-count {
     color: var(--proj-warning);
@@ -239,7 +239,7 @@ html, body {
 
 /* "Designs" â€” teal accent + tinted header rule and cards. */
 .proj-section--designs .proj-section-head {
-    border-bottom-color: rgba(8, 145, 178, 0.35);
+    border-bottom-color: #0B5F76;
 }
 .proj-section--designs .proj-section-count {
     color: var(--proj-design);
@@ -417,7 +417,7 @@ html, body {
 .proj-modal-card {
     position: relative;
     width: min(560px, 92vw);
-    background: linear-gradient(160deg, #ffffff 0%, #F4F2EC 100%);
+    background: linear-gradient(160deg, #ffffff 0%, var(--c-surface-soft) 100%);
     border: 1px solid var(--proj-border);
     border-radius: 18px;
     box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
@@ -1528,7 +1528,7 @@ html, body {
 
 /* â”€â”€ "Closed" registry section + dimmed cards â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-section--closed .proj-section-head {
-    border-bottom-color: rgba(107, 114, 128, 0.35);
+    border-bottom-color: #64748B;
 }
 .proj-section--closed .proj-section-count {
     color: var(--proj-text-muted);

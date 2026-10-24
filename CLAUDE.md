@@ -69,6 +69,14 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 - **Templates** (`/templates`): 6 HTML files with dark theme
 - **Static** (`/static`): CSS and JS files paired by feature (e.g., `personal_tracker.css` + `personal_tracker.js`)
 - Uses Chart.js for analytics visualizations
+- **Colour lives in `static/theme.css`** (the `--c-*`, `--cat-*`, `--proj-*` tokens);
+  each page's `:root` aliases them, and `static/hig.css` (loaded after every page
+  stylesheet) holds the cross-page contrast fixes. The palette is tuned for
+  ordinary LCD screens, not just good monitors: every line/boundary token clears
+  3:1 (`--c-border` 3.0-3.7, `--c-border-strong` 4.3-5.2) and text clears 4.5:1.
+  Don't add faint hairlines (`rgba(0,0,0,0.06)`-style) - use `--c-border`. Don't
+  use a border token as a *fill*: quiet tracks, count bubbles and similar take
+  `--c-track`. When a stylesheet changes, bump its `?v=` in the templates.
 
 ### Key Routes
 - `/` → Hub (bank selection)
