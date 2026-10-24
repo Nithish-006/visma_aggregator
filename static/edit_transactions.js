@@ -143,9 +143,44 @@
             this.optionsContainer = this.container.querySelector('.dropdown-options');
         }
 
+        /**
+         * Replace the option list -- called after EVERY transactions fetch, so
+         * after every tick, while the menu is still open in the user's hand.
+         *
+         * It used to re-render the whole list from scratch, which threw away
+         * the search the user had typed and the scroll position: tick one of
+         * "kal..." and the list snapped back to the top of every vendor A-Z, so
+         * the next one they were about to tick was simply gone. Each list
+         * excludes its own filter server-side, so ticking within a dropdown
+         * never changes that dropdown's options; when nothing changed, only the
+         * ticks are repainted. When something did, the search and the scroll
+         * position are kept.
+         *
+         * A selected value stays listed even when the other filters leave it
+         * no rows, or it could never be unticked.
+         */
         setOptions(items) {
-            this.options = items;
-            this.renderOptions(items);
+            const merged = [...items];
+            for (const val of this.selectedValues) {
+                if (!merged.includes(val)) merged.unshift(val);
+            }
+            const unchanged = merged.length === this.options.length
+                && merged.every((v, i) => v === this.options[i]);
+            this.options = merged;
+            if (unchanged) {
+                this.updateUI();
+                return;
+            }
+            const scrollTop = this.optionsContainer.scrollTop;
+            this.renderOptions(this.matchingOptions());
+            this.optionsContainer.scrollTop = scrollTop;
+        }
+
+        /** The options that match what is typed in this dropdown's search box. */
+        matchingOptions() {
+            const query = (this.searchInput ? this.searchInput.value : '').toLowerCase();
+            if (!query) return this.options;
+            return this.options.filter(item => item.toLowerCase().includes(query));
         }
 
         renderOptions(items) {
@@ -241,33 +276,23 @@
             this.container.classList.remove('active');
         }
 
-        filterOptions(query) {
-            const lowerQuery = query.toLowerCase();
-            const filtered = this.options.filter(item => item.toLowerCase().includes(lowerQuery));
-            this.renderOptions(filtered);
+        filterOptions() {
+            this.renderOptions(this.matchingOptions());
         }
 
         clear() {
             this.selectedValues.clear();
-            this.updateUI();
+            // setOptions honours the search box, so a search left behind would
+            // keep the list narrowed after Reset.
+            if (this.searchInput) this.searchInput.value = '';
+            this.renderOptions(this.options);
             this.updateTriggerText();
             this.syncFilters();
         }
 
-        /**
-         * Update available options while preserving current selections.
-         * Options not in the new list are kept selected (they still match the filter).
-         */
+        /** Same as setOptions; kept for refreshFilterOptions(). */
         updateOptions(newItems) {
-            this.options = newItems;
-            // Re-render with current search query if any
-            const searchQuery = this.searchInput ? this.searchInput.value : '';
-            if (searchQuery) {
-                const lowerQuery = searchQuery.toLowerCase();
-                this.renderOptions(newItems.filter(item => item.toLowerCase().includes(lowerQuery)));
-            } else {
-                this.renderOptions(newItems);
-            }
+            this.setOptions(newItems);
         }
 
         attachEvents() {

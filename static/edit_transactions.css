@@ -62,17 +62,71 @@
     display: none;
 }
 
+/* ============================================================================
+   FILTER GRID
+   ----------------------------------------------------------------------------
+   The filters used to share one flex row with the whole action bar, each
+   dropdown capped at 150px and shrinking to 100px, so on a laptop "All
+   Categories" read "All Cat...". They now have a band of their own, on a grid
+   whose shape follows the width, and no dropdown is narrower than ~200px:
+
+     >= 1536px   category | project | vendor | from | to | quick   (one row)
+     1024-1535   category | project | vendor
+                 from | to | quick                                (two rows)
+     769-1023    category | project
+                 vendor
+                 from | to
+                 quick                                    (two columns)
+
+   The phone panel (<= 768px) keeps its own layout, further down.
+   ============================================================================ */
 .edit-filter-toolbar .filter-content {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-areas:
+        "cat  cat  cat  cat  proj proj proj proj  vend  vend  vend  vend"
+        "from from from to   to   to   quick quick quick quick quick quick";
+    gap: 0.5rem 0.625rem;
     align-items: center;
-    gap: 0.5rem;
     flex: 1;
+    min-width: 0;
 }
 
 .edit-filter-toolbar .filter-group {
-    flex: 1;
-    min-width: 100px;
-    max-width: 150px;
+    min-width: 0;
+    max-width: none;
+}
+
+.edit-filter-toolbar .filter-group-category { grid-area: cat; }
+.edit-filter-toolbar .filter-group-project  { grid-area: proj; }
+.edit-filter-toolbar .filter-group-vendor   { grid-area: vend; }
+.edit-filter-toolbar .filter-group-from     { grid-area: from; }
+.edit-filter-toolbar .filter-group-to       { grid-area: to; }
+.edit-filter-toolbar .filter-quick          { grid-area: quick; }
+
+/* The preset filters and Reset sit together at the end of the band. */
+.edit-filter-toolbar .filter-quick {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+@media (min-width: 1536px) {
+    .edit-filter-toolbar .filter-content {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) repeat(2, 12rem) auto;
+        grid-template-areas: "cat proj vend from to quick";
+    }
+}
+
+@media (max-width: 1023px) {
+    .edit-filter-toolbar .filter-content {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            "cat   proj"
+            "vend  vend"
+            "from  to"
+            "quick quick";
+    }
 }
 
 .edit-filter-toolbar .dropdown-trigger {
@@ -83,12 +137,26 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-/* Date filter group styling */
+/* Date filter group styling. Both fields read "dd-mm-yyyy" until filled, so
+   each carries a small From / To label to say which end of the range it is. */
 .edit-filter-toolbar .filter-group-date {
-    flex: 0 0 auto;
-    min-width: 140px;
-    max-width: 150px;   /* dd-mm-yyyy + the picker's calendar glyph */
+    display: flex;
+    flex-direction: row;   /* style.css stacks every .filter-group */
+    align-items: center;
+    gap: 0.5rem;
 }
+
+.edit-filter-toolbar .filter-group-date::before {
+    flex: none;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.edit-filter-toolbar .filter-group-from::before { content: 'From'; }
+.edit-filter-toolbar .filter-group-to::before   { content: 'To'; }
 
 .edit-filter-toolbar .filter-input.date-input {
     height: 36px;
@@ -99,6 +167,8 @@
     background: #FFFFFF;
     color: var(--text-main);
     width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
@@ -120,8 +190,19 @@
 }
 
 .edit-actions-toolbar .search-wrapper {
-    flex: 0 0 160px;
-    max-width: 160px;
+    flex: 1 1 200px;
+    max-width: 320px;
+}
+
+/* Search and the counts read from the left, the actions from the right; on a
+   narrow window the actions drop to the next line together, not one by one. */
+.edit-actions-group {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
 }
 
 .edit-actions-toolbar .search-input {
@@ -909,6 +990,54 @@ input[type="checkbox"] {
 }
 
 /* ============================================================================
+   LAPTOP / TABLET: ONE-LINE HEADER
+   ----------------------------------------------------------------------------
+   Below ~1280px the bank name and the date badges wrapped onto two lines,
+   making the fixed header ~92px tall over content that clears only 60px - the
+   top of the filter card sat underneath it. The header stays on one line
+   instead: who is logged in goes (as it already does on a phone), the name
+   truncates rather than wraps, and under 1200px the transaction count goes
+   too (the toolbar's "Total" says the same thing), as does the word
+   "UPDATED" on the date badges.
+   ============================================================================ */
+@media (max-width: 1279px) {
+    .header .user-badge {
+        display: none;
+    }
+
+    .header-left {
+        min-width: 0;
+    }
+
+    .header-left .logo {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .header-right {
+        flex-shrink: 0;
+        gap: 0.625rem;
+    }
+
+    .data-updated-badge,
+    .transaction-badge {
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 1199px) {
+    #total-transactions {
+        display: none;
+    }
+
+    /* "FROM: 1 Apr 2025" says it; the "UPDATED" was costing the bank name. */
+    .data-updated-badge .badge-prefix {
+        display: none;
+    }
+}
+
+/* ============================================================================
    MOBILE CARD-BASED LAYOUT
    ============================================================================ */
 @media (max-width: 768px), (pointer: coarse) and (max-height: 500px) {
@@ -1047,6 +1176,7 @@ input[type="checkbox"] {
         flex: none;
         display: flex;
         flex-direction: column;
+        align-items: stretch;   /* the desktop row centres its label */
     }
 
     /* Date filter labels - visible on mobile */
@@ -2092,24 +2222,26 @@ input[type="checkbox"] {
     }
 }
 
-/* The action side of the toolbar grew again when "Sync Expense Tracker" joined
-   Download and Upload. The wrapper is nowrap globally and the filter side has
-   min-width: 0, so on a ~1440px laptop the filter side was squeezed past its
-   own content and its buttons overlapped the stats badges. Scoped to this
-   page's toolbar: let the two sides wrap onto separate lines instead. */
+/* Two bands, one above the other: the FILTER GRID, then search, counts and
+   actions under a rule. The two used to sit side by side and wrap into each
+   other whenever the action side grew (it did, with "Sync Expense Tracker"),
+   which is how the filters ended up squeezed. No gap here: this selector
+   outranks the phone layout's `.edit-toolbar-wrapper { gap }`. */
 .toolbar-wrapper.edit-toolbar-wrapper {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
 }
 
-.edit-toolbar-wrapper .edit-filter-toolbar {
-    flex: 1 1 620px;
-}
-
-/* ...and let the action side shrink to the row so its own flex-wrap can take
-   effect, instead of running past the right edge on a ~900px window. */
+.edit-toolbar-wrapper .edit-filter-toolbar,
 .edit-toolbar-wrapper .edit-actions-toolbar {
-    flex: 1 1 auto;
+    flex: none;
     min-width: 0;
+}
+
+.edit-toolbar-wrapper .edit-actions-toolbar {
+    justify-content: flex-start;   /* .edit-actions-group pushes itself right */
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--c-border);
 }
 
 /* Nothing to sync -> the confirm button must read as unavailable, not just
@@ -2417,7 +2549,8 @@ input[type="checkbox"] {
     }
 
     .edit-toolbar-wrapper .edit-filter-toolbar,
-    .edit-toolbar-wrapper .edit-actions-toolbar {
+    .edit-toolbar-wrapper .edit-actions-toolbar,
+    .edit-toolbar-wrapper .edit-actions-group {
         display: contents;
     }
 
@@ -2456,18 +2589,25 @@ input[type="checkbox"] {
     .edit-filter-toolbar .filter-content.expanded {
         display: grid;
         grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-areas: none;
         gap: 0.5rem;
     }
 
-    .edit-filter-toolbar .filter-content > * {
-        grid-column: 1 / -1;
+    /* The desktop FILTER GRID places each field by area name, and wraps the
+       quick buttons; here they are plain cells of this six-column panel. */
+    .edit-filter-toolbar .filter-quick {
+        display: contents;
     }
 
-    .edit-filter-toolbar .filter-content > .filter-group-date {
-        grid-column: span 3;
+    .edit-filter-toolbar .filter-content .filter-group {
+        grid-area: auto / 1 / auto / -1;
     }
 
-    .edit-filter-toolbar .filter-content > .btn-compact {
+    .edit-filter-toolbar .filter-content .filter-group-date {
+        grid-area: auto / span 3;
+    }
+
+    .edit-filter-toolbar .filter-quick > .btn-compact {
         grid-column: span 2;
         min-height: 44px;
         height: 44px;
@@ -2716,6 +2856,10 @@ input[type="checkbox"] {
     .edit-filter-toolbar .filter-content {
         grid-row: 3;
         z-index: 1;
+        /* width: 100% (from the mobile block above) plus these margins ran
+           the open panel 20px past the card's right edge, clipping the
+           dropdowns and the Reset button. */
+        width: auto;
         margin: 0 10px 10px;
     }
 

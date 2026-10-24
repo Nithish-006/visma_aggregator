@@ -36,7 +36,7 @@
     <!-- Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}?v=12">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=7">
-    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=15">
+    <link rel="stylesheet" href="{{ url_for('static', filename='edit_transactions.css') }}?v=16">
     <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=15">
     <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
@@ -89,7 +89,7 @@
                             <line x1="8" y1="2" x2="8" y2="6"></line>
                             <line x1="3" y1="10" x2="21" y2="10"></line>
                         </svg>
-                        <span>UPDATED FROM: <strong id="data-from-date">--</strong></span>
+                        <span><span class="badge-prefix">UPDATED </span>FROM: <strong id="data-from-date">--</strong></span>
                     </span>
                     <span id="data-updated-badge" class="data-updated-badge">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -97,7 +97,7 @@
                             <circle cx="12" cy="12" r="10"></circle>
                             <polyline points="12 6 12 12 16 14"></polyline>
                         </svg>
-                        <span>UPDATED TILL: <strong id="data-updated-date">--</strong></span>
+                        <span><span class="badge-prefix">UPDATED </span>TILL: <strong id="data-updated-date">--</strong></span>
                     </span>
                 </div>
                 <span id="total-transactions" class="transaction-badge">0 Transactions</span>
@@ -236,27 +236,29 @@
                         </svg>
                     </button>
 
-                    <!-- Filter Controls -->
+                    <!-- Filter Controls (laid out as a grid -- see FILTER GRID in edit_transactions.css) -->
                     <div id="edit-filter-content" class="filter-content">
-                        <div class="filter-group">
+                        <div class="filter-group filter-group-category">
                             <div id="edit-category-filter" class="custom-dropdown"></div>
                         </div>
-                        <div class="filter-group">
+                        <div class="filter-group filter-group-project">
                             <div id="edit-project-filter" class="custom-dropdown"></div>
                         </div>
-                        <div class="filter-group">
+                        <div class="filter-group filter-group-vendor">
                             <div id="edit-vendor-filter" class="custom-dropdown"></div>
                         </div>
-                        <div class="filter-group filter-group-date">
+                        <div class="filter-group filter-group-date filter-group-from">
                             <input type="date" id="edit-start-date" class="filter-input date-input" title="From Date">
                         </div>
-                        <div class="filter-group filter-group-date">
+                        <div class="filter-group filter-group-date filter-group-to">
                             <input type="date" id="edit-end-date" class="filter-input date-input" title="To Date">
                         </div>
-                        <button id="filter-uncategorized" class="btn btn-primary btn-compact">Uncategorized</button>
-                        <button id="filter-needs-review" class="btn btn-secondary btn-compact"
-                                title="Rows the categoriser had a guess for but was not confident enough to apply">Needs review</button>
-                        <button id="clear-all-filters" class="btn btn-secondary btn-compact">Reset</button>
+                        <div class="filter-quick">
+                            <button id="filter-uncategorized" class="btn btn-primary btn-compact">Uncategorized</button>
+                            <button id="filter-needs-review" class="btn btn-secondary btn-compact"
+                                    title="Rows the categoriser had a guess for but was not confident enough to apply">Needs review</button>
+                            <button id="clear-all-filters" class="btn btn-secondary btn-compact">Reset</button>
+                        </div>
                     </div>
                 </div>
 
@@ -280,6 +282,8 @@
                             Unsaved: <strong id="modified-count">0</strong>
                         </span>
                     </div>
+                    <!-- One group, so on a narrow window the actions wrap together -->
+                    <div class="edit-actions-group">
                     <button id="save-all-btn" class="btn btn-success btn-compact" style="display: none;">Save
                         All</button>
                     <button id="discard-all-btn" class="btn btn-secondary btn-compact"
@@ -311,6 +315,7 @@
                         </svg>
                         <span>Upload Statement</span>
                     </button>
+                    </div>
                 </div>
             </div>
 
@@ -533,7 +538,7 @@
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=13"></script>
+    <script src="{{ url_for('static', filename='edit_transactions.js') }}?v=14"></script>
     <script src="{{ url_for('static', filename='upload.js') }}"></script>
     <script src="/static/pwa-register.js"></script>
 <script>
