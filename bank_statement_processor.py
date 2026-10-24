@@ -630,7 +630,8 @@ def process_bank_statement(
     header_row: Optional[int] = None,
     password: Optional[str] = None,
     opening_balance: Optional[float] = None,
-    memory=None
+    memory=None,
+    spellings=None
 ) -> pd.DataFrame:
     """
     Process a bank statement Excel file into standardized format
@@ -646,6 +647,10 @@ def process_bank_statement(
             remarks have meant before. When omitted, categorisation is keyword
             scoring alone - the behaviour that existed before the memory, and
             what the CLI and Excel-only paths still get.
+        spellings: Optional VendorSpellings - how this bank's table already
+            spells its vendors. Each extracted name is snapped to it, so an
+            upload doesn't re-introduce 'Arjunan s' beside 'ARJUNAN S'. When
+            omitted, names are stored exactly as the narration spells them.
 
     Returns:
         Processed DataFrame with standardized columns
@@ -664,10 +669,17 @@ def process_bank_statement(
     # Route to bank-specific processor
     if bank_code == 'kvb':
         return _process_kvb_statement(file_path, file_data, auto_detect_header, header_row,
-                                      opening_balance, memory=memory)
+                                      opening_balance, memory=memory, spellings=spellings)
     else:
         return _process_axis_statement(file_path, file_data, auto_detect_header, header_row,
-                                       memory=memory)
+                                       memory=memory, spellings=spellings)
+
+
+def _stored_vendor(vendor_match, spellings) -> Optional[str]:
+    """The vendor name to store: snapped to the table's spelling when given."""
+    if spellings is None:
+        return vendor_match.vendor
+    return spellings.snap(vendor_match)
 
 
 def _process_axis_statement(
@@ -675,7 +687,8 @@ def _process_axis_statement(
     file_data: io.BytesIO = None,
     auto_detect_header: bool = True,
     header_row: Optional[int] = None,
-    memory=None
+    memory=None,
+    spellings=None
 ) -> pd.DataFrame:
     """Process Axis Bank statement"""
     safe_print("[*] Using Axis Bank processing logic...")
@@ -767,7 +780,7 @@ def _process_axis_statement(
         # Extract vendor
         vendor_match = match_vendor(particulars_text, 'axis')
         vendor_report.record(particulars_text, vendor_match)
-        vendor = vendor_match.vendor
+        vendor = _stored_vendor(vendor_match, spellings)
 
         # Categorize transaction
         decision = decide_category(particulars_text, dr_cr, vendor_match, 'axis', memory)
@@ -825,7 +838,8 @@ def _process_kvb_statement(
     auto_detect_header: bool = True,
     header_row: Optional[int] = None,
     opening_balance: Optional[float] = None,
-    memory=None
+    memory=None,
+    spellings=None
 ) -> pd.DataFrame:
     """
     Process KVB (Karur Vysya Bank) statement
@@ -966,7 +980,7 @@ def _process_kvb_statement(
         # Extract vendor using KVB patterns
         vendor_match = match_vendor(particulars_text, 'kvb')
         vendor_report.record(particulars_text, vendor_match)
-        vendor = vendor_match.vendor
+        vendor = _stored_vendor(vendor_match, spellings)
 
         # Categorize transaction
         decision = decide_category(particulars_text, dr_cr, vendor_match, 'kvb', memory)

@@ -119,6 +119,29 @@ Users have since typed many more (CRANE RENT, AUTO RENT, CAPITAL AC, LABOUR
 PAYMENT, ...) that appear in no keyword list, so keyword scoring alone cannot
 reach them. See below.
 
+### Vendor names: one spelling per vendor, the bank statement's
+
+`client_vendor` is the bank statement's name for the payee, and each vendor
+has **one** spelling per bank table — the vendor filter, project summary and
+category memory all group on the exact string. Prod was unified on
+2026-10-24 by `scripts/vendor_unify.py` (dry run by default; `--apply`,
+`--revert AUDIT_CSV`; the applied audit is
+`scripts/vendor_unify_changes_20261024_155013.csv` — git-ignored like every
+audit CSV, since it holds live row data, so it exists only on the machine that
+ran it). Its rules: a typed value
+naming the narration's own payee takes the statement's spelling; own-account
+moves become `VISMA ASSOCIATES`; typed values with a note after the name
+(`SRIDHAR K M/ARJUN`) and real names typed over a bank nickname (`welder` →
+SATHEESH, `PANDP` → P&P ROOFING) are kept. A review set (vendors the statement
+itself spells two ways, fuzzy matches on nameless KVB rows) is written only
+with `--include-review` and was **not** applied.
+
+Uploads keep it that way: `helpers/vendor_spelling.py` snaps each extracted
+name to the table's existing spelling (same letters ignoring case/spacing, or
+a KVB name cut off at the export width that extends to exactly one stored
+name), loaded once per upload by `helpers/vendor_spelling_loader.py`. It never
+merges names that merely look alike — that stays a human/review decision.
+
 ### Categorisation on upload
 
 `decide_category()` in `bank_statement_processor.py` decides one row, in order:

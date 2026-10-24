@@ -23,9 +23,10 @@ wheels/
 .installed.cfg
 *.egg
 
-# Vendor backfill audit/rollback manifests - generated, contain live row data.
-# Keep them on disk: they are the only way to revert a backfill run.
+# Vendor backfill / unify audit+rollback manifests - generated, contain live row
+# data. Keep them on disk: they are the only way to revert a run.
 scripts/vendor_backfill_*.csv
+scripts/vendor_unify_*.csv
 
 # Streamlit
 .streamlit/

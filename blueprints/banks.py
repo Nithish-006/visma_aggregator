@@ -20,6 +20,7 @@ from bank_statement_processor import process_bank_statement
 from helpers.formatting import format_indian_number, sanitize_for_excel, safe_col_width
 from helpers.bankdata import get_bank_df, reload_bank_data
 from helpers.category_loader import get_category_memory
+from helpers.vendor_spelling_loader import get_vendor_spellings
 from helpers.dataframe import (
     filter_by_date_range, filter_by_category, filter_by_vendor,
     filter_by_project,
@@ -589,9 +590,12 @@ def upload_bank_statement(bank_code):
         # back to an empty memory (i.e. keyword scoring) if history can't be
         # read, which must never block an upload.
         memory = get_category_memory(bank_code) if Config.USE_DATABASE else None
+        # How the table already spells each vendor, so this upload writes
+        # 'ARJUNAN S' rather than adding 'Arjunan s' beside it.
+        spellings = get_vendor_spellings(bank_code) if Config.USE_DATABASE else None
 
         df = process_bank_statement(filepath, bank_code, password=password,
-                                    memory=memory)
+                                    memory=memory, spellings=spellings)
 
         if Config.USE_DATABASE:
 
