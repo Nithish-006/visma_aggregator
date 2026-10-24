@@ -228,8 +228,22 @@
             for (const val of this.selectedValues) {
                 if (!merged.includes(val)) merged.unshift(val);
             }
+            // This runs after every tick, with the menu still open. A full
+            // re-render threw away the typed search and the scroll position,
+            // so the next vendor the user was about to tick vanished from
+            // under the cursor. Each list excludes its own filter server-side,
+            // so ticking within a dropdown never changes its own options:
+            // repaint the ticks only, and otherwise keep search and scroll.
+            const unchanged = merged.length === this.options.length
+                && merged.every((v, i) => v === this.options[i]);
             this.options = merged;
-            this.renderOptions(merged);
+            if (unchanged) {
+                this.updateUI();
+                return;
+            }
+            const scrollTop = this.optionsContainer.scrollTop;
+            this.filterOptions(this.searchInput.value);
+            this.optionsContainer.scrollTop = scrollTop;
         }
 
         renderOptions(items) {
@@ -329,7 +343,8 @@
 
         clear() {
             this.selectedValues.clear();
-            this.updateUI();
+            this.searchInput.value = '';
+            this.renderOptions(this.options);
             this.updateTriggerText();
             this.syncFilters();
         }
