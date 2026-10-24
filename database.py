@@ -610,6 +610,29 @@ class DatabaseManager:
             print(f"[!] Could not read categorization history for {bank_code}: {e}")
         return rows
 
+    def get_vendor_names(self, bank_code: str = 'axis') -> List[str]:
+        """Every stored client_vendor, one per row, for ``helpers/vendor_spelling``.
+
+        One value per row rather than ``GROUP BY``: the column's collation is
+        case-insensitive, so grouping would fold 'Arjunan s' into 'ARJUNAN S'
+        and lose exactly the counts the spelling choice is made from.
+        """
+        table = self.get_table_name(bank_code)
+        names = []
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"""
+                    SELECT client_vendor FROM {table}
+                    WHERE client_vendor IS NOT NULL AND client_vendor <> ''
+                """)
+                names = [row[0] for row in cursor.fetchall()]
+                cursor.close()
+        except Exception as e:
+            # Never blocks an upload: no spellings means names stored as read.
+            print(f"[!] Could not read vendor names for {bank_code}: {e}")
+        return names
+
     def get_transaction_count(self, bank_code: str = 'axis') -> int:
         """Get total number of transactions for a specific bank"""
         table = self.get_table_name(bank_code)
