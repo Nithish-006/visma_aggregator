@@ -18,9 +18,10 @@ from helpers.bankdata import get_bank_df
 
 bp = Blueprint('auth', __name__)
 
-# Login credentials
-VALID_USERNAME = 'visma'
-VALID_PASSWORD = '1617'
+# Login credentials. Overridable per deployment so a test instance can hand out
+# its own login without exposing prod's; unset falls back to the prod values.
+VALID_USERNAME = os.environ.get('APP_USERNAME') or 'visma'
+VALID_PASSWORD = os.environ.get('APP_PASSWORD') or '1617'
 
 
 def login_required(f):
