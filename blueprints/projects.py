@@ -240,6 +240,23 @@ def _attach_client_payments(projects):
     return projects
 
 
+def _attach_material_weight(projects):
+    """Add `material_kg` to each project: gross weight of purchased material.
+
+    Every weight-unit line item on its purchase bills, converted to kg, split
+    bills at the project's share (helpers/material_weight). One grouped query
+    for the whole list, so the cards don't cost a query each.
+    """
+    try:
+        kg_by_id = db_manager.get_material_kg_by_project()
+    except Exception as e:
+        print(f"[!] Could not load material weight: {e}")
+        kg_by_id = {}
+    for p in projects:
+        p['material_kg'] = float(kg_by_id.get(p.get('id'), 0.0))
+    return projects
+
+
 def _po_and_payments_for_project(project_param):
     """Resolve a canonical "<id> - NAME" selection to its PO value and total
     client payments (bank + cash). Returns (po_value, client_payments) as
@@ -265,7 +282,8 @@ def _po_and_payments_for_project(project_param):
 @login_required
 def api_list_projects():
     db_manager.ensure_projects_table()
-    projects = _attach_client_payments(db_manager.list_projects())
+    projects = _attach_material_weight(
+        _attach_client_payments(db_manager.list_projects()))
     return jsonify({'projects': projects})
 
 

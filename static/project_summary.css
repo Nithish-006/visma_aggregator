@@ -1858,6 +1858,29 @@ tr.ps-cf-active td:first-child {
 }
 
 .ps-proj-fin-cell .v.income { color: var(--c-success-text); }
+
+/* Material purchased (gross weight) — mirrors .project-weight on the registry. */
+.ps-proj-weight {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 8px;
+}
+.ps-proj-weight .k {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+.ps-proj-weight .v {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
 .ps-proj-fin-cell .v.expense { color: var(--c-danger-text); }
 /* The registry card's states, same colours: these cards headline the same
    three KPIs, and a balance that reads red on one page and plain on the other
