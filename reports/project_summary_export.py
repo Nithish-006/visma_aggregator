@@ -20,6 +20,7 @@ from helpers.bankdata import get_bank_df
 from helpers.dataframe import filter_by_date_range
 from helpers.projects import parse_project_selection
 from helpers.project_finance import compute_project_finance
+from helpers.material_weight import export_bill_kg, WEIGHT_NOTE
 
 
 def _dmy(value):
@@ -121,12 +122,18 @@ def _make_styles():
 
 
 def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
-                               party_label, party_key, gstin_key, total_font, st):
+                               party_label, party_key, gstin_key, total_font, st,
+                               show_weight=False):
     """Project-grouped bills sheet for a SINGLE project (one project block).
 
     A trimmed sibling of export_project_summary's write_bills_sheet: same
     auditor layout (project header → per-bill line items → bill totals →
     project total), but for just this project's bills.
+
+    show_weight (purchase bills): print the gross weight (every weight-unit
+    line item, converted to kg) at the top of the sheet, each bill's kg on its
+    Bill Total row, and the project's kg on the total row —
+    helpers/material_weight decides what counts and how it converts.
     """
     from openpyxl.styles import Font, Alignment, PatternFill
 
@@ -149,6 +156,24 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
 
     ws.cell(row=1, column=1, value=sheet_title).font = title_font
     cr = 3
+    bill_kgs = [export_bill_kg(b) for b in bills] if show_weight else []
+    total_kg = sum(bill_kgs)
+    if show_weight:
+        # Headline first: the gross tonnage bought for this project, ahead of
+        # the bill-by-bill evidence below it.
+        # Placed in the already-wide vendor / invoice / date / description
+        # columns so auto-width doesn't stretch the narrow SL.NO column.
+        ws.cell(row=cr, column=2, value='TOTAL GROSS WEIGHT').font = Font(bold=True, size=12)
+        wc = ws.cell(row=cr, column=4, value=total_kg)
+        wc.number_format = '#,##0.00" kg"'
+        wc.font = Font(bold=True, size=12, color='1A1A2E')
+        tc = ws.cell(row=cr, column=5, value=total_kg / 1000)
+        tc.number_format = '#,##0.000" MT"'
+        tc.font = Font(bold=True, size=12, color='2563EB')
+        ws.cell(row=cr, column=6, value=(
+            WEIGHT_NOTE + " Split bills count this project's share."
+        )).font = st['formula_font']
+        cr += 2
     block_start = cr
 
     # ── PROJECT HEADER (blue fill, white text) ──
@@ -171,6 +196,7 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
     for bill in bills:
         bill_serial += 1
         line_items = bill.get('line_items', [])
+        b_kg = bill_kgs[bill_serial - 1] if show_weight else 0
         b_taxable = float(bill.get('subtotal', 0) or 0)
         b_cgst = float(bill.get('total_cgst', 0) or 0)
         b_sgst = float(bill.get('total_sgst', 0) or 0)
@@ -218,6 +244,11 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
             cell = ws.cell(row=cr, column=col, value=val)
             cell.font = Font(bold=True)
             cell.number_format = currency_fmt
+        if b_kg:
+            kc = ws.cell(row=cr, column=8, value=b_kg)
+            kc.font = Font(bold=True)
+            kc.number_format = '#,##0.00'
+            ws.cell(row=cr, column=9, value='KG').font = Font(bold=True)
         for c in range(1, BILL_COLS + 1):
             ws.cell(row=cr, column=c).border = thin_border
         cr += 1
@@ -255,6 +286,11 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
         cell = ws.cell(row=cr, column=col, value=val)
         cell.font = total_font
         cell.number_format = currency_fmt
+    if show_weight:
+        kc = ws.cell(row=cr, column=8, value=total_kg)
+        kc.font = Font(bold=True)
+        kc.number_format = '#,##0.00'
+        ws.cell(row=cr, column=9, value='KG').font = Font(bold=True)
 
     # ── Mild-yellow background over the block's content rows (line items + bill
     # totals); the blue project header / column headers and the green project
@@ -266,7 +302,7 @@ def _write_project_bills_sheet(ws, bills, project_label, sheet_title,
             if cell.fill == blank or cell.fill == PatternFill():
                 cell.fill = block_bg
 
-    col_widths = {'A': 8, 'B': 28, 'C': 18, 'D': 18, 'E': 14, 'F': 35, 'G': 12,
+    col_widths = {'A': 8, 'B': 28, 'C': 18, 'D': 18, 'E': 16, 'F': 35, 'G': 12,
                   'H': 10, 'I': 8, 'J': 12, 'K': 15, 'L': 12, 'M': 12, 'N': 12, 'O': 15}
     for col_letter, width in col_widths.items():
         ws.column_dimensions[col_letter].width = width
@@ -430,6 +466,10 @@ def export_single_project_summary(project_id):
         sales_bills = []
 
     material_total = sum(float(b.get('total_amount') or 0) for b in purchase_bills)
+    # Gross weight of the material bought: weight-unit line items in kg,
+    # split bills at this project's share.
+    material_kg = sum(export_bill_kg(b) for b in purchase_bills)
+    material_kg_bills = sum(1 for b in purchase_bills if export_bill_kg(b) > 0)
 
     # ── Labour from the salary API ──
     try:
@@ -994,7 +1034,7 @@ def export_single_project_summary(project_id):
             wb.create_sheet('Purchase Bills'), purchase_bills, stem_name,
             sheet_title=f'Purchase Bills — {display}',
             party_label='VENDOR', party_key='vendor_name', gstin_key='vendor_gstin',
-            total_font=st['red_amount'], st=st)
+            total_font=st['red_amount'], st=st, show_weight=True)
     else:
         ws = wb.create_sheet('Purchase Bills')
         ws.cell(row=1, column=1, value='No purchase bills tagged to this project.')
@@ -1093,6 +1133,16 @@ def export_single_project_summary(project_id):
 
     def signed_font(v):
         return st['green_amount'] if v >= 0 else st['red_amount']
+
+    # Material bought by weight leads the sheet: it's the figure asked for
+    # first, and the one that doesn't appear anywhere in the money ladder below.
+    cr = section(ws, cr, 'MATERIAL PURCHASED (by weight)')
+    kv_row(ws, cr, 'Total Gross Weight (kg)', material_kg, fmt='#,##0.00" kg"',
+           font=st['section_bold'],
+           formula=(f'weight line items (KG / MT / QTL / GMS, in kg) across {material_kg_bills} of {len(purchase_bills)} '
+                    "purchase bills   ·   split bills at this project's share")); cr += 1
+    kv_row(ws, cr, 'Total Gross Tonnage (MT)', material_kg / 1000, fmt='#,##0.000" MT"',
+           font=st['blue_amount'], formula='kg ÷ 1,000'); cr += 2
 
     # Laid out like the app's Project value panel, so the sheet and the screen
     # can be read side by side: the PO as signed, the changes agreed since, the

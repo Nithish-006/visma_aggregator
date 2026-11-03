@@ -21,6 +21,7 @@ from config import (
     IST_MYSQL_OFFSET,
 )
 from extraction_validator import validate_extraction, validate_db_row, notes_from_result
+from helpers.material_weight import alloc_kg_sql
 from helpers.project_finance import (
     compute_ledger_amounts, resolve_contract, resolve_ledger_gst_rate,
 )
@@ -1725,14 +1726,18 @@ class DatabaseManager:
                 # Summary
                 summary_query = f"""
                 SELECT COALESCE(SUM(a.alloc_total), 0) as total_amount,
-                       COALESCE(SUM(a.alloc_cgst + a.alloc_sgst + a.alloc_igst), 0) as total_gst
+                       COALESCE(SUM(a.alloc_cgst + a.alloc_sgst + a.alloc_igst), 0) as total_gst,
+                       COALESCE(SUM({alloc_kg_sql('bi', 'a')}), 0) as total_kg
                 {base_from} WHERE {where_clause}
                 """
                 cursor.execute(summary_query, tuple(params) if params else None)
                 summary_row = cursor.fetchone()
                 summary = {
                     'total_amount': float(summary_row['total_amount']) if summary_row else 0,
-                    'total_gst': float(summary_row['total_gst']) if summary_row else 0
+                    'total_gst': float(summary_row['total_gst']) if summary_row else 0,
+                    # Gross weight of the KG line items across every matching
+                    # bill (not just this page) — helpers/material_weight.
+                    'total_kg': float(summary_row['total_kg'] or 0) if summary_row else 0
                 }
 
                 # Data
@@ -1744,7 +1749,8 @@ class DatabaseManager:
                     a.alloc_sgst as total_sgst, a.alloc_igst as total_igst,
                     a.alloc_total as total_amount, a.project,
                     (SELECT COUNT(*) FROM bill_line_items bli WHERE bli.invoice_id = bi.id) as line_item_count,
-                    (SELECT COUNT(*) FROM bill_project_allocations a2 WHERE a2.invoice_id = bi.id) as allocation_count
+                    (SELECT COUNT(*) FROM bill_project_allocations a2 WHERE a2.invoice_id = bi.id) as allocation_count,
+                    {alloc_kg_sql('bi', 'a')} as kg_weight
                 {base_from}
                 WHERE {where_clause}
                 ORDER BY bi.invoice_date DESC, bi.id DESC, a.seq
@@ -1768,7 +1774,7 @@ class DatabaseManager:
 
         except Exception as e:
             print(f"[!] Error fetching bills for project summary: {e}")
-            return [], 0, {'total_amount': 0, 'total_gst': 0}
+            return [], 0, {'total_amount': 0, 'total_gst': 0, 'total_kg': 0}
 
     def get_sales_bills_for_project_summary(self, start_date=None, end_date=None,
                                             project=None, vendor=None,
@@ -1886,7 +1892,7 @@ class DatabaseManager:
             table, items_table = 'bill_invoices', 'bill_line_items'
 
         empty_summary = {'count': 0, 'total_taxable': 0.0,
-                         'total_gst': 0.0, 'total_amount': 0.0}
+                         'total_gst': 0.0, 'total_amount': 0.0, 'total_kg': 0.0}
 
         # Purchase bills carry a per-project split ledger: read money from the
         # allocations (a.alloc_*) so a bill split across projects contributes
@@ -1902,6 +1908,8 @@ class DatabaseManager:
             count_expr = 'COUNT(*)'
             # Sales invoices are never split across projects.
             alloc_count_expr = '1'
+            # Material weight is a purchase-side measure only.
+            kg_expr = '0'
         else:
             money_taxable = 'a.alloc_taxable'
             money_cgst, money_sgst, money_igst = 'a.alloc_cgst', 'a.alloc_sgst', 'a.alloc_igst'
@@ -1915,6 +1923,9 @@ class DatabaseManager:
             # has to be able to say so.
             alloc_count_expr = ('(SELECT COUNT(*) FROM bill_project_allocations a2 '
                                 'WHERE a2.invoice_id = b.id)')
+            # This project's share of the bill's KG line items — see
+            # helpers/material_weight for the unit rule and the split ratio.
+            kg_expr = alloc_kg_sql('b', 'a')
 
         money_gst = (f"COALESCE({money_cgst}, 0) + COALESCE({money_sgst}, 0) "
                      f"+ COALESCE({money_igst}, 0)")
@@ -1931,7 +1942,8 @@ class DatabaseManager:
                     f"SELECT {count_expr} AS cnt, "
                     f"COALESCE(SUM({money_taxable}), 0) AS total_taxable, "
                     f"COALESCE(SUM({money_total}), 0) AS total_amount, "
-                    f"COALESCE(SUM({money_gst}), 0) AS total_gst "
+                    f"COALESCE(SUM({money_gst}), 0) AS total_gst, "
+                    f"COALESCE(SUM({kg_expr}), 0) AS total_kg "
                     f"FROM {base_from} WHERE {where_clause}",
                     tuple(params)
                 )
@@ -1941,6 +1953,7 @@ class DatabaseManager:
                     'total_taxable': float(agg.get('total_taxable') or 0),
                     'total_gst': float(agg.get('total_gst') or 0),
                     'total_amount': float(agg.get('total_amount') or 0),
+                    'total_kg': float(agg.get('total_kg') or 0),
                 }
 
                 cursor.execute(
@@ -1952,6 +1965,7 @@ class DatabaseManager:
                            {money_igst} AS total_igst,
                            {money_total} AS total_amount, {proj_col} AS project,
                            {alloc_count_expr} AS allocation_count,
+                           {kg_expr} AS kg_weight,
                            (SELECT COUNT(*) FROM {items_table} li WHERE li.invoice_id = b.id) AS line_item_count
                     FROM {base_from}
                     WHERE {where_clause}
@@ -3751,6 +3765,35 @@ class DatabaseManager:
         except Exception as e:
             print(f"[!] Error fetching KVB credit by project: {e}")
             return []
+
+    def get_material_kg_by_project(self) -> Dict[int, float]:
+        """Gross weight (kg) of purchase-bill material, grouped by project id.
+
+        Every weight-unit line item converted to kg, split bills at each
+        project's share — helpers/material_weight. Allocations are tagged in the
+        canonical "<id> - NAME" form; untagged ones are skipped.
+        """
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    f"SELECT a.project, COALESCE(SUM({alloc_kg_sql('b', 'a')}), 0) "
+                    "FROM bill_project_allocations a "
+                    "JOIN bill_invoices b ON b.id = a.invoice_id "
+                    "WHERE a.project IS NOT NULL GROUP BY a.project"
+                )
+                rows = cursor.fetchall()
+                cursor.close()
+        except Exception as e:
+            print(f"[!] Error fetching material weight by project: {e}")
+            return {}
+        out = {}
+        for proj_str, kg in rows:
+            m = re.match(r'^\s*(\d+)\s*-', proj_str or '')
+            if m and kg:
+                pid = int(m.group(1))
+                out[pid] = out.get(pid, 0.0) + float(kg)
+        return out
 
     def get_cash_total_by_project(self) -> Dict[int, float]:
         """Sum recorded cash client payments grouped by project id.

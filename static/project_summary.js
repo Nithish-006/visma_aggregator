@@ -532,6 +532,16 @@
     // list the same projects, so a card that headlined a different set (Income
     // / Expense / Txns) invited the reader to compare figures that were never
     // the same measurement. See buildCard() in projects.js: this mirrors it.
+    // Gross weight of purchased material (all weight units, in kg) for a card:
+    // tonnes once there's at least one, kg below that.
+    function formatWeight(kg) {
+        kg = Number(kg) || 0;
+        if (kg >= 1000) {
+            return (kg / 1000).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MT';
+        }
+        return kg.toLocaleString('en-IN', { maximumFractionDigits: 1 }) + ' kg';
+    }
+
     function landingCardHtml(c) {
         const poValue = Number(c.po_total_value) || 0;
         const hasPoValue = c.po_total_value != null && poValue > 0;
@@ -575,6 +585,14 @@
                         : `Balance due (PO value − ${bits.length ? 'net ' : ''}received)`));
         }
         const finBlock = cells.length ? `<div class="ps-proj-fin">${cells.join('')}</div>` : '';
+        // Same row the registry card carries (see buildCard in projects.js).
+        const kg = Number(c.material_kg) || 0;
+        const weightRow = kg > 0
+            ? `<div class="ps-proj-weight" title="Material purchased: ${escapeHtml(kg.toLocaleString('en-IN', { maximumFractionDigits: 2 }))} kg (all weight units on purchase bills)">
+                    <span class="k">Material purchased</span>
+                    <span class="v">${formatWeight(kg)}</span>
+               </div>`
+            : '';
         return `
             <button type="button" class="ps-proj-card${isCardClosed(c) ? ' is-closed' : ''}" data-display="${escapeHtml(c.display)}"
                     data-title="${c.id} − ${escapeHtml(c.stem_name)}">
@@ -583,6 +601,7 @@
                     <span class="ps-proj-card-name">${escapeHtml(c.stem_name)}</span>
                 </div>
                 ${finBlock}
+                ${weightRow}
             </button>`;
     }
 
@@ -1182,7 +1201,7 @@
         if (!tbody) return;
 
         if (!data.bills || data.bills.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="ps-empty">No bills found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="ps-empty">No bills found</td></tr>';
             renderPaginationControls('bills-pagination', 1, 0, () => {});
             const summaryEl = document.getElementById('bills-summary');
             if (summaryEl) summaryEl.textContent = '';
@@ -1195,6 +1214,7 @@
             <td class="cell-wrap">${escapeHtml(b.vendor_name || '-')}</td>
             <td>${escapeHtml(b.vendor_gstin || '-')}</td>
             <td class="text-right">${b.line_item_count || 0}</td>
+            <td class="text-right">${Number(b.kg_weight) ? fmtKg(b.kg_weight) + ' kg' : '-'}</td>
             <td class="text-right text-expense">${formatIndianNumber(b.total_amount || 0)}</td>
             <td>${escapeHtml(b.project || '-')}</td>
         </tr>`).join('');
@@ -1215,9 +1235,17 @@
         // Update summary text
         const summaryEl = document.getElementById('bills-summary');
         if (summaryEl && data.summary) {
-            summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}`;
+            // Gross weight (weight-unit line items in kg) across every matching bill
+            // (not just this page); split bills count at this project's share.
+            const kg = Number(data.summary.total_kg) || 0;
+            const weight = kg ? ` | Weight: ${fmtKg(kg)} kg (${(kg / 1000).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} MT)` : '';
+            summaryEl.textContent = `${data.total} bills | Total: ${formatIndianNumber(data.summary.total_amount)} | GST: ${formatIndianNumber(data.summary.total_gst)}${weight}`;
         }
 
+    }
+
+    function fmtKg(v) {
+        return Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
     }
 
     // ── Render: Sales Bills Table (server-side pagination) ──────────────

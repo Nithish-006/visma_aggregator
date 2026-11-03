@@ -168,6 +168,16 @@
         </div>`;
     }
 
+    // Gross weight of purchased material (all weight units, in kg) for a card:
+    // tonnes once there's at least one, kg below that.
+    function formatWeight(kg) {
+        kg = Number(kg) || 0;
+        if (kg >= 1000) {
+            return (kg / 1000).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MT';
+        }
+        return kg.toLocaleString('en-IN', { maximumFractionDigits: 1 }) + ' kg';
+    }
+
     function buildCard(p) {
         const card = document.createElement('button');
         card.type = 'button';
@@ -227,6 +237,15 @@
                 settled ? null : bal));
         }
         const financeBlock = cells.length ? `<div class="project-finance">${cells.join('')}</div>` : '';
+        // Its own row rather than a fifth finance cell: it isn't money, and a
+        // fifth column would squeeze the rupee figures into ellipses.
+        const kg = Number(p.material_kg) || 0;
+        const weightRow = kg > 0
+            ? `<div class="project-weight" title="Material purchased: ${escapeHtml(kg.toLocaleString('en-IN', { maximumFractionDigits: 2 }))} kg (all weight units on purchase bills)">
+                    <span class="project-weight-k">Material purchased</span>
+                    <span class="project-weight-v">${formatWeight(kg)}</span>
+               </div>`
+            : '';
 
         card.innerHTML = `
             <div class="project-card-main">
@@ -240,6 +259,7 @@
                     ${created ? `<span class="project-created">Added ${created}</span>` : ''}
                 </div>
                 ${financeBlock}
+                ${weightRow}
             </div>
         `;
         card.addEventListener('click', () => openDetail(p.id));
@@ -1317,13 +1337,23 @@
             el.innerHTML = `<p class="proj-tab-empty">No ${isPurchase ? 'purchase' : 'sales'} bills found for this project.</p>`;
             return;
         }
+        // Gross weight of the weight-unit line items in kg (purchase only; split bills at
+        // this project's share) — helpers/material_weight on the server.
+        const kg = Number(data.total_kg) || 0;
+        const fmtKg = v => Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+        const weightChip = isPurchase ? `
+                <div class="proj-chip">
+                    <span class="proj-chip-k">Material weight</span>
+                    <span class="proj-chip-v">${(kg / 1000).toLocaleString('en-IN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} MT</span>
+                    <span class="proj-chip-sub">${fmtKg(kg)} kg · all weight units</span>
+                </div>` : '';
         const chips = `
             <div class="proj-pay-modes">
                 <div class="proj-chip accent">
                     <span class="proj-chip-k">Total billed</span>
                     <span class="proj-chip-v">${formatINR(data.total_amount)}</span>
                     <span class="proj-chip-sub">${data.count} bill${data.count === 1 ? '' : 's'}</span>
-                </div>
+                </div>${weightChip}
                 <div class="proj-chip">
                     <span class="proj-chip-k">GST included</span>
                     <span class="proj-chip-v">${formatINR(data.total_gst)}</span>
@@ -1334,13 +1364,14 @@
                 <td class="proj-li-unit">${escapeHtml(fmtDate(b.invoice_date))}</td>
                 <td class="proj-li-unit">${b.invoice_number ? escapeHtml(b.invoice_number) : '—'}</td>
                 <td class="proj-li-desc">${escapeHtml((isPurchase ? b.vendor_name : b.buyer_name) || '—')}</td>
-                <td class="proj-li-num">${b.line_item_count != null ? b.line_item_count : '—'}</td>
+                <td class="proj-li-num">${b.line_item_count != null ? b.line_item_count : '—'}</td>${isPurchase ? `
+                <td class="proj-li-num">${Number(b.kg_weight) ? fmtKg(b.kg_weight) + ' kg' : '—'}</td>` : ''}
                 <td class="proj-li-num">${formatINR(b.total_amount)}</td>
             </tr>`).join('');
         el.innerHTML = `${chips}
             <div class="proj-li-scroll proj-li-scroll--tall">
                 <table class="proj-li-table">
-                    <thead><tr><th>Date</th><th>Invoice #</th><th>${isPurchase ? 'Vendor' : 'Buyer'}</th><th class="proj-li-num">Items</th><th class="proj-li-num">Amount</th></tr></thead>
+                    <thead><tr><th>Date</th><th>Invoice #</th><th>${isPurchase ? 'Vendor' : 'Buyer'}</th><th class="proj-li-num">Items</th>${isPurchase ? '<th class="proj-li-num">Weight</th>' : ''}<th class="proj-li-num">Amount</th></tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
             </div>`;

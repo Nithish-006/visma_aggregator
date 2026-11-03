@@ -1062,10 +1062,15 @@ def generate_excel(bill_data_list):
     """
     import pandas as pd
     from openpyxl.styles import Font, Alignment, PatternFill
+    from helpers.material_weight import bill_kg, WEIGHT_NOTE
 
     # Prepare Summary sheet data
     summary_rows = []
     line_items_rows = []
+    # Gross weight (weight-unit line items in kg), per bill and overall (printed at the
+    # top of both sheets). helpers/material_weight decides which units count.
+    grand_kg = 0.0
+    kg_bill_count = 0
 
     for i, bill in enumerate(bill_data_list):
         if not bill.get('success') or not bill.get('data'):
@@ -1077,6 +1082,11 @@ def generate_excel(bill_data_list):
         buyer = data.get('buyer', {})
         taxes = data.get('taxes', {})
         transport = data.get('transport', {})
+
+        weight_kg = bill_kg(data.get('line_items', []))
+        grand_kg += weight_kg
+        if weight_kg:
+            kg_bill_count += 1
 
         # Summary row
         summary_rows.append({
@@ -1101,6 +1111,7 @@ def generate_excel(bill_data_list):
             ),
             'Round Off': taxes.get('round_off', 0),
             'Total Amount': taxes.get('total_amount', 0),
+            'Weight (KG)': round(weight_kg, 3) if weight_kg else '',
             'Project': data.get('project', ''),
             'Vehicle Number': transport.get('vehicle_number', ''),
             'E-Way Bill': header.get('eway_bill_number', ''),
@@ -1170,57 +1181,62 @@ def generate_excel(bill_data_list):
     # Create Excel workbook
     output = BytesIO()
 
+    # Rows 1-2 carry the gross-weight headline; the table starts below it.
+    HEADER_ROW = 4
+    header_fill = PatternFill(start_color='1a2942', end_color='1a2942', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF')
+
+    def write_weight_banner(ws):
+        ws.cell(row=1, column=1, value='TOTAL GROSS WEIGHT').font = Font(bold=True, size=12)
+        kc = ws.cell(row=1, column=2, value=round(grand_kg, 3))
+        kc.number_format = '#,##0.00" kg"'
+        kc.font = Font(bold=True, size=12)
+        tc = ws.cell(row=1, column=3, value=round(grand_kg / 1000, 6))
+        tc.number_format = '#,##0.000" MT"'
+        tc.font = Font(bold=True, size=12, color='2563EB')
+        ws.cell(row=2, column=1, value=(
+            f'{WEIGHT_NOTE} Found in {kg_bill_count} of {len(summary_rows)} bills.'
+        )).font = Font(italic=True, size=9, color='6B7280')
+
+    def style_table(ws):
+        for cell in ws[HEADER_ROW]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        # Auto-width from the table only — the banner text above would
+        # otherwise stretch column A.
+        for column in ws.iter_cols(min_row=HEADER_ROW):
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except Exception:
+                    pass
+            ws.column_dimensions[column_letter].width = min(max_length + 2, 50)
+        # ...but the banner's label (A) and kg / MT figures (B, C) must not be
+        # clipped or show as ####.
+        for column_letter in ('A', 'B', 'C'):
+            ws.column_dimensions[column_letter].width = max(
+                ws.column_dimensions[column_letter].width or 0, 22)
+
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         # Write Summary sheet
         if not df_summary.empty:
-            df_summary.to_excel(writer, sheet_name='Invoice Summary', index=False)
+            df_summary.to_excel(writer, sheet_name='Invoice Summary', index=False,
+                                startrow=HEADER_ROW - 1)
             ws_summary = writer.sheets['Invoice Summary']
-
-            # Style header
-            header_fill = PatternFill(start_color='1a2942', end_color='1a2942', fill_type='solid')
-            header_font = Font(bold=True, color='FFFFFF')
-
-            for cell in ws_summary[1]:
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = Alignment(horizontal='center', vertical='center')
-
-            # Auto-width columns
-            for column in ws_summary.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 50)
-                ws_summary.column_dimensions[column_letter].width = adjusted_width
+            write_weight_banner(ws_summary)
+            style_table(ws_summary)
 
         # Write Line Items sheet
         if not df_items.empty:
-            df_items.to_excel(writer, sheet_name='Line Items', index=False)
+            df_items.to_excel(writer, sheet_name='Line Items', index=False,
+                              startrow=HEADER_ROW - 1)
             ws_items = writer.sheets['Line Items']
-
-            # Style header
-            for cell in ws_items[1]:
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = Alignment(horizontal='center', vertical='center')
-
-            # Auto-width columns
-            for column in ws_items.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 50)
-                ws_items.column_dimensions[column_letter].width = adjusted_width
+            write_weight_banner(ws_items)
+            style_table(ws_items)
 
     output.seek(0)
     return output

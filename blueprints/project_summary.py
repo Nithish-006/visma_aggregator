@@ -27,7 +27,7 @@ from helpers.material_recon import is_material_purchase, reconcile_material
 # the landing cards and the registry answer "what has this project received?"
 # from one definition instead of two that drifted.
 # One-directional: blueprints.projects never imports project_summary.
-from blueprints.projects import _attach_client_payments
+from blueprints.projects import _attach_client_payments, _attach_material_weight
 from auth import login_required
 
 bp = Blueprint('project_summary', __name__)
@@ -361,7 +361,7 @@ def get_project_summary_project_cards():
     helpers/project_finance for why those move cash in hand and nothing else.
     """
     db_manager.ensure_projects_table()
-    registry = _attach_client_payments(db_manager.list_projects())
+    registry = _attach_material_weight(_attach_client_payments(db_manager.list_projects()))
 
     # Exact-name fallback for the id-prefix match below. A row tagged with a bare
     # project name and no "<id> -" prefix (legacy data, or a tag the statement
@@ -433,6 +433,8 @@ def get_project_summary_project_cards():
             'expense': t['expense'],
             'expense_formatted': format_indian_number(t['expense']),
             'txn_count': t['count'],
+            # Gross weight of purchased material, kg (see _attach_material_weight).
+            'material_kg': float(p.get('material_kg') or 0),
         })
     return jsonify({'projects': cards})
 

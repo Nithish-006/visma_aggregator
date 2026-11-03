@@ -749,6 +749,30 @@ html, body {
 .proj-fin-v.pending  { color: var(--proj-warning); font-weight: 600; }
 .proj-fin-v.muted    { color: var(--proj-text-muted); font-weight: 600; }
 
+/* Material purchased (gross weight) — a quiet label / value row under the
+   finance strip; weight isn't money, so it stays out of the rupee columns. */
+.project-weight {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+}
+.project-weight-k {
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--proj-text-muted);
+}
+.project-weight-v {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--proj-text);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
 
 /* â”€â”€ Cash client payments (detail modal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .proj-cash {
