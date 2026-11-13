@@ -1576,6 +1576,21 @@ html, body {
    ============================================================================ */
 .proj-modal-card--detail {
     width: min(880px, 94vw);
+    /* A FIXED height, not a max. The sheet used to size to whichever tab was
+       showing, so Overview -> Bills -> Ledger made it lurch between ~280px
+       and ~780px tall and the tab bar jumped with it (measured: from y=180
+       to y=679 on a 390x844 phone). Now the frame holds still and only the
+       content inside it changes. */
+    height: min(88vh, 860px);
+}
+
+/* The body takes the rest of the fixed frame and scrolls inside it. */
+.proj-modal-card--detail .proj-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding-top: 0;             /* .proj-tab-panel already opens with 1rem */
 }
 
 .proj-tabs {
@@ -1585,6 +1600,15 @@ html, body {
     border-bottom: 1px solid var(--proj-border-strong);
     overflow-x: auto;
     scrollbar-width: thin;
+}
+
+/* In the detail sheet the tab bar sits between the header and the
+   scrolling body (projects.html), so it never scrolls away and never moves
+   when a tab is switched. */
+.proj-modal-card--detail > .proj-tabs {
+    flex: none;
+    margin: 0;
+    padding: 0.5rem 1.5rem 0;
 }
 
 .proj-tab {
@@ -2058,6 +2082,20 @@ html, body {
         max-height: 92vh;
         border-bottom: none;
         border-radius: 18px 18px 0 0;
+    }
+
+    /* The detail sheet is always the same height on a phone, whatever tab is
+       open (see .proj-modal-card--detail above). dvh tracks the browser's
+       collapsing toolbar, so the sheet's top edge does not slide either. */
+    .proj-modal-card--detail {
+        height: 92vh;
+        height: 92dvh;
+        max-height: none;
+    }
+
+    .proj-modal-card--detail > .proj-tabs {
+        margin: 0;
+        padding: 0.25rem 1rem 0;
     }
 
     .proj-modal-header {

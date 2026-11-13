@@ -13,22 +13,14 @@
    material against.
 
    HOW IT IS BUILT
-   One oversized field of soft colour, fixed to the viewport, drifting on two
-   incommensurate cycles:
-
-     - rotate + scale over 240s  (the drift)
-     - opacity  over 41s         (the breath)
-
-   240 and 41 share no useful common factor, so the two never line up and the
-   loop never announces itself. Both are compositor-only properties (transform,
-   opacity), so this costs no layout and no paint on scroll — which matters,
-   because the bank dashboard renders 500-row tables over this.
-
-   HIG's own accessibility guidance warns against full-viewport motion, slow
-   oscillation near 0.2 Hz, and brightness jumps. So: the periods here are
-   ~0.01 Hz, twenty times slower than the band it warns about; the brightness
-   swing is 12%; and all three of prefers-reduced-motion, -reduced-transparency
-   and -contrast turn it down or off at the bottom of this file.
+   One field of soft colour fixed to the viewport: five radial washes in the
+   module hues. Since the glass pass (glass.css, 2026-11-13) it is STILL. It
+   used to drift (240s rotation, 41s breath), but every frosted surface
+   re-blurs its backdrop whenever the backdrop changes, so a moving field made
+   each glass panel repaint continuously - jank on phones. It is also the
+   colour the glass frosts, so it is stronger than the old 4-7% wash.
+   prefers-reduced-transparency and -contrast turn it down or off at the
+   bottom of this file.
 
    WHY body::after AND NOT html::before
    Every page in this app paints its own opaque background on <body>, and one
@@ -51,42 +43,24 @@ body {
 body::after {
     content: '';
     position: fixed;
-    /* Oversized and centred so the rotation never swings an edge into view. */
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
+    inset: 0;
     z-index: -1;
     pointer-events: none;
 
-    /* Five fields, drawn from the hues the app already uses: brand coral, the
-       projects blue, the tracker violet, the sales teal and the bills amber.
-       Nothing new enters the palette — this is the app's own colour, thrown
-       out of focus. Alphas top out at 0.075: it should read as light in the
-       room, never as a gradient anyone would point at. */
+    /* GLASS GROUND (2026-11-13). Glass is only visible as glass when there
+       is colour behind it to frost, so the field is now strong enough to
+       read: the same five module hues (coral, projects blue, tracker violet,
+       sales teal, bills amber), at 0.16-0.38 instead of 0.04-0.075.
+       It no longer drifts. Every glass surface in glass.css re-blurs what is
+       behind it on every frame that background changes, so a moving field
+       would make each panel repaint its blur continuously - fine on a
+       desktop GPU, visible jank on a mid-range phone. Still is also calmer. */
     background:
-        radial-gradient(38% 30% at 22% 18%, rgba(217, 119, 87, 0.075), transparent 64%),
-        radial-gradient(34% 28% at 78% 26%, rgba( 59, 107, 201, 0.060), transparent 62%),
-        radial-gradient(32% 30% at 30% 74%, rgba(106,  87, 206, 0.050), transparent 62%),
-        radial-gradient(34% 28% at 82% 78%, rgba( 14, 140, 140, 0.055), transparent 62%),
-        radial-gradient(30% 26% at 52% 50%, rgba(199, 117,  34, 0.040), transparent 64%);
-
-    will-change: transform, opacity;
-    animation:
-        ambient-drift  240s linear             infinite,
-        ambient-breath 41s cubic-bezier(0.42, 0, 0.58, 1) infinite alternate;
-}
-
-/* A full rotation rather than a back-and-forth: an alternating transform
-   retraces its own path, and the eye picks that up as a loop. */
-@keyframes ambient-drift {
-    from { transform: rotate(0deg)   scale(1.06); }
-    to   { transform: rotate(360deg) scale(1.06); }
-}
-
-@keyframes ambient-breath {
-    from { opacity: 0.88; }
-    to   { opacity: 1.00; }
+        radial-gradient(46% 38% at 10% 8%,   rgba(217, 119,  87, 0.38), transparent 72%),
+        radial-gradient(44% 36% at 90% 14%,  rgba( 59, 107, 201, 0.30), transparent 72%),
+        radial-gradient(42% 38% at 16% 84%,  rgba(106,  87, 206, 0.26), transparent 72%),
+        radial-gradient(44% 36% at 88% 88%,  rgba( 14, 140, 140, 0.26), transparent 72%),
+        radial-gradient(36% 30% at 54% 50%,  rgba(199, 117,  34, 0.16), transparent 72%);
 }
 
 /* --------------------------------------------------------------------------
@@ -94,12 +68,7 @@ body::after {
    stops moving. Losing the field entirely would flatten the app back to paper
    for the people who asked only for stillness. */
 @media (prefers-reduced-motion: reduce) {
-    body::after {
-        animation: none;
-        transform: scale(1.06);
-        opacity: 0.95;
-        will-change: auto;
-    }
+    body::after { animation: none; }
 }
 
 /* Someone who has asked for less transparency has asked for fewer ambiguous
@@ -107,8 +76,7 @@ body::after {
 @media (prefers-reduced-transparency: reduce) {
     body::after {
         animation: none;
-        opacity: 0.45;
-        will-change: auto;
+        opacity: 0.35;
     }
 }
 

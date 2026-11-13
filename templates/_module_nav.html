@@ -1,0 +1,83 @@
+{#
+  Module switcher - jump straight from any module to any other, without going
+  back through the hub.
+
+  Two pieces, imported separately on purpose:
+    trigger()  goes INSIDE the page header, next to the back button.
+    panel()    goes at the END OF <body>, never inside the header.
+  Every header in the app is frosted glass (backdrop-filter), and a
+  backdrop-filter makes its element the containing block for position:fixed
+  children - a panel inside the header would be clipped to the header bar.
+
+  Usage:
+    {% import '_module_nav.html' as mnav %}
+    ... {{ mnav.trigger() }} ...
+    {{ mnav.panel(request.path) }}
+#}
+
+{% set MODULES = [
+    {'group': 'Projects', 'items': [
+        {'href': '/project-summary',  'name': 'Project Summary',   'icon': 'modules/summary.svg',  'hue': '#D97757'},
+        {'href': '/projects',         'name': 'Projects Registry', 'icon': 'modules/projects.svg', 'hue': '#3B6BC9'},
+    ]},
+    {'group': 'Banks', 'items': [
+        {'href': '/dashboard/axis',   'name': 'Axis Bank',         'icon': 'banks/axis.svg',       'hue': '#AE285D'},
+        {'href': '/dashboard/kvb',    'name': 'Karur Vysya Bank',  'icon': 'banks/kvb.svg',        'hue': '#00854A'},
+    ]},
+    {'group': 'Bills', 'items': [
+        {'href': '/bill-processor',   'name': 'Purchase Bills',    'icon': 'modules/purchase.svg', 'hue': '#C77522'},
+        {'href': '/sales-processor',  'name': 'Sales Bills',       'icon': 'modules/sales.svg',    'hue': '#0E8C8C'},
+    ]},
+    {'group': 'Expenses', 'items': [
+        {'href': '/personal-tracker', 'name': 'Expense Tracker',   'icon': 'modules/expense.svg',  'hue': '#6A57CE'},
+    ]},
+] %}
+
+{% macro trigger() -%}
+<button type="button" class="mnav-trigger" id="mnav-trigger"
+        aria-haspopup="true" aria-expanded="false" aria-controls="mnav-panel"
+        title="Switch module (Ctrl+K)">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+        <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+        <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+        <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+    </svg>
+    <span class="mnav-trigger-label">Modules</span>
+    <span class="sr-only mnav-sr">Switch module</span>
+</button>
+{%- endmacro %}
+
+{% macro panel(path) -%}
+<div class="mnav-scrim" id="mnav-scrim" hidden></div>
+<nav class="mnav-panel" id="mnav-panel" aria-label="Switch module" hidden>
+    <div class="mnav-grabber" aria-hidden="true"></div>
+    <div class="mnav-head">
+        <span class="mnav-title">Go to</span>
+        <a class="mnav-home" href="/">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path>
+            </svg>
+            Home
+        </a>
+    </div>
+    {% set n = namespace(i=0) %}
+    {% for g in MODULES %}
+    <div class="mnav-group">
+        <div class="mnav-group-label">{{ g.group }}</div>
+        {% for m in g['items'] %}
+        {% set n.i = n.i + 1 %}
+        {% set current = path == m.href or path.startswith(m.href ~ '/') %}
+        <a class="mnav-item{% if current %} is-current{% endif %}" href="{{ m.href }}"
+           style="--mnav-hue: {{ m.hue }}"{% if current %} aria-current="page"{% endif %}>
+            <span class="mnav-icon"><img src="{{ url_for('static', filename=m.icon) }}" alt="" width="22" height="22"></span>
+            <span class="mnav-name">{{ m.name }}</span>
+            {% if current %}<span class="mnav-here">Here</span>{% else %}<kbd class="mnav-key" aria-hidden="true">{{ n.i }}</kbd>{% endif %}
+        </a>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</nav>
+{%- endmacro %}

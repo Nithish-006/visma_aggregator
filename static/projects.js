@@ -613,8 +613,16 @@
 
     // ── Insight tabs ───────────────────────────────────
     function switchTab(key) {
+        const changed = !tabButtons().some(b => b.dataset.tab === key && b.classList.contains('active'));
         tabButtons().forEach(b => b.classList.toggle('active', b.dataset.tab === key));
         tabPanels().forEach(pn => pn.classList.toggle('hidden', pn.dataset.tabPanel !== key));
+        // A new tab starts at its top. The sheet is a fixed height now, so
+        // without this a switch from deep in Overview would land mid-way
+        // down the next tab. (Callers that then scrollIntoView still win.)
+        if (changed) {
+            const body = detailModal.querySelector('.proj-modal-body');
+            if (body) body.scrollTop = 0;
+        }
     }
     // Nothing recorded yet? Surface the cash entry form so the input is visible
     // without hunting for the "+ Add cash" button. Driven from the click

@@ -14,6 +14,9 @@
     let allTransactionsMap = new Map(); // Map of id -> transaction for tracking modifications
     let selectedTransactionIds = new Set();  // Track by ID instead of index
     let modifiedTransactions = new Map();    // Map of id -> modified transaction data
+    // Read by the module switcher (module_nav.js) so jumping to another
+    // module asks before throwing away unsaved cell edits.
+    window.vismaUnsavedChanges = () => modifiedTransactions.size;
     let categories = [];
     let projects = [];               // historical values — feeds the FILTER multi-select only
     let canonicalProjects = [];      // from /api/projects — feeds the EDIT picker + bulk-set

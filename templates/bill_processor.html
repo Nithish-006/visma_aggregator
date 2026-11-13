@@ -21,7 +21,9 @@
     <!-- PDF.js for PDF rendering -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=15">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='glass.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='module_nav.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='dates.css') }}?v=8">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
@@ -29,6 +31,7 @@
 </head>
 
 <body>
+    {% import '_module_nav.html' as mnav %}
     <!-- Header -->
     <header class="header">
         <div class="header-left">
@@ -39,6 +42,7 @@
                     <polyline points="12 19 5 12 12 5"></polyline>
                 </svg>
             </a>
+            {{ mnav.trigger() }}
             <h1 class="page-title">Purchase Bills</h1>
         </div>
         <div class="header-right">
@@ -938,6 +942,8 @@ function hardRefresh() {
     window.location.href = window.location.pathname + '?_=' + Date.now();
 }
 </script>
+    {{ mnav.panel(request.path) }}
+    <script src="{{ url_for('static', filename='module_nav.js') }}?v=1"></script>
 </body>
 
 </html>

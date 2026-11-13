@@ -1,0 +1,235 @@
+/* ============================================================================
+   module_nav.css - the module switcher (templates/_module_nav.html)
+   ----------------------------------------------------------------------------
+   One button in every page header opens a list of every module, so moving
+   between them no longer means going back through the hub.
+     - Desktop: a glass popover anchored under the button (module_nav.js
+       places it). Ctrl/Cmd+K toggles it; 1-7 jump straight to a module.
+     - Phone (<= 640px): a bottom sheet over a scrim, within thumb reach.
+   Loaded after glass.css; uses its --glass-* tokens with solid fallbacks.
+   ============================================================================ */
+
+/* ---- Trigger --------------------------------------------------------------- */
+.mnav-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    height: 36px;
+    padding: 0 12px 0 10px;
+    margin: 0 6px 0 0;          /* the headers' own gaps are 4-8px; the title needs air */
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.62);
+    color: var(--c-text);
+    font: 600 13px/1 var(--font-ui);
+    letter-spacing: -0.005em;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+.mnav-trigger:hover { background: #FFFFFF; border-color: var(--c-border-strong); }
+.mnav-trigger:active { transform: scale(0.97); }
+.mnav-trigger[aria-expanded="true"] {
+    background: #FFFFFF;
+    border-color: var(--c-accent);
+    color: var(--c-accent-text);
+}
+.mnav-trigger:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.mnav-trigger svg { flex: none; }
+
+.mnav-sr {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Phones: icon only - the headers are already full. Still a 40px target,
+   and hig.css's coarse-pointer rules lift it to 44px where they apply. */
+@media (max-width: 640px) {
+    .mnav-trigger { width: 40px; height: 40px; padding: 0; justify-content: center; }
+    .mnav-trigger-label { display: none; }
+}
+
+/* ---- Scrim ----------------------------------------------------------------- */
+.mnav-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 2999;
+    background: transparent;      /* desktop: only catches the outside click */
+}
+.mnav-scrim[hidden], .mnav-panel[hidden] { display: none; }
+
+/* ---- Panel ----------------------------------------------------------------- */
+.mnav-panel {
+    position: fixed;
+    z-index: 3000;
+    width: 300px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    padding: 8px;
+    border: 1px solid var(--c-border);
+    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 255, 255, 0.80) 100%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(180%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        0 24px 60px -16px rgba(31, 30, 29, 0.32),
+        0 2px 6px rgba(31, 30, 29, 0.08);
+    font-family: var(--font-ui);
+    color: var(--c-text);
+    transform-origin: top left;
+    animation: mnav-pop 0.16s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+@keyframes mnav-pop {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to   { opacity: 1; transform: none; }
+}
+
+.mnav-grabber { display: none; }
+
+.mnav-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px 6px 10px;
+}
+.mnav-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--c-text-muted);
+}
+.mnav-home {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 9px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--c-text-muted);
+    text-decoration: none;
+}
+.mnav-home:hover { background: rgba(31, 30, 29, 0.06); color: var(--c-text); }
+
+.mnav-group + .mnav-group {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--c-track);
+}
+.mnav-group-label {
+    padding: 6px 10px 2px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--c-text-muted);
+}
+
+.mnav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    color: var(--c-text);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.12s ease;
+}
+.mnav-item:hover,
+.mnav-item:focus-visible {
+    background: color-mix(in srgb, var(--mnav-hue) 12%, rgba(255, 255, 255, 0.7));
+    outline: none;
+}
+.mnav-item:focus-visible { box-shadow: inset 0 0 0 2px var(--mnav-hue); }
+
+/* The page you are on: its own hue, a bar on the left, and "Here". */
+.mnav-item.is-current {
+    background: color-mix(in srgb, var(--mnav-hue) 16%, #FFFFFF);
+    box-shadow: inset 3px 0 0 var(--mnav-hue);
+    font-weight: 600;
+}
+
+.mnav-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--mnav-hue) 14%, #FFFFFF);
+}
+.mnav-icon img { width: 20px; height: 20px; display: block; }
+
+.mnav-name { flex: 1 1 auto; min-width: 0; }
+
+.mnav-here {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--c-text-muted);
+}
+.mnav-key {
+    min-width: 20px;
+    padding: 2px 5px;
+    border: 1px solid var(--c-border);
+    border-radius: 5px;
+    background: #FFFFFF;
+    font: 600 11px/1.2 var(--font-ui);
+    color: var(--c-text-muted);
+    text-align: center;
+}
+/* Number shortcuts only mean something with a keyboard. */
+@media (pointer: coarse) { .mnav-key { display: none; } }
+
+/* ---- Phone: bottom sheet ---------------------------------------------------- */
+@media (max-width: 640px) {
+    .mnav-scrim {
+        background: rgba(15, 23, 42, 0.40);
+        -webkit-backdrop-filter: blur(3px);
+        backdrop-filter: blur(3px);
+        animation: mnav-fade 0.2s ease;
+    }
+    .mnav-panel {
+        top: auto !important;   /* overrides the inline desktop placement */
+        left: 0 !important;
+        right: 0;
+        bottom: 0;
+        width: auto;
+        max-height: 88vh;
+        padding: 6px 10px calc(14px + env(safe-area-inset-bottom, 0px));
+        border-bottom: none;
+        border-radius: 20px 20px 0 0;
+        background: linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.88) 100%);
+        transform-origin: bottom center;
+        animation: mnav-rise 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+    .mnav-grabber {
+        display: block;
+        width: 36px;
+        height: 5px;
+        margin: 2px auto 6px;
+        border-radius: 3px;
+        background: var(--c-track);
+    }
+    .mnav-head { padding: 2px 4px 6px 10px; }
+    .mnav-home { padding: 8px 12px; font-size: 14px; }
+    .mnav-item { min-height: 50px; font-size: 15px; }
+    .mnav-icon { width: 34px; height: 34px; border-radius: 9px; }
+    .mnav-icon img { width: 22px; height: 22px; }
+}
+@keyframes mnav-rise {
+    from { transform: translateY(24px); opacity: 0.6; }
+    to   { transform: none; opacity: 1; }
+}
+@keyframes mnav-fade { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .mnav-panel, .mnav-scrim { animation: none; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .mnav-panel { background: #FFFFFF; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
