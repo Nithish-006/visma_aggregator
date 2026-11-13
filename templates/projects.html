@@ -13,9 +13,11 @@
     <!-- project_glance.* is shared with the project summary page and must load
          first: it owns the --proj-* aliases projects.css builds on. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='project_glance.css') }}?v=14">
-    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=22">
+    <link rel="stylesheet" href="{{ url_for('static', filename='projects.css') }}?v=25">
     <link rel="stylesheet" href="{{ url_for('static', filename='hig.css') }}?v=15">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='glass.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', filename='module_nav.css') }}?v=2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ambient.css') }}?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='dates.css') }}?v=8">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
@@ -23,6 +25,7 @@
 </head>
 
 <body>
+    {% import '_module_nav.html' as mnav %}
     <header class="proj-header">
         <div class="proj-header-left">
             <a href="/" class="proj-back-btn" title="Back to Hub">
@@ -30,6 +33,7 @@
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
             </a>
+            {{ mnav.trigger() }}
             <div class="proj-title-block">
                 <h1 class="proj-title">Projects</h1>
                 <span class="proj-subtitle">Canonical project registry — id and stem name</span>
@@ -130,13 +134,14 @@
                     <button class="proj-modal-close" data-close="project-detail-modal" aria-label="Close">×</button>
                 </div>
             </div>
+            <!-- Tab bar. Outside the scrolling body on purpose: the sheet is a
+                 fixed height and only the body scrolls, so the tabs never move. -->
+            <nav id="detail-tabs" class="proj-tabs" role="tablist" aria-label="Project insights">
+                <button type="button" class="proj-tab active" data-tab="overview" role="tab">Overview</button>
+                <button type="button" class="proj-tab" data-tab="bills" role="tab">Bills<span class="proj-tab-count hidden" data-tab-count="bills"></span></button>
+                <button type="button" class="proj-tab" data-tab="ledger" role="tab">Ledger<span class="proj-tab-count hidden" data-tab-count="ledger"></span></button>
+            </nav>
             <div class="proj-modal-body">
-                <!-- Tab bar -->
-                <nav id="detail-tabs" class="proj-tabs" role="tablist" aria-label="Project insights">
-                    <button type="button" class="proj-tab active" data-tab="overview" role="tab">Overview</button>
-                    <button type="button" class="proj-tab" data-tab="bills" role="tab">Bills<span class="proj-tab-count hidden" data-tab-count="bills"></span></button>
-                    <button type="button" class="proj-tab" data-tab="ledger" role="tab">Ledger<span class="proj-tab-count hidden" data-tab-count="ledger"></span></button>
-                </nav>
 
                 <!-- ===== Tab: Overview (default) — the whole project in one look ===== -->
                 <section class="proj-tab-panel" data-tab-panel="overview">
@@ -434,7 +439,9 @@
     <div id="proj-toast" class="proj-toast hidden"></div>
 
     <script src="{{ url_for('static', filename='project_glance.js') }}?v=13"></script>
-    <script src="{{ url_for('static', filename='projects.js') }}?v=21"></script>
+    <script src="{{ url_for('static', filename='projects.js') }}?v=22"></script>
+    {{ mnav.panel(request.path) }}
+    <script src="{{ url_for('static', filename='module_nav.js') }}?v=1"></script>
 </body>
 
 </html>

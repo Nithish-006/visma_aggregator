@@ -1,0 +1,304 @@
+/* ============================================================================
+   glass.css - THE MATERIAL
+   ----------------------------------------------------------------------------
+   Loaded after hig.css and before ambient.css on every page. ambient.css
+   paints the coloured ground; this file turns the app's surfaces into frosted
+   glass over it.
+
+   THE RULES THIS FILE KEEPS (a previous glass layer was reverted for
+   breaking them - see the memory notes on visual verification):
+
+   1. It repaints FILLS only. Borders are left to the page sheets, so every
+      boundary still clears the 3:1 LCD floor documented in CLAUDE.md. The
+      glass edge is an inset highlight drawn INSIDE that border, never a
+      replacement for it.
+   2. Fills stay light enough that text contrast is unchanged in practice:
+      the lightest glass over the strongest part of the ground resolves to
+      roughly #E9E6EC, where --c-text-muted still measures above 7:1.
+   3. backdrop-filter is used on a short list of large surfaces - chrome,
+      panels, modals - never on repeated rows (a 500-row bank table). Rows
+      and small cards get translucency without blur: over a soft ground the
+      two look the same, and the row version costs nothing.
+   4. backdrop-filter makes its element the containing block for
+      position:fixed descendants. Every selector blurred here was checked for
+      fixed children; do not add one without checking.
+   5. No !important. The file wins by load order; where a page rule is more
+      specific, the selector here matches that specificity instead.
+   6. Reduced transparency, increased contrast and browsers without
+      backdrop-filter fall back to the original solid surfaces (bottom).
+   ============================================================================ */
+
+:root {
+    /* Three weights of the same material. Chrome (sticky bars) is the most
+       transparent; content panels carry text and tables, so they sit a step
+       more opaque; modals float over busy content and are the most solid. */
+    --glass-chrome:  linear-gradient(180deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.40) 100%);
+    --glass-panel:   linear-gradient(150deg, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.38) 100%);
+    --glass-card:    linear-gradient(150deg, rgba(255, 255, 255, 0.60) 0%, rgba(255, 255, 255, 0.34) 100%);
+    --glass-modal:   linear-gradient(160deg, rgba(255, 255, 255, 0.90) 0%, rgba(255, 255, 255, 0.80) 100%);
+    --glass-soft:    rgba(255, 255, 255, 0.40);     /* inner wells, table heads */
+
+    --glass-blur:        blur(22px) saturate(165%);
+    /* Modals sit over a dark scrim; frosting that unaltered turns them a
+       muddy grey (seen in the first render). brightness() lifts what is
+       behind before it is blurred, so the sheet reads as light glass. */
+    --glass-blur-strong: blur(32px) saturate(180%) brightness(1.35);
+
+    /* Light catching the top edge + a faint inner rim. Drawn inside the
+       element, so the page's own 3:1 border is untouched. */
+    --glass-edge:   inset 0 1px 0 rgba(255, 255, 255, 0.90), inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+    --glass-shadow: 0 1px 2px rgba(31, 30, 29, 0.05), 0 10px 30px -12px rgba(31, 30, 29, 0.16);
+    --glass-shadow-float: 0 24px 60px -16px rgba(31, 30, 29, 0.32);
+}
+
+/* The page grounds. Each sheet paints body (and projects.css, html) with an
+   opaque ivory. Keep the ivory - it is the paper the colour sits on - but
+   flatten the per-page gradients so every page shares one ground. */
+html, body { background-color: var(--c-bg); }
+body { background-image: none; }
+
+
+/* ============================================================================
+   CHROME - sticky headers, tab strips, bottom bars
+   ============================================================================ */
+.header,                         /* bank dashboard, bills, sales, tracker, add-expense */
+.topbar,                         /* hub */
+.ps-header,                      /* project summary */
+.proj-header,                    /* projects */
+.footer {
+    background: var(--glass-chrome);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.55), 0 6px 24px -14px rgba(31, 30, 29, 0.18);
+}
+
+/* Tracker: the tab strip, bank filter and totals sit directly under the
+   header as one stacked bar. */
+.tabs,
+.filter-bar,
+.summary-bar {
+    background: var(--glass-chrome);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+}
+
+/* Add-expense: on a phone the Save bar is fixed to the bottom edge (chrome);
+   from 768px it is an unboxed row under the form and stays clear. */
+@media (max-width: 767px) {
+    .form-footer {
+        background: var(--glass-chrome);
+        -webkit-backdrop-filter: var(--glass-blur);
+        backdrop-filter: var(--glass-blur);
+    }
+}
+
+
+/* ============================================================================
+   PANELS - the large content surfaces
+   ----------------------------------------------------------------------------
+   Rule 7, learned rendering this: glass only goes on surfaces that have a
+   BORDER at that width. A borderless surface used to blend into the paper;
+   made translucent it shows as a box with no edge. The page sheets turn
+   several panels borderless and transparent on phones, so those are scoped
+   to the widths where they really are panels.
+   ============================================================================ */
+.edit-toolbar-wrapper,           /* bank filters */
+.pagination-controls,
+.bp-filter-bar,                  /* bills / sales filters */
+.ps-section,                     /* project summary detail sections */
+.mr-panel,                       /* material reconciliation (summary) */
+.proj-ov-panel,                  /* project overview panels (both pages) */
+.login-card {
+    background: var(--glass-panel);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-edge), var(--glass-shadow);
+}
+
+/* Bank table and bills/sales list well: panels on desktop; on phones the
+   rows are their own cards and the well is transparent (page sheets,
+   max-width 768px). */
+@media (min-width: 769px) {
+    .edit-table-container,
+    .main-tabs-section {
+        background: var(--glass-panel);
+        -webkit-backdrop-filter: var(--glass-blur);
+        backdrop-filter: var(--glass-blur);
+        box-shadow: var(--glass-edge), var(--glass-shadow);
+    }
+    /* The head bar sits inside the well, which is already glass: a tint,
+       not a second blur. */
+    .main-tabs-section .tabs-header {
+        background: var(--glass-soft);
+    }
+}
+
+/* Add / edit expense: a bordered card from 768px; full-bleed on a phone. */
+@media (min-width: 768px) {
+    .expense-form {
+        background: var(--glass-panel);
+        -webkit-backdrop-filter: var(--glass-blur);
+        backdrop-filter: var(--glass-blur);
+        box-shadow: var(--glass-edge), var(--glass-shadow);
+    }
+}
+
+/* The tracker's main column: a bordered page column from 768px, clear
+   glass with no shadow. On a phone it is the screen itself. */
+@media (min-width: 768px) {
+    .main-content:has(> .tab-content) {
+        background: rgba(255, 255, 255, 0.34);
+        -webkit-backdrop-filter: var(--glass-blur);
+        backdrop-filter: var(--glass-blur);
+    }
+}
+
+
+/* ============================================================================
+   CARDS - repeated, small. Translucency, no blur (rule 3).
+   ============================================================================ */
+.stat-card,
+.ps-bank-card {
+    background: var(--glass-card);
+    box-shadow: var(--glass-edge), var(--glass-shadow);
+}
+
+/* Project tiles (registry + summary) were already designed as glass - they
+   just sat at 94% white on a near-flat ground. Thin them out so the hue
+   behind and their own tint come through. */
+.project-card,
+.ps-proj-card {
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.78) 0%,
+            rgba(255, 255, 255, 0.52) 55%,
+            rgba(var(--tile-rgb), 0.12) 100%);
+}
+.project-card:hover,
+.ps-proj-card:hover {
+    background:
+        linear-gradient(150deg,
+            rgba(255, 255, 255, 0.86) 0%,
+            rgba(255, 255, 255, 0.62) 50%,
+            rgba(var(--tile-rgb), 0.18) 100%);
+}
+
+/* Hub tiles: a wash of the module hue in glass instead of on paper. The
+   hue's share is lifted (26% -> 30%) because the ground under a translucent
+   tile is lighter than the old ivory; the label contrast is re-checked in
+   the verification run, not assumed. */
+.tile {
+    background: color-mix(in srgb, var(--hue) 22%, rgba(255, 255, 255, 0.55));
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-edge), var(--glass-shadow);
+}
+.tile:hover {
+    background: color-mix(in srgb, var(--hue) 28%, rgba(255, 255, 255, 0.62));
+}
+
+/* Bank dashboard rows: translucent, so the table panel's glass shows
+   through. :not() keeps the selected / edited tints (more specific in
+   edit_transactions.css) winning over hover, exactly as before. */
+.edit-table thead {
+    background: rgba(255, 255, 255, 0.55);
+    -webkit-backdrop-filter: var(--glass-blur);   /* sticky: rows scroll under it */
+    backdrop-filter: var(--glass-blur);
+}
+.edit-table tbody tr {
+    background: rgba(255, 255, 255, 0.26);
+}
+.edit-table tbody tr:not(.selected):not(.modified):hover {
+    background: rgba(255, 255, 255, 0.66);
+}
+/* Phone: each row is its own card (edit_transactions.css, max-width 768px). */
+@media (max-width: 768px) {
+    .edit-table tbody tr,
+    .edit-table tbody tr:last-child {
+        background: var(--glass-card);
+        box-shadow: var(--glass-edge), var(--glass-shadow);
+    }
+}
+
+
+/* ============================================================================
+   TINTED CONTROLS - a solid underlay under their translucent tint
+   ----------------------------------------------------------------------------
+   These controls are coloured with a 15-20% alpha tint and coloured text,
+   tuned on ivory paper. Over the coloured ground the tint lands on coral and
+   darkens: the active "All" pill fell from 4.8:1 to 3.8:1 in the audit. A
+   white underlay puts the tint back on a known surface - it now sits on
+   white, so it is a touch lighter than on ivory and every label passes again.
+   ============================================================================ */
+.proj-filter-pill.active {
+    background: linear-gradient(rgba(217, 119, 87, 0.20), rgba(217, 119, 87, 0.20)), #FFFFFF;
+}
+.ps-type-pill.active {
+    background: linear-gradient(rgba(217, 119, 87, 0.18), rgba(217, 119, 87, 0.18)), #FFFFFF;
+}
+.type-btn.expense.active,
+.panel-type-btn.expense.active {
+    background: linear-gradient(rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.15)), #FFFFFF;
+}
+.type-btn.income.active,
+.panel-type-btn.income.active {
+    background: linear-gradient(rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.15)), #FFFFFF;
+}
+
+
+/* ============================================================================
+   MODALS & SHEETS - float over content, so they get the strongest frost
+   ============================================================================ */
+.modal-content,
+.ps-bill-modal-content,
+.proj-modal-card,
+.slide-panel {
+    background: var(--glass-modal);
+    -webkit-backdrop-filter: var(--glass-blur-strong);
+    backdrop-filter: var(--glass-blur-strong);
+    box-shadow: var(--glass-edge), var(--glass-shadow-float);
+}
+
+/* The classic .modal dialogs (bank, bills, sales, tracker, add-expense) sit
+   on a 70% black scrim - much darker than the registry's. Even 80-90% white
+   over that rendered a flat grey #DADADA, so dialogs - which are all forms -
+   take a denser fill. The glass reads in the frosted edge, not in see-through. */
+.modal-content {
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.91) 100%);
+}
+
+/* Inside a sheet, inner panels must not blur again (rule 3, and nested
+   backdrop roots only ever see the sheet anyway). */
+.proj-modal-card .proj-ov-panel,
+.ps-section .proj-ov-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(255, 255, 255, 0.55);
+}
+
+
+/* ============================================================================
+   FALLBACKS (rule 6)
+   ============================================================================ */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :root {
+        --glass-chrome: #FFFFFF;
+        --glass-panel:  #FFFFFF;
+        --glass-card:   #FFFFFF;
+        --glass-modal:  #FFFFFF;
+        --glass-soft:   var(--c-surface-soft);
+    }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    :root {
+        --glass-chrome: #FFFFFF;
+        --glass-panel:  #FFFFFF;
+        --glass-card:   #FFFFFF;
+        --glass-modal:  #FFFFFF;
+        --glass-soft:   var(--c-surface-soft);
+        --glass-blur:        none;
+        --glass-blur-strong: none;
+    }
+    .tile { background: color-mix(in srgb, var(--hue) 26%, var(--c-bg)); }
+}

@@ -77,6 +77,22 @@ gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
   Don't add faint hairlines (`rgba(0,0,0,0.06)`-style) - use `--c-border`. Don't
   use a border token as a *fill*: quiet tracks, count bubbles and similar take
   `--c-track`. When a stylesheet changes, bump its `?v=` in the templates.
+- **Glassmorphism** is `static/glass.css` (after `hig.css`) over the coloured
+  ground in `static/ambient.css` (last). glass.css repaints *fills only* -
+  borders stay the page sheets' 3:1 tokens. Its rules, all learned by
+  rendering: blur only large surfaces, never repeated rows; only glass a
+  surface that has a border at that width (borderless glass shows as an
+  edgeless box); controls tinted with an alpha colour need a solid white
+  underlay or their label fails contrast over the ground; the ground must
+  stay still (a moving backdrop re-blurs every glass panel each frame).
+- **Module switcher**: every module page imports `templates/_module_nav.html`
+  — `{{ mnav.trigger() }}` beside the back button, `{{ mnav.panel(request.path) }}`
+  at the end of `<body>` (never inside the glass header: backdrop-filter
+  would trap the fixed panel), plus `module_nav.{css,js}`. Add new modules to
+  its `MODULES` list. Ctrl/Cmd+K opens it; a page with unsaved edits exposes
+  `window.vismaUnsavedChanges()` so the switcher asks before leaving.
+- The project detail sheet (`projects.html`) is a **fixed height** with the tab
+  bar outside the scrolling body, so switching tabs never resizes or moves it.
 
 ### Key Routes
 - `/` → Hub (bank selection)
