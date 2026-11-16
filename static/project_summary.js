@@ -217,6 +217,14 @@
             });
 
             this.searchInput.addEventListener('click', (e) => e.stopPropagation());
+
+            // Escape closes the menu, as every dropdown does.
+            this.searchInput.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                e.stopPropagation();
+                this.closeMenu();
+                this.searchInput.blur();
+            });
         }
 
         setOptions(items) {
