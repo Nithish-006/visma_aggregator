@@ -303,6 +303,14 @@
             });
             this.searchInput.addEventListener('input', (e) => this.filterOptions(e.target.value));
             this.searchInput.addEventListener('click', (e) => e.stopPropagation());
+            // Escape closes the menu, as every dropdown does. Stopped here so
+            // the table's own Escape handling doesn't also fire.
+            this.searchInput.addEventListener('keydown', (e) => {
+                if (e.key !== 'Escape') return;
+                e.stopPropagation();
+                this.closeMenu();
+                this.searchInput.blur();
+            });
         }
     }
 

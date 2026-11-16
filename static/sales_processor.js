@@ -271,6 +271,14 @@ function initProjectDropdown() {
 
     searchInput.addEventListener('click', (e) => e.stopPropagation());
 
+    // Escape closes the menu, as every dropdown does.
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        closeProjectDropdown();
+        searchInput.blur();
+    });
+
     document.addEventListener('click', (e) => {
         if (!e.target.closest('#projectDropdown')) {
             closeProjectDropdown();

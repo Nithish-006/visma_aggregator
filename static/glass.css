@@ -115,6 +115,16 @@ body { background-image: none; }
     box-shadow: var(--glass-edge), var(--glass-shadow);
 }
 
+/* backdrop-filter makes each panel its own stacking context, so the filter
+   bars' dropdown menus (category / project / vendor) are trapped inside the
+   bar and the table well below - a later sibling context - paints over them.
+   Lift the filter bars above the panels that follow them. */
+.edit-toolbar-wrapper,
+.bp-filter-bar {
+    position: relative;
+    z-index: 3;
+}
+
 /* Bank table and bills/sales list well: panels on desktop; on phones the
    rows are their own cards and the well is transparent (page sheets,
    max-width 768px). */
